@@ -280,7 +280,7 @@ int irq_set_affinity_locked(struct irq_data *data, const struct cpumask *mask,
 	if (desc->affinity_notify) {
 		kref_get(&desc->affinity_notify->kref);
 #ifdef CONFIG_PREEMPT_RT_BASE
-		if (!swork_queue(&desc->affinity_notify->swork)) {
+		if (!kthread_schedule_work(&desc->affinity_notify->work)) {
 #else
 		if (!schedule_work(&desc->affinity_notify->work)) {
 #endif
@@ -349,21 +349,11 @@ out:
 }
 
 #ifdef CONFIG_PREEMPT_RT_BASE
-static void init_helper_thread(void)
-{
-	static int init_sworker_once;
 
-	if (init_sworker_once)
-		return;
-	if (WARN_ON(swork_get()))
-		return;
-	init_sworker_once = 1;
-}
-
-static void irq_affinity_notify(struct swork_event *swork)
+static void irq_affinity_notify(struct kthread_work *work)
 {
 	struct irq_affinity_notify *notify =
-		container_of(swork, struct irq_affinity_notify, swork);
+		container_of(work, struct irq_affinity_notify, work);
 	_irq_affinity_notify(notify);
 }
 
@@ -406,8 +396,7 @@ irq_set_affinity_notifier(unsigned int irq, struct irq_affinity_notify *notify)
 		notify->irq = irq;
 		kref_init(&notify->kref);
 #ifdef CONFIG_PREEMPT_RT_BASE
-		INIT_SWORK(&notify->swork, irq_affinity_notify);
-		init_helper_thread();
+		kthread_init_work(&notify->work, irq_affinity_notify);
 #else
 		INIT_WORK(&notify->work, irq_affinity_notify);
 #endif
