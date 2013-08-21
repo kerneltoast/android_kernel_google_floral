@@ -15,6 +15,7 @@
 #include <linux/hrtimer.h>
 #include <linux/kref.h>
 #include <linux/workqueue.h>
+#include <linux/swork.h>
 
 #include <linux/atomic.h>
 #include <asm/ptrace.h>
@@ -236,6 +237,7 @@ extern void reaffine_perf_irqs(bool from_hotplug);
  * struct irq_affinity_notify - context for notification of IRQ affinity changes
  * @irq:		Interrupt to which notification applies
  * @kref:		Reference count, for internal use
+ * @swork:		Swork item, for internal use
  * @work:		Work item, for internal use
  * @notify:		Function to be called on change.  This will be
  *			called in process context.
@@ -247,7 +249,11 @@ extern void reaffine_perf_irqs(bool from_hotplug);
 struct irq_affinity_notify {
 	unsigned int irq;
 	struct kref kref;
+#ifdef CONFIG_PREEMPT_RT_BASE
+	struct swork_event swork;
+#else
 	struct work_struct work;
+#endif
 	void (*notify)(struct irq_affinity_notify *, const cpumask_t *mask);
 	void (*release)(struct kref *ref);
 };
