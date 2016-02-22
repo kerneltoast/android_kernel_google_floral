@@ -34,7 +34,7 @@
 
 #include "libfdt.h"
 #include "util.h"
-#include "version_gen.h"
+#include "version_non_gen.h"
 
 char *xstrdup(const char *s)
 {
