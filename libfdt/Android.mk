@@ -8,7 +8,8 @@ common_src_files := \
   fdt_rw.c \
   fdt_strerror.c \
   fdt_empty_tree.c \
-  fdt_addresses.c
+  fdt_addresses.c \
+  fdt_overlay.c
 
 #################################################
 

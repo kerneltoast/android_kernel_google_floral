@@ -1,7 +1,8 @@
 /*
  * libfdt - Flat Device Tree manipulation
- *	Testcase for fdt_get_phandle()
- * Copyright (C) 2006 David Gibson, IBM Corporation.
+ *	Testcase for DT overlays()
+ * Copyright (C) 2016 Free Electrons
+ * Copyright (C) 2016 NextThing Co.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License
@@ -17,47 +18,53 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
-#include <stdlib.h>
+
 #include <stdio.h>
-#include <string.h>
-#include <stdint.h>
 
 #include <libfdt.h>
 
 #include "tests.h"
-#include "testdata.h"
 
-static void check_phandle(void *fdt, const char *path, uint32_t checkhandle)
+#define CHECK(code, expected)					\
+	{							\
+		err = (code);					\
+		if (err != expected)				\
+			FAIL(#code ": %s", fdt_strerror(err));	\
+	}
+
+/* 4k ought to be enough for anybody */
+#define FDT_COPY_SIZE	(4 * 1024)
+
+static void *open_dt(char *path)
 {
-	int offset;
-	uint32_t phandle;
+	void *dt, *copy;
+	int err;
 
-	offset = fdt_path_offset(fdt, path);
-	if (offset < 0)
-		FAIL("Couldn't find %s", path);
+	dt = load_blob(path);
+	copy = xmalloc(FDT_COPY_SIZE);
 
-	phandle = fdt_get_phandle(fdt, offset);
-	if (phandle != checkhandle)
-		FAIL("fdt_get_phandle(%s) returned 0x%x instead of 0x%x\n",
-		     path, phandle, checkhandle);
+	/*
+	 * Resize our DTs to 4k so that we have room to operate on
+	 */
+	CHECK(fdt_open_into(dt, copy, FDT_COPY_SIZE), 0);
+
+	return copy;
 }
 
 int main(int argc, char *argv[])
 {
-	uint32_t max;
-	void *fdt;
+	void *fdt_base, *fdt_overlay;
+	int err;
 
 	test_init(argc, argv);
-	fdt = load_blob_arg(argc, argv);
+	if (argc != 3)
+		CONFIG("Usage: %s <base dtb> <overlay dtb>", argv[0]);
 
-	check_phandle(fdt, "/", 0);
-	check_phandle(fdt, "/subnode@2", PHANDLE_1);
-	check_phandle(fdt, "/subnode@2/subsubnode@0", PHANDLE_2);
+	fdt_base = open_dt(argv[1]);
+	fdt_overlay = open_dt(argv[2]);
 
-	max = fdt_get_max_phandle(fdt);
-	if (max != PHANDLE_2)
-		FAIL("fdt_get_max_phandle returned 0x%x instead of 0x%x\n",
-		     max, PHANDLE_2);
+	/* Apply the overlay */
+	CHECK(fdt_overlay_apply(fdt_base, fdt_overlay), -FDT_ERR_BADOVERLAY);
 
 	PASS();
 }

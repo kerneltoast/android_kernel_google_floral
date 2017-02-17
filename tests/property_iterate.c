@@ -33,27 +33,34 @@
 
 static void test_node(void *fdt, int parent_offset)
 {
-	fdt32_t subnodes;
+	fdt32_t properties;
 	const fdt32_t *prop;
-	int offset;
+	int offset, property;
 	int count;
 	int len;
 
-	/* This property indicates the number of subnodes to expect */
-	prop = fdt_getprop(fdt, parent_offset, "subnodes", &len);
+	/*
+	 * This property indicates the number of properties in our
+	 * test node to expect
+	 */
+	prop = fdt_getprop(fdt, parent_offset, "test-properties", &len);
 	if (!prop || len != sizeof(fdt32_t)) {
-		FAIL("Missing/invalid subnodes property at '%s'",
+		FAIL("Missing/invalid test-properties property at '%s'",
 		     fdt_get_name(fdt, parent_offset, NULL));
 	}
-	subnodes = cpu_to_fdt32(*prop);
+	properties = cpu_to_fdt32(*prop);
 
 	count = 0;
-	fdt_for_each_subnode(offset, fdt, parent_offset)
+	offset = fdt_first_subnode(fdt, parent_offset);
+	if (offset < 0)
+		FAIL("Missing test node\n");
+
+	fdt_for_each_property_offset(property, fdt, offset)
 		count++;
 
-	if (count != subnodes) {
-		FAIL("Node '%s': Expected %d subnodes, got %d\n",
-		     fdt_get_name(fdt, parent_offset, NULL), subnodes,
+	if (count != properties) {
+		FAIL("Node '%s': Expected %d properties, got %d\n",
+		     fdt_get_name(fdt, parent_offset, NULL), properties,
 		     count);
 	}
 }
