@@ -308,3 +308,20 @@ the run time loader must apply an offset to each phandle in every dynamic
 DT object loaded. The __local_fixups__ node records the offset relative to the
 start of every local reference within that property so that the loader can apply
 the offset.
+
+There is an alternative syntax to the expanded form for overlays with phandle
+targets which makes the format similar to the one using in .dtsi include files.
+
+So for the &ocp target example above one can simply write:
+
+/dts-v1/;
+/plugin/;
+&ocp {
+	/* bar peripheral */
+	bar {
+		compatible = "corp,bar";
+		... /* various properties and child nodes */
+	}
+};
+
+The resulting dtb object is identical.
