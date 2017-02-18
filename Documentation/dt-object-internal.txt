@@ -2,17 +2,17 @@ Device Tree Dynamic Object format internals
 -------------------------------------------
 
 The Device Tree for most platforms is a static representation of
-the hardware capabilities. This is insufficient for many platforms
-that need to dynamically insert device tree fragments to the
-running kernel's live tree.
+the hardware capabilities. This is insufficient for platforms
+that need to dynamically insert Device Tree fragments into the
+live tree.
 
-This document explains the the device tree object format and the
-modifications made to the device tree compiler, which make it possible.
+This document explains the the Device Tree object format and
+modifications made to the Device Tree compiler, which make it possible.
 
 1. Simplified Problem Definition
 --------------------------------
 
-Assume we have a platform which boots using following simplified device tree.
+Assume we have a platform which boots using following simplified Device Tree.
 
 ---- foo.dts -----------------------------------------------------------------
 	/* FOO platform */
@@ -27,12 +27,12 @@ Assume we have a platform which boots using following simplified device tree.
 		ocp: ocp {
 			/* peripherals that are always instantiated */
 			peripheral1 { ... };
-		}
+		};
 	};
 ---- foo.dts -----------------------------------------------------------------
 
 We have a number of peripherals that after probing (using some undefined method)
-should result in different device tree configuration.
+should result in different Device Tree configuration.
 
 We cannot boot with this static tree because due to the configuration of the
 foo platform there exist multiple conficting peripherals DT fragments.
@@ -57,8 +57,8 @@ So for the bar peripheral we would have this:
 			bar {
 				compatible = "corp,bar";
 				... /* various properties and child nodes */
-			}
-		}
+			};
+		};
 	};
 ---- foo+bar.dts -------------------------------------------------------------
 
@@ -86,8 +86,8 @@ While for the baz peripheral we would have this:
 				/* reference to another point in the tree */
 				ref-to-res = <&baz_res>;
 				... /* various properties and child nodes */
-			}
-		}
+			};
+		};
 	};
 ---- foo+baz.dts -------------------------------------------------------------
 
@@ -97,13 +97,15 @@ reference another node in the DT tree.
 2. Device Tree Object Format Requirements
 -----------------------------------------
 
-Since the device tree is used for booting a number of very different hardware
+Since the Device Tree is used for booting a number of very different hardware
 platforms it is imperative that we tread very carefully.
 
-2.a) No changes to the Device Tree binary format. We cannot modify the tree
-format at all and all the information we require should be encoded using device
-tree itself. We can add nodes that can be safely ignored by both bootloaders and
-the kernel.
+2.a) No changes to the Device Tree binary format for the base tree. We cannot
+modify the tree format at all and all the information we require should be
+encoded using Device Tree itself. We can add nodes that can be safely ignored
+by both bootloaders and the kernel. The plugin dtbs are optionally tagged
+with a different magic number in the header but otherwise they're simple
+blobs.
 
 2.b) Changes to the DTS source format should be absolutely minimal, and should
 only be needed for the DT fragment definitions, and not the base boot DT.
@@ -121,7 +123,9 @@ possible to express everything using the existing DT syntax.
 The basic unit of addressing in Device Tree is the phandle. Turns out it's
 relatively simple to extend the way phandles are generated and referenced
 so that it's possible to dynamically convert symbolic references (labels)
-to phandle values.
+to phandle values. This is a valid assumption as long as the author uses
+reference syntax and does not assign phandle values manually (which might
+be a problem with decompiled source files).
 
 We can roughly divide the operation into two steps.
 
@@ -138,13 +142,11 @@ $ fdtdump foo.dtb
 	...
 	res {
 		...
-		linux,phandle = <0x00000001>;
 		phandle = <0x00000001>;
 		...
 	};
 	ocp {
 		...
-		linux,phandle = <0x00000002>;
 		phandle = <0x00000002>;
 		...
 	};
@@ -161,14 +163,19 @@ This blob can be used to boot the board normally, the __symbols__ node will
 be safely ignored both by the bootloader and the kernel (the only loss will
 be a few bytes of memory and disk space).
 
+We generate a __symbols__ node to record nodes that had labels in the base
+tree (or subsequent loaded overlays) so that they can be matched up with
+references made to them in Device Tree objects.
+
 3.b) The Device Tree fragments must be compiled with the same option but they
-must also have a tag (/plugin/) that allows undefined references to labels
+must also have a tag (/plugin/) that allows undefined references to nodes
 that are not present at compilation time to be recorded so that the runtime
 loader can fix them.
 
 So the bar peripheral's DTS format would be of the form:
 
-/plugin/;	/* allow undefined label references and record them */
+/dts-v1/;
+/plugin/;	/* allow undefined references and record them */
 / {
 	....	/* various properties for loader use; i.e. part id etc. */
 	fragment@0 {
@@ -184,7 +191,7 @@ So the bar peripheral's DTS format would be of the form:
 };
 
 Note that there's a target property that specifies the location where the
-contents of the overlay node will be placed, and it references the label
+contents of the overlay node will be placed, and it references the node
 in the foo.dts file.
 
 $ dtc -@ -O dtb -o bar.dtbo -b 0 bar.dts
@@ -193,7 +200,7 @@ $ fdtdump bar.dtbo
 / {
 	... /* properties */
 	fragment@0 {
-		target = <0xdeadbeef>;
+		target = <0xffffffff>;
 		__overlay__ {
 			bar {
 				compatible = "corp,bar";
@@ -206,27 +213,29 @@ $ fdtdump bar.dtbo
 	};
 };
 
-No __symbols__ has been generated (no label in bar.dts).
-Note that the target's ocp label is undefined, so the phandle handle
-value is filled with the illegal value '0xdeadbeef', while a __fixups__
+No __symbols__ node has been generated (no label in bar.dts).
+Note that the target's ocp label is undefined, so the phandle
+value is filled with the illegal value '0xffffffff', while a __fixups__
 node has been generated, which marks the location in the tree where
 the label lookup should store the runtime phandle value of the ocp node.
 
 The format of the __fixups__ node entry is
 
-	<label> = "<local-full-path>:<property-name>:<offset>";
+  <label> = "<local-full-path>:<property-name>:<offset>" 
+	    [, "<local-full-path>:<property-name>:<offset>"...];
 
-<label> 		Is the label we're referring
-<local-full-path>	Is the full path of the node the reference is
-<property-name>		Is the name of the property containing the
+  <label> 		Is the label we're referring
+  <local-full-path>	Is the full path of the node the reference is
+  <property-name>	Is the name of the property containing the
 			reference
-<offset>		The offset (in bytes) of where the property's
+  <offset>		The offset (in bytes) of where the property's
 			phandle value is located.
 
 Doing the same with the baz peripheral's DTS format is a little bit more
 involved, since baz contains references to local labels which require
 local fixups.
 
+/dts-v1/;
 /plugin/;	/* allow undefined label references and record them */
 / {
 	....	/* various properties for loader use; i.e. part id etc. */
@@ -259,17 +268,16 @@ $ fdtdump baz.dtbo
 / {
 	... /* properties */
 	fragment@0 {
-		target = <0xdeadbeef>;
+		target = <0xffffffff>;
 		__overlay__ {
 			res_baz {
 				....
-				linux,phandle = <0x00000001>;
 				phandle = <0x00000001>;
 			};
 		};
 	};
 	fragment@1 {
-		target = <0xdeadbeef>;
+		target = <0xffffffff>;
 		__overlay__ {
 			baz {
 				compatible = "corp,baz";
@@ -295,7 +303,8 @@ $ fdtdump baz.dtbo
 
 This is similar to the bar case, but the reference of a local label by the
 baz node generates a __local_fixups__ entry that records the place that the
-local reference is being made. Since phandles are allocated starting at 1
+local reference is being made. No matter how phandles are allocated from dtc
 the run time loader must apply an offset to each phandle in every dynamic
-DT object loaded. The __local_fixups__ node records the place of every
-local reference so that the loader can apply the offset.
+DT object loaded. The __local_fixups__ node records the offset relative to the
+start of every local reference within that property so that the loader can apply
+the offset.
