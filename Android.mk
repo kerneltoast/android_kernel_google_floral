@@ -18,6 +18,8 @@ LOCAL_SRC_FILES := \
 
 LOCAL_STATIC_LIBRARIES := \
   libfdt
+LOCAL_CXX_STL := none
+
 LOCAL_MODULE := dtc
 
 include $(BUILD_HOST_EXECUTABLE)
