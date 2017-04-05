@@ -24,4 +24,6 @@ LOCAL_MODULE := dtc
 
 include $(BUILD_HOST_EXECUTABLE)
 
+$(call dist-for-goals, dist_files, $(ALL_MODULES.dtc.BUILT):dtc/dtc)
+
 include $(LOCAL_PATH)/libfdt/Android.mk
