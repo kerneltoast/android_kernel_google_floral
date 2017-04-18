@@ -3,6 +3,10 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
+LOCAL_CFLAGS := \
+  -Wno-sign-compare \
+  -Wno-missing-field-initializers \
+  -Wno-unused-parameter
 LOCAL_SRC_FILES := \
   checks.c \
   data.c \
