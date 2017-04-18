@@ -15,7 +15,7 @@ common_src_files := \
 
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := -Wno-macro-redefined
+LOCAL_CFLAGS := -Wno-macro-redefined -Wno-sign-compare
 LOCAL_SRC_FILES := $(common_src_files)
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)
 LOCAL_MODULE := libfdt
@@ -27,7 +27,7 @@ include $(BUILD_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 
-LOCAL_CFLAGS := -Wno-macro-redefined
+LOCAL_CFLAGS := -Wno-macro-redefined -Wno-sign-compare
 LOCAL_SRC_FILES := $(common_src_files)
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)
 LOCAL_MODULE := libfdt
