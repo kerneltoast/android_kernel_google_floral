@@ -105,7 +105,7 @@ static int show_data(struct display_info *disp, const char *data, int len)
 	for (i = 0; i < len; i += size, p += size) {
 		if (i)
 			printf(" ");
-		value = size == 4 ? fdt32_to_cpu(*(const uint32_t *)p) :
+		value = size == 4 ? fdt32_to_cpu(*(const fdt32_t *)p) :
 			size == 2 ? (*p << 8) | p[1] : *p;
 		printf(fmt, value);
 	}
@@ -245,7 +245,7 @@ static int show_data_for_item(const void *blob, struct display_info *disp,
  * @param filename	Filename of blob file
  * @param arg		List of arguments to process
  * @param arg_count	Number of arguments
- * @param return 0 if ok, -ve on error
+ * @return 0 if ok, -ve on error
  */
 static int do_fdtget(struct display_info *disp, const char *filename,
 		     char **arg, int arg_count, int args_per_step)
