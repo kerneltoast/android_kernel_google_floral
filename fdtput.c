@@ -67,7 +67,7 @@ static void report_error(const char *name, int namelen, int err)
  * @param arg		List of arguments from command line
  * @param arg_count	Number of arguments (may be 0)
  * @param valuep	Returns buffer containing value
- * @param *value_len	Returns length of value encoded
+ * @param value_len	Returns length of value encoded
  */
 static int encode_value(struct display_info *disp, char **arg, int arg_count,
 			char **valuep, int *value_len)
@@ -107,7 +107,7 @@ static int encode_value(struct display_info *disp, char **arg, int arg_count,
 			if (disp->verbose)
 				fprintf(stderr, "\tstring: '%s'\n", ptr);
 		} else {
-			int *iptr = (int *)ptr;
+			fdt32_t *iptr = (fdt32_t *)ptr;
 			sscanf(*arg, fmt, &ival);
 			if (len == 4)
 				*iptr = cpu_to_fdt32(ival);
