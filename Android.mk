@@ -27,5 +27,3 @@ LOCAL_CXX_STL := none
 LOCAL_MODULE := dtc
 
 include $(BUILD_HOST_EXECUTABLE)
-
-include $(LOCAL_PATH)/libfdt/Android.mk
