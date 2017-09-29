@@ -3,6 +3,7 @@ cc_library_static {
     host_supported: true,
 
     cflags: [
+        "-Werror",
         "-Wno-macro-redefined",
         "-Wno-sign-compare",
     ],
