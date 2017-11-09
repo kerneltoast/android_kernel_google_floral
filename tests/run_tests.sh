@@ -157,7 +157,15 @@ run_fdtdump_test() {
     file="$1"
     shorten_echo fdtdump-runtest.sh "$file"
     printf ":	"
-    base_run_test sh fdtdump-runtest.sh "$file"
+    base_run_test sh fdtdump-runtest.sh "$file" 2>/dev/null
+}
+
+run_fdtoverlay_test() {
+    expect="$1"
+    shift
+    shorten_echo fdtoverlay-runtest.sh "$expect" "$@"
+    printf ":	"
+    base_run_test sh fdtoverlay-runtest.sh "$expect" "$@"
 }
 
 BAD_FIXUP_TREES="bad_index \
@@ -420,7 +428,7 @@ dtc_tests () {
     run_dtc_test -I dts -O dtb -o dtc_path-references.test.dtb path-references.dts
     run_test path-references dtc_path-references.test.dtb
 
-    run_test phandle_format dtc_references.test.dtb both
+    run_test phandle_format dtc_references.test.dtb epapr
     for f in legacy epapr both; do
 	run_dtc_test -I dts -O dtb -H $f -o dtc_references.test.$f.dtb references.dts
 	run_test phandle_format dtc_references.test.$f.dtb $f
@@ -540,6 +548,8 @@ dtc_tests () {
     check_tests obsolete-chosen-interrupt-controller.dts obsolete_chosen_interrupt_controller
     check_tests reg-without-unit-addr.dts unit_address_vs_reg
     check_tests unit-addr-without-reg.dts unit_address_vs_reg
+    check_tests unit-addr-leading-0x.dts unit_address_format
+    check_tests unit-addr-leading-0s.dts unit_address_format
     run_sh_test dtc-checkfails.sh node_name_chars -- -I dtb -O dtb bad_node_char.dtb
     run_sh_test dtc-checkfails.sh node_name_format -- -I dtb -O dtb bad_node_format.dtb
     run_sh_test dtc-checkfails.sh prop_name_chars -- -I dtb -O dtb bad_prop_char.dtb
@@ -769,6 +779,40 @@ fdtdump_tests () {
     run_fdtdump_test fdtdump.dts
 }
 
+fdtoverlay_tests() {
+    base=overlay_base.dts
+    basedtb=overlay_base.fdoverlay.test.dtb
+    overlay=overlay_overlay_manual_fixups.dts
+    overlaydtb=overlay_overlay_manual_fixups.fdoverlay.test.dtb
+    targetdtb=target.fdoverlay.test.dtb
+
+    run_dtc_test -@ -I dts -O dtb -o $basedtb $base
+    run_dtc_test -@ -I dts -O dtb -o $overlaydtb $overlay
+
+    # test that the new property is installed
+    run_fdtoverlay_test foobar "/test-node" "test-str-property" "-ts" ${basedtb} ${targetdtb} ${overlaydtb}
+}
+
+pylibfdt_tests () {
+    TMP=/tmp/tests.stderr.$$
+    python pylibfdt_tests.py -v 2> $TMP
+
+    # Use the 'ok' message meaning the test passed, 'ERROR' meaning it failed
+    # and the summary line for total tests (e.g. 'Ran 17 tests in 0.002s').
+    # We could add pass + fail to get total tests, but this provides a useful
+    # sanity check.
+    pass_count=$(grep "\.\.\. ok$" $TMP | wc -l)
+    fail_count=$(grep "^ERROR: " $TMP | wc -l)
+    total_tests=$(sed -n 's/^Ran \([0-9]*\) tests.*$/\1/p' $TMP)
+    cat $TMP
+    rm $TMP
+
+    # Extract the test results and add them to our totals
+    tot_fail=$((tot_fail + $fail_count))
+    tot_pass=$((tot_pass + $pass_count))
+    tot_tests=$((tot_tests + $total_tests))
+}
+
 while getopts "vt:me" ARG ; do
     case $ARG in
 	"v")
@@ -787,7 +831,12 @@ while getopts "vt:me" ARG ; do
 done
 
 if [ -z "$TESTSETS" ]; then
-    TESTSETS="libfdt utilfdt dtc dtbs_equal fdtget fdtput fdtdump"
+    TESTSETS="libfdt utilfdt dtc dtbs_equal fdtget fdtput fdtdump fdtoverlay"
+
+    # Test pylibfdt if the libfdt Python module is available.
+    if [ -f ../pylibfdt/_libfdt.so ]; then
+        TESTSETS="$TESTSETS pylibfdt"
+    fi
 fi
 
 # Make sure we don't have stale blobs lying around
@@ -815,6 +864,12 @@ for set in $TESTSETS; do
 	    ;;
 	"fdtdump")
 	    fdtdump_tests
+	    ;;
+	"pylibfdt")
+	    pylibfdt_tests
+	    ;;
+        "fdtoverlay")
+	    fdtoverlay_tests
 	    ;;
     esac
 done
