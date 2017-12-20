@@ -459,14 +459,6 @@ __next_base(struct hrtimer_cpu_base *cpu_base, unsigned int *active)
 	while ((base = __next_base((cpu_base), &(active))))
 
 #if defined(CONFIG_NO_HZ_COMMON) || defined(CONFIG_HIGH_RES_TIMERS)
-static inline void hrtimer_update_next_timer(struct hrtimer_cpu_base *cpu_base,
-					     struct hrtimer *timer)
-{
-#ifdef CONFIG_HIGH_RES_TIMERS
-	cpu_base->next_timer = timer;
-#endif
-}
-
 static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base,
 					const struct hrtimer *exclude)
 {
@@ -479,7 +471,7 @@ static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base,
 	 * next_timer in below loop if the timer is being exluded.
 	 */
 	if (!exclude)
-		hrtimer_update_next_timer(cpu_base, NULL);
+		cpu_base->next_timer = NULL;
 	for_each_active_base(base, cpu_base, active) {
 		struct timerqueue_node *next;
 		struct hrtimer *timer;
@@ -504,7 +496,7 @@ static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base,
 			if (exclude)
 				continue;
 
-			hrtimer_update_next_timer(cpu_base, timer);
+			cpu_base->next_timer = timer;
 		}
 	}
 	/*
