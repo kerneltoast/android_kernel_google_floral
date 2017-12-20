@@ -459,19 +459,14 @@ __next_base(struct hrtimer_cpu_base *cpu_base, unsigned int *active)
 	while ((base = __next_base((cpu_base), &(active))))
 
 #if defined(CONFIG_NO_HZ_COMMON) || defined(CONFIG_HIGH_RES_TIMERS)
-static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base,
-					const struct hrtimer *exclude)
+static ktime_t __hrtimer_next_event_base(struct hrtimer_cpu_base *cpu_base,
+					 unsigned int active,
+					 ktime_t expires_next,
+					 const struct hrtimer *exclude)
 {
 	struct hrtimer_clock_base *base;
-	unsigned int active = cpu_base->active_bases;
-	ktime_t expires, expires_next = KTIME_MAX;
+	ktime_t expires;
 
-	/*
-	 * Skip initializing cpu_base->next_timer to NULL as we skip updating
-	 * next_timer in below loop if the timer is being exluded.
-	 */
-	if (!exclude)
-		cpu_base->next_timer = NULL;
 	for_each_active_base(base, cpu_base, active) {
 		struct timerqueue_node *next;
 		struct hrtimer *timer;
@@ -506,6 +501,25 @@ static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base,
 	 */
 	if (expires_next < 0)
 		expires_next = 0;
+	return expires_next;
+}
+
+static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base,
+					const struct hrtimer *exclude)
+{
+	unsigned int active = cpu_base->active_bases;
+	ktime_t expires_next = KTIME_MAX;
+
+	/*
+	 * Skip initializing cpu_base->next_timer to NULL as we skip updating
+	 * next_timer in below loop if the timer is being exluded.
+	 */
+	if (!exclude)
+		cpu_base->next_timer = NULL;
+
+	expires_next = __hrtimer_next_event_base(cpu_base, active, expires_next,
+						 exclude);
+
 	return expires_next;
 }
 #endif
