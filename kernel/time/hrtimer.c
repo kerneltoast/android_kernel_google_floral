@@ -60,6 +60,15 @@
 #include "tick-internal.h"
 
 /*
+ * Masks for selecting the soft and hard context timers from
+ * cpu_base->active
+ */
+#define MASK_SHIFT		(HRTIMER_BASE_MONOTONIC_SOFT)
+#define HRTIMER_ACTIVE_HARD	((1U << MASK_SHIFT) - 1)
+#define HRTIMER_ACTIVE_SOFT	(HRTIMER_ACTIVE_HARD << MASK_SHIFT)
+#define HRTIMER_ACTIVE_ALL	(HRTIMER_ACTIVE_SOFT | HRTIMER_ACTIVE_HARD)
+
+/*
  * The timer bases:
  *
  * There are more clockids than hrtimer bases. Thus, we index
@@ -524,10 +533,20 @@ static ktime_t __hrtimer_next_event_base(struct hrtimer_cpu_base *cpu_base,
 	return expires_next;
 }
 
+/*
+ * Recomputes cpu_base::*next_timer and returns the earliest expires_next but
+ * does not set cpu_base::*expires_next, that is done by hrtimer_reprogram.
+ *
+ * @active_mask must be one of:
+ *  - HRTIMER_ACTIVE,
+ *  - HRTIMER_ACTIVE_SOFT, or
+ *  - HRTIMER_ACTIVE_HARD.
+ */
 static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base,
+					unsigned int active_mask,
 					const struct hrtimer *exclude)
 {
-	unsigned int active = cpu_base->active_bases;
+	unsigned int active;
 	ktime_t expires_next = KTIME_MAX;
 
 	/*
@@ -537,6 +556,7 @@ static ktime_t __hrtimer_get_next_event(struct hrtimer_cpu_base *cpu_base,
 	if (!exclude)
 		cpu_base->next_timer = NULL;
 
+	active = cpu_base->active_bases & active_mask;
 	expires_next = __hrtimer_next_event_base(cpu_base, active, expires_next,
 						 exclude);
 
@@ -578,7 +598,8 @@ hrtimer_force_reprogram(struct hrtimer_cpu_base *cpu_base, int skip_equal)
 {
 	ktime_t expires_next;
 
-	expires_next = __hrtimer_get_next_event(cpu_base, NULL);
+	expires_next = __hrtimer_get_next_event(cpu_base, HRTIMER_ACTIVE_HARD,
+						NULL);
 
 	if (skip_equal && expires_next == cpu_base->expires_next)
 		return;
@@ -1114,7 +1135,8 @@ u64 hrtimer_get_next_event(void)
 	raw_spin_lock_irqsave(&cpu_base->lock, flags);
 
 	if (!__hrtimer_hres_active(cpu_base))
-		expires = __hrtimer_get_next_event(cpu_base, NULL);
+		expires = __hrtimer_get_next_event(cpu_base, HRTIMER_ACTIVE_HARD,
+						   NULL);
 
 	raw_spin_unlock_irqrestore(&cpu_base->lock, flags);
 
@@ -1137,7 +1159,8 @@ u64 hrtimer_next_event_without(const struct hrtimer *exclude)
 	raw_spin_lock_irqsave(&cpu_base->lock, flags);
 
 	if (__hrtimer_hres_active(cpu_base))
-		expires = __hrtimer_get_next_event(cpu_base, exclude);
+		expires = __hrtimer_get_next_event(cpu_base, HRTIMER_ACTIVE_HARD,
+						   exclude);
 
 	raw_spin_unlock_irqrestore(&cpu_base->lock, flags);
 
@@ -1311,10 +1334,10 @@ static void __run_hrtimer(struct hrtimer_cpu_base *cpu_base,
 }
 
 static void __hrtimer_run_queues(struct hrtimer_cpu_base *cpu_base, ktime_t now,
-				 unsigned long flags)
+				 unsigned long flags, unsigned int active_mask)
 {
 	struct hrtimer_clock_base *base;
-	unsigned int active = cpu_base->active_bases;
+	unsigned int active = cpu_base->active_bases & active_mask;
 
 	for_each_active_base(base, cpu_base, active) {
 		struct timerqueue_node *node;
@@ -1377,10 +1400,11 @@ retry:
 	 */
 	cpu_base->expires_next = KTIME_MAX;
 
-	__hrtimer_run_queues(cpu_base, now, flags);
+	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
 
 	/* Reevaluate the clock bases for the next expiry */
-	expires_next = __hrtimer_get_next_event(cpu_base, NULL);
+	expires_next = __hrtimer_get_next_event(cpu_base, HRTIMER_ACTIVE_HARD,
+						NULL);
 	/*
 	 * Store the new expiry value so the migration code can verify
 	 * against it.
@@ -1484,7 +1508,7 @@ void hrtimer_run_queues(void)
 
 	raw_spin_lock_irqsave(&cpu_base->lock, flags);
 	now = hrtimer_update_base(cpu_base);
-	__hrtimer_run_queues(cpu_base, now, flags);
+	__hrtimer_run_queues(cpu_base, now, flags, HRTIMER_ACTIVE_HARD);
 	raw_spin_unlock_irqrestore(&cpu_base->lock, flags);
 }
 
