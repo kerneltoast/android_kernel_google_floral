@@ -1748,8 +1748,7 @@ int __sched rt_mutex_slowlock_locked(struct rt_mutex *lock, int state,
 
 	if (unlikely(ret)) {
 		__set_current_state(TASK_RUNNING);
-		if (rt_mutex_has_waiters(lock))
-			remove_waiter(lock, waiter);
+		remove_waiter(lock, waiter);
 		/* ww_mutex want to report EDEADLK/EALREADY, let them */
 		if (!ww_ctx)
 			rt_mutex_handle_deadlock(ret, chwalk, waiter);
@@ -2360,7 +2359,7 @@ int rt_mutex_start_proxy_lock(struct rt_mutex *lock,
 
 	raw_spin_lock_irq(&lock->wait_lock);
 	ret = __rt_mutex_start_proxy_lock(lock, waiter, task);
-	if (ret && rt_mutex_has_waiters(lock))
+	if (unlikely(ret))
 		remove_waiter(lock, waiter);
 	raw_spin_unlock_irq(&lock->wait_lock);
 
