@@ -73,6 +73,8 @@
 	tdls_logfl(QDF_TRACE_LEVEL_ERROR, format, ## args)
 #define tdls_alert(format, args...) \
 	tdls_logfl(QDF_TRACE_LEVEL_FATAL, format, ## args)
+#define tdls_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_TDLS, params)
+
 
 #define TDLS_IS_LINK_CONNECTED(peer)  \
 	((TDLS_LINK_CONNECTED == (peer)->link_status) || \
