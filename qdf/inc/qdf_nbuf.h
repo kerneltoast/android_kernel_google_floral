@@ -217,6 +217,7 @@
  * @he_data3: HE property of received frame
  * @he_data4: HE property of received frame
  * @he_data5: HE property of received frame
+ * @prev_ppdu_id: ppdu_id in previously received message
  *
  */
 struct mon_rx_status {
@@ -286,6 +287,7 @@ struct mon_rx_status {
 	uint16_t he_data5;
 	uint16_t he_data6;
 	uint32_t ppdu_len;
+	uint32_t prev_ppdu_id;
 };
 
 /* Masks for HE SIG known fields in mon_rx_status structure */
@@ -2566,20 +2568,6 @@ static inline
 bool qdf_nbuf_is_bcast_pkt(qdf_nbuf_t buf)
 {
 	return __qdf_nbuf_is_bcast_pkt(buf);
-}
-
-/**
- * qdf_invalidate_range() - invalidate virtual address range
- * @start: start address of the address range
- * @end: end address of the address range
- *
- * Note that this function does not write back the cache entries.
- *
- * Return: none
- */
-static inline void qdf_invalidate_range(void *start, void *end)
-{
-	__qdf_invalidate_range(start, end);
 }
 
 /**

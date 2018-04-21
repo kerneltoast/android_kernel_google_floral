@@ -222,6 +222,28 @@
 #define WMI_HOST_TXBF_CONF_BF_SND_DIM_SET(x, z) \
 	WMI_HOST_F_RMW(x, z, WMI_HOST_TXBF_CONF_BF_SND_DIM)
 
+/* The following WMI_HOST_HEOPS_BSSCOLOR_XXX macros correspond to the
+ *  WMI_HEOPS_COLOR_XXX macros in the FW wmi_unified.h */
+#define WMI_HOST_HEOPS_BSSCOLOR_S 0
+#define WMI_HOST_HEOPS_BSSCOLOR_M 0x3f
+#define WMI_HOST_HEOPS_BSSCOLOR \
+	(WMI_HOST_HEOPS_BSSCOLOR_M << WMI_HOST_HEOPS_BSSCOLOR_S)
+#define WMI_HOST_HEOPS_BSSCOLOR_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_HEOPS_BSSCOLOR)
+#define WMI_HOST_HEOPS_BSSCOLOR_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_HEOPS_BSSCOLOR)
+
+/* The following WMI_HOST_HEOPS_BSSCOLOR_DISABLE_XXX macros correspond to the
+ *  WMI_HEOPS_BSSCOLORDISABLE_XXX macros in the FW wmi_unified.h */
+#define WMI_HOST_HEOPS_BSSCOLOR_DISABLE_S 30
+#define WMI_HOST_HEOPS_BSSCOLOR_DISABLE_M 0x1
+#define WMI_HOST_HEOPS_BSSCOLOR_DISABLE \
+	(WMI_HOST_HEOPS_BSSCOLOR_DISABLE_M << WMI_HOST_HEOPS_BSSCOLOR_DISABLE_S)
+#define WMI_HOST_HEOPS_BSSCOLOR_DISABLE_GET(x) \
+	WMI_HOST_F_MS(x, WMI_HOST_HEOPS_BSSCOLOR_DISABLE)
+#define WMI_HOST_HEOPS_BSSCOLOR_DISABLE_SET(x, z) \
+	WMI_HOST_F_RMW(x, z, WMI_HOST_HEOPS_BSSCOLOR_DISABLE)
+
 /* HE BF capabilities mask */
 #define WMI_HOST_HE_BF_CONF_SU_BFEE_S 0
 #define WMI_HOST_HE_BF_CONF_SU_BFEE_M 0x1
@@ -6410,11 +6432,13 @@ typedef struct {
  * @desc_id: from tx_send_cmd
  * @status: WMI_MGMT_TX_COMP_STATUS_TYPE
  * @pdev_id: pdev_id
+ * @ppdu_id: ppdu_id
  */
 typedef struct {
 	uint32_t	desc_id;
 	uint32_t	status;
 	uint32_t	pdev_id;
+	uint32_t        ppdu_id;
 } wmi_host_mgmt_tx_compl_event;
 
 /**

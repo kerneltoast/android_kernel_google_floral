@@ -29,7 +29,7 @@
 
 /**
 * dp_rx_populate_cdp_indication_ppdu() - Populate cdp rx indication structure
-* @soc: core txrx main context
+* @pdev: pdev ctx
 * @ppdu_info: ppdu info structure from ppdu ring
 * @ppdu_nbuf: qdf nbuf abstraction for linux skb
 *
@@ -37,40 +37,20 @@
 */
 #ifdef FEATURE_PERPKT_INFO
 static inline void
-dp_rx_populate_cdp_indication_ppdu(struct dp_soc *soc,
+dp_rx_populate_cdp_indication_ppdu(struct dp_pdev *pdev,
 	struct hal_rx_ppdu_info *ppdu_info,
 	qdf_nbuf_t ppdu_nbuf)
 {
 	struct dp_peer *peer;
+	struct dp_soc *soc = pdev->soc;
 	struct dp_ast_entry *ast_entry;
 	struct cdp_rx_indication_ppdu *cdp_rx_ppdu;
 	uint32_t ast_index;
 
 	cdp_rx_ppdu = (struct cdp_rx_indication_ppdu *)ppdu_nbuf->data;
 
-	ast_index = ppdu_info->rx_status.ast_index;
-	if (ast_index > (WLAN_UMAC_PSOC_MAX_PEERS * 2)) {
-		cdp_rx_ppdu->peer_id = HTT_INVALID_PEER;
-		return;
-	}
-
-	ast_entry = soc->ast_table[ast_index];
-	if (!ast_entry) {
-		cdp_rx_ppdu->peer_id = HTT_INVALID_PEER;
-		return;
-	}
-	peer = ast_entry->peer;
-	if (!peer || peer->peer_ids[0] == HTT_INVALID_PEER) {
-		cdp_rx_ppdu->peer_id = HTT_INVALID_PEER;
-		return;
-	}
-
-	qdf_mem_copy(cdp_rx_ppdu->mac_addr,
-			peer->mac_addr.raw, DP_MAC_ADDR_LEN);
 	cdp_rx_ppdu->first_data_seq_ctrl =
 		ppdu_info->rx_status.first_data_seq_ctrl;
-	cdp_rx_ppdu->peer_id = peer->peer_ids[0];
-	cdp_rx_ppdu->vdev_id = peer->vdev->vdev_id;
 	cdp_rx_ppdu->ppdu_id = ppdu_info->com_info.ppdu_id;
 	cdp_rx_ppdu->length = ppdu_info->rx_status.ppdu_len;
 	cdp_rx_ppdu->duration = ppdu_info->rx_status.duration;
@@ -99,10 +79,32 @@ dp_rx_populate_cdp_indication_ppdu(struct dp_soc *soc,
 
 	cdp_rx_ppdu->tid = ppdu_info->rx_status.tid;
 	cdp_rx_ppdu->lsig_a = ppdu_info->rx_status.rate;
+
+	ast_index = ppdu_info->rx_status.ast_index;
+	if (ast_index > (WLAN_UMAC_PSOC_MAX_PEERS * 2)) {
+		cdp_rx_ppdu->peer_id = HTT_INVALID_PEER;
+		return;
+	}
+
+	ast_entry = soc->ast_table[ast_index];
+	if (!ast_entry) {
+		cdp_rx_ppdu->peer_id = HTT_INVALID_PEER;
+		return;
+	}
+	peer = ast_entry->peer;
+	if (!peer || peer->peer_ids[0] == HTT_INVALID_PEER) {
+		cdp_rx_ppdu->peer_id = HTT_INVALID_PEER;
+		return;
+	}
+
+	qdf_mem_copy(cdp_rx_ppdu->mac_addr,
+		     peer->mac_addr.raw, DP_MAC_ADDR_LEN);
+	cdp_rx_ppdu->peer_id = peer->peer_ids[0];
+	cdp_rx_ppdu->vdev_id = peer->vdev->vdev_id;
 }
 #else
 static inline void
-dp_rx_populate_cdp_indication_ppdu(struct dp_soc *soc,
+dp_rx_populate_cdp_indication_ppdu(struct dp_pdev *pdev,
 		struct hal_rx_ppdu_info *ppdu_info,
 		qdf_nbuf_t ppdu_nbuf)
 {
@@ -216,7 +218,7 @@ dp_rx_handle_mcopy_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 {
 	uint8_t size = 0;
 
-	if (ppdu_info->first_msdu_payload == NULL)
+	if (ppdu_info->msdu_info.first_msdu_payload == NULL)
 		return QDF_STATUS_SUCCESS;
 
 	if (pdev->m_copy_id.rx_ppdu_id == ppdu_info->com_info.ppdu_id)
@@ -225,12 +227,16 @@ dp_rx_handle_mcopy_mode(struct dp_soc *soc, struct dp_pdev *pdev,
 	pdev->m_copy_id.rx_ppdu_id = ppdu_info->com_info.ppdu_id;
 
 	/* Include 2 bytes of reserved space appended to the msdu payload */
-	size = (ppdu_info->first_msdu_payload - qdf_nbuf_data(nbuf)) + 2;
-	ppdu_info->first_msdu_payload = NULL;
+	size = (ppdu_info->msdu_info.first_msdu_payload -
+				qdf_nbuf_data(nbuf)) + 2;
+	ppdu_info->msdu_info.first_msdu_payload = NULL;
 
 	if (qdf_nbuf_pull_head(nbuf, size) == NULL)
 		return QDF_STATUS_SUCCESS;
 
+	/* only retain RX MSDU payload in the skb */
+	qdf_nbuf_trim_tail(nbuf, qdf_nbuf_len(nbuf) -
+				ppdu_info->msdu_info.payload_len);
 	dp_wdi_event_handler(WDI_EVENT_RX_DATA, soc,
 			nbuf, HTT_INVALID_PEER, WDI_NO_VAL, pdev->pdev_id);
 	return QDF_STATUS_E_ALREADY;
@@ -266,19 +272,20 @@ dp_rx_handle_ppdu_stats(struct dp_soc *soc, struct dp_pdev *pdev,
 	 * Do not allocate if fcs error,
 	 * ast idx invalid / fctl invalid
 	 */
-	if (!ppdu_info->rx_status.frame_control_info_valid)
-		return;
-
 	if (ppdu_info->com_info.mpdu_cnt_fcs_ok == 0)
 		return;
 
-	if (ppdu_info->rx_status.ast_index == HAL_AST_IDX_INVALID)
-		return;
+	if (!pdev->mcopy_mode) {
+		if (!ppdu_info->rx_status.frame_control_info_valid)
+			return;
 
+		if (ppdu_info->rx_status.ast_index == HAL_AST_IDX_INVALID)
+			return;
+	}
 	ppdu_nbuf = qdf_nbuf_alloc(soc->osdev,
 			sizeof(struct hal_rx_ppdu_info), 0, 0, FALSE);
 	if (ppdu_nbuf) {
-		dp_rx_populate_cdp_indication_ppdu(soc, ppdu_info, ppdu_nbuf);
+		dp_rx_populate_cdp_indication_ppdu(pdev, ppdu_info, ppdu_nbuf);
 		qdf_nbuf_put_tail(ppdu_nbuf,
 				sizeof(struct cdp_rx_indication_ppdu));
 		cdp_rx_ppdu = (struct cdp_rx_indication_ppdu *)ppdu_nbuf->data;

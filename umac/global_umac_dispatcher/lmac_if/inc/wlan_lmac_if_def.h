@@ -71,6 +71,32 @@ struct scheduler_msg;
 #include "wlan_tdls_public_structs.h"
 #endif
 
+#ifdef QCA_SUPPORT_CP_STATS
+#include <wlan_cp_stats_tgt_api.h>
+#endif
+
+#ifdef QCA_SUPPORT_CP_STATS
+/**
+ * struct wlan_lmac_if_cp_stats_tx_ops - defines southbound tx callbacks for
+ * control plane statistics component
+ * @cp_stats_attach:	function pointer to register events from FW
+ * @cp_stats_detach:	function pointer to unregister events from FW
+ */
+struct wlan_lmac_if_cp_stats_tx_ops {
+	QDF_STATUS (*cp_stats_attach)(struct wlan_objmgr_psoc *psoc);
+	QDF_STATUS (*cp_stats_detach)(struct wlan_objmgr_psoc *posc);
+};
+
+/**
+ * struct wlan_lmac_if_cp_stats_rx_ops - defines southbound rx callbacks for
+ * control plane statistics component
+ * @cp_stats_rx_event_handler:	function pointer to rx FW events
+ */
+struct wlan_lmac_if_cp_stats_rx_ops {
+	QDF_STATUS (*cp_stats_rx_event_handler)(struct wlan_objmgr_vdev *vdev);
+};
+#endif
+
 /**
  * struct wlan_lmac_if_mgmt_txrx_tx_ops - structure of tx function
  *                  pointers for mgmt txrx component
@@ -337,6 +363,7 @@ struct wmi_spectral_cmd_ops;
  * @sptrlto_register_netlink_cb: Register Spectral Netlink callbacks
  * @sptrlto_use_nl_bcast: Get whether to use Netlink broadcast/unicast
  * @sptrlto_deregister_netlink_cb: De-register Spectral Netlink callbacks
+ * @sptrlto_process_spectral_report: Process spectral report
  **/
 struct wlan_lmac_if_sptrl_tx_ops {
 	void *(*sptrlto_pdev_spectral_init)(struct wlan_objmgr_pdev *pdev);
@@ -366,6 +393,9 @@ struct wlan_lmac_if_sptrl_tx_ops {
 		struct spectral_nl_cb *nl_cb);
 	bool (*sptrlto_use_nl_bcast)(struct wlan_objmgr_pdev *pdev);
 	void (*sptrlto_deregister_netlink_cb)(struct wlan_objmgr_pdev *pdev);
+	int (*sptrlto_process_spectral_report)(
+		struct wlan_objmgr_pdev *pdev,
+		void *payload);
 };
 #endif /* WLAN_CONV_SPECTRAL_ENABLE */
 
@@ -634,6 +664,7 @@ struct wlan_lmac_if_green_ap_tx_ops {
  * @scan: scan tx ops
  * @dfs_tx_ops: dfs tx ops.
  * @green_ap_tx_ops: green_ap tx_ops
+ * @cp_stats_tx_ops: cp stats tx_ops
  *
  * Callback function tabled to be registered with umac.
  * umac will use the functional table to send events/frames to lmac/wmi
@@ -656,6 +687,9 @@ struct wlan_lmac_if_tx_ops {
 
 #ifdef WLAN_ATF_ENABLE
 	struct wlan_lmac_if_atf_tx_ops atf_tx_ops;
+#endif
+#ifdef QCA_SUPPORT_CP_STATS
+	struct wlan_lmac_if_cp_stats_tx_ops cp_stats_tx_ops;
 #endif
 #ifdef WLAN_SA_API_ENABLE
 	struct wlan_lmac_if_sa_api_tx_ops sa_api_tx_ops;
@@ -1129,6 +1163,7 @@ struct wlan_lmac_if_green_ap_rx_ops {
  * @mgmt_txrx_tx_ops: mgmt txrx rx ops
  * @scan: scan rx ops
  * @dfs_rx_ops: dfs rx ops.
+ * @cp_stats_rx_ops: cp stats rx ops
  *
  * Callback function tabled to be registered with lmac/wmi.
  * lmac will use the functional table to send events/frames to umac
@@ -1147,6 +1182,9 @@ struct wlan_lmac_if_rx_ops {
 
 #ifdef WLAN_ATF_ENABLE
 	struct wlan_lmac_if_atf_rx_ops atf_rx_ops;
+#endif
+#ifdef QCA_SUPPORT_CP_STATS
+	struct wlan_lmac_if_cp_stats_rx_ops cp_stats_rx_ops;
 #endif
 #ifdef WLAN_SA_API_ENABLE
 	struct wlan_lmac_if_sa_api_rx_ops sa_api_rx_ops;

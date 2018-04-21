@@ -1175,9 +1175,9 @@ target_if_process_sfft_report_gen3(
 }
 
 int
-target_if_dump_fft_report_gen3(struct spectral_phyerr_fft_report_gen3
-			       *p_fft_report,
-			       struct spectral_search_fft_info_gen3 *p_sfft)
+target_if_dump_fft_report_gen3(struct target_if_spectral *spectral,
+			struct spectral_phyerr_fft_report_gen3 *p_fft_report,
+			struct spectral_search_fft_info_gen3 *p_sfft)
 {
 	int i = 0;
 	int fft_mag = 0;
@@ -1185,6 +1185,15 @@ target_if_dump_fft_report_gen3(struct spectral_phyerr_fft_report_gen3
 	int report_len = (fft_hdr_length + 8);
 	int fft_bin_len = (fft_hdr_length - 16);
 	int fft_bin_len_adj = fft_bin_len >> 2;
+	int fft_bin_len_inband_tfer = 0;
+	int fft_bin_len_to_dump = fft_bin_len;
+
+	if ((spectral->params.ss_rpt_mode == 2) &&
+			spectral->inband_fftbin_size_adj) {
+		fft_bin_len_adj >>= 1;
+		fft_bin_len_inband_tfer = fft_bin_len >> 1;
+		fft_bin_len_to_dump = fft_bin_len_inband_tfer;
+	}
 
 	spectral_debug("#############################################################");
 	spectral_debug("Spectral search fft_report");
@@ -1199,6 +1208,12 @@ target_if_dump_fft_report_gen3(struct spectral_phyerr_fft_report_gen3
 		       report_len, report_len);
 	spectral_debug("FW reported fftbins in report is %d(0x%x)", fft_bin_len,
 		       fft_bin_len);
+	if ((spectral->params.ss_rpt_mode == 2) &&
+			spectral->inband_fftbin_size_adj) {
+		spectral_debug("FW fftbins actually transfered (in-band report mode) "
+					"%d(0x%x)",
+					fft_bin_len_inband_tfer, fft_bin_len_inband_tfer);
+	}
 	spectral_debug("Actual number of fftbins in report is %d(0x%x)\n",
 			fft_bin_len_adj, fft_bin_len_adj);
 
@@ -1215,7 +1230,7 @@ target_if_dump_fft_report_gen3(struct spectral_phyerr_fft_report_gen3
 		       p_sfft->fft_avgpwr_db, p_sfft->fft_relpwr_db);
 
 	spectral_debug("FFT bins:");
-	for (i = 0; i < (fft_hdr_length - 16); i++) {
+	for (i = 0; i < fft_bin_len_to_dump; i++) {
 		if (i % 16 == 0)
 			spectral_debug("\n%d :", i);
 		fft_mag =
@@ -1296,16 +1311,7 @@ target_if_verify_sig_and_tag_gen3(struct target_if_spectral *spectral,
 	return 0;
 }
 
-/**
- * target_if_consume_sfft_report_gen3() -  Process fft report for gen3
- * @spectral: Pointer to spectral object
- * @data: Pointer to phyerror data
- *
- * Process fft report for gen3
- *
- * Return: Success/Failure
- */
-static int
+int
 target_if_consume_spectral_report_gen3(
 	 struct target_if_spectral *spectral,
 	 uint8_t *data)
@@ -1376,7 +1382,14 @@ target_if_consume_spectral_report_gen3(
 	}
 
 	report_len = (fft_hdr_length + 8);
+
 	fft_bin_len = (fft_hdr_length - 16);
+	fft_bin_len >>= 2;
+	if ((spectral->params.ss_rpt_mode == 2) &&
+			spectral->inband_fftbin_size_adj) {
+		fft_bin_len >>= 1;
+	}
+
 	tsf64 = p_fft_report->fft_timestamp;
 
 	target_if_process_sfft_report_gen3(p_fft_report, p_sfft);
@@ -1389,7 +1402,7 @@ target_if_consume_spectral_report_gen3(
 	}
 
 	if (spectral_debug_level & (DEBUG_SPECTRAL2 | DEBUG_SPECTRAL4))
-		target_if_dump_fft_report_gen3(p_fft_report, p_sfft);
+		target_if_dump_fft_report_gen3(spectral, p_fft_report, p_sfft);
 
 	if (spectral->upper_is_control)
 		rssi_up = control_rssi;
@@ -1471,7 +1484,7 @@ target_if_consume_spectral_report_gen3(
 	/* TODO:  Fill proper values once FW provides them*/
 	params.noise_floor       = DUMMY_NF_VALUE;
 	params.datalen           = (fft_hdr_length * 4);
-	params.pwr_count         = fft_bin_len >> 2;
+	params.pwr_count         = fft_bin_len;
 	params.tstamp            = (tsf64 & SPECTRAL_TSMASK);
 
 	if (spectral->ch_width == CH_WIDTH_160MHZ) {
@@ -1496,7 +1509,13 @@ target_if_consume_spectral_report_gen3(
 		p_fft_report = (struct spectral_phyerr_fft_report_gen3 *)(data);
 		fft_hdr_length = p_fft_report->fft_hdr_length * 4;
 		report_len     = (fft_hdr_length + 8);
+
 		fft_bin_len    = (fft_hdr_length - 16);
+		fft_bin_len >>= 2;
+		if ((spectral->params.ss_rpt_mode == 2) &&
+				spectral->inband_fftbin_size_adj) {
+			fft_bin_len >>= 1;
+		}
 
 		target_if_process_sfft_report_gen3(p_fft_report, p_sfft);
 
@@ -1509,7 +1528,7 @@ target_if_consume_spectral_report_gen3(
 
 		if (spectral_debug_level &
 		    (DEBUG_SPECTRAL2 | DEBUG_SPECTRAL4))
-			target_if_dump_fft_report_gen3(p_fft_report, p_sfft);
+			target_if_dump_fft_report_gen3(spectral, p_fft_report, p_sfft);
 
 		params.vhtop_ch_freq_seg1 = 0;
 		params.vhtop_ch_freq_seg2 = 0;
@@ -1534,7 +1553,7 @@ target_if_consume_spectral_report_gen3(
 		/* params.max_index_sec80      = p_sfft->peak_inx; */
 		/* XXX Does this definition of datalen *still hold? */
 		params.datalen_sec80        = fft_hdr_length;
-		params.pwr_count_sec80      = fft_bin_len >> 2;
+		params.pwr_count_sec80      = fft_bin_len;
 		params.bin_pwr_data_sec80   = (u_int8_t *)(
 			(uint8_t *)p_fft_report + SPECTRAL_FFT_BINS_POS);
 	}
@@ -1553,11 +1572,13 @@ target_if_consume_spectral_report_gen3(
 	return -EPERM;
 }
 
-int target_if_spectral_process_phyerr_gen3(
+#ifdef DIRECT_BUF_RX_ENABLE
+int target_if_spectral_process_report_gen3(
 	struct wlan_objmgr_pdev *pdev,
-	struct direct_buf_rx_data *payload)
+	void *buf)
 {
 	int ret = 0;
+	struct direct_buf_rx_data *payload = buf;
 	uint8_t *data = (uint8_t *)payload->vaddr;
 	struct target_if_spectral *spectral;
 
@@ -1569,8 +1590,9 @@ int target_if_spectral_process_phyerr_gen3(
 
 	if (spectral_debug_level & (DEBUG_SPECTRAL2 | DEBUG_SPECTRAL4)) {
 		spectral_debug("Printing the spectral phyerr buffer for debug");
-		spectral_debug("Datalength of buffer = 0x%x(%d) bufptr = 0x%p",
-			  payload->dbr_len, payload->dbr_len, payload->vaddr);
+		spectral_debug("Datalength of buffer = 0x%x(%d) bufptr = 0x%pK",
+			       payload->dbr_len, payload->dbr_len,
+			       payload->vaddr);
 #ifdef CONFIG_WIN
 		RAWSIM_PKT_HEXDUMP((unsigned char *)payload->vaddr, 1024);
 #endif
@@ -1583,7 +1605,16 @@ int target_if_spectral_process_phyerr_gen3(
 
 	return ret;
 }
-qdf_export_symbol(target_if_spectral_process_phyerr_gen3);
+#else
+int target_if_spectral_process_report_gen3(
+	struct wlan_objmgr_pdev *pdev,
+	void *buf)
+{
+	spectral_err("Direct dma support is not enabled");
+	return -EINVAL;
+}
+#endif
+qdf_export_symbol(target_if_spectral_process_report_gen3);
 /* END of spectral GEN III HW specific functions */
 
 #endif  /* WLAN_SPECTRAL_ENABLE */

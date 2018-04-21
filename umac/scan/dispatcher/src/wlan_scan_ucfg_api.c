@@ -278,11 +278,11 @@ static void ucfg_scan_update_pno_dwell_time(struct wlan_objmgr_vdev *vdev,
 		return;
 
 	sap_or_p2p_present = policy_mgr_mode_specific_connection_count(
-				psoc, QDF_SAP_MODE, NULL) ||
+				psoc, PM_SAP_MODE, NULL) ||
 				policy_mgr_mode_specific_connection_count(
-				psoc, QDF_P2P_GO_MODE, NULL) ||
+				psoc, PM_P2P_GO_MODE, NULL) ||
 				policy_mgr_mode_specific_connection_count(
-				psoc, QDF_P2P_CLIENT_MODE, NULL);
+				psoc, PM_P2P_CLIENT_MODE, NULL);
 
 	if (sap_or_p2p_present) {
 		req->active_dwell_time = scan_def->conc_active_dwell;
@@ -593,15 +593,15 @@ static void ucfg_scan_req_update_concurrency_params(
 		return;
 
 	ap_present = policy_mgr_mode_specific_connection_count(
-				psoc, QDF_SAP_MODE, NULL);
+				psoc, PM_SAP_MODE, NULL);
 	go_present = policy_mgr_mode_specific_connection_count(
-				psoc, QDF_P2P_GO_MODE, NULL);
+				psoc, PM_P2P_GO_MODE, NULL);
 	p2p_cli_present = policy_mgr_mode_specific_connection_count(
-				psoc, QDF_P2P_CLIENT_MODE, NULL);
+				psoc, PM_P2P_CLIENT_MODE, NULL);
 	sta_active = policy_mgr_mode_specific_connection_count(
-				psoc, QDF_STA_MODE, NULL);
+				psoc, PM_STA_MODE, NULL);
 	ndi_present = policy_mgr_mode_specific_connection_count(
-				psoc, QDF_NDI_MODE, NULL);
+				psoc, PM_NDI_MODE, NULL);
 
 	if (policy_mgr_get_connection_count(psoc)) {
 		if (req->scan_req.scan_f_passive)
@@ -700,7 +700,7 @@ static void ucfg_scan_req_update_concurrency_params(
 		uint8_t ap_chan;
 		struct wlan_objmgr_pdev *pdev = wlan_vdev_get_pdev(vdev);
 
-		ap_chan = policy_mgr_get_channel(psoc, QDF_SAP_MODE, NULL);
+		ap_chan = policy_mgr_get_channel(psoc, PM_SAP_MODE, NULL);
 		/*
 		 * P2P/STA scan while SoftAP is sending beacons.
 		 * Max duration of CTS2self is 32 ms, which limits the
@@ -739,6 +739,26 @@ ucfg_scan_update_dbs_scan_ctrl_ext_flag(
 	struct scan_start_request *req) {}
 #endif
 
+QDF_STATUS
+ucfg_scan_set_custom_scan_chan_list(struct wlan_objmgr_pdev *pdev,
+		struct chan_list *chan_list)
+{
+	uint8_t pdev_id;
+	struct wlan_scan_obj *scan_obj;
+
+	if (!pdev || !chan_list) {
+		scm_warn("pdev: 0x%pK, chan_list: 0x%pK", pdev, chan_list);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	scan_obj = wlan_pdev_get_scan_obj(pdev);
+
+	qdf_mem_copy(&scan_obj->pdev_info[pdev_id].custom_chan_list,
+			chan_list, sizeof(*chan_list));
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * ucfg_scan_req_update_params() - update scan req params depending on modes
  * and scan type.
@@ -752,6 +772,9 @@ static void
 ucfg_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	struct scan_start_request *req, struct wlan_scan_obj *scan_obj)
 {
+	struct chan_list *custom_chan_list;
+	struct wlan_objmgr_pdev *pdev;
+	uint8_t pdev_id;
 
 	/* Ensure correct number of probes are sent on active channel */
 	if (!req->scan_req.repeat_probe_time)
@@ -831,11 +854,34 @@ ucfg_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 	      req->scan_req.chan_list.num_chan == 1))
 		ucfg_scan_req_update_concurrency_params(vdev, req, scan_obj);
 
-	scm_debug("dwell time: active %d ;passive %d, repeat_probe_time %d n_probes %d flags_ext %x",
-		  req->scan_req.dwell_time_active,
-		  req->scan_req.dwell_time_passive,
-		  req->scan_req.repeat_probe_time, req->scan_req.n_probes,
-		  req->scan_req.scan_ctrl_flags_ext);
+	/* Set wide band flag if enabled. This will cause
+	 * phymode TLV being sent to FW.
+	 */
+	pdev = wlan_vdev_get_pdev(vdev);
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
+	if (ucfg_scan_get_wide_band_scan(pdev))
+		req->scan_req.scan_f_wide_band = true;
+	else
+		req->scan_req.scan_f_wide_band = false;
+
+	/* Overwrite scan channles with custom scan channel
+	 * list if configured.
+	 */
+	custom_chan_list = &scan_obj->pdev_info[pdev_id].custom_chan_list;
+	if (custom_chan_list->num_chan)
+		qdf_mem_copy(&req->scan_req.chan_list, custom_chan_list,
+				sizeof(struct chan_list));
+	else if (req->scan_req.scan_f_wide_band &&
+			!req->scan_req.chan_list.num_chan)
+		ucfg_scan_init_chanlist_params(req, 0, NULL, NULL);
+
+	scm_debug("dwell time: active %d, passive %d, repeat_probe_time %d "
+			"n_probes %d flags_ext %x, wide_bw_scan: %d",
+			req->scan_req.dwell_time_active,
+			req->scan_req.dwell_time_passive,
+			req->scan_req.repeat_probe_time, req->scan_req.n_probes,
+			req->scan_req.scan_ctrl_flags_ext,
+			req->scan_req.scan_f_wide_band);
 }
 
 QDF_STATUS
@@ -879,16 +925,6 @@ ucfg_scan_start(struct scan_start_request *req)
 		req->scan_req.vdev_id);
 
 	ucfg_scan_req_update_params(req->vdev, req, scan_obj);
-
-	/* Overwrite scan parameters as required */
-	if (!ucfg_scan_get_wide_band_scan(pdev)) {
-		req->scan_req.scan_f_wide_band = false;
-	} else {
-		req->scan_req.scan_f_wide_band = true;
-		if (req->scan_req.chan_list.num_chan == 0)
-			ucfg_scan_init_chanlist_params(req, 0, NULL, NULL);
-	}
-	scm_debug("scan_f_wide_band: %d", req->scan_req.scan_f_wide_band);
 
 	/* Try to get vdev reference. Return if reference could
 	 * not be taken. Reference will be released once scan
@@ -1718,7 +1754,7 @@ ucfg_scan_get_vdev_status(struct wlan_objmgr_vdev *vdev)
 
 	if (!vdev) {
 		scm_err("null vdev");
-		return QDF_STATUS_E_NULL_VALUE;
+		return SCAN_NOT_IN_PROGRESS;
 	}
 	status = wlan_serialization_vdev_scan_status(vdev);
 
@@ -1963,6 +1999,7 @@ ucfg_scan_psoc_open(struct wlan_objmgr_psoc *psoc)
 	wlan_scan_global_init(scan_obj);
 	qdf_spinlock_create(&scan_obj->lock);
 	ucfg_scan_register_pmo_handler();
+	scm_db_init(psoc);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1977,6 +2014,7 @@ ucfg_scan_psoc_close(struct wlan_objmgr_psoc *psoc)
 		scm_err("null psoc");
 		return QDF_STATUS_E_FAILURE;
 	}
+	scm_db_deinit(psoc);
 	scan_obj = wlan_psoc_get_scan_obj(psoc);
 	if (scan_obj == NULL) {
 		scm_err("Failed to get scan object");
@@ -2027,7 +2065,6 @@ ucfg_scan_psoc_enable(struct wlan_objmgr_psoc *psoc)
 	/* Subscribe for scan events from lmac layesr */
 	status = tgt_scan_register_ev_handler(psoc);
 	QDF_ASSERT(status == QDF_STATUS_SUCCESS);
-	scm_db_init(psoc);
 	if (wlan_reg_11d_original_enabled_on_host(psoc))
 		scm_11d_cc_db_init(psoc);
 	ucfg_scan_register_unregister_bcn_cb(psoc, true);
@@ -2054,7 +2091,6 @@ ucfg_scan_psoc_disable(struct wlan_objmgr_psoc *psoc)
 	ucfg_scan_register_unregister_bcn_cb(psoc, false);
 	if (wlan_reg_11d_original_enabled_on_host(psoc))
 		scm_11d_cc_db_deinit(psoc);
-	scm_db_deinit(psoc);
 
 	return status;
 }
