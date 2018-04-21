@@ -48,6 +48,8 @@
 #include "wlan_hdd_he.h"
 #include <wlan_policy_mgr_api.h>
 #include "wifi_pos_api.h"
+#include "wlan_hdd_green_ap.h"
+#include "wlan_hdd_green_ap_cfg.h"
 
 static void
 cb_notify_set_roam_prefer5_g_hz(struct hdd_context *hdd_ctx, unsigned long notifyId)
@@ -1321,13 +1323,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_QOS_IMPLICIT_SETUP_ENABLED_MIN,
 		     CFG_QOS_IMPLICIT_SETUP_ENABLED_MAX),
 
-	REG_VARIABLE(CFG_AP_AUTO_SHUT_OFF, WLAN_PARAM_Integer,
-		     struct hdd_config, nAPAutoShutOff,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_AP_AUTO_SHUT_OFF_DEFAULT,
-		     CFG_AP_AUTO_SHUT_OFF_MIN,
-		     CFG_AP_AUTO_SHUT_OFF_MAX),
-
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	REG_VARIABLE(CFG_WLAN_MCC_TO_SCC_SWITCH_MODE, WLAN_PARAM_Integer,
 		     struct hdd_config, WlanMccToSccSwitchMode,
@@ -1884,6 +1879,13 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_QDF_TRACE_ENABLE_MIN,
 		     CFG_QDF_TRACE_ENABLE_MAX),
 
+	REG_VARIABLE(CFG_QDF_TRACE_ENABLE_CP_STATS, WLAN_PARAM_Integer,
+		     struct hdd_config, qdf_trace_enable_cp_stats,
+		     VAR_FLAGS_OPTIONAL,
+		     CFG_QDF_TRACE_ENABLE_DEFAULT,
+		     CFG_QDF_TRACE_ENABLE_MIN,
+		     CFG_QDF_TRACE_ENABLE_MAX),
+
 	REG_VARIABLE(CFG_TELE_BCN_TRANS_LI_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, nTeleBcnTransListenInterval,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -2132,6 +2134,13 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_VHT_ENABLE_TX_MCS2x2_8_9_DEFAULT,
 		     CFG_VHT_ENABLE_TX_MCS2x2_8_9_MIN,
 		     CFG_VHT_ENABLE_TX_MCS2x2_8_9_MAX),
+
+	REG_VARIABLE(CFG_ENABLE_VHT20_MCS9, WLAN_PARAM_Integer,
+		     struct hdd_config, enable_vht20_mcs9,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
+		     CFG_ENABLE_VHT20_MCS9_DEFAULT,
+		     CFG_ENABLE_VHT20_MCS9_MIN,
+		     CFG_ENABLE_VHT20_MCS9_MAX),
 
 	REG_VARIABLE(CFG_VHT_ENABLE_2x2_CAP_FEATURE, WLAN_PARAM_Integer,
 		     struct hdd_config, enable2x2,
@@ -3327,39 +3336,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_MAX_CONCURRENT_CONNECTIONS_DEFAULT,
 		     CFG_MAX_CONCURRENT_CONNECTIONS_MIN,
 		     CFG_MAX_CONCURRENT_CONNECTIONS_MAX),
-
-#ifdef WLAN_SUPPORT_GREEN_AP
-	REG_VARIABLE(CFG_ENABLE_GREEN_AP_FEATURE, WLAN_PARAM_Integer,
-		     struct hdd_config, enableGreenAP,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_GREEN_AP_FEATURE_DEFAULT,
-		     CFG_ENABLE_GREEN_AP_FEATURE_MIN,
-		     CFG_ENABLE_GREEN_AP_FEATURE_MAX),
-	REG_VARIABLE(CFG_ENABLE_EGAP_ENABLE_FEATURE, WLAN_PARAM_Integer,
-		     struct hdd_config, enable_egap,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_EGAP_ENABLE_FEATURE_DEFAULT,
-		     CFG_ENABLE_EGAP_ENABLE_FEATURE_MIN,
-		     CFG_ENABLE_EGAP_ENABLE_FEATURE_MAX),
-	REG_VARIABLE(CFG_ENABLE_EGAP_INACT_TIME_FEATURE, WLAN_PARAM_Integer,
-		     struct hdd_config, egap_inact_time,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_EGAP_INACT_TIME_FEATURE_DEFAULT,
-		     CFG_ENABLE_EGAP_INACT_TIME_FEATURE_MIN,
-		     CFG_ENABLE_EGAP_INACT_TIME_FEATURE_MAX),
-	REG_VARIABLE(CFG_ENABLE_EGAP_WAIT_TIME_FEATURE, WLAN_PARAM_Integer,
-		     struct hdd_config, egap_wait_time,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_EGAP_WAIT_TIME_FEATURE_DEFAULT,
-		     CFG_ENABLE_EGAP_WAIT_TIME_FEATURE_MIN,
-		     CFG_ENABLE_EGAP_WAIT_TIME_FEATURE_MAX),
-	REG_VARIABLE(CFG_ENABLE_EGAP_FLAGS_FEATURE, WLAN_PARAM_Integer,
-		     struct hdd_config, egap_feature_flag,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_EGAP_FLAGS_FEATURE_DEFAULT,
-		     CFG_ENABLE_EGAP_FLAGS_FEATURE_MIN,
-		     CFG_ENABLE_EGAP_FLAGS_FEATURE_MAX),
-#endif
 
 	REG_VARIABLE(CFG_ENABLE_CRASH_INJECT, WLAN_PARAM_Integer,
 		     struct hdd_config, crash_inject_enabled,
@@ -5552,6 +5528,16 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_CHANNEL_SELECT_LOGIC_CONC_DEFAULT,
 		     CFG_CHANNEL_SELECT_LOGIC_CONC_MIN,
 		     CFG_CHANNEL_SELECT_LOGIC_CONC_MAX),
+
+	REG_VARIABLE(CFG_TX_SCH_DELAY_NAME,
+		     WLAN_PARAM_Integer,
+		     struct hdd_config, enable_tx_sch_delay,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_SCH_DELAY_DEFAULT,
+		     CFG_TX_SCH_DELAY_MIN,
+		     CFG_TX_SCH_DELAY_MAX),
+
+	HDD_GREEN_AP_REG_VARIABLES
 };
 
 
@@ -6535,8 +6521,6 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 
 	hdd_debug("Name = [gEnableApProt] value = [%u]",
 		  hdd_ctx->config->apProtEnabled);
-	hdd_debug("Name = [gAPAutoShutOff] Value = [%u]",
-		  hdd_ctx->config->nAPAutoShutOff);
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	hdd_debug("Name = [gWlanMccToSccSwitchMode] Value = [%u]",
 		  hdd_ctx->config->WlanMccToSccSwitchMode);
@@ -6918,18 +6902,9 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 		  hdd_ctx->config->gSapPreferredChanLocation);
 	hdd_debug("Name = [gDisableDfsJapanW53] Value = [%u] ",
 		  hdd_ctx->config->gDisableDfsJapanW53);
-#ifdef WLAN_SUPPORT_GREEN_AP
-	hdd_debug("Name = [gEnableGreenAp] Value = [%u] ",
-		  hdd_ctx->config->enableGreenAP);
-	hdd_debug("Name = [gEenableEGAP] Value = [%u] ",
-		  hdd_ctx->config->enable_egap);
-	hdd_debug("Name = [gEGAPInactTime] Value = [%u] ",
-		  hdd_ctx->config->egap_inact_time);
-	hdd_debug("Name = [gEGAPWaitTime] Value = [%u] ",
-		  hdd_ctx->config->egap_wait_time);
-	hdd_debug("Name = [gEGAPFeatures] Value = [%u] ",
-		  hdd_ctx->config->egap_feature_flag);
-#endif
+
+	hdd_green_ap_print_config(hdd_ctx);
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	hdd_debug("Name = [isRoamOffloadEnabled] Value = [%u]",
 		  hdd_ctx->config->isRoamOffloadEnabled);
@@ -7450,6 +7425,9 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] value = [%d]",
 		  CFG_DTIM_SELECTION_DIVERSITY_NAME,
 		  hdd_ctx->config->enable_dtim_selection_diversity);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_TX_SCH_DELAY_NAME,
+		  hdd_ctx->config->enable_tx_sch_delay);
 
 	hdd_cfg_print_11k_offload_params(hdd_ctx);
 	hdd_debug("Name = [%s] value = [0x%x]",
@@ -9103,6 +9081,7 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 	smeConfig->csrConfig.enable_rx_ldpc = pConfig->enable_rx_ldpc;
 	smeConfig->csrConfig.disable_high_ht_mcs_2x2 =
 					pConfig->disable_high_ht_mcs_2x2;
+	smeConfig->csrConfig.enable_vht20_mcs9 = pConfig->enable_vht20_mcs9;
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	smeConfig->csrConfig.cc_switch_mode = pConfig->WlanMccToSccSwitchMode;
 #endif

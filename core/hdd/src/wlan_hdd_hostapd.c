@@ -48,6 +48,7 @@
 #include <wlan_hdd_includes.h>
 #include <qc_sap_ioctl.h>
 #include <wlan_hdd_hostapd.h>
+#include <wlan_hdd_green_ap.h>
 #include <sap_api.h>
 #include <sap_internal.h>
 #include <wlan_hdd_softap_tx_rx.h>
@@ -89,7 +90,6 @@
 #include "wlan_utility.h"
 #include <wlan_p2p_ucfg_api.h>
 #include "sir_api.h"
-#include <wlan_green_ap_ucfg_api.h>
 #include "sme_api.h"
 #include "wlan_hdd_regulatory.h"
 #include <wlan_ipa_ucfg_api.h>
@@ -729,79 +729,6 @@ static int hdd_hostapd_set_mac_address(struct net_device *dev, void *addr)
 	return ret;
 }
 
-/**
- * hdd_hostapd_inactivity_timer_cb() - Inactivity timeout handler
- * @context: Context registered with qdf_mc_timer_init()
- *
- * This is the callback function registered with qdf_mc_timer_init()
- * to handle the AP inactivity timer. The @context registered is the
- * struct net_device associated with the interface.  When this
- * function is called it means the AP inactivity timer has fired, and
- * this function in turn indicates the timeout to userspace.
- */
-
-static void hdd_hostapd_inactivity_timer_cb(void *context)
-{
-	struct net_device *dev = (struct net_device *)context;
-	uint8_t we_custom_event[64];
-	union iwreq_data wrqu;
-#ifdef DISABLE_CONCURRENCY_AUTOSAVE
-	QDF_STATUS qdf_status;
-	struct hdd_adapter *adapter;
-	struct hdd_ap_ctx *ap_ctx;
-	struct hdd_context *hdd_ctx;
-#endif /* DISABLE_CONCURRENCY_AUTOSAVE */
-
-	/* event_name space-delimiter driver_module_name
-	 * Format of the event is "AUTO-SHUT.indication" " " "module_name"
-	 */
-	char *autoShutEvent = "AUTO-SHUT.indication" " " KBUILD_MODNAME;
-
-	/* For the NULL at the end */
-	int event_len = strlen(autoShutEvent) + 1;
-
-	hdd_enter_dev(dev);
-
-#ifdef DISABLE_CONCURRENCY_AUTOSAVE
-	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	if (policy_mgr_concurrent_open_sessions_running(hdd_ctx->hdd_psoc)) {
-		/*
-		 * This timer routine is going to be called only when AP
-		 * persona is up.
-		 * If there are concurrent sessions running we do not want
-		 * to shut down the Bss.Instead we run the timer again so
-		 * that if Autosave is enabled next time and other session
-		   was down only then we bring down AP
-		 */
-		adapter = netdev_priv(dev);
-		if (WLAN_HDD_ADAPTER_MAGIC != adapter->magic) {
-			hdd_err("invalid adapter: %pK", adapter);
-			return;
-		}
-		ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
-		qdf_status =
-			qdf_mc_timer_start(&ap_ctx->hdd_ap_inactivity_timer,
-					(WLAN_HDD_GET_CTX(adapter))->
-					config->nAPAutoShutOff * 1000);
-		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-			hdd_err("Failed to init AP inactivity timer");
-
-		hdd_exit();
-		return;
-	}
-#endif /* DISABLE_CONCURRENCY_AUTOSAVE */
-	memset(&we_custom_event, '\0', sizeof(we_custom_event));
-	memcpy(&we_custom_event, autoShutEvent, event_len);
-
-	memset(&wrqu, 0, sizeof(wrqu));
-	wrqu.data.length = event_len;
-
-	hdd_debug("Shutting down AP interface due to inactivity");
-	wireless_send_event(dev, IWEVCUSTOM, &wrqu, (char *)we_custom_event);
-
-	hdd_exit();
-}
-
 static void hdd_clear_sta(struct hdd_adapter *adapter, uint8_t sta_id)
 {
 	struct hdd_ap_ctx *ap_ctx;
@@ -857,7 +784,7 @@ static int hdd_stop_bss_link(struct hdd_adapter *adapter)
 		policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 					adapter->device_mode,
 					adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, adapter->device_mode,
 					    false);
 		errno = (status == QDF_STATUS_SUCCESS) ? 0 : -EBUSY;
 	}
@@ -1789,29 +1716,6 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 			}
 		}
 
-		if (0 !=
-		    (WLAN_HDD_GET_CTX(adapter))->config->
-		     nAPAutoShutOff) {
-			/* AP Inactivity timer init and start */
-			qdf_status =
-				qdf_mc_timer_init(&ap_ctx->
-						  hdd_ap_inactivity_timer,
-						  QDF_TIMER_TYPE_SW,
-						  hdd_hostapd_inactivity_timer_cb,
-						  dev);
-			if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-				hdd_err("Failed to init inactivity timer");
-
-			qdf_status =
-				qdf_mc_timer_start(&ap_ctx->
-						   hdd_ap_inactivity_timer,
-						   (WLAN_HDD_GET_CTX
-						    (adapter))->config->
-						    nAPAutoShutOff * 1000);
-			if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-				hdd_err("Failed to init inactivity timer");
-
-		}
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
 		wlan_hdd_auto_shutdown_enable(hdd_ctx, true);
 #endif
@@ -1880,8 +1784,6 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		we_event = IWEVCUSTOM;
 		we_custom_event_generic = we_custom_start_event;
 		hdd_ipa_set_tx_flow_info();
-		/* Send SCC/MCC Switching event to IPA */
-		ucfg_ipa_send_mcc_scc_msg(hdd_ctx->hdd_pdev, hdd_ctx->mcc_mode);
 
 		if (policy_mgr_is_hw_mode_change_after_vdev_up(
 			hdd_ctx->hdd_psoc)) {
@@ -2212,15 +2114,6 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		}
 #endif
 		ap_ctx->ap_active = true;
-		/* Stop AP inactivity timer */
-		if (ap_ctx->hdd_ap_inactivity_timer.state ==
-		    QDF_TIMER_STATE_RUNNING) {
-			qdf_status =
-				qdf_mc_timer_stop(&ap_ctx->
-						  hdd_ap_inactivity_timer);
-			if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-				hdd_err("Failed to start inactivity timer");
-		}
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
 		wlan_hdd_auto_shutdown_enable(hdd_ctx, false);
 #endif
@@ -2286,7 +2179,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 			hdd_err("Peer object "MAC_ADDRESS_STR" add fails!",
 					MAC_ADDR_ARRAY(event->staMac.bytes));
 
-		wlan_green_ap_add_sta(hdd_ctx->hdd_pdev);
+		hdd_green_ap_add_sta(hdd_ctx);
 		break;
 
 	case eSAP_STA_DISASSOC_EVENT:
@@ -2333,8 +2226,8 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 
 		/* Send DHCP STOP indication to FW */
 		stainfo->dhcp_phase = DHCP_PHASE_ACK;
-		if ((stainfo->dhcp_nego_status ==
-					DHCP_NEGO_IN_PROGRESS))
+		if (stainfo->dhcp_nego_status ==
+					DHCP_NEGO_IN_PROGRESS)
 			hdd_post_dhcp_ind(adapter, staId,
 					WMA_DHCP_STOP_IND);
 		stainfo->dhcp_nego_status = DHCP_NEGO_STOP;
@@ -2354,31 +2247,6 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		}
 		spin_unlock_bh(&adapter->sta_info_lock);
 
-		/* Start AP inactivity timer if no stations associated */
-		if ((0 !=
-		     (WLAN_HDD_GET_CTX(adapter))->config->
-		     nAPAutoShutOff)) {
-			if (ap_ctx->ap_active == false) {
-				if (ap_ctx->hdd_ap_inactivity_timer.state ==
-				    QDF_TIMER_STATE_STOPPED) {
-					qdf_status =
-						qdf_mc_timer_start(&ap_ctx->
-								   hdd_ap_inactivity_timer,
-								   (WLAN_HDD_GET_CTX
-								    (adapter))->
-								   config->
-								   nAPAutoShutOff *
-								   1000);
-					if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-						hdd_err("Failed to init AP inactivity timer");
-				} else
-					QDF_ASSERT
-						(qdf_mc_timer_get_current_state
-							(&ap_ctx->
-							hdd_ap_inactivity_timer) ==
-						QDF_TIMER_STATE_STOPPED);
-			}
-		}
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
 		wlan_hdd_auto_shutdown_enable(hdd_ctx, true);
 #endif
@@ -2423,7 +2291,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 			hdd_bus_bw_compute_timer_try_stop(hdd_ctx);
 		}
 #endif
-		wlan_green_ap_del_sta(hdd_ctx->hdd_pdev);
+		hdd_green_ap_del_sta(hdd_ctx);
 		break;
 
 	case eSAP_WPS_PBC_PROBE_REQ_EVENT:
@@ -2646,24 +2514,6 @@ stopbss:
 		 */
 		hostapd_state->bss_state = BSS_STOP;
 
-		if (0 !=
-		    (WLAN_HDD_GET_CTX(adapter))->config->
-		    nAPAutoShutOff) {
-			if (QDF_TIMER_STATE_RUNNING ==
-			    ap_ctx->hdd_ap_inactivity_timer.state) {
-				qdf_status =
-					qdf_mc_timer_stop(&ap_ctx->
-							  hdd_ap_inactivity_timer);
-				if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-					hdd_err("Failed to stop AP inactivity timer");
-			}
-
-			qdf_status =
-				qdf_mc_timer_destroy(&ap_ctx->
-						hdd_ap_inactivity_timer);
-			if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-				hdd_err("Failed to Destroy AP inactivity timer");
-		}
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
 		wlan_hdd_auto_shutdown_enable(hdd_ctx, true);
 #endif
@@ -2701,8 +2551,6 @@ stopbss:
 			qdf_event_set(&hostapd_state->qdf_stop_bss_event);
 
 		hdd_ipa_set_tx_flow_info();
-		/* Send SCC/MCC Switching event to IPA */
-		ucfg_ipa_send_mcc_scc_msg(hdd_ctx->hdd_pdev, hdd_ctx->mcc_mode);
 	}
 	return QDF_STATUS_SUCCESS;
 }
@@ -3342,6 +3190,72 @@ static QDF_STATUS hdd_print_acl(struct hdd_adapter *adapter)
 		return QDF_STATUS_E_FAILURE;
 	}
 	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * hdd_get_aid_rc() - Get AID and rate code passed from user
+ * @aid: pointer to AID
+ * @rc: pointer to rate code
+ * @set_value: value passed from user
+ *
+ * If target is 11ax capable, set_value will have AID left shifted 16 bits
+ * and 16 bits for rate code. If the target is not 11ax capable, rate code
+ * will only be 8 bits.
+ *
+ * Return: None
+ */
+static void hdd_get_aid_rc(uint8_t *aid, uint16_t *rc, int set_value)
+{
+	uint8_t rc_bits;
+
+	if (sme_is_feature_supported_by_fw(DOT11AX))
+		rc_bits = 16;
+	else
+		rc_bits = 8;
+
+	*aid = set_value >> rc_bits;
+	*rc = set_value & ((1 << (rc_bits + 1)) - 1);
+}
+
+/**
+ * hdd_set_peer_rate() - set peer rate
+ * @adapter: adapter being modified
+ * @set_value: rate code with AID
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+static int hdd_set_peer_rate(struct hdd_adapter *adapter, int set_value)
+{
+	uint8_t aid, *peer_mac;
+	uint16_t rc;
+	QDF_STATUS status;
+
+	if (adapter->device_mode != QDF_SAP_MODE) {
+		hdd_err("Invalid devicde mode - %d", adapter->device_mode);
+		return -EINVAL;
+	}
+
+	hdd_get_aid_rc(&aid, &rc, set_value);
+
+	if ((adapter->sta_info[aid].in_use) &&
+	    (OL_TXRX_PEER_STATE_CONN == adapter->sta_info[aid].peer_state)) {
+		peer_mac =
+		    (uint8_t *)&(adapter->sta_info[aid].sta_mac.bytes[0]);
+		hdd_info("Peer AID: %d MAC_ADDR: "MAC_ADDRESS_STR,
+			 aid, MAC_ADDR_ARRAY(peer_mac));
+	} else {
+		hdd_err("No matching peer found for AID: %d", aid);
+		return -EINVAL;
+	}
+
+	status = sme_set_peer_param(peer_mac, WMI_PEER_PARAM_FIXED_RATE,
+				    rc, adapter->session_id);
+	if (status != QDF_STATUS_SUCCESS) {
+		hdd_err("Failed to set peer fixed rate - status: %d", status);
+		return -EIO;
+	}
+
+	return 0;
 }
 
 int
@@ -5132,7 +5046,7 @@ __iw_softap_stopbss(struct net_device *dev,
 		policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 					     adapter->device_mode,
 					     adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, adapter->device_mode,
 					    false);
 		ret = qdf_status_to_os_return(status);
 	}
@@ -8171,7 +8085,7 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 		policy_mgr_incr_active_session(hdd_ctx->hdd_psoc,
 					adapter->device_mode,
 					adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, adapter->device_mode,
 					    true);
 	}
 #ifdef DHCP_SERVER_OFFLOAD
@@ -8366,7 +8280,7 @@ static int __wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
 		policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 						adapter->device_mode,
 						adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, adapter->device_mode,
 					    false);
 		adapter->session.ap.beacon = NULL;
 		qdf_mem_free(old);

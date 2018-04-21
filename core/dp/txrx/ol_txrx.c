@@ -2073,7 +2073,6 @@ static void ol_txrx_pdev_pre_detach(struct cdp_pdev *ppdev, int force)
 #ifdef QCA_COMPUTE_TX_DELAY
 	qdf_spinlock_destroy(&pdev->tx_delay.mutex);
 #endif
-	qdf_mem_free(ppdev);
 }
 
 /**
@@ -2142,6 +2141,8 @@ static void ol_txrx_pdev_detach(struct cdp_pdev *ppdev, int force)
 
 	ol_txrx_pdev_txq_log_destroy(pdev);
 	ol_txrx_pdev_grp_stat_destroy(pdev);
+
+	qdf_mem_free(pdev);
 }
 
 #if defined(CONFIG_PER_VDEV_TX_DESC_POOL)
@@ -3489,7 +3490,7 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 
 	if (!qdf_atomic_read(&peer->access_list[debug_id])) {
 		qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
-		ol_txrx_err("peer %p ref was not taken by %d",
+		ol_txrx_err("peer %pK ref was not taken by %d",
 			    peer, debug_id);
 		ol_txrx_dump_peer_access_list(peer);
 		QDF_BUG(0);
@@ -3581,7 +3582,7 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 			qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
 		}
 
-		ol_txrx_info_high("[%d][%d]: Deleting peer %p ref_cnt -> %d %s",
+		ol_txrx_info_high("[%d][%d]: Deleting peer %pK ref_cnt -> %d %s",
 				  debug_id,
 				  qdf_atomic_read(&peer->access_list[debug_id]),
 				  peer, rc,
@@ -3607,7 +3608,7 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 						&peer->access_list[debug_id]);
 		qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
 		if (!ref_silent)
-			ol_txrx_info_high("[%d][%d]: ref delete peer %p ref_cnt -> %d",
+			ol_txrx_info_high("[%d][%d]: ref delete peer %pK ref_cnt -> %d",
 					debug_id,
 					access_list,
 					peer, rc);
@@ -4064,6 +4065,7 @@ ol_txrx_fw_stats_handler(ol_txrx_pdev_handle pdev,
 			 uint64_t cookie, uint8_t *stats_info_list)
 {
 	enum htt_dbg_stats_type type;
+	enum htt_cmn_dbg_stats_type cmn_type = HTT_DBG_CMN_NUM_STATS_INVALID;
 	enum htt_dbg_stats_status status;
 	int length;
 	uint8_t *stats_data;
@@ -4260,9 +4262,11 @@ ol_txrx_fw_stats_handler(ol_txrx_pdev_handle pdev,
 			}
 			buf = req->base.copy.buf ?
 				req->base.copy.buf : stats_data;
+
+			/* Not implemented for MCL */
 			if (req->base.callback.fp)
 				req->base.callback.fp(req->base.callback.ctxt,
-						      type, buf, bytes);
+						      cmn_type, buf, bytes);
 		}
 		stats_info_list += length;
 	} while (1);

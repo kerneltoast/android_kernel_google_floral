@@ -1147,7 +1147,8 @@ static QDF_STATUS wlan_ipa_uc_handle_first_con(struct wlan_ipa_priv *ipa_ctx)
 	 * PROD resource may return sync or async manners
 	 */
 	if (wlan_ipa_is_rm_enabled(ipa_ctx->config)) {
-		if (!ipa_rm_request_resource(IPA_RM_RESOURCE_WLAN_PROD)) {
+		if (!wlan_ipa_wdi_rm_request_resource(ipa_ctx,
+						IPA_RM_RESOURCE_WLAN_PROD)) {
 			/* RM PROD request sync return
 			 * enable pipe immediately
 			 */
@@ -1719,14 +1720,14 @@ end:
 
 /**
  * wlan_host_to_ipa_wlan_event() - convert wlan_ipa_wlan_event to ipa_wlan_event
- * @wlan_ipa_event_type: IPA IPA WLAN event to be converted to an ipa_wlan_event
+ * @wlan_ipa_event_type: event to be converted to an ipa_wlan_event
  *
  * Return: qdf_ipa_wlan_event representing the wlan_ipa_wlan_event
  */
 static qdf_ipa_wlan_event
 wlan_host_to_ipa_wlan_event(enum wlan_ipa_wlan_event wlan_ipa_event_type)
 {
-	qdf_ipa_wlan_event_t ipa_event;
+	qdf_ipa_wlan_event ipa_event;
 
 	switch (wlan_ipa_event_type) {
 	case WLAN_IPA_CLIENT_CONNECT:
@@ -2061,6 +2062,53 @@ static void wlan_ipa_teardown_sys_pipe(struct wlan_ipa_priv *ipa_ctx)
 	}
 }
 
+#ifndef QCA_LL_TX_FLOW_CONTROL_V2
+QDF_STATUS wlan_ipa_send_mcc_scc_msg(struct wlan_ipa_priv *ipa_ctx,
+				     bool mcc_mode)
+{
+	qdf_ipa_msg_meta_t meta;
+	qdf_ipa_wlan_msg_t *msg;
+	int ret;
+
+	if (!wlan_ipa_uc_sta_is_enabled(ipa_ctx->config))
+		return QDF_STATUS_SUCCESS;
+
+	/* Send SCC/MCC Switching event to IPA */
+	QDF_IPA_MSG_META_MSG_LEN(&meta) = sizeof(*msg);
+	msg = qdf_mem_malloc(QDF_IPA_MSG_META_MSG_LEN(&meta));
+	if (msg == NULL) {
+		ipa_err("msg allocation failed");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	if (mcc_mode)
+		QDF_IPA_SET_META_MSG_TYPE(&meta, QDF_SWITCH_TO_MCC);
+	else
+		QDF_IPA_SET_META_MSG_TYPE(&meta, QDF_SWITCH_TO_SCC);
+	WLAN_IPA_LOG(QDF_TRACE_LEVEL_DEBUG,
+		    "ipa_send_msg(Evt:%d)",
+		    QDF_IPA_MSG_META_MSG_TYPE(&meta));
+
+	ret = qdf_ipa_send_msg(&meta, msg, wlan_ipa_msg_free_fn);
+
+	if (ret) {
+		ipa_err("ipa_send_msg(Evt:%d) - fail=%d",
+			QDF_IPA_MSG_META_MSG_TYPE(&meta), ret);
+		qdf_mem_free(msg);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static void wlan_ipa_mcc_work_handler(void *data)
+{
+	struct wlan_ipa_priv *ipa_ctx = (struct wlan_ipa_priv *)data;
+
+	wlan_ipa_send_mcc_scc_msg(ipa_ctx, ipa_ctx->mcc_mode);
+}
+#endif
+
 /**
  * wlan_ipa_setup() - IPA initialization function
  * @ipa_ctx: IPA context
@@ -2134,6 +2182,9 @@ QDF_STATUS wlan_ipa_setup(struct wlan_ipa_priv *ipa_ctx,
 			ret = wlan_ipa_setup_sys_pipe(ipa_ctx);
 			if (ret)
 				goto fail_create_sys_pipe;
+
+			qdf_create_work(0, &ipa_ctx->mcc_work,
+					wlan_ipa_mcc_work_handler, ipa_ctx);
 		}
 
 		status = wlan_ipa_wdi_init(ipa_ctx);
@@ -2208,8 +2259,10 @@ QDF_STATUS wlan_ipa_cleanup(struct wlan_ipa_priv *ipa_ctx)
 		wlan_ipa_teardown_sys_pipe(ipa_ctx);
 
 	/* Teardown IPA sys_pipe for MCC */
-	if (wlan_ipa_uc_sta_is_enabled(ipa_ctx->config))
+	if (wlan_ipa_uc_sta_is_enabled(ipa_ctx->config)) {
 		wlan_ipa_teardown_sys_pipe(ipa_ctx);
+		qdf_cancel_work(&ipa_ctx->mcc_work);
+	}
 
 	wlan_ipa_wdi_destroy_rm(ipa_ctx);
 
@@ -2253,45 +2306,17 @@ struct wlan_ipa_iface_context
 	return NULL;
 }
 
-#ifndef QCA_LL_TX_FLOW_CONTROL_V2
-QDF_STATUS wlan_ipa_send_mcc_scc_msg(struct wlan_ipa_priv *ipa_ctx,
-				     bool mcc_mode)
+void wlan_ipa_set_mcc_mode(struct wlan_ipa_priv *ipa_ctx, bool mcc_mode)
 {
-	qdf_ipa_msg_meta_t meta;
-	qdf_ipa_wlan_msg_t *msg;
-	int ret;
-
 	if (!wlan_ipa_uc_sta_is_enabled(ipa_ctx->config))
-		return QDF_STATUS_SUCCESS;
+		return;
 
-	/* Send SCC/MCC Switching event to IPA */
-	QDF_IPA_MSG_META_MSG_LEN(&meta) = sizeof(*msg);
-	msg = qdf_mem_malloc(QDF_IPA_MSG_META_MSG_LEN(&meta));
-	if (msg == NULL) {
-		ipa_err("msg allocation failed");
-		return QDF_STATUS_E_NOMEM;
-	}
+	if (ipa_ctx->mcc_mode == mcc_mode)
+		return;
 
-	if (mcc_mode)
-		QDF_IPA_SET_META_MSG_TYPE(&meta, QDF_SWITCH_TO_MCC);
-	else
-		QDF_IPA_SET_META_MSG_TYPE(&meta, QDF_SWITCH_TO_SCC);
-	WLAN_IPA_LOG(QDF_TRACE_LEVEL_DEBUG,
-		    "ipa_send_msg(Evt:%d)",
-		    QDF_IPA_MSG_META_MSG_TYPE(&meta));
-
-	ret = qdf_ipa_send_msg(&meta, msg, wlan_ipa_msg_free_fn);
-
-	if (ret) {
-		ipa_err("ipa_send_msg(Evt:%d) - fail=%d",
-			QDF_IPA_MSG_META_MSG_TYPE(&meta), ret);
-		qdf_mem_free(msg);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	return QDF_STATUS_SUCCESS;
+	ipa_ctx->mcc_mode = mcc_mode;
+	qdf_sched_work(0, &ipa_ctx->mcc_work);
 }
-#endif
 
 /**
  * wlan_ipa_uc_loaded_handler() - Process IPA uC loaded indication
@@ -2375,7 +2400,7 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 			}
 			wlan_ipa_uc_proc_pending_event(ipa_ctx, true);
 			if (ipa_ctx->pending_cons_req)
-				qdf_ipa_rm_notify_completion(
+				wlan_ipa_wdi_rm_notify_completion(
 						QDF_IPA_RM_RESOURCE_GRANTED,
 						QDF_IPA_RM_RESOURCE_WLAN_CONS);
 			ipa_ctx->pending_cons_req = false;
@@ -2394,8 +2419,8 @@ static void wlan_ipa_uc_op_cb(struct op_msg_type *op_msg,
 			qdf_event_set(&ipa_ctx->ipa_resource_comp);
 			wlan_ipa_uc_disable_pipes(ipa_ctx);
 			if (wlan_ipa_is_rm_enabled(ipa_ctx->config))
-				qdf_ipa_rm_release_resource(
-					QDF_IPA_RM_RESOURCE_WLAN_PROD);
+				wlan_ipa_wdi_rm_release_resource(ipa_ctx,
+						QDF_IPA_RM_RESOURCE_WLAN_PROD);
 			wlan_ipa_uc_proc_pending_event(ipa_ctx, false);
 			ipa_ctx->pending_cons_req = false;
 		}
@@ -2517,7 +2542,7 @@ QDF_STATUS wlan_ipa_uc_ol_init(struct wlan_ipa_priv *ipa_ctx,
 	status = wlan_ipa_set_perf_level(ipa_ctx, 0, 0);
 	if (status != QDF_STATUS_SUCCESS) {
 		ipa_err("Set perf level failed: %d", status);
-		qdf_ipa_rm_inactivity_timer_destroy(
+		wlan_ipa_wdi_rm_inactivity_timer_destroy(
 					QDF_IPA_RM_RESOURCE_WLAN_PROD);
 		goto fail_return;
 	}

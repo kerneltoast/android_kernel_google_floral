@@ -53,20 +53,6 @@
 #error "NONE of the ANI_OS_TYPE_xxx are defined for this build"
 #endif
 
-/*
- * Validate the compiler
- */
-#if (defined(ANI_COMPILER_TYPE_MSVC) && defined(ANI_COMPILER_TYPE_GCC) && \
-					defined(ANI_COMPILER_TYPE_RVCT))
-#error "more than one ANI_COMPILER_TYPE_xxx is defined for this build"
-
-#elif !(defined(ANI_COMPILER_TYPE_MSVC) || defined(ANI_COMPILER_TYPE_GCC) || \
-					defined(ANI_COMPILER_TYPE_RVCT))
-#error "NONE of the ANI_COMPILER_TYPE_xxx are defined for this build"
-
-#endif
-
-
 #define WMA_CONFIG_PARAM_UPDATE_REQ    SIR_CFG_PARAM_UPDATE_IND
 
 #define HAL_NUM_BSSID 2
@@ -227,6 +213,7 @@ typedef struct sAniProbeRspStruct {
  * @atimIePresent: Peer Atim Info
  * @peerAtimWindowLength: peer ATIM Window length
  * @nss: Return the number of spatial streams supported
+ * @stbc_capable: stbc capable
  * @max_amsdu_num: Maximum number of MSDUs in a tx aggregate frame
  *
  * This structure contains parameter required for
@@ -329,6 +316,7 @@ typedef struct {
 	tDot11fIEhe_cap he_config;
 	tDot11fIEhe_op he_op;
 #endif
+	uint8_t stbc_capable;
 	uint8_t max_amsdu_num;
 } tAddStaParams, *tpAddStaParams;
 
@@ -461,9 +449,7 @@ typedef struct sLimMlmSetKeysReq {
  */
 typedef struct {
 	tSirMacAddr bssId;
-#ifdef HAL_SELF_STA_PER_BSS
 	tSirMacAddr selfMacAddr;
-#endif /* HAL_SELF_STA_PER_BSS */
 	tSirBssType bssType;
 	uint8_t operMode;
 	tSirNwType nwType;

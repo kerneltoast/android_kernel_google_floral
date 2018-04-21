@@ -740,9 +740,11 @@ void wma_vdev_wait_for_peer_delete_completion(tp_wma_handle wma_handle,
 	 * P2P device, and no need to take care the case which no
 	 * vdev stop response from FW.
 	 */
-	if ((iface->type == WMI_VDEV_TYPE_AP) &&
-	    (iface->sub_type == WMI_UNIFIED_VDEV_SUBTYPE_P2P_DEVICE)) {
-		WMA_LOGD("%s: P2P devices, do not wait", __func__);
+	if (((iface->type == WMI_VDEV_TYPE_AP) &&
+	    (iface->sub_type == WMI_UNIFIED_VDEV_SUBTYPE_P2P_DEVICE)) ||
+	    (cds_is_fw_down())) {
+		WMA_LOGD("%s: type %d P2P devices  or firmware is down, do not wait",
+				__func__, iface->type);
 		return;
 	}
 
@@ -2570,6 +2572,12 @@ QDF_STATUS wma_vdev_start(tp_wma_handle wma,
 	if (mac_ctx == NULL) {
 		WMA_LOGE("%s: vdev start failed as mac_ctx is NULL", __func__);
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (req->chan == 0) {
+		WMA_LOGE("%s: invalid channel: %d", __func__, req->chan);
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_INVAL;
 	}
 
 	params.band_center_freq1 = cds_chan_to_freq(req->chan);

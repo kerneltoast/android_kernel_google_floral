@@ -515,8 +515,9 @@ static QDF_STATUS
 hdd_parse_get_ibss_peer_info(uint8_t *pValue, struct qdf_mac_addr *pPeerMacAddr)
 {
 	uint8_t *inPtr = pValue;
+	size_t in_ptr_len = strlen(pValue);
 
-	inPtr = strnchr(pValue, strlen(pValue), SPACE_ASCII_VALUE);
+	inPtr = strnchr(pValue, in_ptr_len, SPACE_ASCII_VALUE);
 
 	if (NULL == inPtr)
 		return QDF_STATUS_E_FAILURE;
@@ -529,10 +530,14 @@ hdd_parse_get_ibss_peer_info(uint8_t *pValue, struct qdf_mac_addr *pPeerMacAddr)
 	if ('\0' == *inPtr)
 		return QDF_STATUS_E_FAILURE;
 
-	if (inPtr[2] != ':' || inPtr[5] != ':' || inPtr[8] != ':' ||
-	    inPtr[11] != ':' || inPtr[14] != ':') {
+	in_ptr_len -= (inPtr - pValue);
+	if (in_ptr_len < 17)
 		return QDF_STATUS_E_FAILURE;
-	}
+
+	if (inPtr[2] != ':' || inPtr[5] != ':' || inPtr[8] != ':' ||
+	    inPtr[11] != ':' || inPtr[14] != ':')
+		return QDF_STATUS_E_FAILURE;
+
 	sscanf(inPtr, "%2x:%2x:%2x:%2x:%2x:%2x",
 	       (unsigned int *)&pPeerMacAddr->bytes[0],
 	       (unsigned int *)&pPeerMacAddr->bytes[1],
@@ -5058,9 +5063,6 @@ static int drv_cmd_get_ibss_peer_info_all(struct hdd_adapter *adapter,
 			}
 			hdd_debug("%s", &extra[numOfBytestoPrint]);
 		}
-
-		/* Free temporary buffer */
-		qdf_mem_free(extra);
 	} else {
 		/* Command failed, log error */
 		hdd_err("GETIBSSPEERINFOALL command failed with status code %d",
@@ -7081,7 +7083,7 @@ static int __hdd_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 
 	switch (cmd) {
 	case (SIOCDEVPRIVATE + 1):
-		if (is_compat_task())
+		if (in_compat_syscall())
 			ret = hdd_driver_compat_ioctl(adapter, ifr);
 		else
 			ret = hdd_driver_ioctl(adapter, ifr);

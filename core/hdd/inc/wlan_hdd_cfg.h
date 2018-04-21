@@ -46,6 +46,7 @@
 #include "osapi_linux.h"
 #include <wmi_unified.h>
 #include "wlan_pmo_hw_filter_public_struct.h"
+#include "wlan_hdd_green_ap_cfg.h"
 
 struct hdd_context;
 
@@ -2936,28 +2937,6 @@ enum hdd_dot11_mode {
 
 /*
  * <ini>
- * gAPAutoShutOff - Auto shutdown when timer expires
- * @Min: 0
- * @Max: 4294967295UL
- * @Default: 0
- *
- * This ini is used to configure timer value to shutdown AP once timer expired
- *
- * Related: None.
- *
- * Supported Feature: SAP
- *
- * Usage: Internal/External
- *
- * </ini>
- */
-#define CFG_AP_AUTO_SHUT_OFF                "gAPAutoShutOff"
-#define CFG_AP_AUTO_SHUT_OFF_MIN            (0)
-#define CFG_AP_AUTO_SHUT_OFF_MAX            (4294967295UL)
-#define CFG_AP_AUTO_SHUT_OFF_DEFAULT        (0)
-
-/*
- * <ini>
  * gApKeepAlivePeriod - AP keep alive period
  * @Min: 1
  * @Max: 65535
@@ -5112,6 +5091,27 @@ enum hdd_link_speed_rpt_type {
 
 /*
  * <ini>
+ * enable_vht20_mcs9 - Enables VHT MCS9 in 20M BW operation
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * Related: NA
+ *
+ * Supported Feature: 11AC
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+
+#define CFG_ENABLE_VHT20_MCS9               "enable_vht20_mcs9"
+#define CFG_ENABLE_VHT20_MCS9_MIN           (0)
+#define CFG_ENABLE_VHT20_MCS9_MAX           (1)
+#define CFG_ENABLE_VHT20_MCS9_DEFAULT       (1)
+
+/*
+ * <ini>
  * gEnable2x2 - Enables/disables VHT Tx/Rx MCS values for 2x2
  * @Min: 0
  * @Max: 1
@@ -5893,35 +5893,6 @@ enum hdd_link_speed_rpt_type {
 #define CFG_ENABLE_FW_RTS_PROFILE_MAX          (66)
 #define CFG_ENABLE_FW_RTS_PROFILE_DEFAULT      (33)
 
-#ifdef WLAN_SUPPORT_GREEN_AP
-#define CFG_ENABLE_GREEN_AP_FEATURE         "gEnableGreenAp"
-#define CFG_ENABLE_GREEN_AP_FEATURE_MIN     (0)
-#define CFG_ENABLE_GREEN_AP_FEATURE_MAX     (1)
-#define CFG_ENABLE_GREEN_AP_FEATURE_DEFAULT (1)
-
-/* Enhanced Green AP (EGAP) flags/params */
-#define CFG_ENABLE_EGAP_ENABLE_FEATURE             "gEnableEGAP"
-#define CFG_ENABLE_EGAP_ENABLE_FEATURE_MIN         (0)
-#define CFG_ENABLE_EGAP_ENABLE_FEATURE_MAX         (1)
-#define CFG_ENABLE_EGAP_ENABLE_FEATURE_DEFAULT     (1)
-
-#define CFG_ENABLE_EGAP_INACT_TIME_FEATURE         "gEGAPInactTime"
-#define CFG_ENABLE_EGAP_INACT_TIME_FEATURE_MIN     (0)
-#define CFG_ENABLE_EGAP_INACT_TIME_FEATURE_MAX     (300000)
-#define CFG_ENABLE_EGAP_INACT_TIME_FEATURE_DEFAULT (2000)
-
-#define CFG_ENABLE_EGAP_WAIT_TIME_FEATURE          "gEGAPWaitTime"
-#define CFG_ENABLE_EGAP_WAIT_TIME_FEATURE_MIN      (0)
-#define CFG_ENABLE_EGAP_WAIT_TIME_FEATURE_MAX      (300000)
-#define CFG_ENABLE_EGAP_WAIT_TIME_FEATURE_DEFAULT  (150)
-
-#define CFG_ENABLE_EGAP_FLAGS_FEATURE              "gEGAPFeatures"
-#define CFG_ENABLE_EGAP_FLAGS_FEATURE_MIN          (0)
-#define CFG_ENABLE_EGAP_FLAGS_FEATURE_MAX          (15)
-#define CFG_ENABLE_EGAP_FLAGS_FEATURE_DEFAULT      (3)
-/* end Enhanced Green AP flags/params */
-
-#endif
 
 #ifdef FEATURE_WLAN_FORCE_SAP_SCC
 /*
@@ -5993,6 +5964,7 @@ enum hdd_link_speed_rpt_type {
 #define CFG_QDF_TRACE_ENABLE_WIFI_POS     "qdf_trace_enable_wifi_pos"
 #define CFG_QDF_TRACE_ENABLE_NAN          "qdf_trace_enable_nan"
 #define CFG_QDF_TRACE_ENABLE_REGULATORY   "qdf_trace_enable_regulatory"
+#define CFG_QDF_TRACE_ENABLE_CP_STATS     "qdf_trace_enable_cp_stats"
 
 #define CFG_QDF_TRACE_ENABLE_MIN          (0)
 #define CFG_QDF_TRACE_ENABLE_MAX          (0xff)
@@ -12764,7 +12736,7 @@ enum hdd_external_acs_freq_band {
  */
 
 #define CFG_IS_SAE_ENABLED_NAME    "sae_enabled"
-#define CFG_IS_SAE_ENABLED_DEFAULT (0)
+#define CFG_IS_SAE_ENABLED_DEFAULT (1)
 #define CFG_IS_SAE_ENABLED_MIN     (0)
 #define CFG_IS_SAE_ENABLED_MAX     (1)
 
@@ -12879,7 +12851,7 @@ enum hdd_external_acs_freq_band {
  * oce_wan_weightage - OCE WAN DL capacity Weightage to calculate best candidate
  * @Min: 0
  * @Max: 100
- * @Default: 0
+ * @Default: 2
  *
  * This ini is used to increase/decrease OCE WAN caps weightage in best
  * candidate selection. If AP have OCE WAN information, give weightage depending
@@ -12894,7 +12866,7 @@ enum hdd_external_acs_freq_band {
  * </ini>
  */
 #define CFG_OCE_WAN_WEIGHTAGE_NAME    "oce_wan_weightage"
-#define CFG_OCE_WAN_WEIGHTAGE_DEFAULT (0)
+#define CFG_OCE_WAN_WEIGHTAGE_DEFAULT (2)
 #define CFG_OCE_WAN_WEIGHTAGE_MIN     (0)
 #define CFG_OCE_WAN_WEIGHTAGE_MAX     (100)
 
@@ -13349,7 +13321,7 @@ enum hdd_external_acs_freq_band {
  * </ini>
  */
 #define CFG_OCE_WAN_SLOTS_NAME      "num_oce_wan_slots"
-#define CFG_OCE_WAN_SLOTS_DEFAULT   (8)
+#define CFG_OCE_WAN_SLOTS_DEFAULT   (15)
 #define CFG_OCE_WAN_SLOTS_MIN       (1)
 #define CFG_OCE_WAN_SLOTS_MAX       (15)
 
@@ -13358,7 +13330,7 @@ enum hdd_external_acs_freq_band {
  * oce_wan_score_idx3_to_0 - percentage for OCE WAN metrics score for slots 0-3
  * @Min: 0x00000000
  * @Max: 0x64646464
- * @Default: 0x00000000
+ * @Default: 0x00000032
  *
  * This INI give percentage value of OCE WAN metrics DL CAP, to be used as
  * index in which the DL CAP value falls. Index 0 is for percentage when
@@ -13380,7 +13352,7 @@ enum hdd_external_acs_freq_band {
  * </ini>
  */
 #define CFG_OCE_WAN_SCORE_IDX3_TO_0_NAME      "oce_wan_score_idx3_to_0"
-#define CFG_OCE_WAN_SCORE_IDX3_TO_0_DEFAULT   (0x00000000)
+#define CFG_OCE_WAN_SCORE_IDX3_TO_0_DEFAULT   (0x00000032)
 #define CFG_OCE_WAN_SCORE_IDX3_TO_0_MIN       (0x00000000)
 #define CFG_OCE_WAN_SCORE_IDX3_TO_0_MAX       (0x64646464)
 
@@ -13389,7 +13361,7 @@ enum hdd_external_acs_freq_band {
  * oce_wan_score_idx7_to_4 - percentage for OCE WAN metrics score for slots 4-7
  * @Min: 0x00000000
  * @Max: 0x64646464
- * @Default: 0x64640000
+ * @Default: 0x00000000
  *
  * This INI give percentage value of OCE WAN metrics DL CAP, to be used as
  * index in which the DL CAP value falls. Used only if num_oce_wan_slots is
@@ -13411,7 +13383,7 @@ enum hdd_external_acs_freq_band {
  * </ini>
  */
 #define CFG_OCE_WAN_SCORE_IDX7_TO_4_NAME      "oce_wan_score_idx7_to_4"
-#define CFG_OCE_WAN_SCORE_IDX7_TO_4_DEFAULT   (0x64640000)
+#define CFG_OCE_WAN_SCORE_IDX7_TO_4_DEFAULT   (0x00000000)
 #define CFG_OCE_WAN_SCORE_IDX7_TO_4_MIN       (0x00000000)
 #define CFG_OCE_WAN_SCORE_IDX7_TO_4_MAX       (0x64646464)
 
@@ -13420,7 +13392,7 @@ enum hdd_external_acs_freq_band {
  * oce_wan_score_idx11_to_8 - percentage for OCE WAN metrics score for slot 8-11
  * @Min: 0x00000000
  * @Max: 0x64646464
- * @Default: 0x00000064
+ * @Default: 0x06030000
  *
  * This INI give percentage value of OCE WAN metrics DL CAP, to be used as
  * index in which the DL CAP value falls. Used only if num_oce_wan_slots is
@@ -13442,7 +13414,7 @@ enum hdd_external_acs_freq_band {
  * </ini>
  */
 #define CFG_OCE_WAN_SCORE_IDX11_TO_8_NAME      "oce_wan_score_idx11_to_8"
-#define CFG_OCE_WAN_SCORE_IDX11_TO_8_DEFAULT   (0x00000064)
+#define CFG_OCE_WAN_SCORE_IDX11_TO_8_DEFAULT   (0x06030000)
 #define CFG_OCE_WAN_SCORE_IDX11_TO_8_MIN       (0x00000000)
 #define CFG_OCE_WAN_SCORE_IDX11_TO_8_MAX       (0x64646464)
 
@@ -13451,7 +13423,7 @@ enum hdd_external_acs_freq_band {
  * oce_wan_score_idx15_to_12 - % for OCE WAN metrics score for slot 12-15
  * @Min: 0x00000000
  * @Max: 0x64646464
- * @Default: 0x00000000
+ * @Default: 0x6432190C
  *
  * This INI give percentage value of OCE WAN metrics DL CAP, to be used as
  * index in which the DL CAP value falls. Used only if num_oce_wan_slots is
@@ -13473,7 +13445,7 @@ enum hdd_external_acs_freq_band {
  * </ini>
  */
 #define CFG_OCE_WAN_SCORE_IDX15_TO_12_NAME      "oce_wan_score_idx15_to_12"
-#define CFG_OCE_WAN_SCORE_IDX15_TO_12_DEFAULT   (0x00000000)
+#define CFG_OCE_WAN_SCORE_IDX15_TO_12_DEFAULT   (0x6432190C)
 #define CFG_OCE_WAN_SCORE_IDX15_TO_12_MIN       (0x00000000)
 #define CFG_OCE_WAN_SCORE_IDX15_TO_12_MAX       (0x64646464)
 
@@ -14140,7 +14112,7 @@ enum hdd_external_acs_freq_band {
 #define CFG_ENABLE_GCMP_NAME    "gcmp_enabled"
 #define CFG_ENABLE_GCMP_MIN     (0)
 #define CFG_ENABLE_GCMP_MAX     (1)
-#define CFG_ENABLE_GCMP_DEFAULT (0)
+#define CFG_ENABLE_GCMP_DEFAULT (1)
 
 /*
  * <ini>
@@ -14393,6 +14365,23 @@ enum hdd_external_acs_freq_band {
 #define CFG_CHANNEL_SELECT_LOGIC_CONC_DEFAULT (0x00000003)
 
 /*
+ * <ini>
+ * gTxSchDelay - Enable/Disable Tx sch delay
+ * @Min: 0
+ * @Max: 5
+ * @Default: 2
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+
+#define CFG_TX_SCH_DELAY_NAME          "gTxSchDelay"
+#define CFG_TX_SCH_DELAY_MIN           (0)
+#define CFG_TX_SCH_DELAY_MAX           (5)
+#define CFG_TX_SCH_DELAY_DEFAULT       (2)
+
+/*
  * Type declarations
  */
 struct hdd_config {
@@ -14441,7 +14430,6 @@ struct hdd_config {
 	uint16_t apProtection;
 	bool apOBSSProtEnabled;
 	bool apDisableIntraBssFwd;
-	uint32_t nAPAutoShutOff;
 	uint8_t enableLTECoex;
 	uint32_t apKeepAlivePeriod;
 	uint32_t goKeepAlivePeriod;
@@ -14652,6 +14640,7 @@ struct hdd_config {
 	uint16_t qdf_trace_enable_wifi_pos;
 	uint16_t qdf_trace_enable_nan;
 	uint16_t qdf_trace_enable_regulatory;
+	uint16_t qdf_trace_enable_cp_stats;
 
 	uint16_t nTeleBcnTransListenInterval;
 	uint16_t nTeleBcnMaxListenInterval;
@@ -14712,6 +14701,7 @@ struct hdd_config {
 	bool enableTxBF;
 	bool enable_subfee_vendor_vhtie;
 	bool enable_txbf_sap_mode;
+	bool enable_vht20_mcs9;
 	uint8_t txBFCsnValue;
 	bool enable_su_tx_bformer;
 	uint8_t vhtRxMCS2x2;
@@ -14917,13 +14907,6 @@ struct hdd_config {
 	uint8_t ignoreCAC;
 	bool IsSapDfsChSifsBurstEnabled;
 
-#ifdef WLAN_SUPPORT_GREEN_AP
-	bool enableGreenAP;
-	bool enable_egap;
-	uint32_t egap_feature_flag;
-	uint32_t egap_inact_time;
-	uint32_t egap_wait_time;
-#endif
 	/* Flag to indicate crash inject enabled or not */
 	bool crash_inject_enabled;
 	uint8_t force_sap_acs;
@@ -15308,6 +15291,8 @@ struct hdd_config {
 	bool enable_dtim_selection_diversity;
 	uint32_t channel_select_logic_conc;
 	bool enable_bt_chain_separation;
+	uint8_t enable_tx_sch_delay;
+	HDD_GREEN_AP_CFG_FIELDS
 };
 
 #define VAR_OFFSET(_Struct, _Var) (offsetof(_Struct, _Var))

@@ -47,6 +47,7 @@
 #include "wlan_hdd_tdls.h"
 #include "sme_api.h"
 #include "wlan_hdd_hostapd.h"
+#include <wlan_hdd_green_ap.h>
 #include <wlan_hdd_ipa.h>
 #include "wlan_hdd_lpass.h"
 #include <wlan_logging_sock_svc.h>
@@ -1343,7 +1344,7 @@ static void hdd_send_association_event(struct net_device *dev,
 		if (!hdd_is_roam_sync_in_progress(pCsrRoamInfo)) {
 			policy_mgr_incr_active_session(hdd_ctx->hdd_psoc,
 				adapter->device_mode, adapter->session_id);
-			hdd_start_green_ap_state_mc(hdd_ctx,
+			hdd_green_ap_start_state_mc(hdd_ctx,
 						    adapter->device_mode, true);
 		}
 		memcpy(wrqu.ap_addr.sa_data, pCsrRoamInfo->pBssDesc->bssId,
@@ -1440,7 +1441,7 @@ static void hdd_send_association_event(struct net_device *dev,
 		memset(wrqu.ap_addr.sa_data, '\0', ETH_ALEN);
 		policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 				adapter->device_mode, adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, adapter->device_mode,
 					    false);
 
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
@@ -1484,8 +1485,6 @@ static void hdd_send_association_event(struct net_device *dev,
 #endif
 	}
 	hdd_ipa_set_tx_flow_info();
-	/* Send SCC/MCC Switching event to IPA */
-	ucfg_ipa_send_mcc_scc_msg(hdd_ctx->hdd_pdev, hdd_ctx->mcc_mode);
 
 	msg = NULL;
 	/* During the WLAN uninitialization,supplicant is stopped before the
@@ -2328,7 +2327,7 @@ static void hdd_send_re_assoc_event(struct net_device *dev,
 	if (!hdd_is_roam_sync_in_progress(pCsrRoamInfo)) {
 		policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 				adapter->device_mode, adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, adapter->device_mode,
 					    false);
 	}
 
@@ -3046,7 +3045,7 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 							hdd_ctx->hdd_psoc,
 							adapter->device_mode,
 							adapter->session_id);
-						hdd_start_green_ap_state_mc(
+						hdd_green_ap_start_state_mc(
 							hdd_ctx,
 							adapter->device_mode,
 							false);
@@ -3533,7 +3532,7 @@ static void hdd_roam_ibss_indication_handler(struct hdd_adapter *adapter,
 		if (eCSR_ROAM_RESULT_IBSS_STARTED == roamResult) {
 			policy_mgr_incr_active_session(hdd_ctx->hdd_psoc,
 				adapter->device_mode, adapter->session_id);
-			hdd_start_green_ap_state_mc(hdd_ctx,
+			hdd_green_ap_start_state_mc(hdd_ctx,
 						    adapter->device_mode, true);
 		} else if (eCSR_ROAM_RESULT_IBSS_JOIN_SUCCESS == roamResult ||
 				eCSR_ROAM_RESULT_IBSS_COALESCED == roamResult) {

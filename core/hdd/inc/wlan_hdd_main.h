@@ -113,6 +113,16 @@
 #define NUM_TX_QUEUES 4
 #endif
 
+/*
+ * API in_compat_syscall() is introduced in 4.6 kernel to check whether we're
+ * in a compat syscall or not. It is a new way to query the syscall type, which
+ * works properly on all architectures.
+ *
+ */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 6, 0))
+static inline bool in_compat_syscall(void) { return is_compat_task(); }
+#endif
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0)) || \
 	defined(CFG80211_REMOVE_IEEE80211_BACKPORT)
 #define HDD_NL80211_BAND_2GHZ   NL80211_BAND_2GHZ
@@ -960,8 +970,6 @@ struct hdd_station_info {
  * @hostapd_state: state control information
  * @dfs_cac_block_tx: Is data tramsmission blocked due to DFS CAC?
  * @ap_active: Are any stations active?
- * @hdd_ap_inactivity_timer: Timer used to shutdown the AP if it is
- *     inactive for an extended amount of time.
  * @disable_intrabss_fwd: Prevent forwarding between stations
  * @broadcast_sta_id: Station ID assigned after BSS starts
  * @privacy: The privacy bits of configuration
@@ -982,7 +990,6 @@ struct hdd_ap_ctx {
 	struct hdd_hostapd_state hostapd_state;
 	bool dfs_cac_block_tx;
 	bool ap_active;
-	qdf_mc_timer_t hdd_ap_inactivity_timer;
 	bool disable_intrabss_fwd;
 	uint8_t broadcast_sta_id;
 	uint8_t privacy;
@@ -1931,18 +1938,6 @@ enum {
 /*
  * Function declarations and documentation
  */
-
-/**
- * hdd_start_green_ap_state_mc() - to start green AP state mc based on
- *        present concurrency and state of green AP state machine.
- * @hdd_ctx: hdd context
- * @mode: device mode
- * @is_session_start: BSS start/stop
- *
- * Return: 0 - success, < 0 - failure
- */
-int hdd_start_green_ap_state_mc(struct hdd_context *hdd_ctx,
-				enum QDF_OPMODE mode, bool is_session_start);
 
 int hdd_validate_channel_and_bandwidth(struct hdd_adapter *adapter,
 				uint32_t chan_number,

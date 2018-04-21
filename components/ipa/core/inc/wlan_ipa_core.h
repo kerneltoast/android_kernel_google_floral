@@ -218,6 +218,20 @@ QDF_STATUS wlan_ipa_wdi_setup_rm(struct wlan_ipa_priv *ipa_ctx);
  */
 void wlan_ipa_wdi_destroy_rm(struct wlan_ipa_priv *ipa_ctx);
 
+static inline
+int wlan_ipa_wdi_rm_notify_completion(qdf_ipa_rm_event_t event,
+				      qdf_ipa_rm_resource_name_t res_name)
+{
+	return qdf_ipa_rm_notify_completion(event, res_name);
+}
+
+static inline
+int wlan_ipa_wdi_rm_inactivity_timer_destroy(
+					qdf_ipa_rm_resource_name_t res_name)
+{
+	return qdf_ipa_rm_inactivity_timer_destroy(res_name);
+}
+
 #else /* CONFIG_IPA_WDI_UNIFIED_API */
 
 static inline
@@ -260,6 +274,20 @@ static inline QDF_STATUS wlan_ipa_wdi_rm_try_release(struct wlan_ipa_priv
 						     *ipa_ctx)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline
+int wlan_ipa_wdi_rm_notify_completion(qdf_ipa_rm_event_t event,
+				      qdf_ipa_rm_resource_name_t res_name)
+{
+	return 0;
+}
+
+static inline
+int wlan_ipa_wdi_rm_inactivity_timer_destroy(
+					qdf_ipa_rm_resource_name_t res_name)
+{
+	return 0;
 }
 
 #endif /* CONFIG_IPA_WDI_UNIFIED_API */
@@ -439,15 +467,11 @@ void wlan_ipa_reg_send_to_nw_cb(struct wlan_ipa_priv *ipa_ctx, void *cb)
 /**
  * wlan_ipa_set_mcc_mode() - Set MCC mode
  * @ipa_ctx: IPA context
- * @mcc_mode: 0=MCC/1=SCC
+ * @mcc_mode: 1=MCC/0=SCC
  *
  * Return: void
  */
-static inline
-void wlan_ipa_set_mcc_mode(struct wlan_ipa_priv *ipa_ctx, bool mcc_mode)
-{
-	ipa_ctx->mcc_mode = mcc_mode;
-}
+void wlan_ipa_set_mcc_mode(struct wlan_ipa_priv *ipa_ctx, bool mcc_mode);
 
 /**
  * wlan_ipa_set_dfs_cac_tx() - Set DFS cac tx block
@@ -536,6 +560,10 @@ QDF_STATUS wlan_ipa_send_mcc_scc_msg(struct wlan_ipa_priv *ipa_ctx,
 				     bool mcc_mode)
 {
 	return QDF_STATUS_SUCCESS;
+}
+
+static inline void wlan_ipa_mcc_work_handler(void *data)
+{
 }
 #endif
 

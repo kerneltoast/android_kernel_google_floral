@@ -2928,6 +2928,8 @@ QDF_STATUS csr_change_default_config_param(tpAniSirGlobal pMac,
 					pParam->enable_subfee_vendor_vhtie;
 		pMac->roam.configParam.enable_txbf_sap_mode =
 			pParam->enable_txbf_sap_mode;
+		pMac->roam.configParam.enable_vht20_mcs9 =
+			pParam->enable_vht20_mcs9;
 		pMac->roam.configParam.enable2x2 = pParam->enable2x2;
 		pMac->roam.configParam.enableVhtFor24GHz =
 			pParam->enableVhtFor24GHz;
@@ -3250,6 +3252,7 @@ QDF_STATUS csr_get_config_param(tpAniSirGlobal pMac, tCsrConfigParam *pParam)
 				cfg_params->enable_subfee_vendor_vhtie;
 	pParam->enable_txbf_sap_mode =
 		cfg_params->enable_txbf_sap_mode;
+	pParam->enable_vht20_mcs9 = cfg_params->enable_vht20_mcs9;
 	pParam->enableVhtFor24GHz = cfg_params->enableVhtFor24GHz;
 	pParam->ignore_peer_erp_info = cfg_params->ignore_peer_erp_info;
 	pParam->enable2x2 = cfg_params->enable2x2;
@@ -9816,21 +9819,6 @@ bool csr_is_roam_command_waiting_for_session(tpAniSirGlobal pMac,
 	}
 	csr_nonscan_active_ll_unlock(pMac);
 
-	return fRet;
-}
-
-bool csr_is_roam_command_waiting(tpAniSirGlobal pMac)
-{
-	bool fRet = false;
-	uint32_t i;
-
-	for (i = 0; i < CSR_ROAM_SESSION_MAX; i++) {
-		fRet = csr_is_roam_command_waiting_for_session(pMac, i);
-		if (CSR_IS_SESSION_VALID(pMac, i)
-		    && (fRet)) {
-			break;
-		}
-	}
 	return fRet;
 }
 
@@ -16804,7 +16792,7 @@ QDF_STATUS csr_issue_add_sta_for_session_req(tpAniSirGlobal pMac,
 	sme_debug(
 		"Send WMA_ADD_STA_SELF_REQ for selfMac=" MAC_ADDRESS_STR,
 		 MAC_ADDR_ARRAY(add_sta_self_req->self_mac_addr));
-	status = wma_post_ctrl_msg(pMac, &msg);
+	status = scheduler_post_msg(QDF_MODULE_ID_WMA, &msg);
 
 	if (status != QDF_STATUS_SUCCESS) {
 		sme_err("wma_post_ctrl_msg failed");
@@ -19173,6 +19161,7 @@ static void csr_update_fils_params_rso(tpAniSirGlobal mac,
 {
 	struct roam_fils_params *roam_fils_params;
 	struct cds_fils_connection_info *fils_info;
+	uint32_t usr_name_len;
 
 	if (!session->pCurRoamProfile)
 		return;
@@ -19194,13 +19183,19 @@ static void csr_update_fils_params_rso(tpAniSirGlobal mac,
 		return;
 	}
 
+	usr_name_len = copy_all_before_char(fils_info->keyname_nai,
+					    sizeof(fils_info->keyname_nai),
+					    roam_fils_params->username,
+					    sizeof(roam_fils_params->username),
+					    '@');
+	if (fils_info->key_nai_length <= usr_name_len) {
+		sme_err("Fils info len error: key nai len %d, user name len %d",
+			fils_info->key_nai_length, usr_name_len);
+		return;
+	}
+
+	roam_fils_params->username_length = usr_name_len;
 	req_buffer->is_fils_connection = true;
-	roam_fils_params->username_length =
-			copy_all_before_char(fils_info->keyname_nai,
-					     sizeof(fils_info->keyname_nai),
-					     roam_fils_params->username,
-					     sizeof(roam_fils_params->username),
-					     '@');
 
 	roam_fils_params->next_erp_seq_num =
 			(fils_info->sequence_number + 1);

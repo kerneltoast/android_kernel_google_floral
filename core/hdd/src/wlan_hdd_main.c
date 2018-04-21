@@ -83,6 +83,7 @@
 #endif
 #include <wlan_hdd_hostapd.h>
 #include <wlan_hdd_softap_tx_rx.h>
+#include <wlan_hdd_green_ap.h>
 #include "cfg_api.h"
 #include "qwlan_version.h"
 #include "wma_types.h"
@@ -141,7 +142,6 @@
 #include "wlan_reg_ucfg_api.h"
 #include "wlan_ocb_ucfg_api.h"
 
-#include <wlan_green_ap_ucfg_api.h>
 #include <wlan_hdd_spectralscan.h>
 #ifdef MODULE
 #define WLAN_MODULE_NAME  module_name(THIS_MODULE)
@@ -310,125 +310,6 @@ void hdd_start_complete(int ret)
 	wlan_start_ret_val = ret;
 
 	complete(&wlan_start_comp);
-}
-
-/**
- * hdd_check_green_ap_enable() - to check whether to enable green ap or not
- * @hdd_ctx: hdd context
- * @enable_green_ap: 1 - enable green ap enabled, 0 - disbale green ap
- *
- * Return: 0 - success, < 0 - failure
- */
-static int hdd_check_green_ap_enable(struct hdd_context *hdd_ctx,
-				     bool *enable_green_ap)
-{
-	uint8_t num_sessions, mode;
-	QDF_STATUS status;
-
-	for (mode = 0;
-	     mode < QDF_MAX_NO_OF_MODE;
-	     mode++) {
-		if (mode == QDF_SAP_MODE || mode == QDF_P2P_GO_MODE)
-			continue;
-
-		status = policy_mgr_mode_specific_num_active_sessions(
-					hdd_ctx->hdd_psoc, mode, &num_sessions);
-		hdd_debug("No. of active sessions for mode: %d is %d",
-			  mode, num_sessions);
-		if (status != QDF_STATUS_SUCCESS) {
-			hdd_err("Failed to get num sessions for mode: %d",
-				mode);
-			return -EINVAL;
-		} else if (num_sessions) {
-			*enable_green_ap = false;
-			return 0;
-		}
-	}
-	*enable_green_ap = true;
-	return 0;
-}
-
-int hdd_start_green_ap_state_mc(struct hdd_context *hdd_ctx,
-				enum QDF_OPMODE mode, bool is_session_start)
-{
-	struct hdd_config *cfg;
-	bool enable_green_ap = false;
-	uint8_t num_sap_sessions = 0, num_p2p_go_sessions = 0, ret = 0;
-
-	cfg = hdd_ctx->config;
-	if (!cfg) {
-		hdd_err("NULL hdd config");
-		return -EINVAL;
-	}
-
-	if (!cfg->enable2x2 || !cfg->enableGreenAP) {
-		hdd_info("Green AP support not present: enable2x2: %d, enableGreenAp: %d",
-			 cfg->enable2x2, cfg->enableGreenAP);
-		return 0;
-	}
-
-	policy_mgr_mode_specific_num_active_sessions(hdd_ctx->hdd_psoc,
-						     QDF_SAP_MODE,
-						     &num_sap_sessions);
-	policy_mgr_mode_specific_num_active_sessions(hdd_ctx->hdd_psoc,
-						     QDF_P2P_GO_MODE,
-						     &num_p2p_go_sessions);
-
-	switch (mode) {
-	case QDF_STA_MODE:
-	case QDF_P2P_CLIENT_MODE:
-	case QDF_IBSS_MODE:
-		if (!num_sap_sessions && !num_p2p_go_sessions)
-			return 0;
-
-		if (is_session_start) {
-			hdd_debug("Disabling Green AP");
-			ucfg_green_ap_set_ps_config(hdd_ctx->hdd_pdev,
-						    false);
-			wlan_green_ap_stop(hdd_ctx->hdd_pdev);
-		} else {
-			ret = hdd_check_green_ap_enable(hdd_ctx,
-							&enable_green_ap);
-			if (!ret) {
-				if (enable_green_ap) {
-					hdd_debug("Enabling Green AP");
-					ucfg_green_ap_set_ps_config(
-						hdd_ctx->hdd_pdev, true);
-					wlan_green_ap_start(hdd_ctx->hdd_pdev);
-				}
-			} else {
-				hdd_err("Failed to check Green AP enable status");
-			}
-		}
-		break;
-	case QDF_SAP_MODE:
-	case QDF_P2P_GO_MODE:
-		if (is_session_start) {
-			ret = hdd_check_green_ap_enable(hdd_ctx,
-							&enable_green_ap);
-			if (!ret) {
-				if (enable_green_ap) {
-					hdd_debug("Enabling Green AP");
-					ucfg_green_ap_set_ps_config(
-						hdd_ctx->hdd_pdev, true);
-					wlan_green_ap_start(hdd_ctx->hdd_pdev);
-				}
-			} else {
-				hdd_err("Failed to check Green AP enable status");
-			}
-		} else {
-			if (!num_sap_sessions && !num_p2p_go_sessions) {
-				hdd_debug("Disabling Green AP");
-				ucfg_green_ap_set_ps_config(hdd_ctx->hdd_pdev,
-							    false);
-				wlan_green_ap_stop(hdd_ctx->hdd_pdev);
-			}
-		}
-		break;
-	default:
-		break;
-	}
-	return ret;
 }
 
 /**
@@ -964,13 +845,13 @@ int wlan_hdd_validate_context(struct hdd_context *hdd_ctx)
 	if (cds_is_driver_in_bad_state()) {
 		hdd_debug("%pS driver in bad State: 0x%x Ignore!!!",
 			(void *)_RET_IP_, cds_get_driver_state());
-		return -ENODEV;
+		return -EAGAIN;
 	}
 
 	if (cds_is_fw_down()) {
 		hdd_debug("%pS FW is down: 0x%x Ignore!!!",
 			(void *)_RET_IP_, cds_get_driver_state());
-		return -ENODEV;
+		return -EAGAIN;
 	}
 
 	return 0;
@@ -1927,27 +1808,6 @@ static void hdd_update_ra_rate_limit(struct hdd_context *hdd_ctx,
 }
 #endif
 
-static int hdd_update_green_ap_config(struct hdd_context *hdd_ctx)
-{
-	struct green_ap_user_cfg green_ap_cfg;
-	struct hdd_config *cfg = hdd_ctx->config;
-	QDF_STATUS status;
-
-	green_ap_cfg.host_enable_egap = cfg->enable_egap;
-	green_ap_cfg.egap_inactivity_time = cfg->egap_inact_time;
-	green_ap_cfg.egap_wait_time = cfg->egap_wait_time;
-	green_ap_cfg.egap_feature_flags = cfg->egap_feature_flag;
-
-	status = ucfg_green_ap_update_user_config(hdd_ctx->hdd_pdev,
-						  &green_ap_cfg);
-	if (status != QDF_STATUS_SUCCESS) {
-		hdd_err("failed to update green ap user configuration");
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 void hdd_update_tgt_cfg(void *context, void *param)
 {
 	int ret;
@@ -1971,7 +1831,7 @@ void hdd_update_tgt_cfg(void *context, void *param)
 		}
 	}
 
-	ret = hdd_update_green_ap_config(hdd_ctx);
+	ret = hdd_green_ap_update_config(hdd_ctx);
 
 	ucfg_ipa_set_dp_handle(hdd_ctx->hdd_psoc,
 			       cds_get_context(QDF_MODULE_ID_SOC));
@@ -2733,7 +2593,6 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx,
 		return -EINVAL;
 	}
 
-	hdd_set_idle_ps_config(hdd_ctx, false);
 	qdf_cancel_delayed_work(&hdd_ctx->iface_idle_work);
 
 	mutex_lock(&hdd_ctx->iface_change_lock);
@@ -4475,6 +4334,16 @@ int hdd_set_fw_params(struct hdd_adapter *adapter)
 		goto error;
 	}
 
+	ret = sme_cli_set_command(
+			adapter->session_id,
+			WMI_PDEV_PARAM_TX_SCH_DELAY,
+			hdd_ctx->config->enable_tx_sch_delay,
+			PDEV_CMD);
+	if (ret) {
+		hdd_err("Failed to set WMI_PDEV_PARAM_TX_SCH_DELAY");
+		goto error;
+	}
+
 	if (adapter->device_mode == QDF_STA_MODE) {
 		sme_set_smps_cfg(adapter->session_id,
 					HDD_STA_SMPS_PARAM_UPPER_BRSSI_THRESH,
@@ -5107,7 +4976,7 @@ QDF_STATUS hdd_stop_adapter(struct hdd_context *hdd_ctx,
 			policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 						adapter->device_mode,
 						adapter->session_id);
-			hdd_start_green_ap_state_mc(hdd_ctx,
+			hdd_green_ap_start_state_mc(hdd_ctx,
 						    adapter->device_mode,
 						    false);
 
@@ -5280,7 +5149,7 @@ QDF_STATUS hdd_reset_all_adapters(struct hdd_context *hdd_ctx)
 		hdd_deinit_tx_rx(adapter);
 		policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 				adapter->device_mode, adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, adapter->device_mode,
 					    false);
 		if (test_bit(WMM_INIT_DONE, &adapter->event_flags)) {
 			hdd_wmm_adapter_close(adapter);
@@ -8401,6 +8270,8 @@ static void hdd_set_trace_level_for_each(struct hdd_context *hdd_ctx)
 				hdd_ctx->config->qdf_trace_enable_nan);
 	hdd_qdf_trace_enable(QDF_MODULE_ID_REGULATORY,
 				hdd_ctx->config->qdf_trace_enable_regulatory);
+	hdd_qdf_trace_enable(QDF_MODULE_ID_CP_STATS,
+				hdd_ctx->config->qdf_trace_enable_cp_stats);
 
 	hdd_cfg_print(hdd_ctx);
 }
@@ -10172,6 +10043,7 @@ int hdd_configure_cds(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter)
 
 	dp_cbs.hdd_disable_lro_in_concurrency = hdd_disable_lro_in_concurrency;
 	dp_cbs.hdd_set_rx_mode_rps_cb = hdd_set_rx_mode_rps;
+	dp_cbs.hdd_ipa_set_mcc_mode_cb = hdd_ipa_set_mcc_mode;
 	status = policy_mgr_register_dp_cb(hdd_ctx->hdd_psoc, &dp_cbs);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		hdd_debug("Failed to register DP cb with Policy Manager");
@@ -10184,7 +10056,7 @@ int hdd_configure_cds(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter)
 		goto cds_disable;
 	}
 
-	if (ucfg_green_ap_enable_egap(hdd_ctx->hdd_pdev))
+	if (hdd_green_ap_enable_egap(hdd_ctx))
 		hdd_debug("enhance green ap is not enabled");
 
 	if (0 != wlan_hdd_set_wow_pulse(hdd_ctx, true))
@@ -11544,7 +11416,7 @@ void wlan_hdd_stop_sap(struct hdd_adapter *ap_adapter)
 		policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 						ap_adapter->device_mode,
 						ap_adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, ap_adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, ap_adapter->device_mode,
 					    false);
 		hdd_debug("SAP Stop Success");
 	} else {
@@ -11614,7 +11486,7 @@ void wlan_hdd_start_sap(struct hdd_adapter *ap_adapter, bool reinit)
 		policy_mgr_incr_active_session(hdd_ctx->hdd_psoc,
 					ap_adapter->device_mode,
 					ap_adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, ap_adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, ap_adapter->device_mode,
 					    true);
 	}
 	mutex_unlock(&hdd_ctx->sap_lock);
@@ -12229,7 +12101,8 @@ static void __exit hdd_module_exit(void)
 }
 #endif
 
-static int fwpath_changed_handler(const char *kmessage, struct kernel_param *kp)
+static int fwpath_changed_handler(const char *kmessage,
+				  const struct kernel_param *kp)
 {
 	return param_set_copystring(kmessage, kp);
 }
@@ -12394,7 +12267,8 @@ static int hdd_register_req_mode(struct hdd_context *hdd_ctx,
  *
  * Return - 0 on success and failure code on failure
  */
-static int __con_mode_handler(const char *kmessage, struct kernel_param *kp,
+static int __con_mode_handler(const char *kmessage,
+			      const struct kernel_param *kp,
 			      struct hdd_context *hdd_ctx)
 {
 	int ret;
@@ -12504,7 +12378,7 @@ reset_flags:
 }
 
 
-static int con_mode_handler(const char *kmessage, struct kernel_param *kp)
+static int con_mode_handler(const char *kmessage, const struct kernel_param *kp)
 {
 	int ret;
 	struct hdd_context *hdd_ctx;
@@ -12522,7 +12396,7 @@ static int con_mode_handler(const char *kmessage, struct kernel_param *kp)
 }
 
 static int con_mode_handler_ftm(const char *kmessage,
-				struct kernel_param *kp)
+				const struct kernel_param *kp)
 {
 	int ret;
 
@@ -12540,7 +12414,7 @@ static int con_mode_handler_ftm(const char *kmessage,
 }
 
 static int con_mode_handler_monitor(const char *kmessage,
-				struct kernel_param *kp)
+				    const struct kernel_param *kp)
 {
 	int ret;
 
@@ -13362,7 +13236,7 @@ void hdd_restart_sap(struct hdd_adapter *ap_adapter)
 		clear_bit(SOFTAP_BSS_STARTED, &ap_adapter->event_flags);
 		policy_mgr_decr_session_set_pcl(hdd_ctx->hdd_psoc,
 			ap_adapter->device_mode, ap_adapter->session_id);
-		hdd_start_green_ap_state_mc(hdd_ctx, ap_adapter->device_mode,
+		hdd_green_ap_start_state_mc(hdd_ctx, ap_adapter->device_mode,
 					    false);
 		hdd_err("SAP Stop Success");
 
@@ -13399,7 +13273,7 @@ void hdd_restart_sap(struct hdd_adapter *ap_adapter)
 			policy_mgr_incr_active_session(hdd_ctx->hdd_psoc,
 						ap_adapter->device_mode,
 						ap_adapter->session_id);
-			hdd_start_green_ap_state_mc(hdd_ctx,
+			hdd_green_ap_start_state_mc(hdd_ctx,
 						    ap_adapter->device_mode,
 						    true);
 		}
@@ -13795,17 +13669,37 @@ MODULE_LICENSE("Dual BSD/GPL");
 MODULE_AUTHOR("Qualcomm Atheros, Inc.");
 MODULE_DESCRIPTION("WLAN HOST DEVICE DRIVER");
 
-module_param_call(con_mode, con_mode_handler, param_get_int, &con_mode,
-		  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+static const struct kernel_param_ops con_mode_ops = {
+	.set = con_mode_handler,
+	.get = param_get_int,
+};
 
-module_param_call(con_mode_ftm, con_mode_handler_ftm, param_get_int,
-		  &con_mode_ftm, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+static const struct kernel_param_ops con_mode_ftm_ops = {
+	.set = con_mode_handler_ftm,
+	.get = param_get_int,
+};
 
-module_param_call(con_mode_monitor, con_mode_handler_monitor, param_get_int,
-		  &con_mode_monitor, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+static const struct kernel_param_ops con_mode_monitor_ops = {
+	.set = con_mode_handler_monitor,
+	.get = param_get_int,
+};
 
-module_param_call(fwpath, fwpath_changed_handler, param_get_string, &fwpath,
-		  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+static const struct kernel_param_ops fwpath_ops = {
+	.set = fwpath_changed_handler,
+	.get = param_get_string,
+};
+
+module_param_cb(con_mode, &con_mode_ops, &con_mode,
+		S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+module_param_cb(con_mode_ftm, &con_mode_ftm_ops, &con_mode_ftm,
+		S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+module_param_cb(con_mode_monitor, &con_mode_monitor_ops, &con_mode_monitor,
+		S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+module_param_cb(fwpath, &fwpath_ops, &fwpath,
+		S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
 module_param(enable_dfs_chan_scan, int, S_IRUSR | S_IRGRP | S_IROTH);
 
