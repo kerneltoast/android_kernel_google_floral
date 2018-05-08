@@ -8384,7 +8384,7 @@ static int ie_whitelist_attrs_init(struct hdd_context *hdd_ctx)
 static void hdd_iface_change_callback(void *priv)
 {
 	struct hdd_context *hdd_ctx = (struct hdd_context *) priv;
-	//int ret;
+	int ret;
 	int status = wlan_hdd_validate_context(hdd_ctx);
 
 	if (status)
@@ -8392,12 +8392,9 @@ static void hdd_iface_change_callback(void *priv)
 
 	hdd_enter();
 	hdd_debug("Interface change timer expired close the modules!");
-	hdd_err("HACK: Ignore timer");
-	/*
 	ret = hdd_wlan_stop_modules(hdd_ctx, false);
 	if (ret)
 		hdd_err("Failed to stop modules");
-	*/
 	hdd_exit();
 }
 
