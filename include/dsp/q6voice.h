@@ -21,8 +21,8 @@
 #define SESSION_NAME_LEN 20
 #define NUM_OF_MEMORY_BLOCKS 1
 #define NUM_OF_BUFFERS 2
-#define VSS_NUM_CHANNELS_MAX 32
-#define VSS_CHANNEL_MAPPING_SIZE (sizeof(uint8_t) * VSS_NUM_CHANNELS_MAX)
+#define VSS_CHANNELS_MAX 8
+#define VSS_CHANNEL_MAPPING_SIZE (sizeof(uint8_t) * VSS_CHANNELS_MAX)
 /*
  * BUFFER BLOCK SIZE based on
  * the supported page size
@@ -101,7 +101,7 @@ struct device_data {
 	uint32_t dev_mute;
 	uint32_t sample_rate;
 	uint16_t bits_per_sample;
-	uint8_t  channel_mapping[VSS_NUM_CHANNELS_MAX];
+	uint8_t  channel_mapping[VSS_CHANNELS_MAX];
 	uint32_t enabled;
 	uint32_t dev_id;
 	uint32_t port_id;
@@ -120,7 +120,7 @@ struct media_format_info {
 	uint16_t num_channels;
 	uint16_t bits_per_sample;
 	uint32_t sample_rate;
-	uint8_t  channel_mapping[VSS_NUM_CHANNELS_MAX];
+	uint8_t  channel_mapping[VSS_CHANNELS_MAX];
 };
 
 enum {
@@ -235,13 +235,13 @@ struct vss_param_endpoint_media_format_info {
 	 * of the array describes channel i inside the data buffer. An
 	 * unused or unknown channel is set to 0.
 	 */
-	uint8_t channel_mapping[VSS_NUM_CHANNELS_MAX];
+	uint8_t channel_mapping[VSS_CHANNELS_MAX];
 } __packed;
 
 struct vss_param_vocproc_dev_channel_info_t {
 	uint32_t num_channels;
 	uint32_t bits_per_sample;
-	uint8_t channel_mapping[VSS_NUM_CHANNELS_MAX];
+	uint8_t channel_mapping[VSS_CHANNELS_MAX];
 } __packed;
 
 struct vss_param_channel_mixer_info_t {
@@ -258,7 +258,7 @@ struct vss_param_mfc_config_info_t {
 	uint32_t sample_rate;
 	uint16_t bits_per_sample;
 	uint16_t num_channels;
-	uint16_t channel_type[VSS_NUM_CHANNELS_MAX];
+	uint16_t channel_type[VSS_CHANNELS_MAX];
 } __packed;
 
 struct vss_icommon_param_data_channel_info_v2_t {
