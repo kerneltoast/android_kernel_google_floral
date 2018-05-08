@@ -235,8 +235,6 @@ static void tdls_ct_sampling_tx_rx(struct tdls_vdev_priv_obj *tdls_vdev,
 
 	qdf_spin_unlock_bh(&tdls_soc->tdls_ct_spinlock);
 
-	tdls_notice("Valid mac entries %d", mac_entries);
-
 	for (mac_cnt = 0; mac_cnt < mac_entries; mac_cnt++) {
 		qdf_mem_copy(mac, mac_table[mac_cnt].mac_address.bytes,
 		       QDF_MAC_ADDR_SIZE);
@@ -258,7 +256,6 @@ void tdls_update_rx_pkt_cnt(struct wlan_objmgr_vdev *vdev,
 	uint8_t mac_cnt;
 	uint8_t valid_mac_entries;
 	struct tdls_conn_tracker_mac_table *mac_table;
-	static unsigned int tdls_rx_cnt = 0;
 
 	if (QDF_STATUS_SUCCESS != tdls_get_vdev_objects(vdev, &tdls_vdev_obj,
 						   &tdls_soc_obj))
@@ -298,8 +295,6 @@ void tdls_update_rx_pkt_cnt(struct wlan_objmgr_vdev *vdev,
 
 rx_cnt_return:
 	qdf_spin_unlock_bh(&tdls_soc_obj->tdls_ct_spinlock);
-	tdls_rx_cnt++;
-	tdls_err_rl(" tdls rx cnt %d", tdls_rx_cnt);
 	return;
 }
 
@@ -311,7 +306,6 @@ void tdls_update_tx_pkt_cnt(struct wlan_objmgr_vdev *vdev,
 	uint8_t mac_cnt;
 	uint8_t valid_mac_entries;
 	struct tdls_conn_tracker_mac_table *mac_table;
-	static unsigned int tdls_tx_cnt = 0;
 
 	if (QDF_STATUS_SUCCESS != tdls_get_vdev_objects(vdev, &tdls_vdev_obj,
 						   &tdls_soc_obj))
@@ -352,8 +346,6 @@ void tdls_update_tx_pkt_cnt(struct wlan_objmgr_vdev *vdev,
 
 tx_cnt_return:
 	qdf_spin_unlock_bh(&tdls_soc_obj->tdls_ct_spinlock);
-	tdls_tx_cnt++;
-	tdls_err_rl(" tdls tx cnt %d", tdls_tx_cnt);
 	return;
 }
 
