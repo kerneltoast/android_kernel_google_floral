@@ -882,6 +882,40 @@ struct hif_target_info *hif_get_target_info_handle(
 }
 qdf_export_symbol(hif_get_target_info_handle);
 
+#ifdef RECEIVE_OFFLOAD
+void hif_offld_flush_cb_register(struct hif_opaque_softc *scn,
+				 void (offld_flush_handler)(void *))
+{
+	if (hif_napi_enabled(scn, -1))
+		hif_napi_rx_offld_flush_cb_register(scn, offld_flush_handler);
+	else
+		HIF_ERROR("NAPI not enabled\n");
+}
+qdf_export_symbol(hif_offld_flush_cb_register);
+
+void hif_offld_flush_cb_deregister(struct hif_opaque_softc *scn)
+{
+	if (hif_napi_enabled(scn, -1))
+		hif_napi_rx_offld_flush_cb_deregister(scn);
+	else
+		HIF_ERROR("NAPI not enabled\n");
+}
+qdf_export_symbol(hif_offld_flush_cb_deregister);
+
+int hif_get_rx_ctx_id(int ctx_id, struct hif_opaque_softc *hif_hdl)
+{
+	if (hif_napi_enabled(hif_hdl, -1))
+		return NAPI_PIPE2ID(ctx_id);
+	else
+		return ctx_id;
+}
+#else /* RECEIVE_OFFLOAD */
+int hif_get_rx_ctx_id(int ctx_id, struct hif_opaque_softc *hif_hdl)
+{
+	return 0;
+}
+#endif /* RECEIVE_OFFLOAD */
+
 #if defined(FEATURE_LRO)
 
 /**
@@ -901,27 +935,6 @@ void *hif_get_lro_info(int ctx_id, struct hif_opaque_softc *hif_hdl)
 		data = hif_ce_get_lro_ctx(hif_hdl, ctx_id);
 
 	return data;
-}
-
-/**
- * hif_get_rx_ctx_id - Returns LRO instance ID based on underlying LRO instance
- * @ctx_id: LRO context ID
- * @hif_hdl: HIF Context
- *
- * Return: LRO instance ID
- */
-int hif_get_rx_ctx_id(int ctx_id, struct hif_opaque_softc *hif_hdl)
-{
-	if (hif_napi_enabled(hif_hdl, -1))
-		return NAPI_PIPE2ID(ctx_id);
-	else
-		return ctx_id;
-}
-
-#else /* !defined(FEATURE_LRO) */
-int hif_get_rx_ctx_id(int ctx_id, struct hif_opaque_softc *hif_hdl)
-{
-	return 0;
 }
 #endif
 
@@ -1260,3 +1273,32 @@ void hif_set_initial_wakeup_cb(struct hif_opaque_softc *hif_ctx,
 	scn->initial_wakeup_priv = priv;
 }
 
+void hif_set_ce_service_max_yield_time(struct hif_opaque_softc *hif,
+				       uint32_t ce_service_max_yield_time)
+{
+	struct hif_softc *hif_ctx = HIF_GET_SOFTC(hif);
+
+	hif_ctx->ce_service_max_yield_time =
+		ce_service_max_yield_time * 1000;
+}
+
+unsigned long long
+hif_get_ce_service_max_yield_time(struct hif_opaque_softc *hif)
+{
+	struct hif_softc *hif_ctx = HIF_GET_SOFTC(hif);
+
+	return hif_ctx->ce_service_max_yield_time;
+}
+
+void hif_set_ce_service_max_rx_ind_flush(struct hif_opaque_softc *hif,
+				       uint8_t ce_service_max_rx_ind_flush)
+{
+	struct hif_softc *hif_ctx = HIF_GET_SOFTC(hif);
+
+	if (ce_service_max_rx_ind_flush == 0 ||
+	    ce_service_max_rx_ind_flush > MSG_FLUSH_NUM)
+		hif_ctx->ce_service_max_rx_ind_flush = MSG_FLUSH_NUM;
+	else
+		hif_ctx->ce_service_max_rx_ind_flush =
+						ce_service_max_rx_ind_flush;
+}

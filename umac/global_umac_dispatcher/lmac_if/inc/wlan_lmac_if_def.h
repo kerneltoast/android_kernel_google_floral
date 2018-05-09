@@ -28,6 +28,7 @@
 #endif
 #include "wlan_mgmt_txrx_utils_api.h"
 #include "wlan_scan_public_structs.h"
+
 #ifdef WLAN_ATF_ENABLE
 #include "wlan_atf_utils_defs.h"
 #endif
@@ -72,8 +73,8 @@ struct scheduler_msg;
 #endif
 
 #ifdef QCA_SUPPORT_CP_STATS
-#include <wlan_cp_stats_tgt_api.h>
-#endif
+#include <wlan_cp_stats_mc_defs.h>
+#endif /* QCA_SUPPORT_CP_STATS */
 
 #ifdef QCA_SUPPORT_CP_STATS
 /**
@@ -85,6 +86,14 @@ struct scheduler_msg;
 struct wlan_lmac_if_cp_stats_tx_ops {
 	QDF_STATUS (*cp_stats_attach)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*cp_stats_detach)(struct wlan_objmgr_psoc *posc);
+#ifdef CONFIG_MCL
+	void (*inc_wake_lock_stats)(uint32_t reason,
+				    struct wake_lock_stats *stats,
+				    uint32_t *unspecified_wake_count);
+	QDF_STATUS (*send_req_stats)(struct wlan_objmgr_psoc *psoc,
+				     enum stats_req_type type,
+				     struct request_info *req);
+#endif
 };
 
 /**
@@ -94,6 +103,10 @@ struct wlan_lmac_if_cp_stats_tx_ops {
  */
 struct wlan_lmac_if_cp_stats_rx_ops {
 	QDF_STATUS (*cp_stats_rx_event_handler)(struct wlan_objmgr_vdev *vdev);
+#ifdef CONFIG_MCL
+	QDF_STATUS (*process_stats_event)(struct wlan_objmgr_psoc *psoc,
+					  struct stats_event *ev);
+#endif
 };
 #endif
 
@@ -126,9 +139,9 @@ struct wlan_lmac_if_mgmt_txrx_tx_ops {
  * scan module uses these functions to avail ol/da lmac services
  */
 struct wlan_lmac_if_scan_tx_ops {
-	QDF_STATUS (*scan_start)(struct wlan_objmgr_psoc *psoc,
+	QDF_STATUS (*scan_start)(struct wlan_objmgr_pdev *pdev,
 			struct scan_start_request *req);
-	QDF_STATUS (*scan_cancel)(struct wlan_objmgr_psoc *psoc,
+	QDF_STATUS (*scan_cancel)(struct wlan_objmgr_pdev *pdev,
 			struct scan_cancel_param *req);
 	QDF_STATUS (*pno_start)(struct wlan_objmgr_psoc *psoc,
 			struct pno_scan_req_params *req);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -259,9 +259,6 @@ static void dp_tx_flow_pool_vdev_unmap(struct dp_pdev *pdev,
 	}
 
 	vdev->pool = NULL;
-	qdf_spin_lock_bh(&pool->flow_pool_lock);
-	pool->flow_pool_id = INVALID_FLOW_ID;
-	qdf_spin_unlock_bh(&pool->flow_pool_lock);
 }
 
 /**
@@ -416,4 +413,21 @@ QDF_STATUS dp_txrx_register_pause_cb(struct cdp_soc_t *handle,
 	soc->pause_cb = pause_cb;
 
 	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS dp_tx_flow_pool_map(struct cdp_soc_t *handle, struct cdp_pdev *pdev,
+				uint8_t vdev_id)
+{
+	struct dp_soc *soc = (struct dp_soc *)handle;
+	int tx_ring_size = wlan_cfg_tx_ring_size(soc->wlan_cfg_ctx);
+
+	return (dp_tx_flow_pool_map_handler((struct dp_pdev *)pdev, vdev_id,
+				FLOW_TYPE_VDEV,	vdev_id, tx_ring_size));
+}
+
+void dp_tx_flow_pool_unmap(struct cdp_soc_t *soc, struct cdp_pdev *pdev,
+			   uint8_t vdev_id)
+{
+	return(dp_tx_flow_pool_unmap_handler((struct dp_pdev *)pdev, vdev_id,
+				FLOW_TYPE_VDEV, vdev_id));
 }

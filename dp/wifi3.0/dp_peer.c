@@ -69,9 +69,8 @@ static int dp_peer_find_map_attach(struct dp_soc *soc)
 {
 	uint32_t max_peers, peer_map_size;
 
+	max_peers = soc->max_peers;
 	/* allocate the peer ID -> peer object map */
-	max_peers = wlan_cfg_max_peer_id(soc->wlan_cfg_ctx) + 1;
-	soc->max_peers = max_peers;
 	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO,
 		"\n<=== cfg max peer id %d ====>\n", max_peers);
 	peer_map_size = max_peers * sizeof(soc->peer_id_to_obj_map[0]);
@@ -133,7 +132,7 @@ static int dp_peer_find_hash_attach(struct dp_soc *soc)
 	int i, hash_elems, log2;
 
 	/* allocate the peer MAC address -> peer object hash table */
-	hash_elems = wlan_cfg_max_peer_id(soc->wlan_cfg_ctx) + 1;
+	hash_elems = soc->max_peers;
 	hash_elems *= DP_PEER_HASH_LOAD_MULT;
 	hash_elems >>= DP_PEER_HASH_LOAD_SHIFT;
 	log2 = dp_log2_ceil(hash_elems);
@@ -201,7 +200,7 @@ static int dp_peer_ast_hash_attach(struct dp_soc *soc)
 {
 	int i, hash_elems, log2;
 
-	hash_elems = ((WLAN_UMAC_PSOC_MAX_PEERS * DP_AST_HASH_LOAD_MULT) >>
+	hash_elems = ((soc->max_peers * DP_AST_HASH_LOAD_MULT) >>
 		DP_AST_HASH_LOAD_SHIFT);
 
 	log2 = dp_log2_ceil(hash_elems);
@@ -546,8 +545,25 @@ int dp_peer_update_ast(struct dp_soc *soc, struct dp_peer *peer,
 {
 	int ret = -1;
 	struct dp_peer *old_peer;
+	struct dp_peer *sa_peer;
 
-	qdf_spin_lock_bh(&soc->ast_lock);
+	if (ast_entry->type == CDP_TXRX_AST_TYPE_STATIC) {
+		sa_peer = ast_entry->peer;
+
+		/*
+		 * Kickout, when direct associated peer(SA) roams
+		 * to another AP and reachable via TA peer
+		 */
+		if (!sa_peer->delete_in_progress) {
+			sa_peer->delete_in_progress = true;
+			if (soc->cdp_soc.ol_ops->peer_sta_kickout) {
+				soc->cdp_soc.ol_ops->peer_sta_kickout(
+						sa_peer->vdev->pdev->osif_pdev,
+						ast_entry->mac_addr.raw);
+			}
+			return 0;
+		}
+	}
 
 	old_peer = ast_entry->peer;
 	TAILQ_REMOVE(&old_peer->ast_entry_list, ast_entry, ase_list_elem);
@@ -559,19 +575,11 @@ int dp_peer_update_ast(struct dp_soc *soc, struct dp_peer *peer,
 	ast_entry->is_active = TRUE;
 	TAILQ_INSERT_TAIL(&peer->ast_entry_list, ast_entry, ase_list_elem);
 
-	if (ast_entry->type != CDP_TXRX_AST_TYPE_STATIC) {
-		if (QDF_STATUS_SUCCESS ==
-				soc->cdp_soc.ol_ops->peer_update_wds_entry(
-				peer->vdev->osif_vdev,
+	ret = soc->cdp_soc.ol_ops->peer_update_wds_entry(
+			peer->vdev->osif_vdev,
 				ast_entry->mac_addr.raw,
 				peer->mac_addr.raw,
-				flags)) {
-			qdf_spin_unlock_bh(&soc->ast_lock);
-			return 0;
-		}
-	}
-
-	qdf_spin_unlock_bh(&soc->ast_lock);
+				flags);
 
 	return ret;
 }
@@ -705,7 +713,8 @@ struct dp_peer *dp_peer_find_hash_find(struct dp_soc *soc,
 		 * modified find will take care of finding the correct BSS peer.
 		 */
 		if (dp_peer_find_mac_addr_cmp(mac_addr, &peer->mac_addr) == 0 &&
-			(peer->vdev->vdev_id == vdev_id)) {
+			((peer->vdev->vdev_id == vdev_id) ||
+			 (vdev_id == DP_VDEV_ALL))) {
 #else
 		if (dp_peer_find_mac_addr_cmp(mac_addr, &peer->mac_addr) == 0) {
 #endif
@@ -892,7 +901,7 @@ static inline struct dp_peer *dp_peer_find_add_id(struct dp_soc *soc,
 {
 	struct dp_peer *peer;
 
-	QDF_ASSERT(peer_id <= wlan_cfg_max_peer_id(soc->wlan_cfg_ctx) + 1);
+	QDF_ASSERT(peer_id <= soc->max_peers);
 	/* check if there's already a peer object with this MAC address */
 	peer = dp_peer_find_hash_find(soc, peer_mac_addr,
 		0 /* is aligned */, vdev_id);
@@ -1072,7 +1081,7 @@ void *dp_find_peer_by_addr(struct cdp_pdev *dev, uint8_t *peer_mac_addr,
 	struct dp_pdev *pdev = (struct dp_pdev *)dev;
 	struct dp_peer *peer;
 
-	peer = dp_peer_find_hash_find(pdev->soc, peer_mac_addr, 0, 0);
+	peer = dp_peer_find_hash_find(pdev->soc, peer_mac_addr, 0, DP_VDEV_ALL);
 
 	if (!peer)
 		return NULL;
@@ -2032,7 +2041,7 @@ QDF_STATUS dp_peer_state_update(struct cdp_pdev *pdev_handle, uint8_t *peer_mac,
 	struct dp_peer *peer;
 	struct dp_pdev *pdev = (struct dp_pdev *)pdev_handle;
 
-	peer =  dp_peer_find_hash_find(pdev->soc, peer_mac, 0, 0);
+	peer =  dp_peer_find_hash_find(pdev->soc, peer_mac, 0, DP_VDEV_ALL);
 	if (NULL == peer) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
 		"Failed to find peer for: [%pM]", peer_mac);

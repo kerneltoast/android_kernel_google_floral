@@ -113,6 +113,62 @@ cdp_vdev_attach(ol_txrx_soc_handle soc, struct cdp_pdev *pdev,
 	return soc->ops->cmn_drv_ops->txrx_vdev_attach(pdev,
 			vdev_mac_addr, vdev_id, op_mode);
 }
+#ifndef CONFIG_WIN
+/**
+ * cdp_flow_pool_map() - Create flow pool for vdev
+ * @soc - data path soc handle
+ * @pdev
+ * @vdev_id - vdev_id corresponding to vdev start
+ *
+ * Create per vdev flow pool.
+ *
+ * return none
+ */
+static inline QDF_STATUS cdp_flow_pool_map(ol_txrx_soc_handle soc,
+					struct cdp_pdev *pdev, uint8_t vdev_id)
+{
+	if (!soc || !soc->ops) {
+		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
+				"%s: Invalid Instance:", __func__);
+		QDF_BUG(0);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!soc->ops->flowctl_ops ||
+	    !soc->ops->flowctl_ops->flow_pool_map_handler)
+		return QDF_STATUS_E_INVAL;
+
+	return soc->ops->flowctl_ops->flow_pool_map_handler(soc, pdev, vdev_id);
+}
+
+/**
+ * cdp_flow_pool_unmap() - Delete flow pool
+ * @soc - data path soc handle
+ * @pdev
+ * @vdev_id - vdev_id corresponding to vdev start
+ *
+ * Delete flow pool
+ *
+ * return none
+ */
+static inline void cdp_flow_pool_unmap(ol_txrx_soc_handle soc,
+					struct cdp_pdev *pdev, uint8_t vdev_id)
+{
+	if (!soc || !soc->ops) {
+		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
+				"%s: Invalid Instance:", __func__);
+		QDF_BUG(0);
+		return;
+	}
+
+	if (!soc->ops->flowctl_ops ||
+	    !soc->ops->flowctl_ops->flow_pool_unmap_handler)
+		return;
+
+	return soc->ops->flowctl_ops->flow_pool_unmap_handler(soc, pdev,
+							vdev_id);
+}
+#endif
 
 static inline void
 cdp_vdev_detach(ol_txrx_soc_handle soc, struct cdp_vdev *vdev,
@@ -1442,17 +1498,18 @@ void cdp_vdev_tx_unlock(ol_txrx_soc_handle soc,
 /**
  * cdp_ath_getstats() - get updated athstats
  * @soc: opaque soc handle
- * @pdev: data path pdev handle
- * @net_device_stats: interface stats
- * @rtnl_link_stats64: device statistics structure
+ * @dev: dp interface handle
+ * @stats: cdp network device stats structure
+ * @type: device type pdev/vdev
  *
  * Return: void
  */
 static inline void cdp_ath_getstats(ol_txrx_soc_handle soc,
-		struct cdp_pdev *pdev, struct cdp_dev_stats *stats)
+		void *dev, struct cdp_dev_stats *stats,
+		uint8_t type)
 {
 	if (soc && soc->ops && soc->ops->cmn_drv_ops->txrx_ath_getstats)
-		soc->ops->cmn_drv_ops->txrx_ath_getstats(pdev, stats);
+		soc->ops->cmn_drv_ops->txrx_ath_getstats(dev, stats, type);
 }
 
 /**
@@ -1502,4 +1559,57 @@ void cdp_if_mgmt_drain(ol_txrx_soc_handle soc,
 	if (soc->ops->cmn_drv_ops->txrx_if_mgmt_drain)
 		soc->ops->cmn_drv_ops->txrx_if_mgmt_drain(ni, force);
 }
+
+static inline void
+cdp_peer_map_attach(ol_txrx_soc_handle soc, uint32_t max_peers)
+{
+	if (soc && soc->ops && soc->ops->cmn_drv_ops &&
+	    soc->ops->cmn_drv_ops->txrx_peer_map_attach)
+		soc->ops->cmn_drv_ops->txrx_peer_map_attach(soc, max_peers);
+}
+
+#ifdef RECEIVE_OFFLOAD
+/**
+ * cdp_register_rx_offld_flush_cb() - register LRO/GRO flush cb function pointer
+ * @soc - data path soc handle
+ * @pdev - device instance pointer
+ *
+ * register rx offload flush callback function pointer
+ *
+ * return none
+ */
+static inline void cdp_register_rx_offld_flush_cb(ol_txrx_soc_handle soc,
+						  void (rx_ol_flush_cb)(void *))
+{
+	if (!soc || !soc->ops || !soc->ops->rx_offld_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return;
+	}
+
+	if (soc->ops->rx_offld_ops->register_rx_offld_flush_cb)
+		return soc->ops->rx_offld_ops->register_rx_offld_flush_cb(
+								rx_ol_flush_cb);
+}
+
+/**
+ * cdp_deregister_rx_offld_flush_cb() - deregister Rx offld flush cb function
+ * @soc - data path soc handle
+ *
+ * deregister rx offload flush callback function pointer
+ *
+ * return none
+ */
+static inline void cdp_deregister_rx_offld_flush_cb(ol_txrx_soc_handle soc)
+{
+	if (!soc || !soc->ops || !soc->ops->rx_offld_ops) {
+		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_FATAL,
+			  "%s invalid instance", __func__);
+		return;
+	}
+
+	if (soc->ops->rx_offld_ops->deregister_rx_offld_flush_cb)
+		return soc->ops->rx_offld_ops->deregister_rx_offld_flush_cb();
+}
+#endif /* RECEIVE_OFFLOAD */
 #endif /* _CDP_TXRX_CMN_H_ */

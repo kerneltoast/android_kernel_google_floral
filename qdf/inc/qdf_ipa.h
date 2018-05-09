@@ -245,6 +245,7 @@ typedef void (*qdf_ipa_ready_cb)(void *user_data);
 #define QDF_IPA_RM_RESOURCE_APPS_CONS __QDF_IPA_RM_RESOURCE_APPS_CONS
 
 #define QDF_IPA_CLIENT_WLAN1_PROD __QDF_IPA_CLIENT_WLAN1_PROD
+#define QDF_IPA_CLIENT_WLAN1_CONS __QDF_IPA_CLIENT_WLAN1_CONS
 #define QDF_IPA_CLIENT_WLAN2_CONS __QDF_IPA_CLIENT_WLAN2_CONS
 #define QDF_IPA_CLIENT_WLAN3_CONS __QDF_IPA_CLIENT_WLAN3_CONS
 #define QDF_IPA_CLIENT_WLAN4_CONS __QDF_IPA_CLIENT_WLAN4_CONS
@@ -281,11 +282,6 @@ static inline int qdf_ipa_del_hdr(qdf_ipa_ioc_del_hdr_t *hdls)
 static inline int qdf_ipa_commit_hdr(void)
 {
 	return __qdf_ipa_commit_hdr();
-}
-
-static inline int qdf_ipa_reset_hdr(void)
-{
-	return __qdf_ipa_reset_hdr();
 }
 
 static inline int qdf_ipa_get_hdr(qdf_ipa_ioc_get_hdr_t *lookup)

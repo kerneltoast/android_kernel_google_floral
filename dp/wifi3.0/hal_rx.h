@@ -803,6 +803,31 @@ hal_rx_attn_ip_cksum_fail_get(uint8_t *buf)
 	return ip_cksum_fail;
 }
 
+#define HAL_RX_ATTN_PHY_PPDU_ID_GET(_rx_attn)		\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR(_rx_attn,	\
+		RX_ATTENTION_0_PHY_PPDU_ID_OFFSET)),	\
+		RX_ATTENTION_0_PHY_PPDU_ID_MASK,	\
+		RX_ATTENTION_0_PHY_PPDU_ID_LSB))
+
+/*
+ * hal_rx_attn_phy_ppdu_id_get(): get phy_ppdu_id value
+ * from rx attention
+ * @buf: pointer to rx_pkt_tlvs
+ *
+ * Return: phy_ppdu_id
+ */
+static inline uint16_t
+hal_rx_attn_phy_ppdu_id_get(uint8_t *buf)
+{
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_attention *rx_attn = &pkt_tlvs->attn_tlv.rx_attn;
+	uint16_t phy_ppdu_id;
+
+	phy_ppdu_id = HAL_RX_ATTN_PHY_PPDU_ID_GET(rx_attn);
+
+	return phy_ppdu_id;
+}
+
 /*
  * Get peer_meta_data from RX_MPDU_INFO within RX_MPDU_START
  */
@@ -1507,10 +1532,23 @@ hal_rx_msdu_start_nss_get(uint8_t *buf)
 	return nss;
 }
 #else
+#define HAL_RX_MSDU_START_MIMO_SS_BITMAP(_rx_msdu_start)	\
+	(_HAL_MS((*_OFFSET_TO_WORD_PTR((_rx_msdu_start),\
+	RX_MSDU_START_5_MIMO_SS_BITMAP_OFFSET)),	\
+	RX_MSDU_START_5_MIMO_SS_BITMAP_MASK,		\
+	RX_MSDU_START_5_MIMO_SS_BITMAP_LSB))
+
 static inline uint32_t
 hal_rx_msdu_start_nss_get(uint8_t *buf)
 {
-	return 0;
+	struct rx_pkt_tlvs *pkt_tlvs = (struct rx_pkt_tlvs *)buf;
+	struct rx_msdu_start *msdu_start =
+				&pkt_tlvs->msdu_start_tlv.rx_msdu_start;
+	uint8_t mimo_ss_bitmap;
+
+	mimo_ss_bitmap = HAL_RX_MSDU_START_MIMO_SS_BITMAP(msdu_start);
+
+	return qdf_get_hweight8(mimo_ss_bitmap);
 }
 #endif
 

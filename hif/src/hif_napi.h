@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -96,6 +96,37 @@ enum qca_napi_event {
 #define NAPI_ID2PIPE(i) ((i)-1)
 #define NAPI_PIPE2ID(p) ((p)+1)
 
+#ifdef RECEIVE_OFFLOAD
+/**
+ * hif_napi_rx_offld_flush_cb_register() - Register flush callback for Rx offld
+ * @hif_hdl: pointer to hif context
+ * @offld_flush_handler: register offld flush callback
+ *
+ * Return: None
+ */
+void hif_napi_rx_offld_flush_cb_register(struct hif_opaque_softc *hif_hdl,
+					 void (rx_ol_flush_handler)(void *arg));
+
+/**
+ * hif_napi_rx_offld_flush_cb_deregister() - Degregister offld flush_cb
+ * @hif_hdl: pointer to hif context
+ *
+ * Return: NONE
+ */
+void hif_napi_rx_offld_flush_cb_deregister(struct hif_opaque_softc *hif_hdl);
+#endif /* RECEIVE_OFFLOAD */
+
+/**
+ * hif_napi_get_lro_info() - returns the address LRO data for napi_id
+ * @hif: pointer to hif context
+ * @napi_id: napi instance
+ *
+ * Description:
+ *    Returns the address of the LRO structure
+ *
+ * Return:
+ *  <addr>: address of the LRO structure
+ */
 void *hif_napi_get_lro_info(struct hif_opaque_softc *hif_hdl, int napi_id);
 
 enum qca_blacklist_op {
@@ -123,6 +154,15 @@ int hif_napi_destroy(struct hif_opaque_softc  *hif,
 		     int               force);
 
 struct qca_napi_data *hif_napi_get_all(struct hif_opaque_softc   *hif);
+
+/**
+ * hif_get_napi() - get NAPI corresponding to napi_id
+ * @napi_id: NAPI instance
+ * @napid: Handle NAPI
+ *
+ * Return: napi corresponding napi_id
+ */
+struct qca_napi_info *hif_get_napi(int napi_id, struct qca_napi_data *napid);
 
 int hif_napi_event(struct hif_opaque_softc     *hif,
 		   enum  qca_napi_event event,
@@ -255,4 +295,17 @@ static inline int hif_napi_cpu_blacklist(struct qca_napi_data *napid,
 { return 0; }
 #endif /* HIF_IRQ_AFFINITY */
 
+/**
+ * hif_update_napi_max_poll_time() - updates NAPI max poll time
+ * @ce_state: ce state
+ * @napi_info: pointer to napi info structure
+ * @cpu_id: cpu id
+ *
+ * This API updates NAPI max poll time per CE per SPU.
+ *
+ * Return: void
+ */
+void hif_update_napi_max_poll_time(struct CE_state *ce_state,
+				   struct qca_napi_info *napi_info,
+				   int cpu_id);
 #endif /* __HIF_NAPI_H__ */

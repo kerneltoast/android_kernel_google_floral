@@ -176,6 +176,9 @@ struct hif_softc {
 #ifdef FEATURE_NAPI
 	struct qca_napi_data napi_data;
 #endif /* FEATURE_NAPI */
+	/* stores ce_service_max_yield_time in ns */
+	unsigned long long ce_service_max_yield_time;
+	uint8_t ce_service_max_rx_ind_flush;
 	struct hif_driver_state_callbacks callbacks;
 	uint32_t hif_con_param;
 #ifdef QCA_NSS_WIFI_OFFLOAD_SUPPORT
@@ -207,6 +210,10 @@ struct hif_softc {
 static inline void *hif_get_hal_handle(void *hif_hdl)
 {
 	struct hif_softc *sc = (struct hif_softc *)hif_hdl;
+
+	if (!sc)
+		return NULL;
+
 	return sc->hal_soc;
 }
 
@@ -274,6 +281,13 @@ void hif_wlan_disable(struct hif_softc *scn);
 int hif_target_sleep_state_adjust(struct hif_softc *scn,
 					 bool sleep_ok,
 					 bool wait_for_it);
+/**
+ * hif_get_rx_ctx_id() - Returns NAPI instance ID based on CE ID
+ * @ctx_id: Rx CE context ID
+ * @hif_hdl: HIF Context
+ *
+ * Return: Rx instance ID
+ */
 int hif_get_rx_ctx_id(int ctx_id, struct hif_opaque_softc *hif_hdl);
 void hif_ramdump_handler(struct hif_opaque_softc *scn);
 #ifdef HIF_USB

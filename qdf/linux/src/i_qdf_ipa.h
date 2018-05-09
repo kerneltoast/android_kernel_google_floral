@@ -513,6 +513,7 @@ typedef struct ipa_wlan_hdr_attrib_val __qdf_ipa_wlan_hdr_attrib_val_t;
 #define __QDF_IPA_VOLTAGE_LEVEL IPA_VOLTAGE_SVS
 
 #define __QDF_IPA_CLIENT_WLAN1_PROD IPA_CLIENT_WLAN1_PROD
+#define __QDF_IPA_CLIENT_WLAN1_CONS IPA_CLIENT_WLAN1_CONS
 #define __QDF_IPA_CLIENT_WLAN2_CONS IPA_CLIENT_WLAN2_CONS
 #define __QDF_IPA_CLIENT_WLAN3_CONS IPA_CLIENT_WLAN3_CONS
 #define __QDF_IPA_CLIENT_WLAN4_CONS IPA_CLIENT_WLAN4_CONS
@@ -549,11 +550,6 @@ static inline int __qdf_ipa_del_hdr(struct ipa_ioc_del_hdr *hdls)
 static inline int __qdf_ipa_commit_hdr(void)
 {
 	return ipa_commit_hdr();
-}
-
-static inline int __qdf_ipa_reset_hdr(void)
-{
-	return ipa_reset_hdr();
 }
 
 static inline int __qdf_ipa_get_hdr(struct ipa_ioc_get_hdr *lookup)

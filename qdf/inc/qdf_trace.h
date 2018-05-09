@@ -40,6 +40,8 @@
 #include  <qdf_status.h>
 #include  <qdf_nbuf.h>
 #include  <i_qdf_types.h>
+#include <qdf_debugfs.h>
+
 
 /* Type declarations */
 
@@ -73,8 +75,10 @@ typedef int (qdf_abstract_print)(void *priv, const char *fmt, ...);
 /* DP Trace Implementation */
 #ifdef CONFIG_DP_TRACE
 #define DPTRACE(p) p
+#define DPTRACE_PRINT(args...) QDF_TRACE_DEBUG(QDF_MODULE_ID_QDF, args)
 #else
 #define DPTRACE(p)
+#define DPTRACE_PRINT(args...)
 #endif
 
 /* By default Data Path module will have all log levels enabled, except debug
@@ -159,8 +163,8 @@ typedef struct s_qdf_trace_data {
 #define CASE_RETURN_STRING(str) case ((str)): return (uint8_t *)(# str);
 
 
-#define MAX_QDF_DP_TRACE_RECORDS       4000
-#define QDF_DP_TRACE_RECORD_SIZE       16
+#define MAX_QDF_DP_TRACE_RECORDS       2000
+#define QDF_DP_TRACE_RECORD_SIZE       40
 #define INVALID_QDF_DP_TRACE_ADDR      0xffffffff
 #define QDF_DP_TRACE_VERBOSITY_HIGH    3
 #define QDF_DP_TRACE_VERBOSITY_MEDIUM  2
@@ -175,13 +179,14 @@ typedef struct s_qdf_trace_data {
  * @QDF_DP_TRACE_DHCP_PACKET_RECORD - record DHCP packet
  * @QDF_DP_TRACE_ARP_PACKET_RECORD - record ARP packet
  * @QDF_DP_TRACE_MGMT_PACKET_RECORD - record MGMT pacekt
- * @QDF_DP_TRACE_ICMP_PACKET_RECORD - record ICMP packet
- * @QDF_DP_TRACE_ICMPv6_PACKET_RECORD - record ICMPv6 packet
  * QDF_DP_TRACE_EVENT_RECORD - record events
  * @QDF_DP_TRACE_BASE_VERBOSITY - below this are part of base verbosity
- * @QDF_DP_TRACE_ICMP_PACKET_RECORD - record ICMP packets
+ * @QDF_DP_TRACE_ICMP_PACKET_RECORD - record ICMP packet
+ * @QDF_DP_TRACE_ICMPv6_PACKET_RECORD - record ICMPv6 packet
  * @QDF_DP_TRACE_HDD_TX_PACKET_RECORD - record 32 bytes of tx pkt at HDD
  * @QDF_DP_TRACE_HDD_RX_PACKET_RECORD - record 32 bytes of rx pkt at HDD
+ * @QDF_DP_TRACE_TX_PACKET_RECORD - record 32 bytes of tx pkt at any layer
+ * @QDF_DP_TRACE_RX_PACKET_RECORD - record 32 bytes of rx pkt at any layer
  * @QDF_DP_TRACE_HDD_TX_TIMEOUT - HDD tx timeout
  * @QDF_DP_TRACE_HDD_SOFTAP_TX_TIMEOUT- SOFTAP HDD tx timeout
  * @QDF_DP_TRACE_FREE_PACKET_PTR_RECORD - tx completion ptr record
@@ -190,6 +195,7 @@ typedef struct s_qdf_trace_data {
  * @QDF_DP_TRACE_LI_DP_TX_PACKET_PTR_RECORD - Lithium DP layer ptr record
  * @QDF_DP_TRACE_CE_PACKET_PTR_RECORD - CE layer ptr record
  * @QDF_DP_TRACE_CE_FAST_PACKET_PTR_RECORD- CE fastpath ptr record
+ * @QDF_DP_TRACE_CE_FAST_PACKET_ERR_RECORD- CE fastpath error record
  * @QDF_DP_TRACE_RX_HTT_PACKET_PTR_RECORD - HTT RX record
  * @QDF_DP_TRACE_RX_OFFLOAD_HTT_PACKET_PTR_RECORD- HTT RX offload record
  * @QDF_DP_TRACE_RX_HDD_PACKET_PTR_RECORD - HDD RX record
@@ -221,6 +227,8 @@ enum  QDF_DP_TRACE_ID {
 	QDF_DP_TRACE_ICMPv6_PACKET_RECORD,
 	QDF_DP_TRACE_HDD_TX_PACKET_RECORD,
 	QDF_DP_TRACE_HDD_RX_PACKET_RECORD,
+	QDF_DP_TRACE_TX_PACKET_RECORD,
+	QDF_DP_TRACE_RX_PACKET_RECORD,
 	QDF_DP_TRACE_HDD_TX_TIMEOUT,
 	QDF_DP_TRACE_HDD_SOFTAP_TX_TIMEOUT,
 	QDF_DP_TRACE_FREE_PACKET_PTR_RECORD,
@@ -230,6 +238,7 @@ enum  QDF_DP_TRACE_ID {
 	QDF_DP_TRACE_RX_HDD_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_CE_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_CE_FAST_PACKET_PTR_RECORD,
+	QDF_DP_TRACE_CE_FAST_PACKET_ERR_RECORD,
 	QDF_DP_TRACE_RX_HTT_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_RX_OFFLOAD_HTT_PACKET_PTR_RECORD,
 	QDF_DP_TRACE_RX_LI_DP_PACKET_PTR_RECORD,
@@ -315,6 +324,14 @@ struct qdf_dp_trace_event_buf {
 };
 
 /**
+ * struct qdf_dp_trace_data_buf - nbuf data buffer
+ * @msdu_id : msdu id
+ */
+struct qdf_dp_trace_data_buf {
+	uint16_t msdu_id;
+};
+
+/**
  * struct qdf_dp_trace_record_s - Describes a record in DP trace
  * @time: time when it got stored
  * @code: Describes the particular event
@@ -323,7 +340,7 @@ struct qdf_dp_trace_event_buf {
  * @pid : process id which stored the data in this record
  */
 struct qdf_dp_trace_record_s {
-	char time[20];
+	uint64_t time;
 	uint8_t code;
 	uint8_t data[QDF_DP_TRACE_RECORD_SIZE];
 	uint8_t size;
@@ -342,7 +359,11 @@ struct qdf_dp_trace_record_s {
  * @enable: enable/disable DP trace
  * @count: current packet number
  * @live_mode_config: configuration as received during initialization
- * @live_mode: current live mode, enabled or disabled.
+ * @live_mode: current live mode, enabled or disabled, can be throttled based
+ *             on throughput
+ * @force_live_mode: flag to enable live mode all the time for all packets.
+ *                  This can be set/unset from userspace and overrides other
+ *                  live mode flags.
  * @print_pkt_cnt: count of number of packets printed in live mode
  * @high_tput_thresh: thresh beyond which live mode is turned off
  * @thresh_time_limit: max time, in terms of BW timer intervals to wait,
@@ -379,6 +400,9 @@ struct s_qdf_dp_trace_data {
 	bool enable;
 	bool live_mode_config;
 	bool live_mode;
+	uint32_t curr_pos;
+	uint32_t saved_tail;
+	bool force_live_mode;
 	uint8_t print_pkt_cnt;
 	uint8_t high_tput_thresh;
 	uint16_t thresh_time_limit;
@@ -408,6 +432,20 @@ struct s_qdf_dp_trace_data {
 	u16 icmpv6_ra;
 };
 
+/**
+ * struct qdf_dpt_debugfs_state - state to control read to debugfs file
+ * @QDF_DPT_DEBUGFS_STATE_SHOW_STATE_INVALID: invalid state
+ * @QDF_DPT_DEBUGFS_STATE_SHOW_STATE_INIT: initial state
+ * @QDF_DPT_DEBUGFS_STATE_SHOW_IN_PROGRESS: read is in progress
+ * @QDF_DPT_DEBUGFS_STATE_SHOW_COMPLETE:  read complete
+ */
+
+enum qdf_dpt_debugfs_state {
+	QDF_DPT_DEBUGFS_STATE_SHOW_STATE_INVALID,
+	QDF_DPT_DEBUGFS_STATE_SHOW_STATE_INIT,
+	QDF_DPT_DEBUGFS_STATE_SHOW_IN_PROGRESS,
+	QDF_DPT_DEBUGFS_STATE_SHOW_COMPLETE,
+};
 
 /* Function declarations and documenation */
 
@@ -492,6 +530,9 @@ QDF_STATUS qdf_trace_spin_lock_init(void)
 void qdf_dp_set_proto_bitmap(uint32_t val);
 void qdf_dp_trace_set_verbosity(uint32_t val);
 void qdf_dp_set_no_of_record(uint32_t val);
+#define QDF_DP_TRACE_RECORD_INFO_LIVE (0x1)
+#define QDF_DP_TRACE_RECORD_INFO_THROTTLED (0x1 << 1)
+
 bool qdf_dp_trace_log_pkt(uint8_t session_id, struct sk_buff *skb,
 				enum qdf_proto_dir dir, uint8_t pdev_id);
 void qdf_dp_trace_init(bool live_mode_config, uint8_t thresh,
@@ -504,6 +545,37 @@ void qdf_dp_trace_set_track(qdf_nbuf_t nbuf, enum qdf_proto_dir dir);
 void qdf_dp_trace(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code, uint8_t pdev_id,
 			uint8_t *data, uint8_t size, enum qdf_proto_dir dir);
 void qdf_dp_trace_dump_all(uint32_t count, uint8_t pdev_id);
+
+/**
+ * qdf_dpt_get_curr_pos_debugfs() - get curr position to start read
+ * @file: debugfs file to read
+ * @state: state to control read to debugfs file
+ *
+ * Return: curr pos
+ */
+uint32_t qdf_dpt_get_curr_pos_debugfs(qdf_debugfs_file_t file,
+				enum qdf_dpt_debugfs_state state);
+/**
+ * qdf_dpt_dump_stats_debugfs() - dump DP Trace stats to debugfs file
+ * @file: debugfs file to read
+ * @curr_pos: curr position to start read
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS qdf_dpt_dump_stats_debugfs(qdf_debugfs_file_t file,
+				      uint32_t curr_pos);
+
+/**
+ * qdf_dpt_set_value_debugfs() - dump DP Trace stats to debugfs file
+ * @file: debugfs file to read
+ * @curr_pos: curr position to start read
+ *
+ * Return: none
+ */
+void qdf_dpt_set_value_debugfs(uint8_t proto_bitmap, uint8_t no_of_record,
+			    uint8_t verbosity);
+
+
 /**
  * qdf_dp_trace_dump_stats() - dump DP Trace stats
  *
@@ -511,38 +583,146 @@ void qdf_dp_trace_dump_all(uint32_t count, uint8_t pdev_id);
  */
 void qdf_dp_trace_dump_stats(void);
 typedef void (*tp_qdf_dp_trace_cb)(struct qdf_dp_trace_record_s*,
-					uint16_t, uint8_t, bool live);
+				   uint16_t, uint8_t, uint8_t info);
+/**
+ * qdf_dp_display_record() - Displays a record in DP trace
+ * @record: pointer to a record in DP trace
+ * @index: record index
+ * @pdev_id: pdev id for the mgmt pkt
+ * @info: info used to display pkt (live mode, throttling)
+ *
+ * Return: None
+ */
 void qdf_dp_display_record(struct qdf_dp_trace_record_s *record,
-					uint16_t index, uint8_t pdev_id, bool live);
-void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
-	uint8_t pdev_id, uint8_t *data, uint8_t size, uint16_t msdu_id,
-	uint16_t status);
-void qdf_dp_trace_throttle_live_mode(bool high_bw_request);
-void qdf_dp_display_ptr_record(struct qdf_dp_trace_record_s *pRecord,
-				uint16_t recIndex, uint8_t pdev_id, bool live);
+			   uint16_t index, uint8_t pdev_id,
+			   uint8_t info);
+
+/**
+ * qdf_dp_display_ptr_record() - display record
+ * @record: dptrace record
+ * @rec_index: index
+ * @pdev_id: pdev id for the mgmt pkt
+ * @info: info used to display pkt (live mode, throttling)
+ *
+ * Return: none
+ */
+void qdf_dp_display_ptr_record(struct qdf_dp_trace_record_s *record,
+			       uint16_t rec_index, uint8_t pdev_id,
+			       uint8_t info);
+
+/**
+ * qdf_dp_display_proto_pkt() - display proto packet
+ * @record: dptrace record
+ * @index: index
+ * @pdev_id: pdev id for the mgmt pkt
+ * @info: info used to display pkt (live mode, throttling)
+ *
+ * Return: none
+ */
 void qdf_dp_display_proto_pkt(struct qdf_dp_trace_record_s *record,
-					 uint16_t index, uint8_t pdev_id, bool live);
+			      uint16_t index, uint8_t pdev_id,
+			      uint8_t info);
+/**
+ * qdf_dp_display_data_pkt_record() - Displays a data packet in DP trace
+ * @record: pointer to a record in DP trace
+ * @rec_index: record index
+ * @pdev_id: pdev id
+ * @info: display info regarding record
+ *
+ * Return: None
+ */
+void
+qdf_dp_display_data_pkt_record(struct qdf_dp_trace_record_s *record,
+			       uint16_t rec_index, uint8_t pdev_id,
+			       uint8_t info);
+
+void qdf_dp_trace_ptr(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code,
+		      uint8_t pdev_id, uint8_t *data, uint8_t size,
+		      uint16_t msdu_id, uint16_t status);
+void qdf_dp_trace_throttle_live_mode(bool high_bw_request);
+
+/**
+ * qdf_dp_trace_data_pkt() - trace data packet
+ * @nbuf: nbuf which needs to be traced
+ * @pdev_id: pdev_id
+ * @code: QDF_DP_TRACE_ID for the packet (TX or RX)
+ * @msdu_id: tx desc id for the nbuf (Only applies to TX packets)
+ * @dir: TX or RX packet direction
+ *
+ * Return: None
+ */
+void qdf_dp_trace_data_pkt(qdf_nbuf_t nbuf, uint8_t pdev_id,
+			   enum QDF_DP_TRACE_ID code, uint16_t msdu_id,
+			   enum qdf_proto_dir dir);
+
 uint8_t qdf_dp_get_proto_bitmap(void);
 uint8_t qdf_dp_get_verbosity(void);
 uint8_t qdf_dp_get_no_of_record(void);
+
+/**
+ * qdf_dp_trace_proto_pkt() - record proto packet
+ * @code: dptrace code
+ * @vdev_id: vdev id
+ * @sa: source mac address
+ * @da: destination mac address
+ * @type: proto type
+ * @subtype: proto subtype
+ * @dir: direction
+ * @pdev_id: pdev id
+ * @print: to print this proto pkt or not
+ *
+ * Return: none
+ */
 void
 qdf_dp_trace_proto_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
 	uint8_t *sa, uint8_t *da, enum qdf_proto_type type,
 	enum qdf_proto_subtype subtype, enum qdf_proto_dir dir,
 	uint8_t pdev_id, bool print);
+
 void qdf_dp_trace_disable_live_mode(void);
 void qdf_dp_trace_enable_live_mode(void);
 void qdf_dp_trace_clear_buffer(void);
+/**
+ * qdf_dp_trace_mgmt_pkt() - record mgmt packet
+ * @code: dptrace code
+ * @vdev_id: vdev id
+ * @pdev_id: pdev_id
+ * @type: proto type
+ * @subtype: proto subtype
+ *
+ * Return: none
+ */
 void qdf_dp_trace_mgmt_pkt(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
-	uint8_t pdev_id, enum qdf_proto_type type,
-	enum qdf_proto_subtype subtype);
+			   uint8_t pdev_id, enum qdf_proto_type type,
+			   enum qdf_proto_subtype subtype);
+
+/**
+ * qdf_dp_display_mgmt_pkt() - display proto packet
+ * @record: dptrace record
+ * @index: index
+ * @pdev_id: pdev id for the mgmt pkt
+ * @info: info used to display pkt (live mode, throttling)
+ *
+ * Return: none
+ */
 void qdf_dp_display_mgmt_pkt(struct qdf_dp_trace_record_s *record,
-			      uint16_t index, uint8_t pdev_id,  bool live);
+			     uint16_t index, uint8_t pdev_id, uint8_t info);
+
+/**
+ * qdf_dp_display_event_record() - display event records
+ * @record: dptrace record
+ * @index: index
+ * @pdev_id: pdev id for the mgmt pkt
+ * @info: info used to display pkt (live mode, throttling)
+ *
+ * Return: none
+ */
 void qdf_dp_display_event_record(struct qdf_dp_trace_record_s *record,
-			      uint16_t index, uint8_t pdev_id, bool live);
+				 uint16_t index, uint8_t pdev_id, uint8_t info);
+
 void qdf_dp_trace_record_event(enum QDF_DP_TRACE_ID code, uint8_t vdev_id,
-	uint8_t pdev_id, enum qdf_proto_type type,
-	enum qdf_proto_subtype subtype);
+			       uint8_t pdev_id, enum qdf_proto_type type,
+			       enum qdf_proto_subtype subtype);
 #else
 static inline
 bool qdf_dp_trace_log_pkt(uint8_t session_id, struct sk_buff *skb,
@@ -565,8 +745,27 @@ void qdf_dp_trace_set_value(uint8_t proto_bitmap, uint8_t no_of_records,
 			 uint8_t verbosity)
 {
 }
+
 static inline
 void qdf_dp_trace_dump_all(uint32_t count, uint8_t pdev_id)
+{
+}
+
+static inline
+uint32_t qdf_dpt_get_curr_pos_debugfs(qdf_debugfs_file_t file,
+				      enum qdf_dpt_debugfs_state state)
+{
+}
+
+static inline
+QDF_STATUS qdf_dpt_dump_stats_debugfs(qdf_debugfs_file_t file,
+				      uint32_t curr_pos)
+{
+}
+
+static inline
+void qdf_dpt_set_value_debugfs(uint8_t proto_bitmap, uint8_t no_of_record,
+			    uint8_t verbosity)
 {
 }
 
@@ -594,9 +793,12 @@ void qdf_dp_trace_clear_buffer(void)
 {
 }
 
+void qdf_dp_trace_data_pkt(qdf_nbuf_t nbuf, uint8_t pdev_id,
+			   enum QDF_DP_TRACE_ID code, uint16_t msdu_id,
+			   enum qdf_proto_dir dir)
+{
+}
 #endif
-
-
 
 void qdf_trace_display(void);
 
@@ -611,29 +813,93 @@ void __printf(3, 4) qdf_snprintf(char *str_buffer, unsigned int size,
 #define QDF_SNPRINTF qdf_snprintf
 
 #ifdef TSOSEG_DEBUG
-static inline
-int qdf_tso_seg_dbg_record(struct qdf_tso_seg_elem_t *tsoseg,
-			   uint16_t caller)
-{
-	int rc = -1;
 
-	if (tsoseg != NULL) {
-		tsoseg->dbg.cur++;  tsoseg->dbg.cur &= 0x0f;
-		tsoseg->dbg.history[tsoseg->dbg.cur] = caller;
-		rc = tsoseg->dbg.cur;
-	}
-	return rc;
-};
 static inline void qdf_tso_seg_dbg_bug(char *msg)
 {
-	qdf_print(msg);
+	qdf_print("%s", msg);
 	QDF_BUG(0);
+};
+
+/**
+ * qdf_tso_seg_dbg_init - initialize TSO segment debug structure
+ * @tsoseg : structure to initialize
+ *
+ * TSO segment dbg structures are attached to qdf_tso_seg_elem_t
+ * structures and are allocated only of TSOSEG_DEBUG is defined.
+ * When allocated, at the time of the tso_seg_pool initialization,
+ * which goes with tx_desc initialization (1:1), each structure holds
+ * a number of (currently 16) history entries, basically describing
+ * what operation has been performed on this particular tso_seg_elem.
+ * This history buffer is a circular buffer and the current index is
+ * held in an atomic variable called cur. It is incremented every
+ * operation. Each of these operations are added with the function
+ * qdf_tso_seg_dbg_record.
+ * For each segment, this initialization function MUST be called PRIOR
+ * TO any _dbg_record() function calls.
+ * On free, qdf_tso_seg_elem structure is cleared (using qdf_tso_seg_dbg_zero)
+ * which clears the tso_desc, BUT DOES NOT CLEAR THE HISTORY element.
+ *
+ * Return:
+ *   None
+ */
+static inline
+void qdf_tso_seg_dbg_init(struct qdf_tso_seg_elem_t *tsoseg)
+{
+	tsoseg->dbg.txdesc = NULL;
+	qdf_atomic_init(&tsoseg->dbg.cur); /* history empty */
+}
+
+/**
+ * qdf_tso_seg_dbg_record - add a history entry to TSO debug structure
+ * @tsoseg : structure to initialize
+ * @id     : operation ID (identifies the caller)
+ *
+ * Adds a history entry to the history circular buffer. Each entry
+ * contains an operation id (caller, as currently each ID is used only
+ * once in the source, so it directly identifies the src line that invoked
+ * the recording.
+ *
+ * qdf_tso_seg_dbg_record CAN ONLY BE CALLED AFTER the entry is initialized
+ * by qdf_tso_seg_dbg_init.
+ *
+ * The entry to be added is written at the location pointed by the atomic
+ * variable called cur. Cur is an ever increasing atomic variable. It is
+ * masked so that only the lower 4 bits are used (16 history entries).
+ *
+ * Return:
+ *   int: the entry this record was recorded at
+ */
+static inline
+int qdf_tso_seg_dbg_record(struct qdf_tso_seg_elem_t *tsoseg, short id)
+{
+	int rc = -1;
+	unsigned int c;
+
+	qdf_assert(tsoseg);
+
+	if (id == TSOSEG_LOC_ALLOC) {
+		c = qdf_atomic_read(&tsoseg->dbg.cur);
+		/* dont crash on the very first alloc on the segment */
+		c &= 0x0f;
+		/* allow only INIT and FREE ops before ALLOC */
+		if (tsoseg->dbg.h[c].id >= id)
+			qdf_tso_seg_dbg_bug("Rogue TSO seg alloc");
+	}
+	c = qdf_atomic_inc_return(&tsoseg->dbg.cur);
+
+	c &= 0x0f;
+	tsoseg->dbg.h[c].ts = qdf_get_log_timestamp();
+	tsoseg->dbg.h[c].id = id;
+	rc = c;
+
+	return rc;
 };
 
 static inline void
 qdf_tso_seg_dbg_setowner(struct qdf_tso_seg_elem_t *tsoseg, void *owner)
 {
-	tsoseg->dbg.txdesc = owner;
+	if (tsoseg)
+		tsoseg->dbg.txdesc = owner;
 };
 
 static inline void
@@ -645,8 +911,11 @@ qdf_tso_seg_dbg_zero(struct qdf_tso_seg_elem_t *tsoseg)
 
 #else
 static inline
-int qdf_tso_seg_dbg_record(struct qdf_tso_seg_elem_t *tsoseg,
-			   uint16_t caller)
+void qdf_tso_seg_dbg_init(struct qdf_tso_seg_elem_t *tsoseg)
+{
+};
+static inline
+int qdf_tso_seg_dbg_record(struct qdf_tso_seg_elem_t *tsoseg, short id)
 {
 	return 0;
 };

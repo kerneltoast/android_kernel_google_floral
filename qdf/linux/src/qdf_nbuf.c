@@ -541,7 +541,7 @@ void __qdf_nbuf_free(struct sk_buff *skb)
 
 qdf_export_symbol(__qdf_nbuf_free);
 
-#ifdef MEMORY_DEBUG
+#ifdef NBUF_MEMORY_DEBUG
 enum qdf_nbuf_event_type {
 	QDF_NBUF_ALLOC,
 	QDF_NBUF_FREE,
@@ -737,6 +737,8 @@ QDF_STATUS qdf_nbuf_map_debug(qdf_device_t osdev,
 	return status;
 }
 
+qdf_export_symbol(qdf_nbuf_map_debug);
+
 void qdf_nbuf_unmap_debug(qdf_device_t osdev,
 			  qdf_nbuf_t buf,
 			  qdf_dma_dir_t dir,
@@ -746,6 +748,8 @@ void qdf_nbuf_unmap_debug(qdf_device_t osdev,
 	qdf_nbuf_untrack_map(buf, file, line);
 	__qdf_nbuf_unmap_single(osdev, buf, dir);
 }
+
+qdf_export_symbol(qdf_nbuf_unmap_debug);
 
 QDF_STATUS qdf_nbuf_map_single_debug(qdf_device_t osdev,
 				     qdf_nbuf_t buf,
@@ -766,6 +770,8 @@ QDF_STATUS qdf_nbuf_map_single_debug(qdf_device_t osdev,
 	return status;
 }
 
+qdf_export_symbol(qdf_nbuf_map_single_debug);
+
 void qdf_nbuf_unmap_single_debug(qdf_device_t osdev,
 				 qdf_nbuf_t buf,
 				 qdf_dma_dir_t dir,
@@ -775,6 +781,8 @@ void qdf_nbuf_unmap_single_debug(qdf_device_t osdev,
 	qdf_nbuf_untrack_map(buf, file, line);
 	__qdf_nbuf_unmap_single(osdev, buf, dir);
 }
+
+qdf_export_symbol(qdf_nbuf_unmap_single_debug);
 
 QDF_STATUS qdf_nbuf_map_nbytes_debug(qdf_device_t osdev,
 				     qdf_nbuf_t buf,
@@ -796,6 +804,8 @@ QDF_STATUS qdf_nbuf_map_nbytes_debug(qdf_device_t osdev,
 	return status;
 }
 
+qdf_export_symbol(qdf_nbuf_map_nbytes_debug);
+
 void qdf_nbuf_unmap_nbytes_debug(qdf_device_t osdev,
 				 qdf_nbuf_t buf,
 				 qdf_dma_dir_t dir,
@@ -806,6 +816,8 @@ void qdf_nbuf_unmap_nbytes_debug(qdf_device_t osdev,
 	qdf_nbuf_untrack_map(buf, file, line);
 	__qdf_nbuf_unmap_nbytes(osdev, buf, dir, nbytes);
 }
+
+qdf_export_symbol(qdf_nbuf_unmap_nbytes_debug);
 
 QDF_STATUS qdf_nbuf_map_nbytes_single_debug(qdf_device_t osdev,
 					    qdf_nbuf_t buf,
@@ -827,6 +839,8 @@ QDF_STATUS qdf_nbuf_map_nbytes_single_debug(qdf_device_t osdev,
 	return status;
 }
 
+qdf_export_symbol(qdf_nbuf_map_nbytes_single_debug);
+
 void qdf_nbuf_unmap_nbytes_single_debug(qdf_device_t osdev,
 					qdf_nbuf_t buf,
 					qdf_dma_dir_t dir,
@@ -837,7 +851,9 @@ void qdf_nbuf_unmap_nbytes_single_debug(qdf_device_t osdev,
 	qdf_nbuf_untrack_map(buf, file, line);
 	__qdf_nbuf_unmap_nbytes_single(osdev, buf, dir, nbytes);
 }
-#endif /* MEMORY_DEBUG */
+
+qdf_export_symbol(qdf_nbuf_unmap_nbytes_single_debug);
+#endif /* NBUF_MEMORY_DEBUG */
 
 /**
  * __qdf_nbuf_map() - map a buffer to local bus address space
@@ -1203,9 +1219,6 @@ __qdf_nbuf_data_get_icmp_subtype(uint8_t *data)
 	subtype = (uint8_t)(*(uint8_t *)
 			(data + ICMP_SUBTYPE_OFFSET));
 
-	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
-		"ICMP proto type: 0x%02x", subtype);
-
 	switch (subtype) {
 	case ICMP_REQUEST:
 		proto_subtype = QDF_PROTO_ICMP_REQ;
@@ -1237,9 +1250,6 @@ __qdf_nbuf_data_get_icmpv6_subtype(uint8_t *data)
 
 	subtype = (uint8_t)(*(uint8_t *)
 			(data + ICMPV6_SUBTYPE_OFFSET));
-
-	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
-		"ICMPv6 proto type: 0x%02x", subtype);
 
 	switch (subtype) {
 	case ICMPV6_REQUEST:
@@ -2055,7 +2065,7 @@ bool __qdf_nbuf_is_bcast_pkt(qdf_nbuf_t nbuf)
 }
 qdf_export_symbol(__qdf_nbuf_is_bcast_pkt);
 
-#ifdef MEMORY_DEBUG
+#ifdef NBUF_MEMORY_DEBUG
 #define QDF_NET_BUF_TRACK_MAX_SIZE    (1024)
 
 /**
@@ -2625,7 +2635,8 @@ free_buf:
 }
 qdf_export_symbol(qdf_nbuf_free_debug);
 
-#endif /*MEMORY_DEBUG */
+#endif /* NBUF_MEMORY_DEBUG */
+
 #if defined(FEATURE_TSO)
 
 /**
@@ -2819,6 +2830,7 @@ static inline void __qdf_nbuf_fill_tso_cmn_seg_info(
 		   tso_cmn_info->eit_hdr_len,
 		   curr_seg->seg.tso_flags.tcp_seq_num,
 		   curr_seg->seg.total_len);
+	qdf_tso_seg_dbg_record(curr_seg, TSOSEG_LOC_FILLCMNSEG);
 }
 
 /**
@@ -2881,6 +2893,12 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 				tso_frag_vaddr, tso_frag_len, DMA_TO_DEVICE);
 	}
 
+	if (unlikely(dma_mapping_error(osdev->dev,
+					tso_frag_paddr))) {
+		qdf_print("%s:%d DMA mapping error!\n", __func__, __LINE__);
+		qdf_assert(0);
+		return 0;
+	}
 	TSO_DEBUG("%s[%d] skb frag len %d tso frag len %d\n", __func__,
 		__LINE__, skb_frag_len, tso_frag_len);
 	num_seg = tso_info->num_segs;
@@ -3007,7 +3025,8 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 						 DMA_TO_DEVICE);
 			if (unlikely(dma_mapping_error(osdev->dev,
 							tso_frag_paddr))) {
-				qdf_print("DMA mapping error!\n");
+				qdf_print("%s:%d DMA mapping error!\n",
+						__func__, __LINE__);
 				qdf_assert(0);
 				return 0;
 			}
@@ -3019,6 +3038,7 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 		if (!num_seg)
 			curr_seg->seg.tso_flags.fin = tso_cmn_info.tcphdr->fin;
 
+		qdf_tso_seg_dbg_record(curr_seg, TSOSEG_LOC_GETINFO);
 		curr_seg = curr_seg->next;
 	}
 	return tso_info->num_segs;
@@ -3059,13 +3079,13 @@ void __qdf_nbuf_unmap_tso_segment(qdf_device_t osdev,
 			qdf_assert(0);
 			return;
 		}
-		qdf_tso_seg_dbg_record(tso_seg, TSOSEG_LOC_UNMAPTSO);
 		dma_unmap_single(osdev->dev,
 				 tso_seg->seg.tso_frags[num_frags].paddr,
 				 tso_seg->seg.tso_frags[num_frags].length,
 				 __qdf_dma_dir_to_os(QDF_DMA_TO_DEVICE));
 		tso_seg->seg.tso_frags[num_frags].paddr = 0;
 		num_frags--;
+		qdf_tso_seg_dbg_record(tso_seg, TSOSEG_LOC_UNMAPTSO);
 	}
 
 	if (is_last_seg) {
@@ -3080,6 +3100,7 @@ void __qdf_nbuf_unmap_tso_segment(qdf_device_t osdev,
 				 tso_seg->seg.tso_frags[0].length,
 				 __qdf_dma_dir_to_os(QDF_DMA_TO_DEVICE));
 		tso_seg->seg.tso_frags[0].paddr = 0;
+		qdf_tso_seg_dbg_record(tso_seg, TSOSEG_LOC_UNMAPLAST);
 	}
 }
 qdf_export_symbol(__qdf_nbuf_unmap_tso_segment);
@@ -3788,33 +3809,23 @@ qdf_nbuf_update_radiotap_he_mu_flags(struct mon_rx_status *rx_status,
 	 * IEEE80211_RADIOTAP_HE_MU u16, u16, u8[4]
 	 * Enable all "known" he-mu radiotap flags for now
 	 */
-	if (rx_status->he_sig_b_common_known &
-			QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU0) {
-		rtap_buf[rtap_len] = rx_status->he_RU[0];
-		rtap_len += 1;
-	}
-
-	if (rx_status->he_sig_b_common_known &
-			QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU1) {
-		rtap_buf[rtap_len] = rx_status->he_RU[1];
-		rtap_len += 1;
-	}
-	if (rx_status->he_sig_b_common_known &
-			QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU2) {
-		rtap_buf[rtap_len] = rx_status->he_RU[2];
-		rtap_len += 1;
-	}
-	if (rx_status->he_sig_b_common_known &
-			QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU3) {
-		rtap_buf[rtap_len] = rx_status->he_RU[3];
-		rtap_len += 1;
-	}
-
 	put_unaligned_le16(rx_status->he_flags1, &rtap_buf[rtap_len]);
 	rtap_len += 2;
 
 	put_unaligned_le16(rx_status->he_flags2, &rtap_buf[rtap_len]);
 	rtap_len += 2;
+
+	rtap_buf[rtap_len] = rx_status->he_RU[0];
+	rtap_len += 1;
+
+	rtap_buf[rtap_len] = rx_status->he_RU[1];
+	rtap_len += 1;
+
+	rtap_buf[rtap_len] = rx_status->he_RU[2];
+	rtap_len += 1;
+
+	rtap_buf[rtap_len] = rx_status->he_RU[3];
+	rtap_len += 1;
 
 	return rtap_len;
 }
@@ -3849,25 +3860,6 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 	rtap_buf[rtap_len] = rx_status->he_per_user_known;
 	rtap_len += 1;
 
-	/* HE fields */
-	put_unaligned_le16(rx_status->he_data1, &rtap_buf[rtap_len]);
-	rtap_len += 2;
-
-	put_unaligned_le16(rx_status->he_data2, &rtap_buf[rtap_len]);
-	rtap_len += 2;
-
-	put_unaligned_le16(rx_status->he_data3, &rtap_buf[rtap_len]);
-	rtap_len += 2;
-
-	put_unaligned_le16(rx_status->he_data4, &rtap_buf[rtap_len]);
-	rtap_len += 2;
-
-	put_unaligned_le16(rx_status->he_data5, &rtap_buf[rtap_len]);
-	rtap_len += 2;
-
-	put_unaligned_le16(rx_status->he_data6, &rtap_buf[rtap_len]);
-	rtap_len += 2;
-
 	return rtap_len;
 }
 
@@ -3885,10 +3877,12 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 #define RADIOTAP_HE_MU_OTHER_FLAGS_LEN 18
 #define RADIOTAP_FIXED_HEADER_LEN 16
 #define RADIOTAP_HT_FLAGS_LEN 3
+#define RADIOTAP_AMPDU_STATUS_LEN 8
 #define RADIOTAP_HEADER_LEN (sizeof(struct ieee80211_radiotap_header) + \
 				RADIOTAP_FIXED_HEADER_LEN + \
 				RADIOTAP_HT_FLAGS_LEN + \
 				RADIOTAP_VHT_FLAGS_LEN + \
+				RADIOTAP_AMPDU_STATUS_LEN + \
 				RADIOTAP_HE_FLAGS_LEN + \
 				RADIOTAP_HE_MU_FLAGS_LEN + \
 				RADIOTAP_HE_MU_OTHER_FLAGS_LEN)
@@ -3924,6 +3918,39 @@ static uint16_t radiotap_num_to_freq (uint16_t chan_num)
 	return CHANNEL_FREQ_5000 +
 		(chan_num * FREQ_MULTIPLIER_CONST_5MHZ);
 }
+
+/**
+ * qdf_nbuf_update_radiotap_ampdu_flags() - Update radiotap header ampdu flags
+ * @rx_status: Pointer to rx_status.
+ * @rtap_buf: Buf to which AMPDU info has to be updated.
+ * @rtap_len: Current length of radiotap buffer
+ *
+ * Return: Length of radiotap after AMPDU flags updated.
+ */
+static unsigned int qdf_nbuf_update_radiotap_ampdu_flags(
+					struct mon_rx_status *rx_status,
+					uint8_t *rtap_buf,
+					uint32_t rtap_len)
+{
+	/*
+	 * IEEE80211_RADIOTAP_AMPDU_STATUS u32 u16 u8 u8
+	 * First 32 bits of AMPDU represents the reference number
+	 */
+
+	uint32_t ampdu_reference_num = rx_status->ppdu_id;
+	uint16_t ampdu_flags = 0;
+	uint16_t ampdu_reserved_flags = 0;
+
+	put_unaligned_le32(ampdu_reference_num, &rtap_buf[rtap_len]);
+	rtap_len += 4;
+	put_unaligned_le16(ampdu_flags, &rtap_buf[rtap_len]);
+	rtap_len += 2;
+	put_unaligned_le16(ampdu_reserved_flags, &rtap_buf[rtap_len]);
+	rtap_len += 2;
+
+	return rtap_len;
+}
+
 /**
  * qdf_nbuf_update_radiotap() - Update radiotap header from rx_status
  * @rx_status: Pointer to rx_status.
@@ -3940,6 +3967,7 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 		(struct ieee80211_radiotap_header *)rtap_buf;
 	uint32_t rtap_hdr_len = sizeof(struct ieee80211_radiotap_header);
 	uint32_t rtap_len = rtap_hdr_len;
+	uint8_t length = rtap_len;
 
 	/* IEEE80211_RADIOTAP_TSFT              __le64       microseconds*/
 	rthdr->it_present = cpu_to_le32(1 << IEEE80211_RADIOTAP_TSFT);
@@ -3948,6 +3976,10 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 
 	/* IEEE80211_RADIOTAP_FLAGS u8 */
 	rthdr->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_FLAGS);
+
+	if (rx_status->rs_fcs_err)
+		rx_status->rtap_flags |= IEEE80211_RADIOTAP_F_BADFCS;
+
 	rtap_buf[rtap_len] = rx_status->rtap_flags;
 	rtap_len += 1;
 
@@ -3994,7 +4026,13 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 	rtap_buf[rtap_len] = rx_status->nr_ant;
 	rtap_len += 1;
 
+	if ((rtap_len - length) > RADIOTAP_FIXED_HEADER_LEN) {
+		qdf_print("length is greater than RADIOTAP_FIXED_HEADER_LEN");
+		return 0;
+	}
+
 	if (rx_status->ht_flags) {
+		length = rtap_len;
 		/* IEEE80211_RADIOTAP_VHT u8, u8, u8 */
 		rthdr->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_MCS);
 		rtap_buf[rtap_len] = IEEE80211_RADIOTAP_MCS_HAVE_BW |
@@ -4012,33 +4050,66 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 
 		rtap_buf[rtap_len] = rx_status->mcs;
 		rtap_len += 1;
+
+		if ((rtap_len - length) > RADIOTAP_HT_FLAGS_LEN) {
+			qdf_print("length is greater than RADIOTAP_HT_FLAGS_LEN");
+			return 0;
+		}
+	}
+
+	if (rx_status->rs_flags & IEEE80211_AMPDU_FLAG) {
+		/* IEEE80211_RADIOTAP_AMPDU_STATUS u32 u16 u8 u8 */
+		rthdr->it_present |=
+			cpu_to_le32(1 << IEEE80211_RADIOTAP_AMPDU_STATUS);
+		rtap_len = qdf_nbuf_update_radiotap_ampdu_flags(rx_status,
+								rtap_buf,
+								rtap_len);
 	}
 
 	if (rx_status->vht_flags) {
+		length = rtap_len;
 		/* IEEE80211_RADIOTAP_VHT u16, u8, u8, u8[4], u8, u8, u16 */
 		rthdr->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_VHT);
 		rtap_len = qdf_nbuf_update_radiotap_vht_flags(rx_status,
-							      rtap_buf,
-							      rtap_len);
+								rtap_buf,
+								rtap_len);
+
+		if ((rtap_len - length) > RADIOTAP_VHT_FLAGS_LEN) {
+			qdf_print("length is greater than RADIOTAP_VHT_FLAGS_LEN");
+			return 0;
+		}
 	}
 
 	if (rx_status->he_flags) {
+		length = rtap_len;
 		/* IEEE80211_RADIOTAP_HE */
 		rthdr->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_HE);
 		rtap_len = qdf_nbuf_update_radiotap_he_flags(rx_status,
 								rtap_buf,
 								rtap_len);
+
+		if ((rtap_len - length) > RADIOTAP_HE_FLAGS_LEN) {
+			qdf_print("length is greater than RADIOTAP_HE_FLAGS_LEN");
+			return 0;
+		}
 	}
 
 	if (rx_status->he_mu_flags) {
+		length = rtap_len;
 		/* IEEE80211_RADIOTAP_HE-MU */
 		rthdr->it_present |= cpu_to_le32(1 << IEEE80211_RADIOTAP_HE_MU);
 		rtap_len = qdf_nbuf_update_radiotap_he_mu_flags(rx_status,
 								rtap_buf,
 								rtap_len);
+
+		if ((rtap_len - length) > RADIOTAP_HE_MU_FLAGS_LEN) {
+			qdf_print("length is greater than RADIOTAP_HE_MU_FLAGS_LEN");
+			return 0;
+		}
 	}
 
 	if (rx_status->he_mu_other_flags) {
+		length = rtap_len;
 		/* IEEE80211_RADIOTAP_HE-MU-OTHER */
 		rthdr->it_present |=
 			cpu_to_le32(1 << IEEE80211_RADIOTAP_HE_MU_OTHER);
@@ -4046,6 +4117,11 @@ unsigned int qdf_nbuf_update_radiotap(struct mon_rx_status *rx_status,
 			qdf_nbuf_update_radiotap_he_mu_other_flags(rx_status,
 								rtap_buf,
 								rtap_len);
+
+		if ((rtap_len - length) > RADIOTAP_HE_MU_OTHER_FLAGS_LEN) {
+			qdf_print("length is greater than RADIOTAP_HE_MU_OTHER_FLAGS_LEN");
+			return 0;
+		}
 	}
 
 	rthdr->it_len = cpu_to_le16(rtap_len);
@@ -4070,6 +4146,15 @@ static unsigned int qdf_nbuf_update_radiotap_vht_flags(
 
 unsigned int qdf_nbuf_update_radiotap_he_flags(struct mon_rx_status *rx_status,
 				      int8_t *rtap_buf, uint32_t rtap_len)
+{
+	qdf_print("ERROR: struct ieee80211_radiotap_header not supported");
+	return 0;
+}
+
+static unsigned int qdf_nbuf_update_radiotap_ampdu_flags(
+					struct mon_rx_status *rx_status,
+					uint8_t *rtap_buf,
+					uint32_t rtap_len)
 {
 	qdf_print("ERROR: struct ieee80211_radiotap_header not supported");
 	return 0;

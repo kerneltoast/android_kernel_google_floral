@@ -47,6 +47,7 @@ bool util_is_scan_entry_match(
 
 /**
  * util_scan_unpack_beacon_frame() - func to unpack beacon frame to scan entry
+ * @pdev: pdev pointer
  * @frame: beacon/probe frame
  * @frame_len: beacon frame len
  * @frm_subtype: beacon or probe
@@ -57,6 +58,7 @@ bool util_is_scan_entry_match(
  * Return: unpacked list of scan entries.
  */
 qdf_list_t *util_scan_unpack_beacon_frame(
+	struct wlan_objmgr_pdev *pdev,
 	uint8_t *frame, qdf_size_t frame_len, uint32_t frm_subtype,
 	struct mgmt_rx_event_params *rx_param);
 
@@ -1444,4 +1446,11 @@ util_scan_entry_mbo_oce(struct scan_cache_entry *scan_entry)
  */
 enum wlan_band util_scan_scm_chan_to_band(uint32_t chan);
 
+/**
+ * util_scan_scm_freq_to_band() - API to get band from frequency
+ * @freq: Channel frequency
+ *
+ * Return: Band information as per frequency
+ */
+enum wlan_band util_scan_scm_freq_to_band(uint16_t freq);
 #endif

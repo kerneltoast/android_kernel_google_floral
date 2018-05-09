@@ -171,6 +171,7 @@ struct qca_napi_stat {
 	uint32_t napi_budget_uses[QCA_NAPI_NUM_BUCKETS];
 	uint32_t time_limit_reached;
 	uint32_t rxpkt_thresh_reached;
+	unsigned long long napi_max_poll_time;
 };
 
 
@@ -190,8 +191,12 @@ struct qca_napi_info {
 	uint8_t              cpu;
 	int                  irq;
 	struct qca_napi_stat stats[NR_CPUS];
+#ifdef RECEIVE_OFFLOAD
 	/* will only be present for data rx CE's */
-	void (*lro_flush_cb)(void *);
+	void (*offld_flush_cb)(void *);
+	struct napi_struct   rx_thread_napi;
+	struct net_device    rx_thread_netdev;
+#endif /* RECEIVE_OFFLOAD */
 	qdf_lro_ctx_t        lro_ctx;
 };
 
@@ -602,6 +607,12 @@ struct hif_pipe_addl_info {
 	struct hif_dl_pipe_info dl_pipe;
 };
 
+#ifdef CONFIG_SLUB_DEBUG_ON
+#define MSG_FLUSH_NUM 16
+#else /* PERF build */
+#define MSG_FLUSH_NUM 32
+#endif /* SLUB_DEBUG_ON */
+
 struct hif_bus_id;
 
 void hif_claim_device(struct hif_opaque_softc *hif_ctx);
@@ -646,6 +657,28 @@ int hif_check_soc_status(struct hif_opaque_softc *hif_ctx);
 #endif
 void hif_get_hw_info(struct hif_opaque_softc *hif_ctx, u32 *version,
 			u32 *revision, const char **target_name);
+
+#ifdef RECEIVE_OFFLOAD
+/**
+ * hif_offld_flush_cb_register() - Register the offld flush callback
+ * @scn: HIF opaque context
+ * @offld_flush_handler: Flush callback is either ol_flush, incase of rx_thread
+ *			 Or GRO/LRO flush when RxThread is not enabled. Called
+ *			 with corresponding context for flush.
+ * Return: None
+ */
+void hif_offld_flush_cb_register(struct hif_opaque_softc *scn,
+				 void (offld_flush_handler)(void *ol_ctx));
+
+/**
+ * hif_offld_flush_cb_deregister() - deRegister the offld flush callback
+ * @scn: HIF opaque context
+ *
+ * Return: None
+ */
+void hif_offld_flush_cb_deregister(struct hif_opaque_softc *scn);
+#endif
+
 void hif_disable_isr(struct hif_opaque_softc *hif_ctx);
 void hif_reset_soc(struct hif_opaque_softc *hif_ctx);
 void hif_save_htc_htt_config_endpoint(struct hif_opaque_softc *hif_ctx,
@@ -821,11 +854,6 @@ int ol_copy_ramdump(struct hif_opaque_softc *scn);
 void hif_crash_shutdown(struct hif_opaque_softc *hif_ctx);
 void hif_get_hw_info(struct hif_opaque_softc *hif_ctx, u32 *version,
 		     u32 *revision, const char **target_name);
-void hif_lro_flush_cb_register(struct hif_opaque_softc *hif_ctx,
-			       void (lro_flush_handler)(void *arg),
-			       void *(lro_init_handler)(void));
-void hif_lro_flush_cb_deregister(struct hif_opaque_softc *hif_ctx,
-				 void (lro_deinit_cb)(void *arg));
 bool hif_needs_bmi(struct hif_opaque_softc *hif_ctx);
 enum qdf_bus_type hif_get_bus_type(struct hif_opaque_softc *hif_hdl);
 struct hif_target_info *hif_get_target_info_handle(struct hif_opaque_softc *
@@ -920,4 +948,41 @@ ssize_t hif_ce_en_desc_hist(struct hif_softc *scn,
 ssize_t hif_disp_ce_enable_desc_data_hist(struct hif_softc *scn, char *buf);
 ssize_t hif_dump_desc_event(struct hif_softc *scn, char *buf);
 #endif /* Note: for MCL, #if defined(HIF_CONFIG_SLUB_DEBUG_ON) || HIF_CE_DEBUG_DATA_BUF */
+
+/**
+ * hif_set_ce_service_max_yield_time() - sets CE service max yield time
+ * @hif: hif context
+ * @ce_service_max_yield_time: CE service max yield time to set
+ *
+ * This API storess CE service max yield time in hif context based
+ * on ini value.
+ *
+ * Return: void
+ */
+void hif_set_ce_service_max_yield_time(struct hif_opaque_softc *hif,
+				       uint32_t ce_service_max_yield_time);
+
+/**
+ * hif_get_ce_service_max_yield_time() - get CE service max yield time
+ * @hif: hif context
+ *
+ * This API returns CE service max yield time.
+ *
+ * Return: CE service max yield time
+ */
+unsigned long long
+hif_get_ce_service_max_yield_time(struct hif_opaque_softc *hif);
+
+/**
+ * hif_set_ce_service_max_rx_ind_flush() - sets CE service max rx ind flush
+ * @hif: hif context
+ * @ce_service_max_rx_ind_flush: CE service max rx ind flush to set
+ *
+ * This API stores CE service max rx ind flush in hif context based
+ * on ini value.
+ *
+ * Return: void
+ */
+void hif_set_ce_service_max_rx_ind_flush(struct hif_opaque_softc *hif,
+				       uint8_t ce_service_max_rx_ind_flush);
 #endif /* _HIF_H_ */

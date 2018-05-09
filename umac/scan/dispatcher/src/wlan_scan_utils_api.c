@@ -25,6 +25,7 @@
 #include <wlan_scan_utils_api.h>
 #include <../../core/src/wlan_scan_cache_db.h>
 #include <../../core/src/wlan_scan_main.h>
+#include <wlan_reg_services_api.h>
 
 const char*
 util_scan_get_ev_type_name(enum scan_event_type type)
@@ -103,6 +104,14 @@ util_get_last_scan_time(struct wlan_objmgr_vdev *vdev)
 enum wlan_band util_scan_scm_chan_to_band(uint32_t chan)
 {
 	if (WLAN_CHAN_IS_2GHZ(chan))
+		return WLAN_BAND_2_4_GHZ;
+
+	return WLAN_BAND_5_GHZ;
+}
+
+enum wlan_band util_scan_scm_freq_to_band(uint16_t freq)
+{
+	if (WLAN_REG_IS_24GHZ_CH_FREQ(freq))
 		return WLAN_BAND_2_4_GHZ;
 
 	return WLAN_BAND_5_GHZ;
@@ -474,7 +483,7 @@ util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params)
 		}
 
 		if (ie_len < ie->ie_len) {
-			scm_err("Incomplete corrupted IE:%x",
+			scm_debug("Incomplete corrupted IE:%x",
 				ie->ie_id);
 			return QDF_STATUS_E_INVAL;
 		}
@@ -806,7 +815,7 @@ static int util_scan_scm_calc_nss_supported_by_ap(
 }
 
 qdf_list_t *
-util_scan_unpack_beacon_frame(uint8_t *frame,
+util_scan_unpack_beacon_frame(struct wlan_objmgr_pdev *pdev, uint8_t *frame,
 	qdf_size_t frame_len, uint32_t frm_subtype,
 	struct mgmt_rx_event_params *rx_param)
 {
@@ -889,7 +898,7 @@ util_scan_unpack_beacon_frame(uint8_t *frame,
 		frame, frame_len);
 	status = util_scan_populate_bcn_ie_list(scan_entry);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		scm_err("failed to parse beacon IE");
+		scm_debug("failed to parse beacon IE");
 		qdf_mem_free(scan_entry->raw_frame.ptr);
 		qdf_mem_free(scan_entry);
 		qdf_mem_free(scan_list);
@@ -922,7 +931,8 @@ util_scan_unpack_beacon_frame(uint8_t *frame,
 				rx_param->channel;
 	} else if (rx_param->channel !=
 	   scan_entry->channel.chan_idx) {
-		scan_entry->channel_mismatch = true;
+		if (!wlan_reg_chan_is_49ghz(pdev, scan_entry->channel.chan_idx))
+			scan_entry->channel_mismatch = true;
 	}
 
 	if (util_scan_is_hidden_ssid(ssid)) {

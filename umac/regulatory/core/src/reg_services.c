@@ -1759,13 +1759,40 @@ uint32_t reg_chan_to_freq(struct wlan_objmgr_pdev *pdev,
 	chan_list = pdev_priv_obj->cur_chan_list;
 
 	for (count = 0; count < NUM_CHANNELS; count++)
-		if (chan_list[count].chan_num == chan_num)
-			return chan_list[count].center_freq;
+		if (chan_list[count].chan_num == chan_num) {
+			if (reg_chan_in_range(chan_list,
+						pdev_priv_obj->range_2g_low,
+						pdev_priv_obj->range_2g_high,
+						pdev_priv_obj->range_5g_low,
+						pdev_priv_obj->range_5g_high,
+						count)) {
+				return chan_list[count].center_freq;
+			}
+		}
+
 
 	reg_err("invalid channel %d", chan_num);
 
 	return 0;
 }
+
+#ifndef CONFIG_LEGACY_CHAN_ENUM
+bool reg_chan_is_49ghz(struct wlan_objmgr_pdev *pdev,
+		uint8_t chan_num)
+{
+	uint32_t freq = 0;
+
+	freq = reg_chan_to_freq(pdev, chan_num);
+
+	return REG_IS_49GHZ_FREQ(freq) ? true : false;
+}
+#else
+bool reg_chan_is_49ghz(struct wlan_objmgr_pdev *pdev,
+		uint8_t chan_num)
+{
+	return false;
+}
+#endif
 
 enum band_info reg_chan_to_band(uint32_t chan_num)
 {
@@ -2283,6 +2310,84 @@ reg_modify_chan_list_for_freq_range(struct regulatory_channel *chan_list,
 	}
 }
 
+bool reg_chan_in_range(struct regulatory_channel *chan_list,
+		uint32_t low_freq_2g,
+		uint32_t high_freq_2g,
+		uint32_t low_freq_5g,
+		uint32_t high_freq_5g,
+		enum channel_enum ch_enum)
+{
+	uint32_t low_limit_2g = NUM_CHANNELS;
+	uint32_t high_limit_2g = NUM_CHANNELS;
+	uint32_t low_limit_5g = NUM_CHANNELS;
+	uint32_t high_limit_5g = NUM_CHANNELS;
+	bool chan_in_range;
+	enum channel_enum chan_enum;
+	uint16_t min_bw;
+	uint32_t center_freq;
+
+	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
+		min_bw = chan_list[chan_enum].min_bw;
+		center_freq = chan_list[chan_enum].center_freq;
+
+		if ((center_freq - min_bw/2) >= low_freq_2g) {
+			low_limit_2g = chan_enum;
+			break;
+		}
+	}
+
+	for (chan_enum = 0; chan_enum < NUM_CHANNELS; chan_enum++) {
+		min_bw = chan_list[chan_enum].min_bw;
+		center_freq = chan_list[chan_enum].center_freq;
+
+		if ((center_freq - min_bw/2) >= low_freq_5g) {
+			low_limit_5g = chan_enum;
+			break;
+		}
+	}
+
+	for (chan_enum = NUM_CHANNELS - 1; chan_enum >= 0; chan_enum--) {
+		min_bw = chan_list[chan_enum].min_bw;
+		center_freq = chan_list[chan_enum].center_freq;
+
+		if (center_freq + min_bw/2 <= high_freq_2g) {
+			high_limit_2g = chan_enum;
+			break;
+		}
+		if (chan_enum == 0)
+			break;
+	}
+
+	for (chan_enum = NUM_CHANNELS - 1; chan_enum >= 0; chan_enum--) {
+		min_bw = chan_list[chan_enum].min_bw;
+		center_freq = chan_list[chan_enum].center_freq;
+
+		if (center_freq + min_bw/2 <= high_freq_5g) {
+			high_limit_5g = chan_enum;
+			break;
+		}
+		if (chan_enum == 0)
+			break;
+	}
+
+	chan_in_range = false;
+	if  ((low_limit_2g <= ch_enum) &&
+			(high_limit_2g >= ch_enum) &&
+			(low_limit_2g != NUM_CHANNELS) &&
+			(high_limit_2g != NUM_CHANNELS))
+		chan_in_range = true;
+	if  ((low_limit_5g <= ch_enum) &&
+			(high_limit_5g >= ch_enum) &&
+			(low_limit_5g != NUM_CHANNELS) &&
+			(high_limit_5g != NUM_CHANNELS))
+		chan_in_range = true;
+
+	if (chan_in_range)
+		return true;
+	else
+		return false;
+}
+
 static void reg_init_pdev_mas_chan_list(struct wlan_regulatory_pdev_priv_obj
 				    *pdev_priv_obj,
 				    struct mas_chan_params
@@ -2422,6 +2527,7 @@ static struct reg_sched_payload
 	return payload;
 }
 
+#ifdef CONFIG_MCL
 static QDF_STATUS reg_chan_change_flush_cbk_sb(struct scheduler_msg *msg)
 {
 	struct reg_sched_payload *load = msg->bodyptr;
@@ -2629,7 +2735,24 @@ static QDF_STATUS reg_sched_11d_msg(struct wlan_objmgr_psoc *psoc)
 
 	return status;
 }
+#else
+QDF_STATUS reg_send_scheduler_msg_sb(struct wlan_objmgr_psoc *psoc,
+					struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
 
+static QDF_STATUS reg_send_scheduler_msg_nb(struct wlan_objmgr_psoc *psoc,
+					struct wlan_objmgr_pdev *pdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS reg_sched_11d_msg(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 static void reg_propagate_mas_chan_list_to_pdev(struct wlan_objmgr_psoc *psoc,
 						void *object, void *arg)

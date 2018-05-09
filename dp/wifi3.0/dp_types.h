@@ -69,6 +69,7 @@
 #define DP_QOS_TID 0x0f
 #define DP_IPV6_PRIORITY_SHIFT 20
 #define MAX_MON_LINK_DESC_BANKS 2
+#define DP_VDEV_ALL 0xff
 
 #if defined(CONFIG_MCL)
 #define MAX_PDEV_CNT 1
@@ -788,7 +789,7 @@ struct dp_soc {
 	DP_MUTEX_TYPE peer_ref_mutex;
 
 	/* maximum value for peer_id */
-	int max_peers;
+	uint32_t max_peers;
 
 	/* SoC level data path statistics */
 	struct dp_soc_stats stats;
@@ -1023,6 +1024,9 @@ struct dp_pdev {
 	/* VDEV list */
 	TAILQ_HEAD(, dp_vdev) vdev_list;
 
+	/* vdev list lock */
+	qdf_spinlock_t vdev_list_lock;
+
 	/* Number of vdevs this device have */
 	uint16_t vdev_count;
 
@@ -1162,6 +1166,8 @@ struct dp_pdev {
 	TAILQ_HEAD(, ppdu_info) ppdu_info_list;
 	uint32_t tlv_count;
 	uint32_t list_depth;
+	uint32_t ppdu_id;
+	bool first_nbuf;
 };
 
 struct dp_peer;

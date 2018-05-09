@@ -164,10 +164,6 @@
  * struct mon_rx_status - This will have monitor mode rx_status extracted from
  * htt_rx_desc used later to update radiotap information.
  * @tsft: Time Synchronization Function timer
- * @he_sig_A1: HE (11ax) sig A1 field
- * @he_sig_A2: HE (11ax) sig A1 field
- * @he_sig_b_user: HE (11ax) sig B user field
- * @he_sig_b_user_known: HE (11ax) sig B user known field
  * @preamble_type: Preamble type in radio header
  * @chan_freq: Capture channel frequency
  * @chan_num: Capture channel number
@@ -218,14 +214,10 @@
  * @he_data4: HE property of received frame
  * @he_data5: HE property of received frame
  * @prev_ppdu_id: ppdu_id in previously received message
- *
+ * @ppdu_id: Id of the PLCP protocol data unit
  */
 struct mon_rx_status {
 	uint64_t tsft;
-	uint32_t he_sig_A1;
-	uint32_t he_sig_A2;
-	uint32_t he_sig_b_user;
-	uint32_t he_sig_b_user_known;
 	uint32_t preamble_type;
 	uint16_t chan_freq;
 	uint16_t chan_num;
@@ -288,21 +280,17 @@ struct mon_rx_status {
 	uint16_t he_data6;
 	uint32_t ppdu_len;
 	uint32_t prev_ppdu_id;
+	uint32_t ppdu_id;
 };
 
 /* Masks for HE SIG known fields in mon_rx_status structure */
-#define QDF_MON_STATUS_HE_SIG_A1_SU_KNOWN_ALL		0x000007ff
-#define QDF_MON_STATUS_HE_SIG_A1_MU_KNOWN_ALL		0x000003ff
-#define QDF_MON_STATUS_HE_SIG_A2_SU_KNOWN_ALL		0x00000ffd
-#define QDF_MON_STATUS_HE_SIG_A2_MU_KNOWN_ALL		0x00000ffd
 #define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU0	0x00000001
 #define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU1	0x00000002
 #define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU2	0x00000004
 #define QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU3	0x00000008
-#define QDF_MON_STATUS_HE_SIG_B_USER_KNOWN_SIG_B_ALL	0x00fe0000
+#define QDF_MON_STATUS_HE_SIG_B_USER_KNOWN_SIG_B_ALL   0x00fe0000
 #define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_SU		0x00000000
 #define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_EXT_SU	0x40000000
-#define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_MU		0x80000000
 #define QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_TRIG		0xc0000000
 
 /* DHCP Related Mask */
@@ -365,8 +353,12 @@ struct mon_rx_status {
 #define QDF_NBUF_IPA_CHECK_MASK		0x80000000
 
 /* HE Radiotap data1 Mask */
+#define QDF_MON_STATUS_HE_SU_FORMAT_TYPE 0x0000
+#define QDF_MON_STATUS_HE_EXT_SU_FORMAT_TYPE 0x0001
+#define QDF_MON_STATUS_HE_MU_FORMAT_TYPE 0x0002
 #define QDF_MON_STATUS_HE_TRIG_FORMAT_TYPE 0x0003
-#define QDF_MON_STATUS_HE_SU_OR_EXT_SU_FORMAT_TYPE 0x0000
+
+
 #define QDF_MON_STATUS_HE_BEAM_CHANGE_KNOWN 0x0008
 #define QDF_MON_STATUS_HE_DL_UL_KNOWN 0x0010
 #define QDF_MON_STATUS_HE_MCS_KNOWN 0x0020
@@ -396,6 +388,9 @@ struct mon_rx_status {
 #define QDF_MON_STATUS_LDPC_EXTRA_SYMBOL_SHIFT 14
 #define QDF_MON_STATUS_STBC_SHIFT 15
 
+/* HE radiotap data4 shift values */
+#define QDF_MON_STATUS_STA_ID_SHIFT 4
+
 /* HE radiotap data5 */
 #define QDF_MON_STATUS_GI_SHIFT 4
 #define QDF_MON_STATUS_HE_LTF_SHIFT 8
@@ -409,15 +404,20 @@ struct mon_rx_status {
 
 /* HE radiotap HE-MU flags1 */
 #define QDF_MON_STATUS_SIG_B_MCS_KNOWN 0x0010
+#define QDF_MON_STATUS_SIG_B_DCM_KNOWN 0x0040
+#define QDF_MON_STATUS_SIG_B_SYM_NUM_KNOWN 0x8000
+#define QDF_MON_STATUS_RU_0_KNOWN 0x0100
+#define QDF_MON_STATUS_RU_1_KNOWN 0x0200
+#define QDF_MON_STATUS_RU_2_KNOWN 0x0400
+#define QDF_MON_STATUS_RU_3_KNOWN 0x0800
 #define QDF_MON_STATUS_DCM_FLAG_1_SHIFT 5
-#define QDF_MON_STATUS_QDF_KNOWN 0x0040
-#define QDF_MON_STATUS_BW_KNOWN 0x0080
 #define QDF_MON_STATUS_SPATIAL_REUSE_MU_KNOWN 0x0100
 #define QDF_MON_STATUS_SIG_B_COMPRESSION_FLAG_1_KNOWN 0x4000
 
 /* HE radiotap HE-MU flags2 */
 #define QDF_MON_STATUS_SIG_B_COMPRESSION_FLAG_2_SHIFT 3
-#define QDF_MON_STATUS_SYMBOLS_SHIFT 4
+#define QDF_MON_STATUS_BW_KNOWN 0x0004
+#define QDF_MON_STATUS_NUM_SIG_B_SYMBOLS_SHIFT 4
 #define QDF_MON_STATUS_SIG_B_COMPRESSION_FLAG_2_KNOWN 0x0100
 #define QDF_MON_STATUS_NUM_SIG_B_FLAG_2_SHIFT 9
 #define QDF_MON_STATUS_LTF_FLAG_2_SYMBOLS_SHIFT 12
@@ -425,10 +425,16 @@ struct mon_rx_status {
 
 /* HE radiotap per_user_1 */
 #define QDF_MON_STATUS_STA_SPATIAL_SHIFT 11
+#define QDF_MON_STATUS_TXBF_SHIFT 14
 #define QDF_MON_STATUS_RESERVED_SET_TO_1_SHIFT 19
 #define QDF_MON_STATUS_STA_CODING_SHIFT 20
 
+/* HE radiotap per_user_2 */
+#define QDF_MON_STATUS_STA_MCS_SHIFT 4
+#define QDF_MON_STATUS_STA_DCM_SHIFT 5
+
 /* HE radiotap per user known */
+#define QDF_MON_STATUS_USER_FIELD_POSITION_KNOWN 0x01
 #define QDF_MON_STATUS_STA_ID_PER_USER_KNOWN 0x02
 #define QDF_MON_STATUS_STA_NSTS_KNOWN 0x04
 #define QDF_MON_STATUS_STA_TX_BF_KNOWN 0x08
@@ -574,7 +580,7 @@ qdf_nbuf_set_send_complete_flag(qdf_nbuf_t buf, bool flag)
 	__qdf_nbuf_set_send_complete_flag(buf, flag);
 }
 
-#ifdef MEMORY_DEBUG
+#ifdef NBUF_MEMORY_DEBUG
 /**
  * qdf_nbuf_map_check_for_leaks() - check for nbut map leaks
  *
@@ -662,7 +668,7 @@ void qdf_nbuf_unmap_nbytes_single_debug(qdf_device_t osdev,
 	qdf_nbuf_unmap_nbytes_single_debug(osdev, buf, dir, nbytes, \
 					   __FILE__, __LINE__)
 
-#else /* MEMORY_DEBUG */
+#else /* NBUF_MEMORY_DEBUG */
 
 static inline QDF_STATUS
 qdf_nbuf_map(qdf_device_t osdev, qdf_nbuf_t buf, qdf_dma_dir_t dir)
@@ -715,7 +721,7 @@ qdf_nbuf_unmap_nbytes_single(
 {
 	return __qdf_nbuf_unmap_nbytes_single(osdev, buf, dir, nbytes);
 }
-#endif /* MEMORY_DEBUG */
+#endif /* NBUF_MEMORY_DEBUG */
 
 static inline void
 qdf_nbuf_sync_for_cpu(qdf_device_t osdev, qdf_nbuf_t buf, qdf_dma_dir_t dir)
@@ -1069,7 +1075,7 @@ static inline qdf_nbuf_t qdf_nbuf_next(qdf_nbuf_t buf)
 	return __qdf_nbuf_next(buf);
 }
 
-#ifdef MEMORY_DEBUG
+#ifdef NBUF_MEMORY_DEBUG
 void qdf_net_buf_debug_init(void);
 void qdf_net_buf_debug_exit(void);
 void qdf_net_buf_debug_clean(void);
@@ -1166,7 +1172,10 @@ qdf_nbuf_copy_debug(qdf_nbuf_t buf, uint8_t *file_name,
 	return copied_buf;
 }
 
-#else
+#else /* NBUF_MEMORY_DEBUG */
+
+static inline void qdf_net_buf_debug_init(void) {}
+static inline void qdf_net_buf_debug_exit(void) {}
 
 static inline void qdf_net_buf_debug_acquire_skb(qdf_nbuf_t net_buf,
 			uint8_t *file_name, uint32_t line_num)
@@ -1219,7 +1228,7 @@ static inline qdf_nbuf_t qdf_nbuf_copy(qdf_nbuf_t buf)
 	return __qdf_nbuf_copy(buf);
 }
 
-#endif
+#endif /* NBUF_MEMORY_DEBUG */
 
 #ifdef WLAN_FEATURE_FASTPATH
 /**
@@ -2998,6 +3007,21 @@ static inline void qdf_nbuf_mod_exit(void)
 {
 	return __qdf_nbuf_mod_exit();
 }
+
+/**
+ * qdf_nbuf_orphan() - orphan a nbuf
+ * @buf: Pointer to network buffer
+ *
+ * If a buffer currently has an owner then we call the
+ * owner's destructor function
+ *
+ * Return: void
+ */
+static inline void qdf_nbuf_orphan(qdf_nbuf_t buf)
+{
+	return __qdf_nbuf_orphan(buf);
+}
+
 #ifdef CONFIG_WIN
 #include <i_qdf_nbuf_api_w.h>
 #else

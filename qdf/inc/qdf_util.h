@@ -106,6 +106,18 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 #define QDF_MIN(_x, _y) (((_x) < (_y)) ? (_x) : (_y))
 
 /**
+ * QDF_IS_ADDR_BROADCAST - is mac address broadcast mac address
+ * @_a: pointer to mac address
+ */
+#define QDF_IS_ADDR_BROADCAST(_a)  \
+	((_a)[0] == 0xff &&        \
+	 (_a)[1] == 0xff &&        \
+	 (_a)[2] == 0xff &&        \
+	 (_a)[3] == 0xff &&        \
+	 (_a)[4] == 0xff &&        \
+	 (_a)[5] == 0xff)
+
+/**
  * qdf_status_to_os_return - returns the status to OS.
  * @status: enum QDF_STATUS
  *
@@ -528,6 +540,14 @@ static inline uint8_t *qdf_get_u32(uint8_t *ptr, uint32_t *value)
 #define qdf_min(a, b)   __qdf_min(a, b)
 
 /**
+ * qdf_ffz() - find first (least significant) zero bit
+ * @mask: the bitmask to check
+ *
+ * Return: The zero-based index of the first zero bit, or -1 if none are found
+ */
+#define qdf_ffz(mask) __qdf_ffz(mask)
+
+/**
  * qdf_get_pwr2() - get next power of 2 integer from input value
  * @value: input value to find next power of 2 integer
  *
@@ -554,6 +574,22 @@ static inline
 int qdf_get_cpu(void)
 {
 	return __qdf_get_cpu();
+}
+
+/**
+ * qdf_get_hweight8() - count num of 1's in bitmap
+ * @value: input bitmap
+ *
+ * Count num of 1's set in the bitmap
+ *
+ * Return: num of 1's
+ */
+static inline
+unsigned int qdf_get_hweight8(unsigned int w)
+{
+	unsigned int res = w - ((w >> 1) & 0x55);
+	res = (res & 0x33) + ((res >> 2) & 0x33);
+	return (res + (res >> 4)) & 0x0F;
 }
 
 /**

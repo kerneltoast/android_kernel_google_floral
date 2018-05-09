@@ -404,6 +404,11 @@ typedef void *ol_scn_t;
 typedef int (*wmi_unified_event_handler)(ol_scn_t scn_handle,
 		 uint8_t *event_buf, uint32_t len);
 
+/**
+ * @WMI_HOST_WLAN_PHY_MODE: Host based enum ID for corresponding in
+ * WLAN_PHY_MODE. This should be consistent with WLAN_PHY_MODE always to avoid
+ * breaking the WMI
+ */
 typedef enum {
 	WMI_HOST_MODE_11A	= 0,   /* 11a Mode */
 	WMI_HOST_MODE_11G	= 1,   /* 11b/g Mode */
@@ -1875,6 +1880,7 @@ typedef struct {
 	uint32_t wmm_caps;
 	/* since this is 4 byte aligned, we don't declare it as tlv array */
 	uint32_t mcsset[WMI_HOST_ROAM_OFFLOAD_NUM_MCS_SET >> 2];
+	uint32_t ho_delay_for_rx;
 } roam_offload_param;
 
 #define WMI_FILS_MAX_RRK_LENGTH 64
@@ -1930,6 +1936,8 @@ struct roam_fils_params {
  * @is_ese_assoc: flag to determine ese assoc
  * @mdid: mobility domain info
  * @roam_offload_params: roam offload tlv params
+ * @min_delay_btw_roam_scans: Delay btw two scans
+ * @roam_trigger_reason_bitmask: Roam reason bitmark
  * @assoc_ie_length: Assoc IE length
  * @assoc_ie: Assoc IE buffer
  * @add_fils_tlv: add FILS TLV boolean
@@ -1956,7 +1964,10 @@ struct roam_offload_scan_params {
 	bool fw_okc;
 	bool fw_pmksa_cache;
 #endif
+	uint32_t min_delay_btw_roam_scans;
+	uint32_t roam_trigger_reason_bitmask;
 	bool is_ese_assoc;
+	bool is_11r_assoc;
 	struct mobility_domain_info mdid;
 #ifdef CONFIG_MCL
 	/* THis is not available in non tlv target.
@@ -4868,6 +4879,7 @@ struct rx_reorder_queue_remove_params {
  * @num_chan_stats: number of channel stats
  * @pdev_id: device id for the radio
  * @num_bcn_stats: number of beacon stats
+ * @num_rssi_stats: number of rssi stats
  */
 typedef struct {
 	wmi_host_stats_id stats_id;
@@ -4879,6 +4891,7 @@ typedef struct {
 	uint32_t num_chan_stats;
 	uint32_t pdev_id;
 	uint32_t num_bcn_stats;
+	uint32_t num_rssi_stats;
 } wmi_host_stats_event;
 
 /**
@@ -5505,6 +5518,7 @@ typedef enum {
 	wmi_obss_color_collision_report_event_id,
 	wmi_host_swfda_event_id,
 	wmi_sar_get_limits_event_id,
+	wmi_pdev_div_rssi_antid_event_id,
 
 	wmi_events_max,
 } wmi_conv_event_id;
@@ -5769,6 +5783,8 @@ typedef enum {
 	wmi_vdev_param_tx_power,
 	wmi_vdev_param_set_ba_mode,
 	wmi_vdev_param_autorate_misc_cfg,
+	wmi_vdev_param_amsdu_subframe_size_per_ac,
+
 	wmi_vdev_param_max,
 } wmi_conv_vdev_param_id;
 
@@ -6043,6 +6059,9 @@ struct wmi_host_fw_abi_ver {
  * @use_pdev_id:
  * @max_num_dbs_scan_duty_cycle: max dbs can duty cycle value
  * @cce_disable: disable cce component
+ * @twt_ap_pdev_count: Number of MAC on which AP TWT feature is supported
+ * @twt_ap_sta_count: Max no of STA with which TWT sessions can be formed
+ *                    by the AP
  */
 typedef struct {
 	uint32_t num_vdevs;
@@ -6115,6 +6134,8 @@ typedef struct {
 	uint32_t use_pdev_id;
 	uint32_t max_num_dbs_scan_duty_cycle;
 	bool cce_disable;
+	uint32_t twt_ap_pdev_count;
+	uint32_t twt_ap_sta_count;
 } target_resource_config;
 
 /**
@@ -8087,14 +8108,21 @@ struct wmi_host_ready_ev_param {
 	bool agile_capability;
 };
 
+enum bcn_offload_control_param {
+	BCN_OFFLD_CTRL_TX_DISABLE = 0,
+	BCN_OFFLD_CTRL_TX_ENABLE,
+	BCN_OFFLD_CTRL_SWBA_DISABLE,
+	BCN_OFFLD_CTRL_SWBA_ENABLE,
+};
+
 /**
  * struct bcn_offload_control - Beacon offload control params
  * @vdev_id: vdev identifer of VAP to control beacon tx
- * @bcn_tx_enable: Enable or Disable beacon TX in offload mode
+ * @bcn_ctrl_op: values from enum bcn_offload_control_param
  */
 struct bcn_offload_control {
 	uint32_t vdev_id;
-	bool bcn_tx_enable;
+	enum bcn_offload_control_param bcn_ctrl_op;
 };
 
 /**
@@ -8150,6 +8178,15 @@ struct wdsentry {
 		WMI_HOST_F_RMW(dword, val, WMI_HOST_DBR_DATA_ADDR_HI_HOST_DATA)
 
 /**
+ * struct direct_buf_rx_metadata: direct buffer metadata
+ *
+ * @noisefloor: noisefloor
+ */
+struct direct_buf_rx_metadata {
+	int32_t noisefloor[WMI_HOST_MAX_NUM_CHAINS];
+};
+
+/**
  * struct direct_buf_rx_entry: direct buffer rx release entry structure
  *
  * @addr_lo: LSB 32-bits of the buffer
@@ -8174,6 +8211,7 @@ struct direct_buf_rx_rsp {
 	uint32_t pdev_id;
 	uint32_t mod_id;
 	uint32_t num_buf_release_entry;
+	uint32_t num_meta_data_entry;
 	struct direct_buf_rx_entry *dbr_entries;
 };
 

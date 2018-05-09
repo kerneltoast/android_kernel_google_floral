@@ -208,7 +208,7 @@ HAL_RX_DESC_GET_80211_HDR(void *hw_desc_addr) {
 }
 
 static inline
-uint32_t HAL_RX_MON_HW_DESC_GET_PPDUID_GET(void *hw_desc_addr)
+uint32_t HAL_RX_HW_DESC_GET_PPDUID_GET(void *hw_desc_addr)
 {
 	struct rx_mpdu_info *rx_mpdu_info;
 	struct rx_pkt_tlvs *rx_desc = (struct rx_pkt_tlvs *)hw_desc_addr;
@@ -540,8 +540,6 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 		ppdu_info->rx_status.ast_index =
 				HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_4,
 						AST_INDEX);
-		ppdu_info->rx_status.mcs =
-			 HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_1, MCS);
 
 		tid = HAL_RX_GET(rx_tlv, RX_PPDU_END_USER_STATS_12,
 				RECEIVED_QOS_DATA_TID_BITMAP);
@@ -739,6 +737,10 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 		ppdu_info->rx_status.vht_flag_values4 =
 			HAL_RX_GET(vht_sig_a_info,
 				  VHT_SIG_A_INFO_1, SU_MU_CODING);
+
+		ppdu_info->rx_status.beamformed = HAL_RX_GET(vht_sig_a_info,
+				VHT_SIG_A_INFO_1, BEAMFORMED);
+
 		break;
 	}
 	case WIFIPHYRX_HE_SIG_A_SU_E:
@@ -754,10 +756,10 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 				QDF_MON_STATUS_HE_TRIG_FORMAT_TYPE;
 		} else {
 			 ppdu_info->rx_status.he_data1 =
-				 QDF_MON_STATUS_HE_SU_OR_EXT_SU_FORMAT_TYPE;
+				 QDF_MON_STATUS_HE_SU_FORMAT_TYPE;
 		}
 
-		/*data1*/
+		/* data1 */
 		ppdu_info->rx_status.he_data1 |=
 			QDF_MON_STATUS_HE_BSS_COLOR_KNOWN |
 			QDF_MON_STATUS_HE_BEAM_CHANGE_KNOWN |
@@ -770,7 +772,7 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 			QDF_MON_STATUS_HE_DATA_BW_RU_KNOWN |
 			QDF_MON_STATUS_HE_DOPPLER_KNOWN;
 
-		/*data2*/
+		/* data2 */
 		ppdu_info->rx_status.he_data2 =
 			QDF_MON_STATUS_HE_GI_KNOWN;
 		ppdu_info->rx_status.he_data2 |=
@@ -781,7 +783,7 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 			QDF_MON_STATUS_PRE_FEC_PADDING_KNOWN |
 			QDF_MON_STATUS_MIDABLE_PERIODICITY_KNOWN;
 
-		/*data3*/
+		/* data3 */
 		value = HAL_RX_GET(he_sig_a_su_info,
 				HE_SIG_A_SU_INFO_0, BSS_COLOR_ID);
 		ppdu_info->rx_status.he_data3 = value;
@@ -793,11 +795,13 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 				HE_SIG_A_SU_INFO_0, DL_UL_FLAG);
 		value = value << QDF_MON_STATUS_DL_UL_SHIFT;
 		ppdu_info->rx_status.he_data3 |= value;
+
 		value = HAL_RX_GET(he_sig_a_su_info,
 				HE_SIG_A_SU_INFO_0, TRANSMIT_MCS);
 		ppdu_info->rx_status.mcs = value;
 		value = value << QDF_MON_STATUS_TRANSMIT_MCS_SHIFT;
 		ppdu_info->rx_status.he_data3 |= value;
+
 		value = HAL_RX_GET(he_sig_a_su_info,
 				HE_SIG_A_SU_INFO_0, DCM);
 		he_dcm = value;
@@ -818,12 +822,12 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 		value = value << QDF_MON_STATUS_STBC_SHIFT;
 		ppdu_info->rx_status.he_data3 |= value;
 
-		/*data4*/
+		/* data4 */
 		value = HAL_RX_GET(he_sig_a_su_info, HE_SIG_A_SU_INFO_0,
 							SPATIAL_REUSE);
 		ppdu_info->rx_status.he_data4 = value;
 
-		/*data5*/
+		/* data5 */
 		value = HAL_RX_GET(he_sig_a_su_info,
 				HE_SIG_A_SU_INFO_0, TRANSMIT_BW);
 		ppdu_info->rx_status.he_data5 = value;
@@ -871,7 +875,7 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 		value = value << QDF_MON_STATUS_PE_DISAMBIGUITY_SHIFT;
 		ppdu_info->rx_status.he_data5 |= value;
 
-		/*data6*/
+		/* data6 */
 		value = HAL_RX_GET(he_sig_a_su_info, HE_SIG_A_SU_INFO_0, NSTS);
 		value++;
 		ppdu_info->rx_status.nss = value;
@@ -885,59 +889,288 @@ hal_rx_status_get_tlv_info(void *rx_tlv, struct hal_rx_ppdu_info *ppdu_info)
 		value = value << QDF_MON_STATUS_TXOP_SHIFT;
 		ppdu_info->rx_status.he_data6 |= value;
 
+		ppdu_info->rx_status.beamformed = HAL_RX_GET(he_sig_a_su_info,
+					HE_SIG_A_SU_INFO_1, TXBF);
 		break;
 	}
 	case WIFIPHYRX_HE_SIG_A_MU_DL_E:
-		ppdu_info->rx_status.he_sig_A1 =
-			*((uint32_t *)((uint8_t *)rx_tlv +
+	{
+		uint8_t *he_sig_a_mu_dl_info = (uint8_t *)rx_tlv +
 			HAL_RX_OFFSET(PHYRX_HE_SIG_A_MU_DL_0,
-			HE_SIG_A_MU_DL_INFO_PHYRX_HE_SIG_A_MU_DL_INFO_DETAILS)));
-		ppdu_info->rx_status.he_sig_A1 |=
-			QDF_MON_STATUS_HE_SIG_A1_HE_FORMAT_MU;
-		ppdu_info->rx_status.he_sig_A1_known =
-			QDF_MON_STATUS_HE_SIG_A1_MU_KNOWN_ALL;
+			HE_SIG_A_MU_DL_INFO_PHYRX_HE_SIG_A_MU_DL_INFO_DETAILS);
 
-		ppdu_info->rx_status.he_sig_A2 =
-			*((uint32_t *)((uint8_t *)rx_tlv +
-			HAL_RX_OFFSET(PHYRX_HE_SIG_A_MU_DL_1,
-			HE_SIG_A_MU_DL_INFO_PHYRX_HE_SIG_A_MU_DL_INFO_DETAILS)));
-		ppdu_info->rx_status.he_sig_A2_known =
-			QDF_MON_STATUS_HE_SIG_A2_MU_KNOWN_ALL;
+		ppdu_info->rx_status.he_mu_flags = 1;
+
+		/* HE Flags */
+		/*data1*/
+		ppdu_info->rx_status.he_data1 =
+					QDF_MON_STATUS_HE_MU_FORMAT_TYPE;
+		ppdu_info->rx_status.he_data1 |=
+			QDF_MON_STATUS_HE_BSS_COLOR_KNOWN |
+			QDF_MON_STATUS_HE_DL_UL_KNOWN |
+			QDF_MON_STATUS_HE_LDPC_EXTRA_SYMBOL_KNOWN |
+			QDF_MON_STATUS_HE_STBC_KNOWN |
+			QDF_MON_STATUS_HE_DATA_BW_RU_KNOWN |
+			QDF_MON_STATUS_HE_DOPPLER_KNOWN;
+
+		/* data2 */
+		ppdu_info->rx_status.he_data2 =
+			QDF_MON_STATUS_HE_GI_KNOWN;
+		ppdu_info->rx_status.he_data2 |=
+			QDF_MON_STATUS_LTF_SYMBOLS_KNOWN |
+			QDF_MON_STATUS_PRE_FEC_PADDING_KNOWN |
+			QDF_MON_STATUS_PE_DISAMBIGUITY_KNOWN |
+			QDF_MON_STATUS_TXOP_KNOWN |
+			QDF_MON_STATUS_MIDABLE_PERIODICITY_KNOWN;
+
+		/*data3*/
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, BSS_COLOR_ID);
+		ppdu_info->rx_status.he_data3 = value;
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, DL_UL_FLAG);
+		value = value << QDF_MON_STATUS_DL_UL_SHIFT;
+		ppdu_info->rx_status.he_data3 |= value;
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_1,
+				LDPC_EXTRA_SYMBOL);
+		value = value << QDF_MON_STATUS_LDPC_EXTRA_SYMBOL_SHIFT;
+		ppdu_info->rx_status.he_data3 |= value;
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_1, STBC);
+		he_stbc = value;
+		value = value << QDF_MON_STATUS_STBC_SHIFT;
+		ppdu_info->rx_status.he_data3 |= value;
+
+		/*data4*/
+		value = HAL_RX_GET(he_sig_a_mu_dl_info, HE_SIG_A_MU_DL_INFO_0,
+							SPATIAL_REUSE);
+		ppdu_info->rx_status.he_data4 = value;
+
+		/*data5*/
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, TRANSMIT_BW);
+		ppdu_info->rx_status.he_data5 = value;
+		ppdu_info->rx_status.bw = value;
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, CP_LTF_SIZE);
+		switch (value) {
+		case 0:
+			he_gi = HE_GI_0_8;
+			he_ltf = HE_LTF_4_X;
+			break;
+		case 1:
+			he_gi = HE_GI_0_8;
+			he_ltf = HE_LTF_2_X;
+			break;
+		case 2:
+			he_gi = HE_GI_1_6;
+			he_ltf = HE_LTF_2_X;
+			break;
+		case 3:
+			he_gi = HE_GI_3_2;
+			he_ltf = HE_LTF_4_X;
+			break;
+		}
+		ppdu_info->rx_status.sgi = he_gi;
+		value = he_gi << QDF_MON_STATUS_GI_SHIFT;
+		ppdu_info->rx_status.he_data5 |= value;
+
+		value = he_ltf << QDF_MON_STATUS_HE_LTF_SHIFT;
+		ppdu_info->rx_status.he_data5 |= value;
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info, HE_SIG_A_MU_DL_INFO_1,
+				   PACKET_EXTENSION_A_FACTOR);
+		value = value << QDF_MON_STATUS_PRE_FEC_PAD_SHIFT;
+		ppdu_info->rx_status.he_data5 |= value;
+
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info, HE_SIG_A_MU_DL_INFO_1,
+				   PACKET_EXTENSION_PE_DISAMBIGUITY);
+		value = value << QDF_MON_STATUS_PE_DISAMBIGUITY_SHIFT;
+		ppdu_info->rx_status.he_data5 |= value;
+
+		/*data6*/
+		value = HAL_RX_GET(he_sig_a_mu_dl_info, HE_SIG_A_MU_DL_INFO_0,
+							DOPPLER_INDICATION);
+		value = value << QDF_MON_STATUS_DOPPLER_SHIFT;
+		ppdu_info->rx_status.he_data6 |= value;
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info, HE_SIG_A_MU_DL_INFO_1,
+							TXOP_DURATION);
+		value = value << QDF_MON_STATUS_TXOP_SHIFT;
+		ppdu_info->rx_status.he_data6 |= value;
+
+		/* HE-MU Flags */
+		/* HE-MU-flags1 */
+		ppdu_info->rx_status.he_flags1 =
+			QDF_MON_STATUS_SIG_B_MCS_KNOWN |
+			QDF_MON_STATUS_SIG_B_DCM_KNOWN |
+			QDF_MON_STATUS_SIG_B_COMPRESSION_FLAG_1_KNOWN |
+			QDF_MON_STATUS_SIG_B_SYM_NUM_KNOWN |
+			QDF_MON_STATUS_RU_0_KNOWN;
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, MCS_OF_SIG_B);
+		ppdu_info->rx_status.he_flags1 |= value;
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, DCM_OF_SIG_B);
+		value = value << QDF_MON_STATUS_DCM_FLAG_1_SHIFT;
+		ppdu_info->rx_status.he_flags1 |= value;
+
+		/* HE-MU-flags2 */
+		ppdu_info->rx_status.he_flags2 =
+			QDF_MON_STATUS_BW_KNOWN;
+
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, TRANSMIT_BW);
+		ppdu_info->rx_status.he_flags2 |= value;
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, COMP_MODE_SIG_B);
+		value = value << QDF_MON_STATUS_SIG_B_COMPRESSION_FLAG_2_SHIFT;
+		ppdu_info->rx_status.he_flags2 |= value;
+		value = HAL_RX_GET(he_sig_a_mu_dl_info,
+				HE_SIG_A_MU_DL_INFO_0, NUM_SIG_B_SYMBOLS);
+		value = value - 1;
+		value = value << QDF_MON_STATUS_NUM_SIG_B_SYMBOLS_SHIFT;
+		ppdu_info->rx_status.he_flags2 |= value;
 		break;
+	}
 	case WIFIPHYRX_HE_SIG_B1_MU_E:
 	{
+
 		uint8_t *he_sig_b1_mu_info = (uint8_t *)rx_tlv +
-			*((uint32_t *)((uint8_t *)rx_tlv +
 			HAL_RX_OFFSET(PHYRX_HE_SIG_B1_MU_0,
-			HE_SIG_B1_MU_INFO_PHYRX_HE_SIG_B1_MU_INFO_DETAILS)));
+			HE_SIG_B1_MU_INFO_PHYRX_HE_SIG_B1_MU_INFO_DETAILS);
 
-		ppdu_info->rx_status.he_sig_b_common_RU[0] =
-			HAL_RX_GET(he_sig_b1_mu_info, HE_SIG_B1_MU_INFO_0,
-				RU_ALLOCATION);
-
-		ppdu_info->rx_status.he_sig_b_common_known =
+		ppdu_info->rx_status.he_sig_b_common_known |=
 			QDF_MON_STATUS_HE_SIG_B_COMMON_KNOWN_RU0;
 		/* TODO: Check on the availability of other fields in
 		 * sig_b_common
 		 */
+
+		value = HAL_RX_GET(he_sig_b1_mu_info,
+				HE_SIG_B1_MU_INFO_0, RU_ALLOCATION);
+		ppdu_info->rx_status.he_RU[0] = value;
 		break;
 	}
 	case WIFIPHYRX_HE_SIG_B2_MU_E:
-		ppdu_info->rx_status.he_sig_b_user =
-			*((uint32_t *)((uint8_t *)rx_tlv +
+	{
+		uint8_t *he_sig_b2_mu_info = (uint8_t *)rx_tlv +
 			HAL_RX_OFFSET(PHYRX_HE_SIG_B2_MU_0,
-			HE_SIG_B2_MU_INFO_PHYRX_HE_SIG_B2_MU_INFO_DETAILS)));
-		ppdu_info->rx_status.he_sig_b_user_known =
-			QDF_MON_STATUS_HE_SIG_B_USER_KNOWN_SIG_B_ALL;
+			HE_SIG_B2_MU_INFO_PHYRX_HE_SIG_B2_MU_INFO_DETAILS);
+		/*
+		 * Not all "HE" fields can be updated from
+		 * WIFIPHYRX_HE_SIG_A_MU_DL_E TLV. Use WIFIPHYRX_HE_SIG_B2_MU_E
+		 * to populate rest of the "HE" fields for MU scenarios.
+		 */
+
+		/* HE-data1 */
+		ppdu_info->rx_status.he_data1 |=
+			QDF_MON_STATUS_HE_MCS_KNOWN |
+			QDF_MON_STATUS_HE_CODING_KNOWN;
+
+		/* HE-data2 */
+
+		/* HE-data3 */
+		value = HAL_RX_GET(he_sig_b2_mu_info,
+				HE_SIG_B2_MU_INFO_0, STA_MCS);
+		ppdu_info->rx_status.mcs = value;
+		value = value << QDF_MON_STATUS_TRANSMIT_MCS_SHIFT;
+		ppdu_info->rx_status.he_data3 |= value;
+
+
+		value = HAL_RX_GET(he_sig_b2_mu_info,
+				HE_SIG_B2_MU_INFO_0, STA_CODING);
+		value = value << QDF_MON_STATUS_CODING_SHIFT;
+		ppdu_info->rx_status.he_data3 |= value;
+
+		/* HE-data4 */
+		value = HAL_RX_GET(he_sig_b2_mu_info,
+				HE_SIG_B2_MU_INFO_0, STA_ID);
+		value = value << QDF_MON_STATUS_STA_ID_SHIFT;
+		ppdu_info->rx_status.he_data4 |= value;
+
+		/* HE-data5 */
+
+		/* HE-data6 */
+		value = HAL_RX_GET(he_sig_b2_mu_info,
+				   HE_SIG_B2_MU_INFO_0, NSTS);
+		/* value n indicates n+1 spatial streams */
+		value++;
+		ppdu_info->rx_status.nss = value;
+		ppdu_info->rx_status.he_data6 |= value;
+
 		break;
+
+	}
 	case WIFIPHYRX_HE_SIG_B2_OFDMA_E:
-		ppdu_info->rx_status.he_sig_b_user =
-			*((uint32_t *)((uint8_t *)rx_tlv +
-			HAL_RX_OFFSET(PHYRX_HE_SIG_B2_OFDMA_0,
-			HE_SIG_B2_OFDMA_INFO_PHYRX_HE_SIG_B2_OFDMA_INFO_DETAILS)));
-		ppdu_info->rx_status.he_sig_b_user_known =
-			QDF_MON_STATUS_HE_SIG_B_USER_KNOWN_SIG_B_ALL;
+	{
+		uint8_t *he_sig_b2_ofdma_info =
+		(uint8_t *)rx_tlv +
+		HAL_RX_OFFSET(PHYRX_HE_SIG_B2_OFDMA_0,
+		HE_SIG_B2_OFDMA_INFO_PHYRX_HE_SIG_B2_OFDMA_INFO_DETAILS);
+
+		/*
+		 * Not all "HE" fields can be updated from
+		 * WIFIPHYRX_HE_SIG_A_MU_DL_E TLV. Use WIFIPHYRX_HE_SIG_B2_MU_E
+		 * to populate rest of "HE" fields for MU OFDMA scenarios.
+		 */
+
+		/* HE-data1 */
+		ppdu_info->rx_status.he_data1 |=
+			QDF_MON_STATUS_HE_MCS_KNOWN |
+			QDF_MON_STATUS_HE_DCM_KNOWN |
+			QDF_MON_STATUS_HE_CODING_KNOWN;
+
+		/* HE-data2 */
+		ppdu_info->rx_status.he_data2 |=
+					QDF_MON_STATUS_TXBF_KNOWN;
+
+		/* HE-data3 */
+		value = HAL_RX_GET(he_sig_b2_ofdma_info,
+				HE_SIG_B2_OFDMA_INFO_0, STA_MCS);
+		ppdu_info->rx_status.mcs = value;
+		value = value << QDF_MON_STATUS_TRANSMIT_MCS_SHIFT;
+		ppdu_info->rx_status.he_data3 |= value;
+
+		value = HAL_RX_GET(he_sig_b2_ofdma_info,
+				HE_SIG_B2_OFDMA_INFO_0, STA_DCM);
+		he_dcm = value;
+		value = value << QDF_MON_STATUS_DCM_SHIFT;
+		ppdu_info->rx_status.he_data3 |= value;
+
+		value = HAL_RX_GET(he_sig_b2_ofdma_info,
+				HE_SIG_B2_OFDMA_INFO_0, STA_CODING);
+		value = value << QDF_MON_STATUS_CODING_SHIFT;
+		ppdu_info->rx_status.he_data3 |= value;
+
+		/* HE-data4 */
+		value = HAL_RX_GET(he_sig_b2_ofdma_info,
+				HE_SIG_B2_OFDMA_INFO_0, STA_ID);
+		value = value << QDF_MON_STATUS_STA_ID_SHIFT;
+		ppdu_info->rx_status.he_data4 |= value;
+
+		/* HE-data5 */
+		value = HAL_RX_GET(he_sig_b2_ofdma_info,
+				   HE_SIG_B2_OFDMA_INFO_0, TXBF);
+		value = value << QDF_MON_STATUS_TXBF_SHIFT;
+		ppdu_info->rx_status.he_data5 |= value;
+
+		/* HE-data6 */
+		value = HAL_RX_GET(he_sig_b2_ofdma_info,
+				   HE_SIG_B2_OFDMA_INFO_0, NSTS);
+		/* value n indicates n+1 spatial streams */
+		value++;
+		ppdu_info->rx_status.nss = value;
+		ppdu_info->rx_status.he_data6 |= value;
+
 		break;
+	}
 	case WIFIPHYRX_RSSI_LEGACY_E:
 	{
 		uint8_t *rssi_info_tlv = (uint8_t *)rx_tlv +

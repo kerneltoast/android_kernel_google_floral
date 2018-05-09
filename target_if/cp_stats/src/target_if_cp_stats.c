@@ -31,7 +31,7 @@
 #include <wlan_tgt_def_config.h>
 #include <wmi_unified_api.h>
 #include <wlan_osif_priv.h>
-#include <target_if.h>
+#include <wlan_cp_stats_utils_api.h>
 
 static QDF_STATUS
 target_if_cp_stats_register_event_handler(struct wlan_objmgr_psoc *psoc)
@@ -78,3 +78,4 @@ target_if_cp_stats_register_tx_ops(struct wlan_lmac_if_tx_ops *tx_ops)
 
 	return QDF_STATUS_SUCCESS;
 }
+

@@ -1,8 +1,5 @@
 /*
- * Copyright (c) 2014-2017 The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
+ * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include <scheduler_api.h>
@@ -86,7 +77,7 @@ static inline void scheduler_watchdog_notify(struct scheduler_ctx *sched)
 	if (sched->watchdog_callback)
 		qdf_sprint_symbol(symbol, sched->watchdog_callback);
 
-	sched_err("Callback %s (type 0x%x) exceeded its allotted time of %ds",
+	sched_err("WLAN_BUG_RCA: Callback %s (type 0x%x) exceeded its allotted time of %ds",
 		  sched->watchdog_callback ? symbol : "<null>",
 		  sched->watchdog_msg_type, SCHEDULER_WATCHDOG_TIMEOUT / 1000);
 }
@@ -529,6 +520,27 @@ QDF_STATUS scheduler_timer_q_mq_handler(struct scheduler_msg *msg)
 
 		return status;
 	}
+}
+
+QDF_STATUS scheduler_scan_mq_handler(struct scheduler_msg *msg)
+{
+	QDF_STATUS (*scan_q_msg_handler)(struct scheduler_msg *);
+
+	if (NULL == msg) {
+		sched_err("Msg is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	scan_q_msg_handler = msg->callback;
+
+	if (NULL == scan_q_msg_handler) {
+		sched_err("Msg callback is NULL");
+		QDF_ASSERT(0);
+		return QDF_STATUS_E_FAILURE;
+	}
+	scan_q_msg_handler(msg);
+
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS scheduler_register_wma_legacy_handler(scheduler_msg_process_fn_t

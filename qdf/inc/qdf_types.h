@@ -43,6 +43,9 @@
 /* Include Files */
 #include <i_qdf_types.h>
 #include <stdarg.h>
+#ifdef TSOSEG_DEBUG
+#include <qdf_atomic.h>
+#endif
 
 /* Preprocessor definitions and constants */
 #define QDF_MAX_SGLIST 4
@@ -632,6 +635,8 @@ void qdf_vtrace_msg(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
 #define qdf_vprint    __qdf_vprint
 #define qdf_snprint   __qdf_snprint
 
+#define qdf_kstrtoint __qdf_kstrtoint
+
 #ifdef WLAN_OPEN_P2P_INTERFACE
 /* This should match with WLAN_MAX_INTERFACES */
 #define QDF_MAX_CONCURRENCY_PERSONA  (4)
@@ -859,6 +864,10 @@ QDF_STATUS qdf_ipv6_parse(const char *ipv6_str, struct qdf_ipv6_addr *out_addr);
 
 #define QDF_MAX_NUM_CHAN   (128)
 
+#define QDF_BCAST_MAC_ADDR (0xFF)
+#define QDF_MCAST_IPV4_MAC_ADDR (0x01)
+#define QDF_MCAST_IPV6_MAC_ADDR (0x33)
+
 /**
  * struct qdf_tso_frag_t - fragments of a single TCP segment
  * @paddr_low_32: Lower 32 bits of the buffer pointer
@@ -876,7 +885,7 @@ struct qdf_tso_frag_t {
 };
 
 #define FRAG_NUM_MAX 6
-#define TSO_SEG_MAGIC_COOKIE 0x7EED
+#define TSO_SEG_MAGIC_COOKIE 0x1EED
 
 /**
  * struct qdf_tso_flags_t - TSO specific flags
@@ -956,20 +965,33 @@ enum tsoseg_dbg_caller_e {
 	TSOSEG_LOC_UNDEFINED,
 	TSOSEG_LOC_INIT1,
 	TSOSEG_LOC_INIT2,
+	TSOSEG_LOC_FREE,
+	TSOSEG_LOC_ALLOC,
 	TSOSEG_LOC_DEINIT,
+	TSOSEG_LOC_GETINFO,
+	TSOSEG_LOC_FILLHTTSEG,
+	TSOSEG_LOC_FILLCMNSEG,
 	TSOSEG_LOC_PREPARETSO,
 	TSOSEG_LOC_TXPREPLLFAST,
 	TSOSEG_LOC_UNMAPTSO,
-	TSOSEG_LOC_ALLOC,
-	TSOSEG_LOC_FREE,
+	TSOSEG_LOC_UNMAPLAST,
+	TSOSEG_LOC_FORCE_FREE,
 };
 #ifdef TSOSEG_DEBUG
 
+/**
+ * WARNING: Don't change the history size without changing the wrap
+ *  code in qdf_tso_seg_dbg_record function
+ */
 #define MAX_TSO_SEG_ACT_HISTORY 16
+struct qdf_tso_seg_dbg_history_t {
+	uint64_t ts;
+	short    id;
+};
 struct qdf_tso_seg_dbg_t {
 	void    *txdesc;  /* owner - (ol_txrx_tx_desc_t *) */
-	int      cur;     /* index of last valid entry */
-	uint16_t history[MAX_TSO_SEG_ACT_HISTORY];
+	qdf_atomic_t cur; /* index of last valid entry */
+	struct qdf_tso_seg_dbg_history_t h[MAX_TSO_SEG_ACT_HISTORY];
 };
 #endif /* TSOSEG_DEBUG */
 
@@ -980,8 +1002,10 @@ struct qdf_tso_seg_dbg_t {
  */
 struct qdf_tso_seg_elem_t {
 	struct qdf_tso_seg_t seg;
-	uint16_t cookie:15,
-		on_freelist:1;
+	uint32_t cookie:13,
+		on_freelist:1,
+		sent_to_target:1,
+		force_free:1;
 	struct qdf_tso_seg_elem_t *next;
 #ifdef TSOSEG_DEBUG
 	struct qdf_tso_seg_dbg_t dbg;

@@ -196,7 +196,7 @@ wmi_unified_remove_work(struct wmi_unified *wmi_handle);
  *  @param len             : length of the buffer
  *  @return wmi_buf_t.
  */
-#ifdef MEMORY_DEBUG
+#ifdef NBUF_MEMORY_DEBUG
 #define wmi_buf_alloc(h, l) wmi_buf_alloc_debug(h, l, __FILE__, __LINE__)
 wmi_buf_t
 wmi_buf_alloc_debug(wmi_unified_t wmi_handle, uint16_t len,
@@ -755,7 +755,7 @@ QDF_STATUS wmi_unified_vdev_set_gtx_cfg_cmd(void *wmi_hdl, uint32_t if_id,
 				  struct wmi_gtx_config *gtx_info);
 
 QDF_STATUS wmi_unified_process_update_edca_param(void *wmi_hdl,
-		     uint8_t vdev_id,
+		     uint8_t vdev_id, bool mu_edca_param,
 		     struct wmi_host_wme_vparams wmm_vparams[WMI_MAX_NUM_AC]);
 
 QDF_STATUS wmi_unified_probe_rsp_tmpl_send_cmd(void *wmi_hdl,
@@ -1830,6 +1830,22 @@ QDF_STATUS wmi_extract_dbr_buf_release_entry(
 			void *wmi_hdl,
 			uint8_t *evt_buf, uint8_t idx,
 			struct direct_buf_rx_entry *param);
+
+/**
+ * wmi_extract_dbr_buf_metadata: Extract direct buffer metadata
+ *
+ * @wmi_hdl: WMI handle
+ * @evt_buf: Event buffer
+ * @idx: Index of the module for which capability is received
+ * @param: Pointer to direct buffer metadata
+ *
+ * Return: QDF status of operation
+ */
+QDF_STATUS wmi_extract_dbr_buf_metadata(
+			void *wmi_hdl,
+			uint8_t *evt_buf, uint8_t idx,
+			struct direct_buf_rx_metadata *param);
+
 QDF_STATUS wmi_extract_pdev_utf_event(void *wmi_hdl,
 				      uint8_t *evt_buf,
 				      struct wmi_host_pdev_utf_event *param);
@@ -2225,5 +2241,14 @@ QDF_STATUS wmi_unified_offload_11k_cmd(void *wmi_hdl,
  */
 QDF_STATUS wmi_unified_invoke_neighbor_report_cmd(void *wmi_hdl,
 			struct wmi_invoke_neighbor_report_params *params);
+
+/* wmi_get_ch_width_from_phy_mode() - convert phy mode to channel width
+ * @wmi_hdl: wmi handle
+ * @phymode: phy mode
+ *
+ * Return: wmi channel width
+ */
+wmi_host_channel_width wmi_get_ch_width_from_phy_mode(void *wmi_hdl,
+					WMI_HOST_WLAN_PHY_MODE phymode);
 
 #endif /* _WMI_UNIFIED_API_H_ */

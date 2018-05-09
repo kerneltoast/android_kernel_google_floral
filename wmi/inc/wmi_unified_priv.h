@@ -850,7 +850,7 @@ QDF_STATUS (*send_wmm_update_cmd)(wmi_unified_t wmi_handle,
 		struct wmm_update_params *param);
 
 QDF_STATUS (*send_process_update_edca_param_cmd)(wmi_unified_t wmi_handle,
-		uint8_t vdev_id,
+		uint8_t vdev_id, bool mu_edca_param,
 		struct wmi_host_wme_vparams wmm_vparams[WMI_MAX_NUM_AC]);
 
 QDF_STATUS (*send_set_ant_switch_tbl_cmd)(wmi_unified_t wmi_handle,
@@ -1424,6 +1424,11 @@ QDF_STATUS (*extract_dbr_buf_release_entry)(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf, uint8_t idx,
 			struct direct_buf_rx_entry *param);
+
+QDF_STATUS (*extract_dbr_buf_metadata)(
+			wmi_unified_t wmi_handle,
+			uint8_t *evt_buf, uint8_t idx,
+			struct direct_buf_rx_metadata *param);
 
 QDF_STATUS (*extract_pdev_utf_event)(wmi_unified_t wmi_hdl,
 				     uint8_t *evt_buf,

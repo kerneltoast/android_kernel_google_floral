@@ -138,8 +138,8 @@ struct cdp_cmn_ops {
 
 	void (*txrx_vdev_tx_unlock)(struct cdp_vdev *vdev);
 
-	void (*txrx_ath_getstats)(struct cdp_pdev *pdev,
-			struct cdp_dev_stats *stats);
+	void (*txrx_ath_getstats)(void *pdev,
+			struct cdp_dev_stats *stats, uint8_t type);
 
 	void (*txrx_set_gid_flag)(struct cdp_pdev *pdev, u_int8_t *mem_status,
 			u_int8_t *user_position);
@@ -302,6 +302,9 @@ struct cdp_cmn_ops {
 	void (*txrx_peer_reset_ast_table)(ol_txrx_soc_handle soc);
 
 	void (*txrx_peer_flush_ast_table)(ol_txrx_soc_handle soc);
+
+	QDF_STATUS (*txrx_peer_map_attach)(ol_txrx_soc_handle soc,
+			uint32_t num_peers);
 
 	ol_txrx_tx_fp tx_send;
 };
@@ -682,11 +685,11 @@ struct cdp_pflow_ops {
 #define LRO_IPV6_SEED_ARR_SZ 11
 
 /**
- * struct cdp_lro_config - set LRO init parameters
- * @lro_enable: indicates whether lro is enabled
+ * struct cdp_lro_hash_config - set rx_offld(LRO/GRO) init parameters
+ * @lro_enable: indicates whether rx_offld is enabled
  * @tcp_flag: If the TCP flags from the packet do not match
  * the values in this field after masking with TCP flags mask
- * below, packet is not LRO eligible
+ * below, packet is not rx_offld eligible
  * @tcp_flag_mask: field for comparing the TCP values provided
  * above with the TCP flags field in the received packet
  * @toeplitz_hash_ipv4: contains seed needed to compute the flow id
@@ -724,7 +727,7 @@ struct ol_if_ops {
 	void (*peer_del_wds_entry)(void *ol_soc_handle,
 			uint8_t *wds_macaddr);
 	QDF_STATUS (*lro_hash_config)(void *scn_handle,
-			struct cdp_lro_hash_config *lro_hash);
+			struct cdp_lro_hash_config *rx_offld_hash);
 	void (*update_dp_stats)(void *soc, void *stats, uint16_t id,
 			uint8_t type);
 	uint8_t (*rx_invalid_peer)(void *osif_pdev, void *msg);
@@ -749,6 +752,8 @@ struct ol_if_ops {
 	int (*config_bssid_in_fw_for_nac_rssi)(struct wlan_objmgr_pdev *pdev,
 		u_int8_t vdev_id, enum cdp_nac_param_cmd cmd, char *bssid);
 #endif
+	int (*peer_sta_kickout)(void *osif_pdev, uint8_t *peer_macaddr);
+
 	/* TODO: Add any other control path calls required to OL_IF/WMA layer */
 };
 
@@ -866,9 +871,16 @@ struct cdp_cfg_ops {
  * @dump_flow_pool_info:
  */
 struct cdp_flowctl_ops {
+	QDF_STATUS (*flow_pool_map_handler)(struct cdp_soc_t *soc,
+					    struct cdp_pdev *pdev,
+					    uint8_t vdev_id);
+	void (*flow_pool_unmap_handler)(struct cdp_soc_t *soc,
+					struct cdp_pdev *pdev,
+					uint8_t vdev_id);
 	QDF_STATUS (*register_pause_cb)(struct cdp_soc_t *soc,
 					tx_pause_callback);
 	void (*set_desc_global_pool_size)(uint32_t num_msdu_desc);
+
 	void (*dump_flow_pool_info)(void *);
 };
 
@@ -1076,6 +1088,18 @@ struct cdp_mob_stats_ops {
 };
 #endif /* CONFIG_WIN */
 
+#ifdef RECEIVE_OFFLOAD
+/**
+ * struct cdp_rx_offld_ops - mcl receive offload ops
+ * @register_rx_offld_flush_cb:
+ * @deregister_rx_offld_flush_cb:
+ */
+struct cdp_rx_offld_ops {
+	void (*register_rx_offld_flush_cb)(void (rx_offld_flush_cb)(void *));
+	void (*deregister_rx_offld_flush_cb)(void);
+};
+#endif
+
 struct cdp_ops {
 	struct cdp_cmn_ops          *cmn_drv_ops;
 	struct cdp_ctrl_ops         *ctrl_ops;
@@ -1093,6 +1117,9 @@ struct cdp_ops {
 #ifdef IPA_OFFLOAD
 	struct cdp_ipa_ops          *ipa_ops;
 #endif
+#ifdef RECEIVE_OFFLOAD
+	struct cdp_rx_offld_ops     *rx_offld_ops;
+#endif
 	struct cdp_bus_ops          *bus_ops;
 	struct cdp_ocb_ops          *ocb_ops;
 	struct cdp_peer_ops         *peer_ops;
@@ -1102,5 +1129,4 @@ struct cdp_ops {
 	struct cdp_pmf_ops          *pmf_ops;
 #endif /* CONFIG_WIN */
 };
-
 #endif

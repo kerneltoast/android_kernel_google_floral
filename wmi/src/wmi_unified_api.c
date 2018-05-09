@@ -28,6 +28,38 @@
 #include "wmi_unified_param.h"
 #include "qdf_module.h"
 
+static const wmi_host_channel_width mode_to_width[WMI_HOST_MODE_MAX] = {
+	[WMI_HOST_MODE_11A]           = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11G]           = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11B]           = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11GONLY]       = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11NA_HT20]     = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11NG_HT20]     = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11AC_VHT20]    = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11AC_VHT20_2G] = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11NA_HT40]     = WMI_HOST_CHAN_WIDTH_40,
+	[WMI_HOST_MODE_11NG_HT40]     = WMI_HOST_CHAN_WIDTH_40,
+	[WMI_HOST_MODE_11AC_VHT40]    = WMI_HOST_CHAN_WIDTH_40,
+	[WMI_HOST_MODE_11AC_VHT40_2G] = WMI_HOST_CHAN_WIDTH_40,
+	[WMI_HOST_MODE_11AC_VHT80]    = WMI_HOST_CHAN_WIDTH_80,
+	[WMI_HOST_MODE_11AC_VHT80_2G] = WMI_HOST_CHAN_WIDTH_80,
+#if CONFIG_160MHZ_SUPPORT
+	[WMI_HOST_MODE_11AC_VHT80_80] = WMI_HOST_CHAN_WIDTH_80P80,
+	[WMI_HOST_MODE_11AC_VHT160]   = WMI_HOST_CHAN_WIDTH_160,
+#endif
+
+#if SUPPORT_11AX
+	[WMI_HOST_MODE_11AX_HE20]     = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11AX_HE40]     = WMI_HOST_CHAN_WIDTH_40,
+	[WMI_HOST_MODE_11AX_HE80]     = WMI_HOST_CHAN_WIDTH_80,
+	[WMI_HOST_MODE_11AX_HE80_80]  = WMI_HOST_CHAN_WIDTH_80P80,
+	[WMI_HOST_MODE_11AX_HE160]    = WMI_HOST_CHAN_WIDTH_160,
+	[WMI_HOST_MODE_11AX_HE20_2G]  = WMI_HOST_CHAN_WIDTH_20,
+	[WMI_HOST_MODE_11AX_HE40_2G]  = WMI_HOST_CHAN_WIDTH_40,
+	[WMI_HOST_MODE_11AX_HE80_2G]  = WMI_HOST_CHAN_WIDTH_80,
+#endif
+};
+
 /**
  * wmi_unified_vdev_create_send() - send VDEV create command to fw
  * @wmi_handle: wmi handle
@@ -1457,6 +1489,7 @@ QDF_STATUS wmi_unified_vdev_set_gtx_cfg_cmd(void *wmi_hdl, uint32_t if_id,
  * wmi_unified_process_update_edca_param() - update EDCA params
  * @wmi_hdl: wmi handle
  * @vdev_id: vdev id.
+ * @mu_edca_param: mu_edca_param.
  * @wmm_vparams: edca parameters
  *
  * This function updates EDCA parameters to the target
@@ -1464,14 +1497,14 @@ QDF_STATUS wmi_unified_vdev_set_gtx_cfg_cmd(void *wmi_hdl, uint32_t if_id,
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
 QDF_STATUS wmi_unified_process_update_edca_param(void *wmi_hdl,
-				uint8_t vdev_id,
+				uint8_t vdev_id, bool mu_edca_param,
 				struct wmi_host_wme_vparams wmm_vparams[WMI_MAX_NUM_AC])
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
 	if (wmi_handle->ops->send_process_update_edca_param_cmd)
 		return wmi_handle->ops->send_process_update_edca_param_cmd(wmi_handle,
-					 vdev_id, wmm_vparams);
+					 vdev_id, mu_edca_param, wmm_vparams);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -6906,6 +6939,21 @@ QDF_STATUS wmi_extract_dbr_buf_release_entry(
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_extract_dbr_buf_metadata(
+			void *wmi_hdl,
+			uint8_t *evt_buf, uint8_t idx,
+			struct direct_buf_rx_metadata *param)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->extract_dbr_buf_metadata)
+		return wmi_handle->ops->extract_dbr_buf_metadata(
+				wmi_handle,
+				evt_buf, idx, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 /**
  * wmi_extract_pdev_utf_event() -
  *       extract UTF data from pdev utf event
@@ -7419,4 +7467,18 @@ QDF_STATUS wmi_unified_extract_obss_color_collision_info(void *wmi_hdl,
 									  info);
 
 	return QDF_STATUS_E_FAILURE;
+}
+
+wmi_host_channel_width wmi_get_ch_width_from_phy_mode(void *wmi_hdl,
+					WMI_HOST_WLAN_PHY_MODE phymode)
+{
+	/*
+	 * this API does translation between host only strcutres, hence
+	 * does not need separate TLV, non-TLV definitions
+	 */
+
+	if (phymode >= WMI_HOST_MODE_11A && phymode < WMI_HOST_MODE_MAX)
+		return mode_to_width[phymode];
+	else
+		return WMI_HOST_CHAN_WIDTH_20;
 }

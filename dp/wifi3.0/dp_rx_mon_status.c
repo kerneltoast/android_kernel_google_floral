@@ -67,6 +67,7 @@ dp_rx_populate_cdp_indication_ppdu(struct dp_pdev *pdev,
 	cdp_rx_ppdu->rssi = ppdu_info->rx_status.rssi_comb;
 	cdp_rx_ppdu->timestamp = ppdu_info->rx_status.tsft;
 	cdp_rx_ppdu->channel = ppdu_info->rx_status.chan_num;
+	cdp_rx_ppdu->beamformed = ppdu_info->rx_status.beamformed;
 	cdp_rx_ppdu->num_msdu = (cdp_rx_ppdu->tcp_msdu_count +
 			cdp_rx_ppdu->udp_msdu_count +
 			cdp_rx_ppdu->other_msdu_count);
@@ -197,7 +198,6 @@ static void dp_rx_stats_update(struct dp_soc *soc, struct dp_peer *peer,
 				&peer->stats, ppdu->peer_id,
 				UPDATE_PEER_STATS);
 
-		dp_aggregate_vdev_stats(peer->vdev);
 	}
 }
 #endif
@@ -374,18 +374,15 @@ dp_rx_mon_status_process_tlv(struct dp_soc *soc, uint32_t mac_id,
 		}
 
 		if (tlv_status == HAL_TLV_STATUS_PPDU_DONE) {
-			pdev->mon_ppdu_status = DP_PPDU_STATUS_DONE;
-			dp_rx_mon_dest_process(soc, mac_id, quota);
 			if (pdev->enhanced_stats_en ||
 					pdev->mcopy_mode)
 				dp_rx_handle_ppdu_stats(soc, pdev, ppdu_info);
 
+			pdev->mon_ppdu_status = DP_PPDU_STATUS_DONE;
+			dp_rx_mon_dest_process(soc, mac_id, quota);
 			pdev->mon_ppdu_status = DP_PPDU_STATUS_START;
 			pdev->ppdu_info.com_info.last_ppdu_id =
 				pdev->ppdu_info.com_info.ppdu_id;
-
-			qdf_mem_zero(&(pdev->ppdu_info.rx_status),
-				sizeof(pdev->ppdu_info.rx_status));
 		}
 	}
 	return;
@@ -724,13 +721,22 @@ QDF_STATUS dp_rx_mon_status_buffers_replenish(struct dp_soc *dp_soc,
 		paddr = qdf_nbuf_get_frag_paddr(rx_netbuf, 0);
 
 		next = (*desc_list)->next;
+		rxdma_ring_entry = hal_srng_src_get_next(dp_soc->hal_soc,
+							 rxdma_srng);
+
+		if (qdf_unlikely(rxdma_ring_entry == NULL)) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+					"[%s][%d] rxdma_ring_entry is NULL, count - %d\n",
+					__func__, __LINE__, count);
+			qdf_nbuf_unmap_single(dp_soc->osdev, rx_netbuf,
+					      QDF_DMA_BIDIRECTIONAL);
+			qdf_nbuf_free(rx_netbuf);
+			break;
+		}
 
 		(*desc_list)->rx_desc.nbuf = rx_netbuf;
 		(*desc_list)->rx_desc.in_use = 1;
-
 		count++;
-		rxdma_ring_entry = hal_srng_src_get_next(dp_soc->hal_soc,
-							 rxdma_srng);
 
 		hal_rxdma_buff_addr_info_set(rxdma_ring_entry, paddr,
 			(*desc_list)->rx_desc.cookie, owner);

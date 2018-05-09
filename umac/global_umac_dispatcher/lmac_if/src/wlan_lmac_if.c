@@ -86,13 +86,14 @@ qdf_export_symbol(wlan_lmac_if_umac_tx_ops_register);
 static void
 wlan_lmac_if_cp_stats_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
+	tgt_cp_stats_register_rx_ops(rx_ops);
 }
 #else
 static void
 wlan_lmac_if_cp_stats_rx_ops_register(struct wlan_lmac_if_rx_ops *rx_ops)
 {
 }
-#endif
+#endif /* QCA_SUPPORT_CP_STATS */
 
 #ifdef WLAN_ATF_ENABLE
 /**

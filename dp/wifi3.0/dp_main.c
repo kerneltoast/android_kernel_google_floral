@@ -372,6 +372,7 @@ static void dp_wds_reset_ast_table_wifi3(struct cdp_soc_t  *soc_hdl)
 
 	for (i = 0; i < MAX_PDEV_CNT && soc->pdev_list[i]; i++) {
 		pdev = soc->pdev_list[i];
+		qdf_spin_lock_bh(&pdev->vdev_list_lock);
 		DP_PDEV_ITERATE_VDEV_LIST(pdev, vdev) {
 			DP_VDEV_ITERATE_PEER_LIST(vdev, peer) {
 				DP_PEER_ITERATE_ASE_LIST(peer, ase, temp_ase) {
@@ -382,6 +383,7 @@ static void dp_wds_reset_ast_table_wifi3(struct cdp_soc_t  *soc_hdl)
 				}
 			}
 		}
+		qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	}
 
 	qdf_spin_unlock_bh(&soc->ast_lock);
@@ -406,6 +408,7 @@ static void dp_wds_flush_ast_table_wifi3(struct cdp_soc_t  *soc_hdl)
 
 	for (i = 0; i < MAX_PDEV_CNT && soc->pdev_list[i]; i++) {
 		pdev = soc->pdev_list[i];
+		qdf_spin_lock_bh(&pdev->vdev_list_lock);
 		DP_PDEV_ITERATE_VDEV_LIST(pdev, vdev) {
 			DP_VDEV_ITERATE_PEER_LIST(vdev, peer) {
 				DP_PEER_ITERATE_ASE_LIST(peer, ase, temp_ase) {
@@ -416,6 +419,7 @@ static void dp_wds_flush_ast_table_wifi3(struct cdp_soc_t  *soc_hdl)
 				}
 			}
 		}
+		qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	}
 
 	qdf_spin_unlock_bh(&soc->ast_lock);
@@ -637,6 +641,7 @@ static void dp_print_ast_stats(struct dp_soc *soc)
 	DP_PRINT_STATS("AST Table:");
 	for (i = 0; i < MAX_PDEV_CNT && soc->pdev_list[i]; i++) {
 		pdev = soc->pdev_list[i];
+		qdf_spin_lock_bh(&pdev->vdev_list_lock);
 		DP_PDEV_ITERATE_VDEV_LIST(pdev, vdev) {
 			DP_VDEV_ITERATE_PEER_LIST(vdev, peer) {
 				DP_PEER_ITERATE_ASE_LIST(peer, ase, tmp_ase) {
@@ -662,6 +667,7 @@ static void dp_print_ast_stats(struct dp_soc *soc)
 				}
 			}
 		}
+		qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	}
 }
 #else
@@ -1505,14 +1511,21 @@ static int dp_hw_link_desc_pool_setup(struct dp_soc *soc)
 					soc->hal_soc, total_mem_size,
 					soc->wbm_idle_scatter_buf_size);
 
+		if (num_scatter_bufs > MAX_IDLE_SCATTER_BUFS) {
+			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
+					FL("scatter bufs size out of bounds"));
+			goto fail;
+		}
+
 		for (i = 0; i < num_scatter_bufs; i++) {
 			soc->wbm_idle_scatter_buf_base_vaddr[i] =
-				qdf_mem_alloc_consistent(soc->osdev, soc->osdev->dev,
+				qdf_mem_alloc_consistent(soc->osdev,
+							soc->osdev->dev,
 				soc->wbm_idle_scatter_buf_size,
 				&(soc->wbm_idle_scatter_buf_base_paddr[i]));
 			if (soc->wbm_idle_scatter_buf_base_vaddr[i] == NULL) {
 				QDF_TRACE(QDF_MODULE_ID_DP,
-					QDF_TRACE_LEVEL_ERROR,
+						QDF_TRACE_LEVEL_ERROR,
 					FL("Scatter list memory alloc failed"));
 				goto fail;
 			}
@@ -1677,6 +1690,7 @@ static void dp_wds_aging_timer_fn(void *soc_hdl)
 
 	for (i = 0; i < MAX_PDEV_CNT && soc->pdev_list[i]; i++) {
 		pdev = soc->pdev_list[i];
+		qdf_spin_lock_bh(&pdev->vdev_list_lock);
 		DP_PDEV_ITERATE_VDEV_LIST(pdev, vdev) {
 			DP_VDEV_ITERATE_PEER_LIST(vdev, peer) {
 				DP_PEER_ITERATE_ASE_LIST(peer, ase, temp_ase) {
@@ -1684,10 +1698,7 @@ static void dp_wds_aging_timer_fn(void *soc_hdl)
 					 * Do not expire static ast entries
 					 * and HM WDS entries
 					 */
-					if (ase->type ==
-						CDP_TXRX_AST_TYPE_STATIC ||
-						ase->type ==
-						CDP_TXRX_AST_TYPE_WDS_HM)
+					if (ase->type != CDP_TXRX_AST_TYPE_WDS)
 						continue;
 
 					if (ase->is_active) {
@@ -1700,7 +1711,7 @@ static void dp_wds_aging_timer_fn(void *soc_hdl)
 				}
 			}
 		}
-
+		qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	}
 
 	qdf_spin_unlock_bh(&soc->ast_lock);
@@ -2049,9 +2060,6 @@ static int dp_soc_cmn_setup(struct dp_soc *soc)
 	if (qdf_atomic_read(&soc->cmn_init_done))
 		return 0;
 
-	if (dp_peer_find_attach(soc))
-		goto fail0;
-
 	if (dp_hw_link_desc_pool_setup(soc))
 		goto fail1;
 
@@ -2258,7 +2266,6 @@ fail1:
 	 * Cleanup will be done as part of soc_detach, which will
 	 * be called on pdev attach failure
 	 */
-fail0:
 	return QDF_STATUS_E_FAILURE;
 }
 
@@ -2433,6 +2440,7 @@ static os_timer_func(dp_txrx_peer_find_inact_timeout_handler)
 
 	for (i = 0; i < soc->pdev_count; i++) {
 	pdev = soc->pdev_list[i];
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
 		if (vdev->opmode != wlan_op_mode_ap)
 			continue;
@@ -2460,6 +2468,7 @@ static os_timer_func(dp_txrx_peer_find_inact_timeout_handler)
 				dp_mark_peer_inact(peer, true);
 		}
 	}
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	}
 
 	qdf_spin_unlock(&soc->peer_ref_mutex);
@@ -2594,6 +2603,7 @@ static struct cdp_pdev *dp_pdev_attach_wifi3(struct cdp_soc_t *txrx_soc,
 	soc->pdev_count++;
 
 	TAILQ_INIT(&pdev->vdev_list);
+	qdf_spinlock_create(&pdev->vdev_list_lock);
 	pdev->vdev_count = 0;
 
 	qdf_spinlock_create(&pdev->tx_mutex);
@@ -2876,6 +2886,7 @@ static void dp_pdev_detach_wifi3(struct cdp_pdev *txrx_pdev, int force)
 
 	dp_neighbour_peers_detach(pdev);
 	qdf_spinlock_destroy(&pdev->tx_mutex);
+	qdf_spinlock_destroy(&pdev->vdev_list_lock);
 
 	dp_ipa_uc_detach(soc, pdev);
 
@@ -3257,7 +3268,6 @@ static struct cdp_vdev *dp_vdev_attach_wifi3(struct cdp_pdev *txrx_pdev,
 	struct dp_pdev *pdev = (struct dp_pdev *)txrx_pdev;
 	struct dp_soc *soc = pdev->soc;
 	struct dp_vdev *vdev = qdf_mem_malloc(sizeof(*vdev));
-	int tx_ring_size;
 
 	if (!vdev) {
 		QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
@@ -3292,7 +3302,6 @@ static struct cdp_vdev *dp_vdev_attach_wifi3(struct cdp_pdev *txrx_pdev,
 	vdev->rx_decap_type = wlan_cfg_pkt_type(soc->wlan_cfg_ctx);
 	vdev->dscp_tid_map_id = 0;
 	vdev->mcast_enhancement_en = 0;
-	tx_ring_size = wlan_cfg_tx_ring_size(soc->wlan_cfg_ctx);
 
 	/* TODO: Initialize default HTT meta data that will be used in
 	 * TCL descriptors for packets transmitted from this VDEV
@@ -3300,15 +3309,13 @@ static struct cdp_vdev *dp_vdev_attach_wifi3(struct cdp_pdev *txrx_pdev,
 
 	TAILQ_INIT(&vdev->peer_list);
 
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	/* add this vdev into the pdev's list */
 	TAILQ_INSERT_TAIL(&pdev->vdev_list, vdev, vdev_list_elem);
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	pdev->vdev_count++;
 
 	dp_tx_vdev_attach(vdev);
-
-	if (QDF_STATUS_SUCCESS != dp_tx_flow_pool_map_handler(pdev, vdev_id,
-					FLOW_TYPE_VDEV, vdev_id, tx_ring_size))
-		goto fail1;
 
 
 	if ((soc->intr_mode == DP_INTR_POLL) &&
@@ -3337,9 +3344,6 @@ static struct cdp_vdev *dp_vdev_attach_wifi3(struct cdp_pdev *txrx_pdev,
 
 	return (struct cdp_vdev *)vdev;
 
-fail1:
-	dp_tx_vdev_detach(vdev);
-	qdf_mem_free(vdev);
 fail0:
 	return NULL;
 }
@@ -3441,8 +3445,10 @@ static void dp_vdev_detach_wifi3(struct cdp_vdev *vdev_handle,
 	/* preconditions */
 	qdf_assert(vdev);
 
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	/* remove the vdev from its parent pdev's list */
 	TAILQ_REMOVE(&pdev->vdev_list, vdev, vdev_list_elem);
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 
 	if (wlan_op_mode_sta == vdev->opmode)
 		dp_peer_delete_wifi3(vdev->vap_bss_peer, 0);
@@ -3476,8 +3482,6 @@ static void dp_vdev_detach_wifi3(struct cdp_vdev *vdev_handle,
 	}
 	qdf_spin_unlock_bh(&soc->peer_ref_mutex);
 
-	dp_tx_flow_pool_unmap_handler(pdev, vdev->vdev_id, FLOW_TYPE_VDEV,
-		vdev->vdev_id);
 	dp_tx_vdev_detach(vdev);
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_INFO_HIGH,
 		FL("deleting vdev object %pK (%pM)"), vdev, vdev->mac_addr.raw);
@@ -3516,6 +3520,11 @@ static void *dp_peer_create_wifi3(struct cdp_vdev *vdev_handle,
 
 	if (peer) {
 		peer->delete_in_progress = false;
+
+		qdf_spin_lock_bh(&soc->ast_lock);
+		TAILQ_INIT(&peer->ast_entry_list);
+		qdf_spin_unlock_bh(&soc->ast_lock);
+
 		/*
 		* on peer create, peer ref count decrements, sice new peer is not
 		* getting created earlier reference is reused, peer_unref_delete will
@@ -3526,6 +3535,7 @@ static void *dp_peer_create_wifi3(struct cdp_vdev *vdev_handle,
 				vdev->vdev_id, peer->mac_addr.raw);
 		}
 
+		DP_STATS_INIT(peer);
 		return (void *)peer;
 	}
 
@@ -3876,6 +3886,7 @@ dp_txrx_update_inact_threshold(struct cdp_pdev *pdev_handle,
 	soc->pdev_bs_inact_reload = new_threshold;
 
 	qdf_spin_lock_bh(&soc->peer_ref_mutex);
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
 		if (vdev->opmode != wlan_op_mode_ap)
 			continue;
@@ -3894,6 +3905,7 @@ dp_txrx_update_inact_threshold(struct cdp_pdev *pdev_handle,
 			}
 		}
 	}
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	qdf_spin_unlock_bh(&soc->peer_ref_mutex);
 }
 
@@ -3912,6 +3924,7 @@ dp_txrx_reset_inact_count(struct cdp_pdev *pdev_handle)
 	struct dp_soc *soc = pdev->soc;
 
 	qdf_spin_lock_bh(&soc->peer_ref_mutex);
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
 		if (vdev->opmode != wlan_op_mode_ap)
 			continue;
@@ -3923,6 +3936,7 @@ dp_txrx_reset_inact_count(struct cdp_pdev *pdev_handle)
 			peer->peer_bs_inact = soc->pdev_bs_inact_reload;
 		}
 	}
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	qdf_spin_unlock_bh(&soc->peer_ref_mutex);
 }
 
@@ -4282,10 +4296,12 @@ static struct cdp_vdev *dp_get_vdev_from_vdev_id_wifi3(struct cdp_pdev *dev,
 	if (qdf_unlikely(!pdev))
 		return NULL;
 
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
 		if (vdev->vdev_id == vdev_id)
 			break;
 	}
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 
 	return (struct cdp_vdev *)vdev;
 }
@@ -4443,6 +4459,8 @@ static int dp_vdev_set_monitor_mode(struct cdp_vdev *vdev_handle,
 		pdev->mo_mgmt_filter, pdev->mo_ctrl_filter,
 		pdev->mo_data_filter);
 
+	qdf_mem_set(&(htt_tlv_filter), sizeof(htt_tlv_filter), 0x0);
+
 	htt_tlv_filter.mpdu_start = 1;
 	htt_tlv_filter.msdu_start = 1;
 	htt_tlv_filter.packet = 1;
@@ -4476,33 +4494,35 @@ static int dp_vdev_set_monitor_mode(struct cdp_vdev *vdev_handle,
 			RXDMA_MONITOR_BUF, RX_BUFFER_SIZE, &htt_tlv_filter);
 	}
 
+	qdf_mem_set(&(htt_tlv_filter), sizeof(htt_tlv_filter), 0x0);
+
 	htt_tlv_filter.mpdu_start = 1;
-	htt_tlv_filter.msdu_start = 1;
+	htt_tlv_filter.msdu_start = 0;
 	htt_tlv_filter.packet = 0;
-	htt_tlv_filter.msdu_end = 1;
-	htt_tlv_filter.mpdu_end = 1;
-	htt_tlv_filter.packet_header = 1;
-	htt_tlv_filter.attention = 1;
+	htt_tlv_filter.msdu_end = 0;
+	htt_tlv_filter.mpdu_end = 0;
+	htt_tlv_filter.attention = 0;
 	htt_tlv_filter.ppdu_start = 1;
 	htt_tlv_filter.ppdu_end = 1;
 	htt_tlv_filter.ppdu_end_user_stats = 1;
 	htt_tlv_filter.ppdu_end_user_stats_ext = 1;
 	htt_tlv_filter.ppdu_end_status_done = 1;
-	htt_tlv_filter.header_per_msdu = 0;
-	htt_tlv_filter.enable_fp =
-		(pdev->mon_filter_mode & MON_FILTER_PASS) ? 1 : 0;
+	htt_tlv_filter.enable_fp = 1;
 	htt_tlv_filter.enable_md = 0;
-	htt_tlv_filter.enable_mo =
-		(pdev->mon_filter_mode & MON_FILTER_OTHER) ? 1 : 0;
-	htt_tlv_filter.fp_mgmt_filter = pdev->fp_mgmt_filter;
-	htt_tlv_filter.fp_ctrl_filter = pdev->fp_ctrl_filter;
-	htt_tlv_filter.fp_data_filter = pdev->fp_data_filter;
-	htt_tlv_filter.mo_mgmt_filter = pdev->mo_mgmt_filter;
-	htt_tlv_filter.mo_ctrl_filter = pdev->mo_ctrl_filter;
-	htt_tlv_filter.mo_data_filter = pdev->mo_data_filter;
+	htt_tlv_filter.enable_mo = 1;
+	if (pdev->mcopy_mode) {
+		htt_tlv_filter.packet_header = 1;
+	}
+	htt_tlv_filter.fp_mgmt_filter = FILTER_MGMT_ALL;
+	htt_tlv_filter.fp_ctrl_filter = FILTER_CTRL_ALL;
+	htt_tlv_filter.fp_data_filter = FILTER_DATA_ALL;
+	htt_tlv_filter.mo_mgmt_filter = FILTER_MGMT_ALL;
+	htt_tlv_filter.mo_ctrl_filter = FILTER_CTRL_ALL;
+	htt_tlv_filter.mo_data_filter = FILTER_DATA_ALL;
 
 	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++) {
-		int mac_for_pdev = dp_get_mac_id_for_pdev(mac_id, pdev_id);
+		int mac_for_pdev = dp_get_mac_id_for_pdev(mac_id,
+						pdev->pdev_id);
 
 		htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
 			pdev->rxdma_mon_status_ring[mac_id].hal_srng,
@@ -4608,33 +4628,35 @@ static int dp_pdev_set_advance_monitor_filter(struct cdp_pdev *pdev_handle,
 			RXDMA_MONITOR_BUF, RX_BUFFER_SIZE, &htt_tlv_filter);
 	}
 
+	qdf_mem_set(&(htt_tlv_filter), sizeof(htt_tlv_filter), 0x0);
+
 	htt_tlv_filter.mpdu_start = 1;
-	htt_tlv_filter.msdu_start = 1;
+	htt_tlv_filter.msdu_start = 0;
 	htt_tlv_filter.packet = 0;
-	htt_tlv_filter.msdu_end = 1;
-	htt_tlv_filter.mpdu_end = 1;
-	htt_tlv_filter.packet_header = 1;
-	htt_tlv_filter.attention = 1;
+	htt_tlv_filter.msdu_end = 0;
+	htt_tlv_filter.mpdu_end = 0;
+	htt_tlv_filter.attention = 0;
 	htt_tlv_filter.ppdu_start = 1;
 	htt_tlv_filter.ppdu_end = 1;
 	htt_tlv_filter.ppdu_end_user_stats = 1;
 	htt_tlv_filter.ppdu_end_user_stats_ext = 1;
 	htt_tlv_filter.ppdu_end_status_done = 1;
-	htt_tlv_filter.header_per_msdu = 0;
-	htt_tlv_filter.enable_fp =
-		(pdev->mon_filter_mode & MON_FILTER_PASS) ? 1 : 0;
+	htt_tlv_filter.enable_fp = 1;
 	htt_tlv_filter.enable_md = 0;
-	htt_tlv_filter.enable_mo =
-		(pdev->mon_filter_mode & MON_FILTER_OTHER) ? 1 : 0;
-	htt_tlv_filter.fp_mgmt_filter = pdev->fp_mgmt_filter;
-	htt_tlv_filter.fp_ctrl_filter = pdev->fp_ctrl_filter;
-	htt_tlv_filter.fp_data_filter = pdev->fp_data_filter;
-	htt_tlv_filter.mo_mgmt_filter = pdev->mo_mgmt_filter;
-	htt_tlv_filter.mo_ctrl_filter = pdev->mo_ctrl_filter;
-	htt_tlv_filter.mo_data_filter = pdev->mo_data_filter;
+	htt_tlv_filter.enable_mo = 1;
+	if (pdev->mcopy_mode) {
+		htt_tlv_filter.packet_header = 1;
+	}
+	htt_tlv_filter.fp_mgmt_filter = FILTER_MGMT_ALL;
+	htt_tlv_filter.fp_ctrl_filter = FILTER_CTRL_ALL;
+	htt_tlv_filter.fp_data_filter = FILTER_DATA_ALL;
+	htt_tlv_filter.mo_mgmt_filter = FILTER_MGMT_ALL;
+	htt_tlv_filter.mo_ctrl_filter = FILTER_CTRL_ALL;
+	htt_tlv_filter.mo_data_filter = FILTER_DATA_ALL;
 
 	for (mac_id = 0; mac_id < NUM_RXDMA_RINGS_PER_PDEV; mac_id++) {
-		int mac_for_pdev = dp_get_mac_id_for_pdev(mac_id, pdev_id);
+		int mac_for_pdev = dp_get_mac_id_for_pdev(mac_id,
+						pdev->pdev_id);
 
 		htt_h2t_rx_ring_cfg(soc->htt_handle, mac_for_pdev,
 			pdev->rxdma_mon_status_ring[mac_id].hal_srng,
@@ -4857,6 +4879,7 @@ static inline void dp_aggregate_pdev_stats(struct dp_pdev *pdev)
 	qdf_mem_set(&(pdev->stats.rx), sizeof(pdev->stats.rx), 0x0);
 	qdf_mem_set(&(pdev->stats.tx_i), sizeof(pdev->stats.tx_i), 0x0);
 
+	qdf_spin_lock_bh(&pdev->vdev_list_lock);
 	TAILQ_FOREACH(vdev, &pdev->vdev_list, vdev_list_elem) {
 
 		dp_aggregate_vdev_stats(vdev);
@@ -4906,11 +4929,28 @@ static inline void dp_aggregate_pdev_stats(struct dp_pdev *pdev)
 		pdev->stats.tx_i.tso.num_seg =
 			vdev->stats.tx_i.tso.num_seg;
 	}
+	qdf_spin_unlock_bh(&pdev->vdev_list_lock);
 	if (soc->cdp_soc.ol_ops->update_dp_stats)
 		soc->cdp_soc.ol_ops->update_dp_stats(pdev->osif_pdev,
 				&pdev->stats, pdev->pdev_id, UPDATE_PDEV_STATS);
 
 }
+
+/**
+ * dp_vdev_getstats() - get vdev packet level stats
+ * @vdev_handle: Datapath VDEV handle
+ * @stats: cdp network device stats structure
+ *
+ * Return: void
+ */
+static void dp_vdev_getstats(void *vdev_handle,
+		struct cdp_dev_stats *stats)
+{
+	struct dp_vdev *vdev = (struct dp_vdev *)vdev_handle;
+
+	dp_aggregate_vdev_stats(vdev);
+}
+
 
 /**
  * dp_pdev_getstats() - get pdev packet level stats
@@ -4919,7 +4959,7 @@ static inline void dp_aggregate_pdev_stats(struct dp_pdev *pdev)
  *
  * Return: void
  */
-static void dp_pdev_getstats(struct cdp_pdev *pdev_handle,
+static void dp_pdev_getstats(void *pdev_handle,
 		struct cdp_dev_stats *stats)
 {
 	struct dp_pdev *pdev = (struct dp_pdev *)pdev_handle;
@@ -4934,10 +4974,40 @@ static void dp_pdev_getstats(struct cdp_pdev *pdev_handle,
 	stats->tx_dropped = stats->tx_errors;
 
 	stats->rx_packets = pdev->stats.rx.unicast.num +
-		pdev->stats.rx.multicast.num;
+		pdev->stats.rx.multicast.num +
+		pdev->stats.rx.bcast.num;
 	stats->rx_bytes = pdev->stats.rx.unicast.bytes +
-		pdev->stats.rx.multicast.bytes;
+		pdev->stats.rx.multicast.bytes +
+		pdev->stats.rx.bcast.bytes;
 }
+
+/**
+ * dp_get_device_stats() - get interface level packet stats
+ * @handle: device handle
+ * @stats: cdp network device stats structure
+ * @type: device type pdev/vdev
+ *
+ * Return: void
+ */
+static void dp_get_device_stats(void *handle,
+		struct cdp_dev_stats *stats, uint8_t type)
+{
+	switch (type) {
+	case UPDATE_VDEV_STATS:
+		dp_vdev_getstats(handle, stats);
+		break;
+	case UPDATE_PDEV_STATS:
+		dp_pdev_getstats(handle, stats);
+		break;
+	default:
+		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+			"apstats cannot be updated for this input "
+			"type %d\n", type);
+		break;
+	}
+
+}
+
 
 /**
  * dp_print_pdev_tx_stats(): Print Pdev level TX stats
@@ -5109,9 +5179,11 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 			pdev->stats.rx.to_stack.bytes);
 	DP_PRINT_STATS("Multicast/Broadcast:");
 	DP_PRINT_STATS("	Packets = %d",
-			pdev->stats.rx.multicast.num);
+			(pdev->stats.rx.multicast.num +
+			pdev->stats.rx.bcast.num));
 	DP_PRINT_STATS("	Bytes = %llu",
-			pdev->stats.rx.multicast.bytes);
+			(pdev->stats.rx.multicast.bytes +
+			pdev->stats.rx.bcast.bytes));
 	DP_PRINT_STATS("Errors:");
 	DP_PRINT_STATS("	Rxdma Ring Un-inititalized = %d",
 			pdev->stats.replenish.rxdma_err);
@@ -5460,8 +5532,8 @@ dp_print_tx_rates(struct dp_vdev *vdev)
 			pdev->stats.tx.sgi_count[3]);
 
 	DP_PRINT_STATS("BW Counts = 20MHZ %d, 40MHZ %d, 80MHZ %d, 160MHZ %d",
-			pdev->stats.tx.bw[2], pdev->stats.tx.bw[3],
-			pdev->stats.tx.bw[4], pdev->stats.tx.bw[5]);
+			pdev->stats.tx.bw[0], pdev->stats.tx.bw[1],
+			pdev->stats.tx.bw[2], pdev->stats.tx.bw[3]);
 
 	DP_PRINT_STATS("OFDMA = %d", pdev->stats.tx.ofdma);
 	DP_PRINT_STATS("STBC = %d", pdev->stats.tx.stbc);
@@ -5816,8 +5888,7 @@ dp_ppdu_ring_cfg(struct dp_pdev *pdev)
 	htt_tlv_filter.packet = 0;
 	htt_tlv_filter.msdu_end = 0;
 	htt_tlv_filter.mpdu_end = 0;
-	htt_tlv_filter.packet_header = 1;
-	htt_tlv_filter.attention = 1;
+	htt_tlv_filter.attention = 0;
 	htt_tlv_filter.ppdu_start = 1;
 	htt_tlv_filter.ppdu_end = 1;
 	htt_tlv_filter.ppdu_end_user_stats = 1;
@@ -5825,8 +5896,10 @@ dp_ppdu_ring_cfg(struct dp_pdev *pdev)
 	htt_tlv_filter.ppdu_end_status_done = 1;
 	htt_tlv_filter.enable_fp = 1;
 	htt_tlv_filter.enable_md = 0;
-	if (pdev->mcopy_mode)
+	if (pdev->mcopy_mode) {
+		htt_tlv_filter.packet_header = 1;
 		htt_tlv_filter.enable_mo = 1;
+	}
 	htt_tlv_filter.fp_mgmt_filter = FILTER_MGMT_ALL;
 	htt_tlv_filter.fp_ctrl_filter = FILTER_CTRL_ALL;
 	htt_tlv_filter.fp_data_filter = FILTER_DATA_ALL;
@@ -6744,6 +6817,19 @@ static void dp_peer_teardown_wifi3(struct cdp_vdev *vdev_hdl, void *peer_hdl)
 	struct dp_peer *peer = (struct dp_peer *) peer_hdl;
 	struct dp_soc *soc = (struct dp_soc *) vdev->pdev->soc;
 
+	/*
+	 * For BSS peer, new peer is not created on alloc_node if the
+	 * peer with same address already exists , instead refcnt is
+	 * increased for existing peer. Correspondingly in delete path,
+	 * only refcnt is decreased; and peer is only deleted , when all
+	 * references are deleted. So delete_in_progress should not be set
+	 * for bss_peer, unless only 2 reference remains (peer map reference
+	 * and peer hash table reference).
+	 */
+	if (peer->bss_peer && (qdf_atomic_read(&peer->ref_cnt) > 2)) {
+		return;
+	}
+
 	peer->delete_in_progress = true;
 	dp_peer_delete_ast_entries(soc, peer);
 }
@@ -6786,6 +6872,21 @@ static QDF_STATUS dp_config_for_nac_rssi(struct cdp_vdev *vdev_handle,
 }
 #endif
 
+static QDF_STATUS dp_peer_map_attach_wifi3(struct cdp_soc_t  *soc_hdl,
+		uint32_t max_peers)
+{
+	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
+
+	soc->max_peers = max_peers;
+
+	qdf_print ("%s max_peers %u\n", __func__, max_peers);
+
+	if (dp_peer_find_attach(soc))
+		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_soc_attach_target = dp_soc_attach_target_wifi3,
 	.txrx_vdev_attach = dp_vdev_attach_wifi3,
@@ -6812,7 +6913,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_get_vdev_mac_addr = dp_get_vdev_mac_addr_wifi3,
 	.txrx_get_vdev_from_vdev_id = dp_get_vdev_from_vdev_id_wifi3,
 	.txrx_get_ctrl_pdev_from_vdev = dp_get_ctrl_pdev_from_vdev_wifi3,
-	.txrx_ath_getstats = dp_pdev_getstats,
+	.txrx_ath_getstats = dp_get_device_stats,
 	.addba_requestprocess = dp_addba_requestprocess_wifi3,
 	.addba_responsesetup = dp_addba_responsesetup_wifi3,
 	.delba_process = dp_delba_process_wifi3,
@@ -6850,6 +6951,7 @@ static struct cdp_cmn_ops dp_ops_cmn = {
 	.txrx_peer_reset_ast = dp_wds_reset_ast_wifi3,
 	.txrx_peer_reset_ast_table = dp_wds_reset_ast_table_wifi3,
 	.txrx_peer_flush_ast_table = dp_wds_flush_ast_table_wifi3,
+	.txrx_peer_map_attach = dp_peer_map_attach_wifi3,
 };
 
 static struct cdp_ctrl_ops dp_ops_ctrl = {
@@ -7020,6 +7122,8 @@ static struct cdp_misc_ops dp_ops_misc = {
 static struct cdp_flowctl_ops dp_ops_flowctl = {
 	/* WIFI 3.0 DP implement as required. */
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
+	.flow_pool_map_handler = dp_tx_flow_pool_map,
+	.flow_pool_unmap_handler = dp_tx_flow_pool_unmap,
 	.register_pause_cb = dp_txrx_register_pause_cb,
 	.dump_flow_pool_info = dp_tx_dump_flow_pool_info,
 #endif /* QCA_LL_TX_FLOW_CONTROL_V2 */
