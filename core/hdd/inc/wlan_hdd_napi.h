@@ -1,8 +1,5 @@
 /*
- * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
+ * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #ifndef __HDD_NAPI_H__
@@ -58,12 +49,12 @@ int hdd_napi_poll(struct napi_struct *napi, int budget);
 
 struct qca_napi_data *hdd_napi_get_all(void);
 
-#ifdef HELIUMPLUS
+#if defined HELIUMPLUS && defined MSM_PLATFORM
 int hdd_napi_apply_throughput_policy(struct hdd_context *hddctx,
 				     uint64_t              tx_packets,
 				     uint64_t              rx_packets);
 int hdd_napi_serialize(int is_on);
-#else /* FEATURE_NAPI and NOT HELIUM */
+#else
 static inline int hdd_napi_apply_throughput_policy(struct hdd_context *hddctx,
 						   uint64_t tx_packets,
 						   uint64_t rx_packets)
@@ -74,7 +65,7 @@ static inline int hdd_napi_serialize(int is_on)
 {
 	return -EINVAL;
 }
-#endif /* HELIUMPLUS */
+#endif /* HELIUMPLUS && MSM_PLATFORM */
 
 #else /* ! defined(FEATURE_NAPI) */
 #include "hif_napi.h"

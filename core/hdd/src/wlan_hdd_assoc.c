@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -1601,6 +1592,31 @@ static void hdd_clear_roam_profile_ie(struct hdd_adapter *adapter)
 }
 
 /**
+ * hdd_wlan_get_ibss_mac_addr_from_staid() - Get IBSS MAC address
+ * @adapter: Adapter upon which the IBSS client is active
+ * @staIdx: Station index of the IBSS peer
+ *
+ * Return: a pointer to the MAC address of the IBSS peer if the peer is
+ *	   found, otherwise %NULL.
+ */
+static struct qdf_mac_addr *
+hdd_wlan_get_ibss_mac_addr_from_staid(struct hdd_adapter *adapter,
+				      uint8_t staIdx)
+{
+	uint8_t idx;
+	struct hdd_station_ctx *sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+
+	for (idx = 0; idx < MAX_PEERS; idx++) {
+		if (HDD_WLAN_INVALID_STA_ID !=
+				sta_ctx->conn_info.staId[idx] &&
+				staIdx == sta_ctx->conn_info.staId[idx]) {
+			return &sta_ctx->conn_info.peerMacAddress[idx];
+		}
+	}
+	return NULL;
+}
+
+/**
  * hdd_roam_deregister_sta() - deregister station
  * @adapter: pointer to adapter
  * @staId: station identifier
@@ -1734,7 +1750,8 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 				     WLAN_STOP_ALL_NETIF_QUEUE_N_CARRIER,
 				     WLAN_CONTROL_PATH);
 
-	if (ucfg_ipa_is_enabled())
+	if (ucfg_ipa_is_enabled() &&
+	    (sta_ctx->conn_info.staId[0] != HDD_WLAN_INVALID_STA_ID))
 		ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev, adapter->dev,
 				  adapter->device_mode,
 				  sta_ctx->conn_info.staId[0],
@@ -2896,10 +2913,6 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 			return QDF_STATUS_E_FAILURE;
 		}
 
-		hdd_debug("check for SAP restart");
-		policy_mgr_check_concurrent_intf_and_restart_sap(
-			hdd_ctx->hdd_psoc);
-
 		DPTRACE(qdf_dp_trace_mgmt_pkt(QDF_DP_TRACE_MGMT_PACKET_RECORD,
 			adapter->session_id,
 			QDF_TRACE_DEFAULT_PDEV_ID,
@@ -3269,6 +3282,9 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 		qdf_mem_zero(&adapter->hdd_stats.hdd_pmf_stats,
 			     sizeof(adapter->hdd_stats.hdd_pmf_stats));
 #endif
+		hdd_debug("check for SAP restart");
+		policy_mgr_check_concurrent_intf_and_restart_sap(
+			hdd_ctx->hdd_psoc);
 	} else {
 		bool connect_timeout = false;
 
@@ -4697,6 +4713,7 @@ hdd_sme_roam_callback(void *pContext, struct csr_roam_info *roam_info,
 		break;
 	case eCSR_ROAM_CANCELLED:
 		hdd_debug("****eCSR_ROAM_CANCELLED****");
+		/* fallthrough */
 	case eCSR_ROAM_ASSOCIATION_FAILURE:
 		qdf_ret_status = hdd_association_completion_handler(adapter,
 								    roam_info,

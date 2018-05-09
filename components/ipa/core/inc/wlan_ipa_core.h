@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #ifndef _WLAN_IPA_CORE_H_
@@ -135,17 +126,6 @@ QDF_STATUS wlan_ipa_uc_enable_pipes(struct wlan_ipa_priv *ipa_ctx);
 QDF_STATUS wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx);
 
 /**
- * wlan_ipa_get_iface() - Get IPA interface
- * @ipa_ctx: IPA context
- * @mode: Interface device mode
- *
- * Return: IPA interface address
- */
-struct wlan_ipa_iface_context
-*wlan_ipa_get_iface(struct wlan_ipa_priv *ipa_ctx, uint8_t mode);
-
-#ifndef CONFIG_IPA_WDI_UNIFIED_API
-/**
  * wlan_ipa_set_perf_level() - Set IPA performance level
  * @ipa_ctx: IPA context
  * @tx_packets: Number of packets transmitted in the last sample period
@@ -156,6 +136,17 @@ struct wlan_ipa_iface_context
 QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 				   uint64_t tx_packets, uint64_t rx_packets);
 
+/**
+ * wlan_ipa_get_iface() - Get IPA interface
+ * @ipa_ctx: IPA context
+ * @mode: Interface device mode
+ *
+ * Return: IPA interface address
+ */
+struct wlan_ipa_iface_context
+*wlan_ipa_get_iface(struct wlan_ipa_priv *ipa_ctx, uint8_t mode);
+
+#ifndef CONFIG_IPA_WDI_UNIFIED_API
 /**
  * wlan_ipa_wdi_rm_request_resource() - IPA WDI request resource
  * @ipa_ctx: IPA context
@@ -233,13 +224,6 @@ int wlan_ipa_wdi_rm_inactivity_timer_destroy(
 }
 
 #else /* CONFIG_IPA_WDI_UNIFIED_API */
-
-static inline
-QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
-				   uint64_t tx_packets, uint64_t rx_packets)
-{
-	return QDF_STATUS_SUCCESS;
-}
 
 static inline int wlan_ipa_wdi_rm_request_resource(
 			struct wlan_ipa_priv *ipa_ctx,
@@ -596,5 +580,12 @@ QDF_STATUS wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
  */
 int wlan_ipa_uc_smmu_map(bool map, uint32_t num_buf, qdf_mem_info_t *buf_arr);
 
+/**
+ * wlan_ipa_is_fw_wdi_activated() - Is FW WDI actived?
+ * @ipa_ctx: IPA contex
+ *
+ * Return: true if FW WDI actived, false otherwise
+ */
+bool wlan_ipa_is_fw_wdi_activated(struct wlan_ipa_priv *ipa_ctx);
 #endif /* IPA_OFFLOAD */
 #endif /* _WLAN_IPA_CORE_H_ */

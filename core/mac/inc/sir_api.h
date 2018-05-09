@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -2208,162 +2199,6 @@ typedef struct sSmeCsaOffloadInd {
 	struct qdf_mac_addr bssid;      /* BSSID */
 } tSmeCsaOffloadInd, *tpSmeCsaOffloadInd;
 
-/* SME->PE: Enter WOWLAN parameters */
-typedef struct sSirSmeWowlEnterParams {
-	uint8_t sessionId;
-
-	/* Enables/disables magic packet filtering */
-	uint8_t ucMagicPktEnable;
-
-	/* Magic pattern */
-	struct qdf_mac_addr magic_ptrn;
-
-	/* Enables/disables packet pattern filtering */
-	uint8_t ucPatternFilteringEnable;
-
-#ifdef WLAN_WAKEUP_EVENTS
-	/*
-	 * This configuration directs the WoW packet filtering to look at EAP-ID
-	 * requests embedded in EAPOL frames and use this as a wake source.
-	 */
-	uint8_t ucWoWEAPIDRequestEnable;
-
-	/*
-	 * This configuration directs the WoW packet filtering to look for
-	 * EAPOL-4WAY requests and use this as a wake source.
-	 */
-	uint8_t ucWoWEAPOL4WayEnable;
-
-	/*
-	 * This configuration allows a host wakeup on an network scan
-	 * offload match.
-	 */
-	uint8_t ucWowNetScanOffloadMatch;
-
-	/* This configuration allows a host wakeup on any GTK rekeying error.
-	 */
-	uint8_t ucWowGTKRekeyError;
-
-	/* This configuration allows a host wakeup on BSS connection loss.
-	 */
-	uint8_t ucWoWBSSConnLoss;
-#endif /* WLAN_WAKEUP_EVENTS */
-
-	struct qdf_mac_addr bssid;
-} tSirSmeWowlEnterParams, *tpSirSmeWowlEnterParams;
-
-/* PE<->HAL: Enter WOWLAN parameters */
-typedef struct sSirHalWowlEnterParams {
-	uint8_t sessionId;
-
-	/* Enables/disables magic packet filtering */
-	uint8_t ucMagicPktEnable;
-
-	/* Magic pattern */
-	struct qdf_mac_addr magic_ptrn;
-
-	/* Enables/disables packet pattern filtering in firmware.
-	   Enabling this flag enables broadcast pattern matching
-	   in Firmware. If unicast pattern matching is also desired,
-	   ucUcastPatternFilteringEnable flag must be set tot true
-	   as well
-	 */
-	uint8_t ucPatternFilteringEnable;
-
-	/* Enables/disables unicast packet pattern filtering.
-	   This flag specifies whether we want to do pattern match
-	   on unicast packets as well and not just broadcast packets.
-	   This flag has no effect if the ucPatternFilteringEnable
-	   (main controlling flag) is set to false
-	 */
-	uint8_t ucUcastPatternFilteringEnable;
-
-	/* This configuration is valid only when magicPktEnable=1.
-	 * It requests hardware to wake up when it receives the
-	 * Channel Switch Action Frame.
-	 */
-	uint8_t ucWowChnlSwitchRcv;
-
-	/* This configuration is valid only when magicPktEnable=1.
-	 * It requests hardware to wake up when it receives the
-	 * Deauthentication Frame.
-	 */
-	uint8_t ucWowDeauthRcv;
-
-	/* This configuration is valid only when magicPktEnable=1.
-	 * It requests hardware to wake up when it receives the
-	 * Disassociation Frame.
-	 */
-	uint8_t ucWowDisassocRcv;
-
-	/* This configuration is valid only when magicPktEnable=1.
-	 * It requests hardware to wake up when it has missed
-	 * consecutive beacons. This is a hardware register
-	 * configuration (NOT a firmware configuration).
-	 */
-	uint8_t ucWowMaxMissedBeacons;
-
-	/* This configuration is valid only when magicPktEnable=1.
-	 * This is a timeout value in units of microsec. It requests
-	 * hardware to unconditionally wake up after it has stayed
-	 * in WoWLAN mode for some time. Set 0 to disable this feature.
-	 */
-	uint8_t ucWowMaxSleepUsec;
-
-#ifdef WLAN_WAKEUP_EVENTS
-	/* This config directs the WoW pkt filtering to look for EAP-ID
-	 * requests embedded in EAPOL frames and use this as a wake source.
-	 */
-	uint8_t ucWoWEAPIDRequestEnable;
-
-	/* This config directs the WoW pkt filtering to look for EAPOL-4WAY
-	 * requests and use this as a wake source.
-	 */
-	uint8_t ucWoWEAPOL4WayEnable;
-
-	/* This config allows a host wakeup on an network scan offload match.
-	 */
-	uint8_t ucWowNetScanOffloadMatch;
-
-	/* This configuration allows a host wakeup on any GTK rekeying error.
-	 */
-	uint8_t ucWowGTKRekeyError;
-
-	/* This configuration allows a host wakeup on BSS connection loss.
-	 */
-	uint8_t ucWoWBSSConnLoss;
-#endif /* WLAN_WAKEUP_EVENTS */
-
-	/* Status code to be filled by HAL when it sends
-	 * SIR_HAL_WOWL_ENTER_RSP to PE.
-	 */
-	QDF_STATUS status;
-
-	/*BSSID to find the current session
-	 */
-	uint8_t bssIdx;
-} tSirHalWowlEnterParams, *tpSirHalWowlEnterParams;
-
-/* SME->PE: Exit WOWLAN parameters */
-typedef struct sSirSmeWowlExitParams {
-	uint8_t sessionId;
-
-} tSirSmeWowlExitParams, *tpSirSmeWowlExitParams;
-
-/* PE<->HAL: Exit WOWLAN parameters */
-typedef struct sSirHalWowlExitParams {
-	uint8_t sessionId;
-
-	/* Status code to be filled by HAL when it sends
-	 * SIR_HAL_WOWL_EXIT_RSP to PE.
-	 */
-	QDF_STATUS status;
-
-	/*BSSIDX to find the current session
-	 */
-	uint8_t bssIdx;
-} tSirHalWowlExitParams, *tpSirHalWowlExitParams;
-
 #define SIR_MAX_NAME_SIZE 64
 #define SIR_MAX_TEXT_SIZE 32
 
@@ -3050,6 +2885,7 @@ typedef struct sSirRoamOffloadScanReq {
 	uint8_t ValidChannelCount;
 	uint8_t ValidChannelList[SIR_ROAM_MAX_CHANNELS];
 	bool IsESEAssoc;
+	bool is_11r_assoc;
 	uint8_t nProbes;
 	uint16_t HomeAwayTime;
 	tSirRoamNetworkType ConnectedNetwork;
@@ -3097,6 +2933,9 @@ typedef struct sSirRoamOffloadScanReq {
 	uint32_t btm_max_attempt_cnt;
 	uint32_t btm_sticky_time;
 	struct wmi_11k_offload_params offload_11k_params;
+	uint32_t ho_delay_for_rx;
+	uint32_t min_delay_btw_roam_scans;
+	uint32_t roam_trigger_reason_bitmask;
 } tSirRoamOffloadScanReq, *tpSirRoamOffloadScanReq;
 
 typedef struct sSirRoamOffloadScanRsp {
@@ -3302,28 +3141,6 @@ enum set_antenna_mode_status {
 struct sir_antenna_mode_resp {
 	enum set_antenna_mode_status status;
 };
-
-#ifdef WLAN_WAKEUP_EVENTS
-/*---------------------------------------------------------------------------
-   tSirWakeReasonInd
-   ---------------------------------------------------------------------------*/
-typedef struct {
-	uint16_t mesgType;
-	uint16_t mesgLen;
-	uint32_t ulReason;      /* see tWakeReasonType */
-	uint32_t ulReasonArg;   /* argument specific to the reason type */
-	/* length of optional data stored in this message, in case
-	 * HAL truncates the data (i.e. data packets) this length
-	 * will be less than the actual length
-	 */
-	uint32_t ulStoredDataLen;
-	uint32_t ulActualDataLen;       /* actual length of data */
-	/* variable length start of data (length == storedDataLen)
-	 * see specific wake type
-	 */
-	uint8_t aDataStart[1];
-} tSirWakeReasonInd, *tpSirWakeReasonInd;
-#endif /* WLAN_WAKEUP_EVENTS */
 
 /*---------------------------------------------------------------------------
    sAniSetTmLevelReq
@@ -6379,6 +6196,7 @@ struct sir_bpf_get_offload {
 	uint32_t remaining_bytes_for_bpf_inst;
 };
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * struct sir_wake_lock_stats - wake lock stats structure
  * @wow_unspecified_wake_up_count: number of non-wow related wake ups
@@ -6457,6 +6275,7 @@ struct sir_vdev_wow_stats {
 	uint32_t pwr_save_fail_detected;
 	uint32_t scan_11d;
 };
+#endif
 
 /**
  * enum ht_capability_fields - HT Capabilities bit fields
@@ -6935,12 +6754,36 @@ struct sme_ndp_peer_ind {
  * struct sir_set_tx_rx_aggregation_size - sets tx rx aggregation size
  * @vdev_id: vdev id of the session
  * @tx_aggregation_size: Tx aggregation size
+ * @tx_aggregation_size_be: Tx aggregation size for be queue
+ * @tx_aggregation_size_bk: Tx aggregation size for bk queue
+ * @tx_aggregation_size_vi: Tx aggregation size for vi queue
+ * @tx_aggregation_size_vo: Tx aggregation size for vo queue
  * @rx_aggregation_size: Rx aggregation size
  */
 struct sir_set_tx_rx_aggregation_size {
 	uint8_t vdev_id;
 	uint32_t tx_aggregation_size;
+	uint32_t tx_aggregation_size_be;
+	uint32_t tx_aggregation_size_bk;
+	uint32_t tx_aggregation_size_vi;
+	uint32_t tx_aggregation_size_vo;
 	uint32_t rx_aggregation_size;
+};
+
+/**
+ * struct sir_set_tx_aggr_sw_retry_threshold - set sw retry threshold
+ * @vdev_id: vdev id of the session
+ * @tx_aggr_sw_retry_threshold_be: sw retry threshold for BE
+ * @tx_aggr_sw_retry_threshold_bk: sw retry threshold for BK
+ * @tx_aggr_sw_retry_threshold_vi: sw retry threshold for VI
+ * @tx_aggr_sw_retry_threshold_vo: sw retry threshold for VO
+ */
+struct sir_set_tx_aggr_sw_retry_threshold {
+	uint8_t vdev_id;
+	uint32_t tx_aggr_sw_retry_threshold_be;
+	uint32_t tx_aggr_sw_retry_threshold_bk;
+	uint32_t tx_aggr_sw_retry_threshold_vi;
+	uint32_t tx_aggr_sw_retry_threshold_vo;
 };
 
 /**
@@ -7187,6 +7030,24 @@ struct wow_enable_params {
 	enum wow_resume_trigger resume_trigger;
 };
 
+#define HE_LTF_1X	0
+#define HE_LTF_2X	1
+#define HE_LTF_4X	2
+
+#define HE_LTF_ALL	0x7
+#define HE_SGI_MASK	0xFF00
+
+#define AUTO_RATE_GI_400NS	8
+#define AUTO_RATE_GI_800NS	9
+#define AUTO_RATE_GI_1600NS	10
+#define AUTO_RATE_GI_3200NS	11
+
+#define SET_AUTO_RATE_SGI_VAL(set_val, bit_mask) \
+	(set_val = (set_val & HE_LTF_ALL) | bit_mask)
+
+#define SET_AUTO_RATE_HE_LTF_VAL(set_val, bit_mask) \
+	(set_val = (set_val & HE_SGI_MASK) | bit_mask)
+
 #ifdef WLAN_FEATURE_11AX
 #define HE_CAP_OUI_TYPE "\x23"
 #define HE_CAP_OUI_SIZE 1
@@ -7246,6 +7107,7 @@ struct ppet_hdr {
 #define HE_MCS_0_9     0x1
 #define HE_MCS_0_11    0x2
 #define HE_MCS_DISABLE 0x3
+
 /*
  * Following formuala has been arrived at using karnaugh map and unit tested
  * with sample code. Take MCS for each NSS as 2 bit value first and solve for
@@ -7476,11 +7338,15 @@ struct sir_rssi_disallow_lst {
 
 /**
  * struct chain_rssi_result - chain rssi result
+ * num_chains_valid: vaild chain num
  * @chain_rssi: chain rssi result as dBm unit
+ * @ant_id: antenna id
  */
-#define CHAIN_RSSI_NUM  8
+#define CHAIN_MAX_NUM 8
 struct chain_rssi_result {
-	int32_t chain_rssi[CHAIN_RSSI_NUM];
+	uint32_t num_chains_valid;
+	uint32_t chain_rssi[CHAIN_MAX_NUM];
+	uint32_t ant_id[CHAIN_MAX_NUM];
 };
 
 /**

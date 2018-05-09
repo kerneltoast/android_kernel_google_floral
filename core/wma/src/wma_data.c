@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -560,7 +551,7 @@ static QDF_STATUS wma_fill_vht80_mcast_rate(uint32_t shortgi,
  */
 static QDF_STATUS wma_fill_ht_mcast_rate(uint32_t shortgi,
 					 uint32_t chwidth, int32_t mbpsx10_rate,
-					 uint8_t nss, WLAN_PHY_MODE chanmode,
+					 uint8_t nss, WMI_HOST_WLAN_PHY_MODE chanmode,
 					 uint8_t *rate,
 					 int32_t *streaming_rate)
 {
@@ -595,7 +586,7 @@ static QDF_STATUS wma_fill_ht_mcast_rate(uint32_t shortgi,
 static QDF_STATUS wma_fill_vht_mcast_rate(uint32_t shortgi,
 					  uint32_t chwidth,
 					  int32_t mbpsx10_rate, uint8_t nss,
-					  WLAN_PHY_MODE chanmode,
+					  WMI_HOST_WLAN_PHY_MODE chanmode,
 					  uint8_t *rate,
 					  int32_t *streaming_rate)
 {
@@ -631,9 +622,9 @@ static QDF_STATUS wma_fill_vht_mcast_rate(uint32_t shortgi,
  * Return: QDF status
  */
 static QDF_STATUS wma_encode_mc_rate(uint32_t shortgi, uint32_t chwidth,
-				     WLAN_PHY_MODE chanmode, A_UINT32 mhz,
-				     int32_t mbpsx10_rate, uint8_t nss,
-				     uint8_t *rate)
+			     WMI_HOST_WLAN_PHY_MODE chanmode, A_UINT32 mhz,
+			     int32_t mbpsx10_rate, uint8_t nss,
+			     uint8_t *rate)
 {
 	int32_t ret = 0;
 
@@ -1226,6 +1217,7 @@ void wma_set_linkstate(tp_wma_handle wma, tpLinkStateParams params)
 				 vdev_id);
 			params->status = false;
 			status = QDF_STATUS_E_NOMEM;
+			goto out;
 		}
 		wma_vdev_set_pause_bit(vdev_id, PAUSE_TYPE_HOST);
 		if (wma_send_vdev_stop_to_fw(wma, vdev_id)) {
@@ -2433,11 +2425,20 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 		if (!IEEE80211_IS_BROADCAST(wh->i_addr1) &&
 		    !IEEE80211_IS_MULTICAST(wh->i_addr1)) {
 			if (pFc->wep) {
+				uint8_t mic_len, hdr_len;
+
 				/* Allocate extra bytes for privacy header and
 				 * trailer
 				 */
-				newFrmLen = frmLen + IEEE80211_CCMP_HEADERLEN +
-					    IEEE80211_CCMP_MICLEN;
+				if (iface->ucast_key_cipher ==
+				    WMI_CIPHER_AES_GCM) {
+					hdr_len = WLAN_IEEE80211_GCMP_HEADERLEN;
+					mic_len = WLAN_IEEE80211_GCMP_MICLEN;
+				} else {
+					hdr_len = IEEE80211_CCMP_HEADERLEN;
+					mic_len = IEEE80211_CCMP_MICLEN;
+				}
+				newFrmLen = frmLen + hdr_len + mic_len;
 				qdf_status =
 					cds_packet_alloc((uint16_t) newFrmLen,
 							 (void **)&pFrame,
@@ -2460,7 +2461,7 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 				qdf_mem_set(pFrame, newFrmLen, 0);
 				qdf_mem_copy(pFrame, wh, sizeof(*wh));
 				qdf_mem_copy(pFrame + sizeof(*wh) +
-					     IEEE80211_CCMP_HEADERLEN,
+					     hdr_len,
 					     pData + sizeof(*wh),
 					     frmLen - sizeof(*wh));
 

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -93,6 +84,8 @@
 #include "sme_api.h"
 #include "wlan_hdd_regulatory.h"
 #include <wlan_ipa_ucfg_api.h>
+#include <wlan_cfg80211_mc_cp_stats.h>
+#include <wlan_cp_stats_mc_ucfg_api.h>
 
 #define    IS_UP(_dev) \
 	(((_dev)->flags & (IFF_RUNNING|IFF_UP)) == (IFF_RUNNING|IFF_UP))
@@ -217,8 +210,6 @@ int hdd_sap_context_init(struct hdd_context *hdd_ctx)
 	mutex_init(&hdd_ctx->sap_lock);
 	qdf_wake_lock_create(&hdd_ctx->sap_wake_lock, "qcom_sap_wakelock");
 	qdf_spinlock_create(&hdd_ctx->sap_update_info_lock);
-
-	qdf_atomic_init(&hdd_ctx->is_acs_allowed);
 
 	return 0;
 }
@@ -691,6 +682,12 @@ static int __hdd_hostapd_set_mac_address(struct net_device *dev, void *addr)
 
 	qdf_mem_copy(&mac_addr, psta_mac_addr->sa_data, sizeof(mac_addr));
 
+	if (hdd_get_adapter_by_macaddr(hdd_ctx, mac_addr.bytes)) {
+		hdd_err("adapter exist with same mac address " MAC_ADDRESS_STR,
+			MAC_ADDR_ARRAY(mac_addr.bytes));
+		return -EINVAL;
+	}
+
 	if (qdf_is_macaddr_zero(&mac_addr)) {
 		hdd_err("MAC is all zero");
 		return -EINVAL;
@@ -706,6 +703,9 @@ static int __hdd_hostapd_set_mac_address(struct net_device *dev, void *addr)
 		return -EINVAL;
 	}
 
+	hdd_info("Changing MAC to " MAC_ADDRESS_STR " of interface %s ",
+		 MAC_ADDR_ARRAY(mac_addr.bytes),
+		 dev->name);
 	memcpy(dev->dev_addr, psta_mac_addr->sa_data, ETH_ALEN);
 	hdd_exit();
 	return 0;
@@ -1703,17 +1703,8 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 					adapter->session_id,
 					WLAN_IPA_AP_CONNECT,
 					adapter->dev->dev_addr);
-			if (status) {
-				hdd_err("WLAN_AP_CONNECT event failed!!");
-				/*
-				 * Make sure to set the event before proceeding
-				 * for error handling otherwise caller thread
-				 * will wait till 10 secs and no other
-				 * connection will go through before that.
-				 */
-				qdf_event_set(&hostapd_state->qdf_event);
-				goto stopbss;
-			}
+			if (status)
+				hdd_err("WLAN_AP_CONNECT event failed");
 		}
 
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
@@ -1785,6 +1776,10 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		we_custom_event_generic = we_custom_start_event;
 		hdd_ipa_set_tx_flow_info();
 
+		hdd_debug("check for SAP restart");
+		policy_mgr_check_concurrent_intf_and_restart_sap(
+						hdd_ctx->hdd_psoc);
+
 		if (policy_mgr_is_hw_mode_change_after_vdev_up(
 			hdd_ctx->hdd_psoc)) {
 			hdd_debug("check for possible hw mode change");
@@ -1818,18 +1813,6 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 
 		/* Invalidate the channel info. */
 		ap_ctx->operating_channel = 0;
-		if (ucfg_ipa_is_enabled()) {
-			status = ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev,
-					adapter->dev, adapter->device_mode,
-					ap_ctx->broadcast_sta_id,
-					adapter->session_id,
-					WLAN_IPA_AP_DISCONNECT,
-					adapter->dev->dev_addr);
-			if (status) {
-				hdd_err("WLAN_AP_DISCONNECT event failed!!");
-				goto stopbss;
-			}
-		}
 
 		/* reset the dfs_cac_status and dfs_cac_block_tx flag only when
 		 * the last BSS is stopped
@@ -2083,10 +2066,8 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 						   adapter->session_id,
 						   WLAN_IPA_CLIENT_CONNECT_EX,
 						   event->staMac.bytes);
-			if (status) {
+			if (status)
 				hdd_err("WLAN_CLIENT_CONNECT_EX event failed");
-				goto stopbss;
-			}
 		}
 
 		DPTRACE(qdf_dp_trace_mgmt_pkt(QDF_DP_TRACE_MGMT_PACKET_RECORD,
@@ -2462,7 +2443,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		/* send vendor event to hostapd only for hostapd based acs*/
 		if (!hdd_ctx->config->force_sap_acs)
 			wlan_hdd_cfg80211_acs_ch_select_evt(adapter);
-		qdf_atomic_set(&hdd_ctx->is_acs_allowed, 0);
+		qdf_atomic_set(&adapter->session.ap.acs_in_progress, 0);
 		return QDF_STATUS_SUCCESS;
 	case eSAP_ECSA_CHANGE_CHAN_IND:
 		hdd_debug("Channel change indication from peer for channel %d",
@@ -3053,24 +3034,9 @@ static int __iw_softap_set_two_ints_getnone(struct net_device *dev,
 		return ret;
 
 	switch (sub_cmd) {
-#ifdef WLAN_DEBUG
 	case QCSAP_IOCTL_SET_FW_CRASH_INJECT:
-		hdd_err("WE_SET_FW_CRASH_INJECT: %d %d",
-		       value[1], value[2]);
-		if (!hdd_ctx->config->crash_inject_enabled) {
-			hdd_err("Crash Inject ini disabled, Ignore Crash Inject");
-			return 0;
-		}
-		if (value[1] == 3) {
-			cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
-			return 0;
-		}
-		ret = wma_cli_set2_command(adapter->session_id,
-					   GEN_PARAM_CRASH_INJECT,
-					   value[1], value[2],
-					   GEN_CMD);
+		ret = hdd_crash_inject(adapter, value[1], value[2]);
 		break;
-#endif
 	case QCSAP_IOCTL_DUMP_DP_TRACE_LEVEL:
 		hdd_debug("WE_DUMP_DP_TRACE: %d %d",
 		       value[1], value[2]);
@@ -5273,7 +5239,7 @@ int __iw_get_softap_linkspeed(struct net_device *dev,
 	}
 	rc = wlan_hdd_get_linkspeed_for_peermac(adapter, &macAddress,
 						&link_speed);
-	if (!rc) {
+	if (rc) {
 		hdd_err("Unable to retrieve SME linkspeed");
 		return rc;
 	}
@@ -5318,6 +5284,70 @@ iw_get_softap_linkspeed(struct net_device *dev,
  *
  * Return: 0 on success, otherwise error value
  */
+#ifdef QCA_SUPPORT_CP_STATS
+static int
+__iw_get_peer_rssi(struct net_device *dev, struct iw_request_info *info,
+		   union iwreq_data *wrqu, char *extra)
+{
+	int ret, i;
+	struct hdd_context *hddctx;
+	struct stats_event rssi_info;
+	char macaddrarray[MAC_ADDRESS_STR_LEN];
+	struct hdd_adapter *adapter = netdev_priv(dev);
+	struct qdf_mac_addr macaddress = QDF_MAC_ADDR_BCAST_INIT;
+
+	hdd_enter();
+
+	hddctx = WLAN_HDD_GET_CTX(adapter);
+	ret = wlan_hdd_validate_context(hddctx);
+	if (ret != 0)
+		return ret;
+
+	ret = hdd_check_private_wext_control(hddctx, info);
+	if (0 != ret)
+		return ret;
+
+	hdd_debug("wrqu->data.length= %d", wrqu->data.length);
+
+	if (wrqu->data.length >= MAC_ADDRESS_STR_LEN - 1) {
+		if (copy_from_user(macaddrarray,
+				   wrqu->data.pointer,
+				   MAC_ADDRESS_STR_LEN - 1)) {
+			hdd_info("failed to copy data from user buffer");
+			return -EFAULT;
+		}
+
+		macaddrarray[MAC_ADDRESS_STR_LEN - 1] = '\0';
+		hdd_debug("%s", macaddrarray);
+
+		if (!mac_pton(macaddrarray, macaddress.bytes))
+			hdd_err("String to Hex conversion Failed");
+	}
+
+	ret = wlan_cfg80211_mc_cp_stats_get_peer_rssi(adapter->hdd_vdev,
+						      macaddress.bytes,
+						      &rssi_info);
+	if (ret) {
+		hdd_err("Unable to retrieve peer rssi: %d", ret);
+		wlan_cfg80211_mc_cp_stats_put_peer_rssi(&rssi_info);
+		return ret;
+	}
+
+	wrqu->data.length = scnprintf(extra, IW_PRIV_SIZE_MASK, "\n");
+	for (i = 0; i < rssi_info.num_peer_stats; i++) {
+		wrqu->data.length += scnprintf(extra + wrqu->data.length,
+					IW_PRIV_SIZE_MASK - wrqu->data.length,
+					"[%pM] [%d]\n",
+					rssi_info.peer_stats[i].peer_macaddr,
+					rssi_info.peer_stats[i].peer_rssi);
+	}
+	wrqu->data.length++;
+	wlan_cfg80211_mc_cp_stats_put_peer_rssi(&rssi_info);
+
+	hdd_exit();
+	return 0;
+}
+#else
 static int
 __iw_get_peer_rssi(struct net_device *dev, struct iw_request_info *info,
 		   union iwreq_data *wrqu, char *extra)
@@ -5390,11 +5420,11 @@ __iw_get_peer_rssi(struct net_device *dev, struct iw_request_info *info,
 		length += buf;
 	}
 	wrqu->data.length = length + 1;
-
 	hdd_exit();
 
 	return 0;
 }
+#endif
 
 /**
  * iw_get_peer_rssi() - get station's rssi
@@ -5866,7 +5896,7 @@ static const struct iw_priv_args hostapd_private_args[] = {
 	}
 	,
 	/* handlers for sub-ioctl */
-#ifdef WLAN_DEBUG
+#ifdef CONFIG_WLAN_DEBUG_CRASH_INJECT
 	{
 		QCSAP_IOCTL_SET_FW_CRASH_INJECT,
 		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 2,
@@ -6063,6 +6093,7 @@ QDF_STATUS hdd_init_ap_mode(struct hdd_adapter *adapter, bool reinit)
 	hdd_enter();
 
 	hdd_info("SSR in progress: %d", reinit);
+	qdf_atomic_init(&adapter->session.ap.acs_in_progress);
 
 	sapContext = hdd_hostapd_init_sap_session(adapter);
 	if (!sapContext) {
@@ -6167,6 +6198,7 @@ void hdd_deinit_ap_mode(struct hdd_context *hdd_ctx,
 		hdd_wmm_adapter_close(adapter);
 		clear_bit(WMM_INIT_DONE, &adapter->event_flags);
 	}
+	qdf_atomic_set(&adapter->session.ap.acs_in_progress, 0);
 	wlan_hdd_undo_acs(adapter);
 	hdd_softap_deinit_tx_rx(adapter);
 	/*
@@ -8111,6 +8143,7 @@ error:
 		sme_update_channel_list(hdd_ctx->hHal);
 	}
 	clear_bit(SOFTAP_INIT_DONE, &adapter->event_flags);
+	qdf_atomic_set(&adapter->session.ap.acs_in_progress, 0);
 	wlan_hdd_undo_acs(adapter);
 
 free:
@@ -8233,6 +8266,7 @@ static int __wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
 		qdf_spin_unlock(&hdd_ctx->sap_update_info_lock);
 	}
 	adapter->session.ap.sap_config.acs_cfg.acs_mode = false;
+	qdf_atomic_set(&adapter->session.ap.acs_in_progress, 0);
 	wlan_hdd_undo_acs(adapter);
 	qdf_mem_zero(&adapter->session.ap.sap_config.acs_cfg,
 						sizeof(struct sap_acs_cfg));

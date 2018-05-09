@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -643,6 +634,11 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 				ret_code = eSIR_SME_RESOURCES_UNAVAILABLE;
 				goto free;
 			}
+
+			/* Update the beacon/probe filter in mac_ctx */
+			lim_set_bcn_probe_filter(mac_ctx, session,
+						 &sme_start_bss_req->ssId,
+						 sme_start_bss_req->channelId);
 		}
 
 		if (QDF_NDI_MODE != sme_start_bss_req->bssPersona) {
@@ -675,9 +671,6 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 		}
 		/* Store the session related params in newly created session */
 		session->pLimStartBssReq = sme_start_bss_req;
-
-		/* Store PE session_id in session Table  */
-		session->peSessionId = session_id;
 
 		/* Store SME session Id in sessionTable */
 		session->smeSessionId = sme_start_bss_req->sessionId;
@@ -1328,17 +1321,21 @@ __lim_process_sme_join_req(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 				pe_err("Session Can not be created");
 				ret_code = eSIR_SME_RESOURCES_UNAVAILABLE;
 				goto end;
-			} else
+			} else {
 				pe_debug("SessionId:%d New session created",
 					session_id);
+			}
+
+			/* Update the beacon/probe filter in mac_ctx */
+			lim_set_bcn_probe_filter(mac_ctx, session,
+						 &sme_join_req->ssId,
+						 bss_desc->channelId);
 		}
 		session->max_amsdu_num = sme_join_req->max_amsdu_num;
 
 		/*
 		 * Store Session related parameters
-		 * Store PE session Id in session Table
 		 */
-		session->peSessionId = session_id;
 
 		/* store the smejoin req handle in session table */
 		session->pLimJoinReq = sme_join_req;
@@ -3416,7 +3413,7 @@ static void __lim_process_sme_delts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 				   &psessionEntry->dph.dphHashTable);
 	if (pStaDs != NULL) {
 		lim_send_edca_params(pMac, psessionEntry->gLimEdcaParamsActive,
-				     pStaDs->bssId);
+				     pStaDs->bssId, false);
 		status = eSIR_SUCCESS;
 	} else {
 		pe_err("Self entry missing in Hash Table");
@@ -3575,7 +3572,7 @@ static void lim_process_sme_update_edca_params(tpAniSirGlobal mac_ctx,
 	if (sta_ds_ptr)
 		lim_send_edca_params(mac_ctx,
 				     pe_session->gLimEdcaParamsActive,
-				     sta_ds_ptr->bssId);
+				     sta_ds_ptr->bssId, false);
 	else
 		pe_err("Self entry missing in Hash Table");
 }
@@ -4877,6 +4874,10 @@ static void lim_process_sme_channel_change_request(tpAniSirGlobal mac_ctx,
 		ch_change_req->targetChannel;
 	session_entry->limRFBand =
 		lim_get_rf_band(session_entry->currentOperChannel);
+
+	/* Update the global beacon filter */
+	lim_update_bcn_probe_filter(mac_ctx, session_entry);
+
 	/* Initialize 11h Enable Flag */
 	if (CHAN_HOP_ALL_BANDS_ENABLE ||
 	    BAND_5G == session_entry->limRFBand) {
@@ -5774,7 +5775,7 @@ static void obss_color_collision_process_color_change(tpAniSirGlobal mac_ctx,
 			is_color_collision = (obss_color_info->
 					     obss_color_bitmap_bit32to63 >>
 					     (session->he_op.bss_color -
-					      31)) & 0x01;
+					      32)) & 0x01;
 		if (!is_color_collision) {
 			pe_err("%d: color collision not found, curr_color: %d",
 			       session->smeSessionId,

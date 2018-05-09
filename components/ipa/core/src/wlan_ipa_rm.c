@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,28 +16,12 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
-
 /* Include Files */
 #include "wlan_ipa_core.h"
 #include "wlan_ipa_main.h"
 #include "cdp_txrx_ipa.h"
 #include "host_diag_core_event.h"
 
-
-#ifdef FEATURE_METERING
-void wlan_ipa_init_metering(struct wlan_ipa_priv *ipa_ctx)
-{
-	qdf_event_create(&ipa_ctx->ipa_uc_sharing_stats_comp);
-	qdf_event_create(&ipa_ctx->ipa_uc_set_quota_comp);
-}
-#endif
-
-#ifndef CONFIG_IPA_WDI_UNIFIED_API
 QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 				    uint64_t tx_packets,
 				    uint64_t rx_packets)
@@ -78,7 +59,7 @@ QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 		ipa_debug("Requesting CONS perf curr: %d, next: %d",
 			  ipa_ctx->curr_cons_bw, next_cons_bw);
 		ret = cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
-					     QDF_IPA_RM_RESOURCE_WLAN_CONS,
+					     QDF_IPA_CLIENT_WLAN1_CONS,
 					     next_cons_bw);
 		if (ret) {
 			ipa_err("RM CONS set perf profile failed: %d", ret);
@@ -93,7 +74,7 @@ QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 		ipa_debug("Requesting PROD perf curr: %d, next: %d",
 			  ipa_ctx->curr_prod_bw, next_prod_bw);
 		ret = cdp_ipa_set_perf_level(ipa_ctx->dp_soc,
-					     QDF_IPA_RM_RESOURCE_WLAN_PROD,
+					     QDF_IPA_CLIENT_WLAN1_PROD,
 					     next_prod_bw);
 		if (ret) {
 			ipa_err("RM PROD set perf profile failed: %d", ret);
@@ -106,6 +87,15 @@ QDF_STATUS wlan_ipa_set_perf_level(struct wlan_ipa_priv *ipa_ctx,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef FEATURE_METERING
+void wlan_ipa_init_metering(struct wlan_ipa_priv *ipa_ctx)
+{
+	qdf_event_create(&ipa_ctx->ipa_uc_sharing_stats_comp);
+	qdf_event_create(&ipa_ctx->ipa_uc_set_quota_comp);
+}
+#endif
+
+#ifndef CONFIG_IPA_WDI_UNIFIED_API
 /**
  * wlan_ipa_rm_cons_release() - WLAN consumer resource release handler
  *

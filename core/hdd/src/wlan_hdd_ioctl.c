@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /* Include Files */
@@ -2847,25 +2838,24 @@ static int drv_cmd_p2p_dev_addr(struct hdd_adapter *adapter,
 				uint8_t command_len,
 				struct hdd_priv_data *priv_data)
 {
-	int ret = 0;
+	struct qdf_mac_addr *addr = &hdd_ctx->p2p_device_address;
+	size_t user_size = qdf_min(sizeof(addr->bytes),
+				   (size_t)priv_data->total_len);
 
 	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
 			 TRACE_CODE_HDD_P2P_DEV_ADDR_IOCTL,
 			 adapter->session_id,
-			(unsigned int)(*(hdd_ctx->p2p_device_address.bytes + 2)
-				<< 24 | *(hdd_ctx->p2p_device_address.bytes
-				+ 3) << 16 | *(hdd_ctx->
-				p2p_device_address.bytes + 4) << 8 |
-				*(hdd_ctx->p2p_device_address.bytes +
-				5))));
+			 (unsigned int)(*(addr->bytes + 2) << 24 |
+				*(addr->bytes + 3) << 16 |
+				*(addr->bytes + 4) << 8 |
+				*(addr->bytes + 5))));
 
-	if (copy_to_user(priv_data->buf, hdd_ctx->p2p_device_address.bytes,
-			 sizeof(tSirMacAddr))) {
+	if (copy_to_user(priv_data->buf, addr->bytes, user_size)) {
 		hdd_err("failed to copy data to user buffer");
-		ret = -EFAULT;
+		return -EFAULT;
 	}
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -4983,13 +4973,16 @@ static int drv_cmd_get_ibss_peer_info_all(struct hdd_adapter *adapter,
 	/* Handle the command */
 	status = hdd_cfg80211_get_ibss_peer_info_all(adapter);
 	if (QDF_STATUS_SUCCESS == status) {
+		size_t user_size = qdf_min(WLAN_MAX_BUF_SIZE,
+					   priv_data->total_len);
+
 		/*
 		 * The variable extra needed to be allocated on the heap since
 		 * amount of memory required to copy the data for 32 devices
 		 * exceeds the size of 1024 bytes of default stack size. On
 		 * 64 bit devices, the default max stack size of 2048 bytes
 		 */
-		extra = qdf_mem_malloc(WLAN_MAX_BUF_SIZE);
+		extra = qdf_mem_malloc(user_size);
 
 		if (NULL == extra) {
 			hdd_err("memory allocation failed");
@@ -4998,7 +4991,7 @@ static int drv_cmd_get_ibss_peer_info_all(struct hdd_adapter *adapter,
 		}
 
 		/* Copy number of stations */
-		length = scnprintf(extra, WLAN_MAX_BUF_SIZE, "%d ",
+		length = scnprintf(extra, user_size, "%d ",
 				   sta_ctx->ibss_peer_info.numPeers);
 		numOfBytestoPrint = length;
 		for (idx = 0; idx < sta_ctx->ibss_peer_info.numPeers;
@@ -5021,8 +5014,8 @@ static int drv_cmd_get_ibss_peer_info_all(struct hdd_adapter *adapter,
 			rssi = sta_ctx->ibss_peer_info.peerInfoParams[idx].
 									rssi;
 
-			length += scnprintf((extra + length),
-				WLAN_MAX_BUF_SIZE - length,
+			length += scnprintf(extra + length,
+				user_size - length,
 				"%02x:%02x:%02x:%02x:%02x:%02x %d %d ",
 				mac_addr[0], mac_addr[1], mac_addr[2],
 				mac_addr[3], mac_addr[4], mac_addr[5],
@@ -5158,7 +5151,7 @@ static int drv_cmd_get_ibss_peer_info(struct hdd_adapter *adapter,
 	}
 
 	/* Success ! */
-	hdd_debug("%s", priv_data->buf);
+	hdd_debug("%s", extra);
 	ret = 0;
 
 exit:
@@ -6194,7 +6187,7 @@ static int hdd_driver_rxfilter_comand_handler(uint8_t *command,
 		value = command + 13;
 	ret = kstrtou8(value, 10, &type);
 	if (ret < 0) {
-		hdd_err("kstrtou8 failed invalid input value %d", type);
+		hdd_err("kstrtou8 failed invalid input value");
 		return -EINVAL;
 	}
 

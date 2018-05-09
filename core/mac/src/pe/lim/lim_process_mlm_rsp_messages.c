@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include "wni_api.h"
@@ -2519,7 +2510,7 @@ lim_process_sta_mlm_add_bss_rsp(tpAniSirGlobal mac_ctx,
 				session_entry->gLimEdcaParams, session_entry);
 			lim_send_edca_params(mac_ctx,
 				session_entry->gLimEdcaParamsActive,
-				sta_ds->bssId);
+				sta_ds->bssId, false);
 			rrm_cache_mgmt_tx_power(mac_ctx,
 				add_bss_params->txMgmtPower, session_entry);
 			if (lim_add_sta_self(mac_ctx, sta_idx, update_sta,
@@ -3080,7 +3071,7 @@ static void lim_process_switch_channel_join_req(
 		session_entry->pLimMlmJoinReq->bssDescription.bssId,
 		session_entry->currentOperChannel, session_entry->selfMacAddr,
 		session_entry->dot11mode,
-		session_entry->pLimJoinReq->addIEScan.length,
+		&session_entry->pLimJoinReq->addIEScan.length,
 		session_entry->pLimJoinReq->addIEScan.addIEdata);
 
 	if (session_entry->pePersona == QDF_P2P_CLIENT_MODE) {

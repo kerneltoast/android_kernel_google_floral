@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #ifndef _HALMSGAPI_H_
@@ -509,6 +500,10 @@ typedef struct {
 	uint8_t nss_5g;
 	uint16_t beacon_tx_rate;
 	uint32_t tx_aggregation_size;
+	uint32_t tx_aggregation_size_be;
+	uint32_t tx_aggregation_size_bk;
+	uint32_t tx_aggregation_size_vi;
+	uint32_t tx_aggregation_size_vo;
 	uint32_t rx_aggregation_size;
 #ifdef WLAN_FEATURE_11AX
 	bool he_capable;
@@ -1028,6 +1023,7 @@ typedef tSirRetStatus (*tHalMsgCallback)(tpAniSirGlobal pMac, uint32_t mesgId,
  * @acbk: Background access catagory
  * @acvi: video access catagory
  * @acvo: voice access catagory
+ * @mu_edca_params: flag to indicate MU EDCA
  */
 typedef struct {
 	uint16_t bssIdx;
@@ -1035,6 +1031,7 @@ typedef struct {
 	tSirMacEdcaParamRecord acbk;
 	tSirMacEdcaParamRecord acvi;
 	tSirMacEdcaParamRecord acvo;
+	bool mu_edca_params;
 } tEdcaParams, *tpEdcaParams;
 
 /**
@@ -1161,6 +1158,10 @@ typedef struct sMaxTxPowerPerBandParams {
  * @enable_bcast_probe_rsp: enable broadcast probe response
  * @fils_max_chan_guard_time: FILS max channel guard time
  * @pkt_err_disconn_th: packet drop threshold
+ * @tx_aggr_sw_retry_threshold_be: sw retry threashold for be
+ * @tx_aggr_sw_retry_threshold_bk: sw retry threashold for bk
+ * @tx_aggr_sw_retry_threshold_vi: sw retry threashold for vi
+ * @tx_aggr_sw_retry_threshold_vo: sw retry threashold for vo
  */
 struct add_sta_self_params {
 	tSirMacAddr self_mac_addr;
@@ -1172,11 +1173,19 @@ struct add_sta_self_params {
 	uint8_t nss_5g;
 	uint32_t status;
 	uint32_t tx_aggregation_size;
+	uint32_t tx_aggregation_size_be;
+	uint32_t tx_aggregation_size_bk;
+	uint32_t tx_aggregation_size_vi;
+	uint32_t tx_aggregation_size_vo;
 	uint32_t rx_aggregation_size;
 	bool enable_bcast_probe_rsp;
 	uint8_t fils_max_chan_guard_time;
 	uint16_t pkt_err_disconn_th;
 	uint8_t oce_feature_bitmap;
+	uint32_t tx_aggr_sw_retry_threshold_be;
+	uint32_t tx_aggr_sw_retry_threshold_bk;
+	uint32_t tx_aggr_sw_retry_threshold_vi;
+	uint32_t tx_aggr_sw_retry_threshold_vo;
 };
 
 /**

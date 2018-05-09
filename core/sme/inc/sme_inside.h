@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #if !defined(__SMEINSIDE_H)
@@ -62,17 +53,6 @@ ePhyChanBondState csr_convert_cb_ini_value_to_phy_cb_state(uint32_t cbIniValue);
 #define SME_TOTAL_COMMAND                (HAL_NUM_STA * 3)
 /* default sme timeout is set to 30 secs */
 #define SME_DEFAULT_CMD_TIMEOUT  30000
-
-typedef struct sGenericPmcCmd {
-	uint32_t size;          /* sizeof the data in the union, if any */
-	uint32_t sessionId;
-	/* if true, the cmd shalln't put back to the queue, free mem instead. */
-	bool fReleaseWhenDone;
-	union {
-		tSirSmeWowlEnterParams enterWowlInfo;
-		tSirSmeWowlExitParams exitWowlInfo;
-	} u;
-} tGenericPmcCmd;
 
 typedef struct sGenericQosCmd {
 	struct sme_qos_wmmtspecinfo tspecInfo;
@@ -173,7 +153,6 @@ typedef struct tagSmeCmd {
 	union {
 		struct roam_cmd roamCmd;
 		struct wmstatus_changecmd wmStatusChangeCmd;
-		tGenericPmcCmd pmcCmd;
 		tGenericQosCmd qosCmd;
 		tRemainChlCmd remainChlCmd;
 		struct addstafor_sessioncmd addStaSessionCmd;

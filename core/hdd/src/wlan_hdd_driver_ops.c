@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include <linux/platform_device.h>
@@ -269,8 +260,11 @@ int hdd_hif_open(struct device *dev, void *bdev, const struct hif_bus_id *bid,
 		}
 	}
 
+	hif_set_ce_service_max_yield_time(hif_ctx,
+				hdd_ctx->config->ce_service_max_yield_time);
 	pmo_ucfg_psoc_set_hif_handle(hdd_ctx->hdd_psoc, hif_ctx);
-
+	hif_set_ce_service_max_rx_ind_flush(hif_ctx,
+				hdd_ctx->config->ce_service_max_rx_ind_flush);
 	return 0;
 
 err_hif_close:
@@ -1496,17 +1490,26 @@ static void wlan_hdd_handle_the_pld_uevent(struct pld_uevent_data *uevent)
 	if (cds_is_driver_loading())
 		return;
 
+	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
+	if (!hdd_ctx) {
+		hdd_err("hdd_ctx is NULL return");
+		return;
+	}
+
+	if (hdd_ctx->driver_status == DRIVER_MODULES_CLOSED) {
+		hdd_info("Driver modules are already closed!");
+		return;
+	}
+
 	switch (uevent->uevent) {
 	case PLD_RECOVERY:
+		cds_set_target_ready(false);
 		hdd_pld_ipa_uc_shutdown_pipes();
 		break;
 	case PLD_FW_DOWN:
 		qdf_complete_wait_events();
 		cds_set_target_ready(false);
-		hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
-		if (hdd_ctx != NULL)
-			wlan_cfg80211_cleanup_scan_queue(
-					hdd_ctx->hdd_pdev, NULL);
+		wlan_cfg80211_cleanup_scan_queue(hdd_ctx->hdd_pdev, NULL);
 		break;
 	default:
 		break;
@@ -1526,8 +1529,8 @@ static void wlan_hdd_pld_uevent(struct device *dev,
 	hdd_enter();
 	hdd_info("pld event %d", uevent->uevent);
 
-	mutex_lock(&hdd_init_deinit_lock);
 	wlan_hdd_set_the_pld_uevent(uevent);
+	mutex_lock(&hdd_init_deinit_lock);
 	wlan_hdd_handle_the_pld_uevent(uevent);
 	mutex_unlock(&hdd_init_deinit_lock);
 

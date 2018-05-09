@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -114,6 +105,7 @@
 #include "wifi_pos_api.h"
 #include "wlan_hdd_spectralscan.h"
 #include "wlan_ipa_ucfg_api.h"
+#include <wlan_cfg80211_mc_cp_stats.h>
 
 #define g_mode_rates_size (12)
 #define a_mode_rates_size (8)
@@ -2177,23 +2169,6 @@ static void hdd_get_scan_band(struct hdd_context *hdd_ctx,
 	} else if (sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211ANY) {
 		*band = BAND_ALL;
 	}
-	/* Auto is not supported currently */
-	if (!((*band == BAND_2G) || (BAND_5G == *band))) {
-		hdd_err("invalid band");
-		if (HDD_EXTERNAL_ACS_FREQ_BAND_24GHZ ==
-			hdd_ctx->config->external_acs_freq_band)
-			*band = BAND_2G;
-		else
-			*band = BAND_5G;
-
-		hdd_update_acs_channel_list(sap_config, *band);
-	}
-
-	if (*band == BAND_2G &&
-	    (sap_config->acs_cfg.ch_width == CH_WIDTH_80MHZ ||
-	    sap_config->acs_cfg.ch_width == CH_WIDTH_160MHZ ||
-	    sap_config->acs_cfg.ch_width == CH_WIDTH_80P80MHZ))
-		sap_config->acs_cfg.ch_width = CH_WIDTH_40MHZ;
 }
 
 
@@ -2514,18 +2489,23 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 
 	ret = wlan_hdd_validate_context(hdd_ctx);
 	if (ret)
-		goto out;
+		return ret;
+
+	if (adapter->device_mode != QDF_SAP_MODE) {
+		hdd_err("Invalid device mode %d", adapter->device_mode);
+		return -EINVAL;
+	}
 
 	if (cds_is_sub_20_mhz_enabled()) {
 		hdd_err("ACS not supported in sub 20 MHz ch wd.");
-		ret = -EINVAL;
-		goto out;
+		return -EINVAL;
 	}
 
-	if (qdf_atomic_inc_return(&hdd_ctx->is_acs_allowed) > 1) {
+	if (qdf_atomic_read(&adapter->session.ap.acs_in_progress) > 0) {
 		hdd_err("ACS rejected as previous req already in progress");
-		ret = -EINVAL;
-		goto out;
+		return -EINVAL;
+	} else {
+		qdf_atomic_set(&adapter->session.ap.acs_in_progress, 1);
 	}
 
 	ret = wlan_cfg80211_nla_parse(tb, QCA_WLAN_VENDOR_ATTR_ACS_MAX, data,
@@ -2533,14 +2513,12 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 					 wlan_hdd_cfg80211_do_acs_policy);
 	if (ret) {
 		hdd_err("Invalid ATTR");
-		qdf_atomic_set(&hdd_ctx->is_acs_allowed, 0);
 		goto out;
 	}
 
 	if (!tb[QCA_WLAN_VENDOR_ATTR_ACS_HW_MODE]) {
 		hdd_err("Attr hw_mode failed");
 		ret = -EINVAL;
-		qdf_atomic_set(&hdd_ctx->is_acs_allowed, 0);
 		goto out;
 	}
 	hw_mode = nla_get_u8(tb[QCA_WLAN_VENDOR_ATTR_ACS_HW_MODE]);
@@ -2630,7 +2608,6 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 			if (!sap_config->acs_cfg.ch_list) {
 				hdd_err("ACS config alloc fail");
 				ret = -ENOMEM;
-				qdf_atomic_set(&hdd_ctx->is_acs_allowed, 0);
 				goto out;
 			}
 
@@ -2649,7 +2626,6 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 			if (!sap_config->acs_cfg.ch_list) {
 				hdd_err("ACS config alloc fail");
 				ret = -ENOMEM;
-				qdf_atomic_set(&hdd_ctx->is_acs_allowed, 0);
 				goto out;
 			}
 
@@ -2661,7 +2637,6 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 	}
 
 	if (!sap_config->acs_cfg.ch_list_count) {
-		qdf_atomic_set(&hdd_ctx->is_acs_allowed, 0);
 		hdd_err("acs config chan count 0");
 		ret = -EINVAL;
 		goto out;
@@ -2781,6 +2756,7 @@ out:
 		if (temp_skbuff != NULL)
 			return cfg80211_vendor_cmd_reply(temp_skbuff);
 	}
+	qdf_atomic_set(&adapter->session.ap.acs_in_progress, 0);
 	wlan_hdd_undo_acs(adapter);
 	clear_bit(ACS_IN_PROGRESS, &hdd_ctx->g_event_flags);
 
@@ -3065,9 +3041,7 @@ __wlan_hdd_cfg80211_get_supported_features(struct wiphy *wiphy,
 		fset |= WIFI_FEATURE_TDLS_OFFCHANNEL;
 	}
 #endif
-#ifdef WLAN_AP_STA_CONCURRENCY
 	fset |= WIFI_FEATURE_AP_STA;
-#endif
 	fset |= WIFI_FEATURE_RSSI_MONITOR;
 	fset |= WIFI_FEATURE_TX_TRANSMIT_POWER;
 	fset |= WIFI_FEATURE_SET_TX_POWER_LIMIT;
@@ -6322,6 +6296,8 @@ wlan_hdd_wifi_test_config_policy[
 			.type = NLA_U8},
 		[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_NO_ACK_AC] = {
 			.type = NLA_U8},
+		[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_LTF] = {
+			.type = NLA_U8},
 };
 
 /**
@@ -7470,6 +7446,23 @@ __wlan_hdd_cfg80211_set_wifi_test_config(struct wiphy *wiphy,
 		hdd_debug("Set NO_ACK to %d for ac %d", cfg_val, ac);
 		ret_val = sme_set_no_ack_policy(hdd_ctx->hHal,
 				adapter->session_id, cfg_val, ac);
+	}
+
+	if (tb[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_LTF]) {
+		cfg_val = nla_get_u8(tb[
+				QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_LTF]);
+		hdd_debug("Set HE LTF to %d", cfg_val);
+		ret_val = sme_set_auto_rate_he_ltf(hdd_ctx->hHal,
+						   adapter->session_id,
+						   cfg_val);
+		if (ret_val)
+			sme_err("Failed to set auto rate HE LTF");
+
+		ret_val = wma_cli_set_command(adapter->session_id,
+					      WMI_VDEV_PARAM_HE_LTF,
+					      cfg_val, VDEV_CMD);
+		if (ret_val)
+			goto send_err;
 	}
 
 	if (update_sme_cfg)
@@ -10941,6 +10934,7 @@ static int wlan_hdd_cfg80211_sap_configuration_set(struct wiphy *wiphy,
 #undef BPF_PROGRAM
 #undef BPF_MAX
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * define short names for the global vendor params
  * used by wlan_hdd_cfg80211_wakelock_stats_rsp_callback()
@@ -10991,8 +10985,6 @@ static int wlan_hdd_cfg80211_sap_configuration_set(struct wiphy *wiphy,
 		QCA_WLAN_VENDOR_ATTR_PNO_COMPLETE_CNT
 #define PARAM_PNO_MATCH_CNT \
 		QCA_WLAN_VENDOR_ATTR_PNO_MATCH_CNT
-
-
 
 /**
  * hdd_send_wakelock_stats() - API to send wakelock stats
@@ -11121,6 +11113,41 @@ nla_put_failure:
 	kfree_skb(skb);
 	return -EINVAL;
 }
+#endif
+
+#ifdef QCA_SUPPORT_CP_STATS
+static int wlan_hdd_process_wake_lock_stats(struct hdd_context *hdd_ctx)
+{
+	return wlan_cfg80211_mc_cp_stats_get_wakelock_stats(hdd_ctx->hdd_psoc,
+							    hdd_ctx->wiphy);
+}
+#else
+/**
+ * wlan_hdd_process_wake_lock_stats() - wrapper function to absract cp_stats
+ * or legacy get_wake_lock_stats API.
+ * @hdd_ctx: pointer to hdd_ctx
+ *
+ * Return: 0 on success; error number otherwise.
+ */
+static int wlan_hdd_process_wake_lock_stats(struct hdd_context *hdd_ctx)
+{
+	int ret;
+	QDF_STATUS qdf_status;
+	struct sir_wake_lock_stats wake_lock_stats = {0};
+
+	qdf_status = wma_get_wakelock_stats(&wake_lock_stats);
+	if (qdf_status != QDF_STATUS_SUCCESS) {
+		hdd_err("failed to get wakelock stats(err=%d)", qdf_status);
+		return -EINVAL;
+	}
+
+	ret = hdd_send_wakelock_stats(hdd_ctx, &wake_lock_stats);
+	if (ret)
+		hdd_err("Failed to post wake lock stats");
+
+	return ret;
+}
+#endif
 
 /**
  * __wlan_hdd_cfg80211_get_wakelock_stats() - gets wake lock stats
@@ -11141,10 +11168,8 @@ static int __wlan_hdd_cfg80211_get_wakelock_stats(struct wiphy *wiphy,
 					const void *data,
 					int data_len)
 {
+	int ret;
 	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
-	int status, ret;
-	struct sir_wake_lock_stats wake_lock_stats;
-	QDF_STATUS qdf_status;
 
 	hdd_enter();
 
@@ -11153,21 +11178,11 @@ static int __wlan_hdd_cfg80211_get_wakelock_stats(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	status = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != status)
+	ret = wlan_hdd_validate_context(hdd_ctx);
+	if (0 != ret)
 		return -EINVAL;
 
-	qdf_status = wma_get_wakelock_stats(&wake_lock_stats);
-	if (qdf_status != QDF_STATUS_SUCCESS) {
-		hdd_err("failed to get wakelock stats(err=%d)", qdf_status);
-		return -EINVAL;
-	}
-
-	ret = hdd_send_wakelock_stats(hdd_ctx,
-					&wake_lock_stats);
-	if (ret)
-		hdd_err("Failed to post wake lock stats");
-
+	ret = wlan_hdd_process_wake_lock_stats(hdd_ctx);
 	hdd_exit();
 	return ret;
 }
@@ -13584,18 +13599,27 @@ static int hdd_post_get_chain_rssi_rsp(struct hdd_context *hdd_ctx,
 				       struct chain_rssi_result *result)
 {
 	struct sk_buff *skb;
-	int data_len = sizeof(result->chain_rssi);
 
 	skb = cfg80211_vendor_cmd_alloc_reply_skb(hdd_ctx->wiphy,
-		data_len + NLA_HDRLEN + NLMSG_HDRLEN);
+		(sizeof(result->chain_rssi) + NLA_HDRLEN) +
+		(sizeof(result->ant_id) + NLA_HDRLEN) +
+		NLMSG_HDRLEN);
 
 	if (!skb) {
 		hdd_err("cfg80211_vendor_event_alloc failed");
 		return -ENOMEM;
 	}
 
-	if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_CHAIN_RSSI, data_len,
+	if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_CHAIN_RSSI,
+			sizeof(result->chain_rssi),
 			result->chain_rssi)) {
+		hdd_err("put fail");
+		goto nla_put_failure;
+	}
+
+	if (nla_put(skb, QCA_WLAN_VENDOR_ATTR_ANTENNA_INFO,
+			sizeof(result->ant_id),
+			result->ant_id)) {
 		hdd_err("put fail");
 		goto nla_put_failure;
 	}
@@ -13760,6 +13784,11 @@ static int __wlan_hdd_cfg80211_set_limit_offchan_param(struct wiphy *wiphy,
 	}
 
 	tos = nla_get_u8(tb[QCA_WLAN_VENDOR_ATTR_ACTIVE_TOS]);
+	if (tos >= HDD_MAX_AC) {
+		hdd_err("tos value %d exceeded Max value %d",
+			tos, HDD_MAX_AC);
+		goto fail;
+	}
 	hdd_debug("tos %d", tos);
 
 	if (!tb[QCA_WLAN_VENDOR_ATTR_ACTIVE_TOS_START]) {
@@ -14937,7 +14966,8 @@ hdd_wiphy_set_max_sched_scans(struct wiphy *wiphy, uint8_t max_scans)
  *
  * Return: None
  */
-#if defined(CFG80211_REPORT_BETTER_BSS_IN_SCHED_SCAN)
+#if defined(CFG80211_REPORT_BETTER_BSS_IN_SCHED_SCAN) || \
+	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 static void wlan_hdd_cfg80211_add_connected_pno_support(struct wiphy *wiphy)
 {
 	wiphy_ext_feature_set(wiphy,
@@ -18008,7 +18038,7 @@ static int wlan_hdd_cfg80211_connect_start(struct hdd_adapter *adapter,
 
 		qdf_runtime_pm_prevent_suspend(
 				&hdd_ctx->runtime_context.connect);
-		hdd_prevent_suspend_timeout(HDD_WAKELOCK_TIMEOUT_CONNECT,
+		hdd_prevent_suspend_timeout(HDD_WAKELOCK_CONNECT_COMPLETE,
 					    WIFI_POWER_EVENT_WAKELOCK_CONNECT);
 		qdf_status = sme_roam_connect(WLAN_HDD_GET_HAL_CTX(adapter),
 					  adapter->session_id, roam_profile,
@@ -20340,37 +20370,6 @@ static int __wlan_hdd_cfg80211_set_wiphy_params(struct wiphy *wiphy,
 		hdd_debug("set frag threshold %hu", frag_threshold);
 	}
 
-	if ((changed & WIPHY_PARAM_RETRY_SHORT)
-	    || (changed & WIPHY_PARAM_RETRY_LONG)) {
-		u8 retry_value = (changed & WIPHY_PARAM_RETRY_SHORT) ?
-				 wiphy->retry_short : wiphy->retry_long;
-
-		if ((WNI_CFG_LONG_RETRY_LIMIT_STAMIN > retry_value) ||
-		    (WNI_CFG_LONG_RETRY_LIMIT_STAMAX < retry_value)) {
-			hdd_err("Invalid Retry count: %hu", retry_value);
-			return -EINVAL;
-		}
-
-		if (changed & WIPHY_PARAM_RETRY_LONG) {
-			if (0 != sme_cfg_set_int(hHal,
-						WNI_CFG_LONG_RETRY_LIMIT,
-						retry_value)) {
-				hdd_err("sme_cfg_set_int failed for long retry count: %hu",
-					retry_value);
-				return -EIO;
-			}
-			hdd_debug("set long retry count %hu", retry_value);
-		} else if (changed & WIPHY_PARAM_RETRY_SHORT) {
-			if (0 != sme_cfg_set_int(hHal,
-						WNI_CFG_SHORT_RETRY_LIMIT,
-						retry_value)) {
-				hdd_err("sme_cfg_set_int failed for short retry count: %hu",
-					retry_value);
-				return -EIO;
-			}
-			hdd_debug("set short retry count %hu", retry_value);
-		}
-	}
 	hdd_exit();
 	return 0;
 }

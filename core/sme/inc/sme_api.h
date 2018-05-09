@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #if !defined(__SME_API_H)
@@ -483,22 +474,6 @@ static inline void sme_deregister_oem_data_rsp_callback(tHalHandle h_hal)
 
 #endif
 
-extern QDF_STATUS sme_enter_wowl(tHalHandle hHal,
-			 void (*enter_wowl_callback_routine)(void
-						  *callbackContext,
-						  QDF_STATUS  status),
-			 void *enter_wowl_callback_context,
-#ifdef WLAN_WAKEUP_EVENTS
-			 void (*wake_reason_ind_cb)(void *callbackContext,
-						 tpSirWakeReasonInd
-						 wake_reason_ind),
-			 void *wake_reason_ind_cb_ctx,
-#endif /* WLAN_WAKEUP_EVENTS */
-			 tpSirSmeWowlEnterParams wowl_enter_params,
-			 uint8_t sessionId);
-
-extern QDF_STATUS sme_exit_wowl(tHalHandle hHal,
-		tpSirSmeWowlExitParams wowl_exit_params);
 QDF_STATUS sme_roam_set_key(tHalHandle, uint8_t sessionId,
 		tCsrRoamSetKey *pSetKey, uint32_t *pRoamId);
 QDF_STATUS sme_get_country_code(tHalHandle hHal, uint8_t *pBuf, uint8_t *pbLen);
@@ -651,8 +626,6 @@ QDF_STATUS sme_update_enable_fast_roam_in_concurrency(tHalHandle hHal,
 QDF_STATUS sme_update_is_ese_feature_enabled(tHalHandle hHal, uint8_t sessionId,
 		const bool isEseIniFeatureEnabled);
 #endif /* FEATURE_WLAN_ESE */
-QDF_STATUS sme_update_config_fw_rssi_monitoring(tHalHandle hHal,
-		bool fEnableFwRssiMonitoring);
 QDF_STATUS sme_set_roam_rescan_rssi_diff(tHalHandle hHal,
 		uint8_t sessionId,
 		const uint8_t nRoamRescanRssiDiff);
@@ -2108,6 +2081,28 @@ int sme_send_addba_req(tHalHandle hal, uint8_t session_id, uint8_t tid,
  */
 int sme_set_no_ack_policy(tHalHandle hal, uint8_t session_id,
 		uint8_t val, uint8_t ac);
+
+/**
+ * sme_set_auto_rate_he_sgi() - Sets SGI for auto rate
+ * @hal: Pointer to HAL
+ * @session_id: SME session id
+ * @cfg_val: SGI configuration value
+ *
+ * Return: 0 on success else err code
+ */
+int sme_set_auto_rate_he_sgi(tHalHandle hal, uint8_t session_id,
+		uint8_t cfg_val);
+
+/**
+ * sme_set_auto_rate_he_ltf() - Sets HE LTF for auto rate
+ * @hal: Pointer to HAL
+ * @session_id: SME session id
+ * @cfg_val: LTF configuration value
+ *
+ * Return: 0 on success else err code
+ */
+int sme_set_auto_rate_he_ltf(tHalHandle hal, uint8_t session_id,
+		uint8_t cfg_val);
 
 #ifdef WLAN_FEATURE_11AX
 /**

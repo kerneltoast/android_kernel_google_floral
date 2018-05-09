@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -129,15 +120,6 @@ cb_notify_set_ese_feature_enabled(struct hdd_context *hdd_ctx,
 					  hdd_ctx->config->isEseIniFeatureEnabled);
 }
 #endif
-
-static void
-cb_notify_set_fw_rssi_monitoring(struct hdd_context *hdd_ctx, unsigned long notifyId)
-{
-	sme_update_config_fw_rssi_monitoring(hdd_ctx->hHal,
-					     hdd_ctx->config->
-					     fEnableFwRssiMonitoring);
-}
-
 static void cb_notify_set_opportunistic_scan_threshold_diff(struct hdd_context *hdd_ctx,
 							    unsigned long notifyId)
 {
@@ -472,13 +454,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_BMPS_MAXIMUM_LI_MIN,
 		     CFG_BMPS_MAXIMUM_LI_MAX),
 
-	REG_VARIABLE(CFG_BMPS_MODERATE_LI_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, nBmpsModListenInterval,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_BMPS_MODERATE_LI_DEFAULT,
-		     CFG_BMPS_MODERATE_LI_MIN,
-		     CFG_BMPS_MODERATE_LI_MAX),
-
 	REG_VARIABLE(CFG_DOT11_MODE_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, dot11Mode,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
@@ -760,28 +735,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_SCAN_PROBE_REPEAT_TIME_MIN,
 		     CFG_SCAN_PROBE_REPEAT_TIME_MAX),
 
-	REG_VARIABLE(CFG_RETRY_LIMIT_ZERO_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, retryLimitZero,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_RETRY_LIMIT_ZERO_DEFAULT,
-		     CFG_RETRY_LIMIT_ZERO_MIN,
-		     CFG_RETRY_LIMIT_ZERO_MAX),
-
-	REG_VARIABLE(CFG_RETRY_LIMIT_ONE_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, retryLimitOne,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_RETRY_LIMIT_ONE_DEFAULT,
-		     CFG_RETRY_LIMIT_ONE_MIN,
-		     CFG_RETRY_LIMIT_ONE_MAX),
-
-	REG_VARIABLE(CFG_RETRY_LIMIT_TWO_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, retryLimitTwo,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_RETRY_LIMIT_TWO_DEFAULT,
-		     CFG_RETRY_LIMIT_TWO_MIN,
-		     CFG_RETRY_LIMIT_TWO_MAX),
-
-#ifdef WLAN_AP_STA_CONCURRENCY
 	REG_VARIABLE(CFG_PASSIVE_MAX_CHANNEL_TIME_CONC_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, nPassiveMaxChnTimeConc,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -830,7 +783,6 @@ struct reg_table_entry g_registry_table[] = {
 		      CFG_IDLE_TIME_DEFAULT,
 		      CFG_IDLE_TIME_MIN,
 		      CFG_IDLE_TIME_MAX),
-#endif
 
 	REG_VARIABLE(CFG_MAX_PS_POLL_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, nMaxPsPoll,
@@ -853,56 +805,12 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_TX_POWER_CTRL_MIN,
 		     CFG_TX_POWER_CTRL_MAX),
 
-	REG_VARIABLE(CFG_LOW_GAIN_OVERRIDE_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, fIsLowGainOverride,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_LOW_GAIN_OVERRIDE_DEFAULT,
-		     CFG_LOW_GAIN_OVERRIDE_MIN,
-		     CFG_LOW_GAIN_OVERRIDE_MAX),
-
-	REG_VARIABLE(CFG_RSSI_FILTER_PERIOD_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, nRssiFilterPeriod,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_RSSI_FILTER_PERIOD_DEFAULT,
-		     CFG_RSSI_FILTER_PERIOD_MIN,
-		     CFG_RSSI_FILTER_PERIOD_MAX),
-
-	REG_VARIABLE(CFG_IGNORE_DTIM_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, fIgnoreDtim,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_IGNORE_DTIM_DEFAULT,
-		     CFG_IGNORE_DTIM_MIN,
-		     CFG_IGNORE_DTIM_MAX),
-
 	REG_VARIABLE(CFG_MAX_LI_MODULATED_DTIM_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, fMaxLIModulatedDTIM,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
 		     CFG_MAX_LI_MODULATED_DTIM_DEFAULT,
 		     CFG_MAX_LI_MODULATED_DTIM_MIN,
 		     CFG_MAX_LI_MODULATED_DTIM_MAX),
-
-	REG_VARIABLE(CFG_FW_HEART_BEAT_MONITORING_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, fEnableFwHeartBeatMonitoring,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_FW_HEART_BEAT_MONITORING_DEFAULT,
-		     CFG_FW_HEART_BEAT_MONITORING_MIN,
-		     CFG_FW_HEART_BEAT_MONITORING_MAX),
-
-	REG_VARIABLE(CFG_FW_BEACON_FILTERING_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, fEnableFwBeaconFiltering,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_FW_BEACON_FILTERING_DEFAULT,
-		     CFG_FW_BEACON_FILTERING_MIN,
-		     CFG_FW_BEACON_FILTERING_MAX),
-
-	REG_DYNAMIC_VARIABLE(CFG_FW_RSSI_MONITORING_NAME, WLAN_PARAM_Integer,
-			     struct hdd_config, fEnableFwRssiMonitoring,
-			     VAR_FLAGS_OPTIONAL |
-			     VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-			     CFG_FW_RSSI_MONITORING_DEFAULT,
-			     CFG_FW_RSSI_MONITORING_MIN,
-			     CFG_FW_RSSI_MONITORING_MAX,
-			     cb_notify_set_fw_rssi_monitoring, 0),
 
 	REG_VARIABLE(CFG_FW_MCC_RTS_CTS_PROT_NAME, WLAN_PARAM_Integer,
 		struct hdd_config, mcc_rts_cts_prot_enable,
@@ -1311,11 +1219,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_TL_DELAYED_TRGR_FRM_INT_MIN,
 		     CFG_TL_DELAYED_TRGR_FRM_INT_MAX),
 
-	REG_VARIABLE_STRING(CFG_WOWL_PATTERN_NAME, WLAN_PARAM_String,
-			    struct hdd_config, wowlPattern,
-			    VAR_FLAGS_OPTIONAL,
-			    (void *)CFG_WOWL_PATTERN_DEFAULT),
-
 	REG_VARIABLE(CFG_QOS_IMPLICIT_SETUP_ENABLED_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, bImplicitQosEnabled,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -1357,13 +1260,6 @@ struct reg_table_entry g_registry_table[] = {
 			    struct hdd_config, rm_capability,
 			    VAR_FLAGS_OPTIONAL,
 			    (void *) CFG_RM_CAPABILITY_DEFAULT),
-
-	REG_VARIABLE(CFG_FT_RESOURCE_REQ_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, fFTResourceReqSupported,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_FT_RESOURCE_REQ_DEFAULT,
-		     CFG_FT_RESOURCE_REQ_MIN,
-		     CFG_FT_RESOURCE_REQ_MAX),
 
 	REG_DYNAMIC_VARIABLE(CFG_NEIGHBOR_SCAN_TIMER_PERIOD_NAME,
 			     WLAN_PARAM_Integer,
@@ -1661,13 +1557,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_SINGLE_TID_RC_MIN,
 		     CFG_SINGLE_TID_RC_MAX),
 
-	REG_VARIABLE(CFG_DYNAMIC_PSPOLL_VALUE_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, dynamicPsPollValue,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_DYNAMIC_PSPOLL_VALUE_DEFAULT,
-		     CFG_DYNAMIC_PSPOLL_VALUE_MIN,
-		     CFG_DYNAMIC_PSPOLL_VALUE_MAX),
-
 	REG_VARIABLE(CFG_TELE_BCN_WAKEUP_EN_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, teleBcnWakeupEn,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -1695,27 +1584,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_QOS_ADDTS_WHEN_ACM_IS_OFF_DEFAULT,
 		     CFG_QOS_ADDTS_WHEN_ACM_IS_OFF_MIN,
 		     CFG_QOS_ADDTS_WHEN_ACM_IS_OFF_MAX),
-
-	REG_VARIABLE(CFG_VALIDATE_SCAN_LIST_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, fValidateScanList,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_VALIDATE_SCAN_LIST_DEFAULT,
-		     CFG_VALIDATE_SCAN_LIST_MIN,
-		     CFG_VALIDATE_SCAN_LIST_MAX),
-
-	REG_VARIABLE(CFG_NULLDATA_AP_RESP_TIMEOUT_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, nNullDataApRespTimeout,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_NULLDATA_AP_RESP_TIMEOUT_DEFAULT,
-		     CFG_NULLDATA_AP_RESP_TIMEOUT_MIN,
-		     CFG_NULLDATA_AP_RESP_TIMEOUT_MAX),
-
-	REG_VARIABLE(CFG_AP_DATA_AVAIL_POLL_PERIOD_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, apDataAvailPollPeriodInMs,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_AP_DATA_AVAIL_POLL_PERIOD_DEFAULT,
-		     CFG_AP_DATA_AVAIL_POLL_PERIOD_MIN,
-		     CFG_AP_DATA_AVAIL_POLL_PERIOD_MAX),
 
 	REG_VARIABLE(CFG_BAND_CAPABILITY_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, nBandCapability,
@@ -1886,34 +1754,12 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_QDF_TRACE_ENABLE_MIN,
 		     CFG_QDF_TRACE_ENABLE_MAX),
 
-	REG_VARIABLE(CFG_TELE_BCN_TRANS_LI_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, nTeleBcnTransListenInterval,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_TELE_BCN_TRANS_LI_DEFAULT,
-		     CFG_TELE_BCN_TRANS_LI_MIN,
-		     CFG_TELE_BCN_TRANS_LI_MAX),
-
-	REG_VARIABLE(CFG_TELE_BCN_TRANS_LI_NUM_IDLE_BCNS_NAME,
-		     WLAN_PARAM_Integer,
-		     struct hdd_config, nTeleBcnTransLiNumIdleBeacons,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_TELE_BCN_TRANS_LI_NUM_IDLE_BCNS_DEFAULT,
-		     CFG_TELE_BCN_TRANS_LI_NUM_IDLE_BCNS_MIN,
-		     CFG_TELE_BCN_TRANS_LI_NUM_IDLE_BCNS_MAX),
-
 	REG_VARIABLE(CFG_TELE_BCN_MAX_LI_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, nTeleBcnMaxListenInterval,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
 		     CFG_TELE_BCN_MAX_LI_DEFAULT,
 		     CFG_TELE_BCN_MAX_LI_MIN,
 		     CFG_TELE_BCN_MAX_LI_MAX),
-
-	REG_VARIABLE(CFG_TELE_BCN_MAX_LI_NUM_IDLE_BCNS_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, nTeleBcnMaxLiNumIdleBeacons,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_TELE_BCN_MAX_LI_NUM_IDLE_BCNS_DEFAULT,
-		     CFG_TELE_BCN_MAX_LI_NUM_IDLE_BCNS_MIN,
-		     CFG_TELE_BCN_MAX_LI_NUM_IDLE_BCNS_MAX),
 
 	REG_VARIABLE(CFG_ENABLE_BYPASS_11D_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, enableBypass11d,
@@ -2529,28 +2375,6 @@ struct reg_table_entry g_registry_table[] = {
 
 #endif
 
-#ifdef WLAN_SOFTAP_VSTA_FEATURE
-	REG_VARIABLE(CFG_VSTA_SUPPORT_ENABLE, WLAN_PARAM_Integer,
-		     struct hdd_config, fEnableVSTASupport,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_VSTA_SUPPORT_ENABLE_DEFAULT,
-		     CFG_VSTA_SUPPORT_ENABLE_MIN,
-		     CFG_VSTA_SUPPORT_ENABLE_MAX),
-#endif
-	REG_VARIABLE(CFG_ENABLE_LPWR_IMG_TRANSITION_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, enableLpwrImgTransition,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_LPWR_IMG_TRANSITION_DEFAULT,
-		     CFG_ENABLE_LPWR_IMG_TRANSITION_MIN,
-		     CFG_ENABLE_LPWR_IMG_TRANSITION_MAX),
-
-	REG_VARIABLE(CFG_ENABLE_LPWR_IMG_TRANSITION_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, enableLpwrImgTransition,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_LPWR_IMG_TRANSITION_DEFAULT,
-		     CFG_ENABLE_LPWR_IMG_TRANSITION_MIN,
-		     CFG_ENABLE_LPWR_IMG_TRANSITION_MAX),
-
 	REG_VARIABLE(CFG_SCAN_AGING_PARAM_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, scanAgingTimeout,
 		     VAR_FLAGS_OPTIONAL,
@@ -2666,13 +2490,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_DATA_STALL_DETECTION_MIN,
 		     CFG_ENABLE_DATA_STALL_DETECTION_MAX),
 
-	REG_VARIABLE(CFG_MAX_MEDIUM_TIME, WLAN_PARAM_Integer,
-		     struct hdd_config, cfgMaxMediumTime,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_MAX_MEDIUM_TIME_STADEFAULT,
-		     CFG_MAX_MEDIUM_TIME_STAMIN,
-		     CFG_MAX_MEDIUM_TIME_STAMAX),
-
 	REG_VARIABLE(CFG_ENABLE_VHT_FOR_24GHZ_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, enableVhtFor24GHzBand,
 		     VAR_FLAGS_OPTIONAL,
@@ -2697,27 +2514,6 @@ struct reg_table_entry g_registry_table[] = {
 			     CFG_ENABLE_FAST_ROAM_IN_CONCURRENCY_MIN,
 			     CFG_ENABLE_FAST_ROAM_IN_CONCURRENCY_MAX,
 			     cb_notify_set_enable_fast_roam_in_concurrency, 0),
-
-	REG_VARIABLE(CFG_ENABLE_ADAPT_RX_DRAIN_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, fEnableAdaptRxDrain,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK,
-		     CFG_ENABLE_ADAPT_RX_DRAIN_DEFAULT,
-		     CFG_ENABLE_ADAPT_RX_DRAIN_MIN,
-		     CFG_ENABLE_ADAPT_RX_DRAIN_MAX),
-
-	REG_VARIABLE(CFG_ENABLE_HEART_BEAT_OFFLOAD, WLAN_PARAM_Integer,
-		     struct hdd_config, enableIbssHeartBeatOffload,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_HEART_BEAT_OFFLOAD_DEFAULT,
-		     CFG_ENABLE_HEART_BEAT_OFFLOAD_MIN,
-		     CFG_ENABLE_HEART_BEAT_OFFLOAD_MAX),
-
-	REG_VARIABLE(CFG_ANTENNA_DIVERSITY_PARAM_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, antennaDiversity,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ANTENNA_DIVERSITY_PARAM_DEFAULT,
-		     CFG_ANTENNA_DIVERSITY_PARAM_MIN,
-		     CFG_ANTENNA_DIVERSITY_PARAM_MAX),
 
 	REG_VARIABLE(CFG_ENABLE_SNR_MONITORING_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, fEnableSNRMonitoring,
@@ -3161,22 +2957,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_CCK_TX_FIR_OVERRIDE_MIN,
 		     CFG_ENABLE_CCK_TX_FIR_OVERRIDE_MAX),
 
-	REG_VARIABLE(CFG_DEFAULT_RATE_INDEX_24GH, WLAN_PARAM_Integer,
-		     struct hdd_config, defaultRateIndex24Ghz,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_DEFAULT_RATE_INDEX_24GH_DEFAULT,
-		     CFG_DEFAULT_RATE_INDEX_24GH_MIN,
-		     CFG_DEFAULT_RATE_INDEX_24GH_MAX),
-
-#ifdef MEMORY_DEBUG
-	REG_VARIABLE(CFG_ENABLE_MEMORY_DEBUG_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, IsMemoryDebugSupportEnabled,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_MEMORY_DEBUG_DEFAULT,
-		     CFG_ENABLE_MEMORY_DEBUG_MIN,
-		     CFG_ENABLE_MEMORY_DEBUG_MAX),
-#endif
-
 	REG_VARIABLE(CFG_DEBUG_P2P_REMAIN_ON_CHANNEL_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, debugP2pRemainOnChannel,
 		     VAR_FLAGS_OPTIONAL,
@@ -3448,15 +3228,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_SELF_RECOVERY_MIN,
 		     CFG_ENABLE_SELF_RECOVERY_MAX),
 
-#ifdef FEATURE_WLAN_FORCE_SAP_SCC
-	REG_VARIABLE(CFG_SAP_SCC_CHAN_AVOIDANCE, WLAN_PARAM_Integer,
-		     struct hdd_config, SapSccChanAvoidance,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SAP_SCC_CHAN_AVOIDANCE_DEFAULT,
-		     CFG_SAP_SCC_CHAN_AVOIDANCE_MIN,
-		     CFG_SAP_SCC_CHAN_AVOIDANCE_MAX),
-#endif /* FEATURE_WLAN_FORCE_SAP_SCC */
-
 	REG_VARIABLE(CFG_ENABLE_SAP_SUSPEND, WLAN_PARAM_Integer,
 		     struct hdd_config, enable_sap_suspend,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -3685,6 +3456,13 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_LRO_ENABLED_DEFAULT,
 		     CFG_LRO_ENABLED_MIN,
 		     CFG_LRO_ENABLED_MAX),
+
+	REG_VARIABLE(CFG_GRO_ENABLED_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, gro_enable,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_GRO_ENABLED_DEFAULT,
+		     CFG_GRO_ENABLED_MIN,
+		     CFG_GRO_ENABLED_MAX),
 
 	REG_VARIABLE(CFG_BPF_PACKET_FILTER_OFFLOAD, WLAN_PARAM_Integer,
 		     struct hdd_config, bpf_packet_filter_enable,
@@ -4064,6 +3842,30 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_ROAM_BG_SCAN_BAD_RSSI_OFFSET_2G_MIN,
 		CFG_ROAM_BG_SCAN_BAD_RSSI_OFFSET_2G_MAX),
 
+	REG_VARIABLE(CFG_ROAM_HO_DELAY_FOR_RX_NAME,
+		WLAN_PARAM_Integer, struct hdd_config,
+		ho_delay_for_rx,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_ROAM_HO_DELAY_FOR_RX_DEFAULT,
+		CFG_ROAM_HO_DELAY_FOR_RX_MIN,
+		CFG_ROAM_HO_DELAY_FOR_RX_MAX),
+
+	REG_VARIABLE(CFG_MIN_DELAY_BTW_ROAM_SCAN_NAME,
+		WLAN_PARAM_Integer, struct hdd_config,
+		min_delay_btw_roam_scans,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_MIN_DELAY_BTW_ROAM_SCAN_DEFAULT,
+		CFG_MIN_DELAY_BTW_ROAM_SCAN_MIN,
+		CFG_MIN_DELAY_BTW_ROAM_SCAN_MAX),
+
+	REG_VARIABLE(CFG_ROAM_SCAN_TRIGGER_REASON_BITMASK_NAME,
+		WLAN_PARAM_HexInteger, struct hdd_config,
+		roam_trigger_reason_bitmask,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_ROAM_SCAN_TRIGGER_REASON_BITMASK_DEFAULT,
+		CFG_ROAM_SCAN_TRIGGER_REASON_BITMASK_MIN,
+		CFG_ROAM_SCAN_TRIGGER_REASON_BITMASK_MAX),
+
 	REG_VARIABLE(CFG_ENABLE_FATAL_EVENT_TRIGGER, WLAN_PARAM_Integer,
 			struct hdd_config, enable_fatal_event,
 			VAR_FLAGS_OPTIONAL |
@@ -4223,6 +4025,7 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_ENABLE_NAN_NDI_CHANNEL_MIN,
 		CFG_ENABLE_NAN_NDI_CHANNEL_MAX),
 #endif
+
 	REG_VARIABLE(CFG_CREATE_BUG_REPORT_FOR_SCAN, WLAN_PARAM_Integer,
 		struct hdd_config, bug_report_for_no_scan_results,
 		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -4341,6 +4144,20 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_RX_MODE_MIN,
 		CFG_RX_MODE_MAX),
 
+	REG_VARIABLE(CFG_CE_SERVICE_MAX_YIELD_TIME_NAME, WLAN_PARAM_Integer,
+		struct hdd_config, ce_service_max_yield_time,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_CE_SERVICE_MAX_YIELD_TIME_DEFAULT,
+		CFG_CE_SERVICE_MAX_YIELD_TIME_MIN,
+		CFG_CE_SERVICE_MAX_YIELD_TIME_MAX),
+
+	REG_VARIABLE(CFG_CE_SERVICE_MAX_RX_IND_FLUSH_NAME, WLAN_PARAM_Integer,
+		struct hdd_config, ce_service_max_rx_ind_flush,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_CE_SERVICE_MAX_RX_IND_FLUSH_DEFAULT,
+		CFG_CE_SERVICE_MAX_RX_IND_FLUSH_MIN,
+		CFG_CE_SERVICE_MAX_RX_IND_FLUSH_MAX),
+
 	REG_VARIABLE_STRING(CFG_RPS_RX_QUEUE_CPU_MAP_LIST_NAME,
 				 WLAN_PARAM_String,
 				 struct hdd_config, cpu_map_list,
@@ -4431,11 +4248,39 @@ struct reg_table_entry g_registry_table[] = {
 			CFG_OPTIMIZE_CA_EVENT_ENABLE),
 
 	REG_VARIABLE(CFG_TX_AGGREGATION_SIZE, WLAN_PARAM_Integer,
-		struct hdd_config, tx_aggregation_size,
-		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		CFG_TX_AGGREGATION_SIZE_DEFAULT,
-		CFG_TX_AGGREGATION_SIZE_MIN,
-		CFG_TX_AGGREGATION_SIZE_MAX),
+		     struct hdd_config, tx_aggregation_size,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZE_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZE_MIN,
+		     CFG_TX_AGGREGATION_SIZE_MAX),
+
+	REG_VARIABLE(CFG_TX_AGGREGATION_SIZEBE, WLAN_PARAM_Integer,
+		     struct hdd_config, tx_aggregation_size_be,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZEBE_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZEBE_MIN,
+		     CFG_TX_AGGREGATION_SIZEBE_MAX),
+
+	REG_VARIABLE(CFG_TX_AGGREGATION_SIZEBK, WLAN_PARAM_Integer,
+		     struct hdd_config, tx_aggregation_size_bk,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZEBK_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZEBK_MIN,
+		     CFG_TX_AGGREGATION_SIZEBK_MAX),
+
+	REG_VARIABLE(CFG_TX_AGGREGATION_SIZEVI, WLAN_PARAM_Integer,
+		     struct hdd_config, tx_aggregation_size_vi,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZEVI_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZEVI_MIN,
+		     CFG_TX_AGGREGATION_SIZEVI_MAX),
+
+	REG_VARIABLE(CFG_TX_AGGREGATION_SIZEVO, WLAN_PARAM_Integer,
+		     struct hdd_config, tx_aggregation_size_vo,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZEVO_DEFAULT,
+		     CFG_TX_AGGREGATION_SIZEVO_MIN,
+		     CFG_TX_AGGREGATION_SIZEVO_MAX),
 
 	REG_VARIABLE(CFG_RX_AGGREGATION_SIZE, WLAN_PARAM_Integer,
 		struct hdd_config, rx_aggregation_size,
@@ -4443,6 +4288,35 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_RX_AGGREGATION_SIZE_DEFAULT,
 		CFG_RX_AGGREGATION_SIZE_MIN,
 		CFG_RX_AGGREGATION_SIZE_MAX),
+
+	REG_VARIABLE(CFG_TX_AGGR_SW_RETRY_BE, WLAN_PARAM_Integer,
+		     struct hdd_config, tx_aggr_sw_retry_threshold_be,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGR_SW_RETRY_BE_DEFAULT,
+		     CFG_TX_AGGR_SW_RETRY_BE_MIN,
+		     CFG_TX_AGGR_SW_RETRY_BE_MAX),
+
+	REG_VARIABLE(CFG_TX_AGGR_SW_RETRY_BK, WLAN_PARAM_Integer,
+		     struct hdd_config, tx_aggr_sw_retry_threshold_bk,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGR_SW_RETRY_BK_DEFAULT,
+		     CFG_TX_AGGR_SW_RETRY_BK_MIN,
+		     CFG_TX_AGGR_SW_RETRY_BK_MAX),
+
+	REG_VARIABLE(CFG_TX_AGGR_SW_RETRY_VI, WLAN_PARAM_Integer,
+		     struct hdd_config, tx_aggr_sw_retry_threshold_vi,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGR_SW_RETRY_VI_DEFAULT,
+		     CFG_TX_AGGR_SW_RETRY_VI_MIN,
+		     CFG_TX_AGGR_SW_RETRY_VI_MAX),
+
+	REG_VARIABLE(CFG_TX_AGGR_SW_RETRY_VO, WLAN_PARAM_Integer,
+		     struct hdd_config, tx_aggr_sw_retry_threshold_vo,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_TX_AGGR_SW_RETRY_VO_DEFAULT,
+		     CFG_TX_AGGR_SW_RETRY_VO_MIN,
+		     CFG_TX_AGGR_SW_RETRY_VO_MAX),
+
 	REG_VARIABLE(CFG_SAP_MAX_INACTIVITY_OVERRIDE_NAME, WLAN_PARAM_Integer,
 		struct hdd_config, sap_max_inactivity_override,
 		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -4607,13 +4481,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_HE_STA_OBSSPD_MAX),
 #endif
 
-	REG_VARIABLE(CFG_L1SS_SLEEP_ALLOWED_NAME, WLAN_PARAM_Integer,
-		struct hdd_config, l1ss_sleep_allowed,
-		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		CFG_L1SS_SLEEP_ALLOWED_DEFAULT,
-		CFG_L1SS_SLEEP_ALLOWED_MIN,
-		CFG_L1SS_SLEEP_ALLOWED_MAX),
-
 	REG_VARIABLE(CFG_ARP_AC_CATEGORY, WLAN_PARAM_Integer,
 		struct hdd_config, arp_ac_category,
 		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -4759,13 +4626,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_EXTERNAL_ACS_POLICY_DEFAULT,
 		     CFG_EXTERNAL_ACS_POLICY_MIN,
 		     CFG_EXTERNAL_ACS_POLICY_MAX),
-
-	REG_VARIABLE(CFG_EXTERNAL_ACS_FREQ_BAND, WLAN_PARAM_Integer,
-		     struct hdd_config, external_acs_freq_band,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_EXTERNAL_ACS_FREQ_BAND_DEFAULT,
-		     CFG_EXTERNAL_ACS_FREQ_BAND_MIN,
-		     CFG_EXTERNAL_ACS_FREQ_BAND_MAX),
 
 	REG_VARIABLE(CFG_DROPPED_PKT_DISCONNECT_TH_NAME, WLAN_PARAM_Integer,
 		struct hdd_config, pkt_err_disconn_th,
@@ -5538,6 +5398,37 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_TX_SCH_DELAY_MAX),
 
 	HDD_GREEN_AP_REG_VARIABLES
+
+	REG_VARIABLE(CFG_ENABLE_UNIT_TEST_FRAMEWORK_NAME,
+		     WLAN_PARAM_Integer,
+		     struct hdd_config, is_unit_test_framework_enabled,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_UINT_TEST_FRAMEWORK_DEFAULT,
+		     CFG_ENABLE_UNIT_TEST_FRAMEWORK_MIN,
+		     CFG_ENABLE_UNIT_TEST_FRAMEWORK_MAX),
+
+	REG_VARIABLE(CFG_ROAM_FT_OPEN_ENABLE_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, enable_ftopen,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ROAM_FT_OPEN_ENABLE_DEFAULT,
+		     CFG_ROAM_FT_OPEN_ENABLE_MIN,
+		     CFG_ROAM_FT_OPEN_ENABLE_MAX),
+
+	REG_VARIABLE(CFG_ENABLE_RTT_MAC_RANDOMIZATION_NAME,
+		     WLAN_PARAM_Integer,
+		     struct hdd_config, enable_rtt_mac_randomization,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_RTT_MAC_RANDOMIZATION_DEFAULT,
+		     CFG_ENABLE_RTT_MAC_RANDOMIZATION_MIN,
+		     CFG_ENABLE_RTT_MAC_RANDOMIZATION_MAX),
+
+	REG_VARIABLE(CFG_ENABLE_SECONDARY_RATE_NAME,
+		     WLAN_PARAM_HexInteger,
+		     struct hdd_config, enable_secondary_rate,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_SECONDARY_RATE_DEFAULT,
+		     CFG_ENABLE_SECONDARY_RATE_MIN,
+		     CFG_ENABLE_SECONDARY_RATE_MAX),
 };
 
 
@@ -6289,8 +6180,6 @@ static void hdd_set_power_save_offload_config(struct hdd_context *hdd_ctx)
 		listenInterval = pConfig->nBmpsMinListenInterval;
 	else if (strcmp(pConfig->PowerUsageControl, "Max") == 0)
 		listenInterval = pConfig->nBmpsMaxListenInterval;
-	else if (strcmp(pConfig->PowerUsageControl, "Mod") == 0)
-		listenInterval = pConfig->nBmpsModListenInterval;
 
 	/*
 	 * Based on Mode Set the LI
@@ -6696,9 +6585,6 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [IsRArateLimitEnabled] Value = [%u] ",
 		  hdd_ctx->config->IsRArateLimitEnabled);
 #endif
-	hdd_debug("Name = [fFTResourceReqSupported] Value = [%u] ",
-		  hdd_ctx->config->fFTResourceReqSupported);
-
 	hdd_debug("Name = [nNeighborLookupRssiThreshold] Value = [%u] ",
 		  hdd_ctx->config->nNeighborLookupRssiThreshold);
 	hdd_debug("Name = [%s] Value = [%d] ",
@@ -6744,33 +6630,18 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 		  hdd_ctx->config->burstSizeDefinition);
 	hdd_debug("Name = [tsInfoAckPolicy] Value = [0x%x] ",
 		  hdd_ctx->config->tsInfoAckPolicy);
-	hdd_debug("Name = [rfSettlingTimeUs] Value = [%u] ",
-		  hdd_ctx->config->rfSettlingTimeUs);
 	hdd_debug("Name = [bSingleTidRc] Value = [%u] ",
 		  hdd_ctx->config->bSingleTidRc);
-	hdd_debug("Name = [gDynamicPSPollvalue] Value = [%u] ",
-		  hdd_ctx->config->dynamicPsPollValue);
 	hdd_debug("Name = [gAddTSWhenACMIsOff] Value = [%u] ",
 		  hdd_ctx->config->AddTSWhenACMIsOff);
-	hdd_debug("Name = [gValidateScanList] Value = [%u] ",
-		  hdd_ctx->config->fValidateScanList);
-
 	hdd_debug("Name = [gStaKeepAlivePeriod] Value = [%u] ",
 		  hdd_ctx->config->infraStaKeepAlivePeriod);
-	hdd_debug("Name = [gApDataAvailPollInterVal] Value = [%u] ",
-		  hdd_ctx->config->apDataAvailPollPeriodInMs);
 	hdd_debug("Name = [BandCapability] Value = [%u] ",
 		  hdd_ctx->config->nBandCapability);
 	hdd_debug("Name = [teleBcnWakeupEnable] Value = [%u] ",
 		  hdd_ctx->config->teleBcnWakeupEn);
-	hdd_debug("Name = [transListenInterval] Value = [%u] ",
-		  hdd_ctx->config->nTeleBcnTransListenInterval);
-	hdd_debug("Name = [transLiNumIdleBeacons] Value = [%u] ",
-		  hdd_ctx->config->nTeleBcnTransLiNumIdleBeacons);
 	hdd_debug("Name = [maxListenInterval] Value = [%u] ",
 		  hdd_ctx->config->nTeleBcnMaxListenInterval);
-	hdd_debug("Name = [maxLiNumIdleBeacons] Value = [%u] ",
-		  hdd_ctx->config->nTeleBcnMaxLiNumIdleBeacons);
 	hdd_debug("Name = [gEnableBypass11d] Value = [%u] ",
 		  hdd_ctx->config->enableBypass11d);
 	hdd_debug("Name = [gEnableDFSChnlScan] Value = [%u] ",
@@ -6791,18 +6662,12 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 		  hdd_ctx->config->ignoreDynamicDtimInP2pMode);
 	hdd_debug("Name = [enableRxSTBC] Value = [%u] ",
 		  hdd_ctx->config->enableRxSTBC);
-	hdd_debug("Name = [gEnableLpwrImgTransition] Value = [%u] ",
-		  hdd_ctx->config->enableLpwrImgTransition);
 	hdd_debug("Name = [gEnableSSR] Value = [%u] ",
 		  hdd_ctx->config->enableSSR);
 	hdd_debug("Name = [gEnableDataStallDetection] Value = [%u] ",
 		  hdd_ctx->config->enable_data_stall_det);
 	hdd_debug("Name = [gEnableVhtFor24GHzBand] Value = [%u] ",
 		  hdd_ctx->config->enableVhtFor24GHzBand);
-	hdd_debug("Name = [gEnableIbssHeartBeatOffload] Value = [%u] ",
-		  hdd_ctx->config->enableIbssHeartBeatOffload);
-	hdd_debug("Name = [gAntennaDiversity] Value = [%u] ",
-		  hdd_ctx->config->antennaDiversity);
 	hdd_debug("Name = [gGoLinkMonitorPeriod] Value = [%u]",
 		  hdd_ctx->config->goLinkMonitorPeriod);
 	hdd_debug("Name = [gApLinkMonitorPeriod] Value = [%u]",
@@ -6995,6 +6860,12 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 		  hdd_ctx->config->max_scan_count);
 	hdd_debug("Name = [%s] value = [%d]",
 		  CFG_RX_MODE_NAME, hdd_ctx->config->rx_mode);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_CE_SERVICE_MAX_YIELD_TIME_NAME,
+		  hdd_ctx->config->ce_service_max_yield_time);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_CE_SERVICE_MAX_RX_IND_FLUSH_NAME,
+		  hdd_ctx->config->ce_service_max_rx_ind_flush);
 	hdd_debug("Name = [%s] Value = [%u]",
 		  CFG_CE_CLASSIFY_ENABLE_NAME,
 		  hdd_ctx->config->ce_classify_enabled);
@@ -7075,6 +6946,15 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] Value = [%u]",
 		CFG_ROAM_BG_SCAN_BAD_RSSI_OFFSET_2G_NAME,
 		hdd_ctx->config->roam_bad_rssi_thresh_offset_2g);
+	hdd_debug("Name = [%s] Value = [%u]",
+		CFG_ROAM_HO_DELAY_FOR_RX_NAME,
+		hdd_ctx->config->ho_delay_for_rx);
+	hdd_debug("Name = [%s] Value = [%u]",
+		CFG_MIN_DELAY_BTW_ROAM_SCAN_NAME,
+		hdd_ctx->config->min_delay_btw_roam_scans);
+	hdd_debug("Name = [%s] Value = [%u]",
+		CFG_ROAM_SCAN_TRIGGER_REASON_BITMASK_NAME,
+		hdd_ctx->config->roam_trigger_reason_bitmask);
 	hdd_debug("Name = [%s] Value = [%u]",
 		CFG_MIN_REST_TIME_NAME,
 		hdd_ctx->config->min_rest_time_conc);
@@ -7240,9 +7120,6 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] Value = [%d]",
 		 CFG_EXTERNAL_ACS_POLICY,
 		 hdd_ctx->config->external_acs_policy);
-	hdd_debug("Name = [%s] Value = [%d]",
-		 CFG_EXTERNAL_ACS_FREQ_BAND,
-		 hdd_ctx->config->external_acs_freq_band);
 	hdd_debug("Name = [%s] value = [%u]",
 		 CFG_DROPPED_PKT_DISCONNECT_TH_NAME,
 		 hdd_ctx->config->pkt_err_disconn_th);
@@ -7435,6 +7312,16 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 		  hdd_ctx->config->channel_select_logic_conc);
 
 	hdd_nud_cfg_print(hdd_ctx);
+	hdd_debug("Name = [%s] value = [0x%x]",
+		  CFG_ENABLE_UNIT_TEST_FRAMEWORK_NAME,
+		  hdd_ctx->config->is_unit_test_framework_enabled);
+	hdd_debug("Name = [%s] Value = [%u]",
+		  CFG_ROAM_FT_OPEN_ENABLE_NAME,
+		  hdd_ctx->config->enable_ftopen);
+
+	hdd_debug("Name = [%s] value = [0x%x]",
+		  CFG_ENABLE_SECONDARY_RATE_NAME,
+		  hdd_ctx->config->enable_secondary_rate);
 }
 
 
@@ -8134,7 +8021,6 @@ static bool hdd_update_vht_cap_in_cfg(struct hdd_context *hdd_ctx)
 bool hdd_update_config_cfg(struct hdd_context *hdd_ctx)
 {
 	bool status = true;
-	uint32_t val;
 	struct hdd_config *config = hdd_ctx->config;
 
 	/*
@@ -8204,45 +8090,6 @@ bool hdd_update_config_cfg(struct hdd_context *hdd_ctx)
 		hdd_err("Couldn't pass on WNI_CFG_MAX_PS_POLL to CFG");
 	}
 
-	if (sme_cfg_set_int (hdd_ctx->hHal, WNI_CFG_LOW_GAIN_OVERRIDE,
-		    config->fIsLowGainOverride) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_LOW_GAIN_OVERRIDE to HAL");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_RSSI_FILTER_PERIOD,
-		    config->nRssiFilterPeriod) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_RSSI_FILTER_PERIOD to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_IGNORE_DTIM,
-		     config->fIgnoreDtim) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_IGNORE_DTIM to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_PS_ENABLE_HEART_BEAT,
-		    config->fEnableFwHeartBeatMonitoring)
-		    == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_PS_HEART_BEAT to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_PS_ENABLE_BCN_FILTER,
-		    config->fEnableFwBeaconFiltering) ==
-		    QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_PS_BCN_FILTER to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_PS_ENABLE_RSSI_MONITOR,
-		    config->fEnableFwRssiMonitoring) ==
-		    QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_PS_RSSI_MONITOR to CFG");
-	}
-
 	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_PS_DATA_INACTIVITY_TIMEOUT,
 		    config->nDataInactivityTimeout) == QDF_STATUS_E_FAILURE) {
 		status = false;
@@ -8298,38 +8145,11 @@ bool hdd_update_config_cfg(struct hdd_context *hdd_ctx)
 		hdd_err("Couldn't pass on WNI_CFG_TELE_BCN_WAKEUP_EN to CFG");
 	}
 
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_TELE_BCN_TRANS_LI,
-		    config->nTeleBcnTransListenInterval) ==
-		    QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_TELE_BCN_TRANS_LI to CFG");
-	}
-
 	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_TELE_BCN_MAX_LI,
 		    config->nTeleBcnMaxListenInterval) ==
 		    QDF_STATUS_E_FAILURE) {
 		status = false;
 		hdd_err("Couldn't pass on WNI_CFG_TELE_BCN_MAX_LI to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_TELE_BCN_TRANS_LI_IDLE_BCNS,
-		    config->nTeleBcnTransLiNumIdleBeacons) ==
-		    QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_TELE_BCN_TRANS_LI_IDLE_BCNS to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_TELE_BCN_MAX_LI_IDLE_BCNS,
-		    config->nTeleBcnMaxLiNumIdleBeacons) ==
-		    QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_TELE_BCN_MAX_LI_IDLE_BCNS to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_RF_SETTLING_TIME_CLK,
-		    config->rfSettlingTimeUs) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_RF_SETTLING_TIME_CLK to CFG");
 	}
 
 	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_INFRA_STA_KEEP_ALIVE_PERIOD,
@@ -8338,24 +8158,7 @@ bool hdd_update_config_cfg(struct hdd_context *hdd_ctx)
 		status = false;
 		hdd_err("Couldn't pass on WNI_CFG_INFRA_STA_KEEP_ALIVE_PERIOD to CFG");
 	}
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_DYNAMIC_PS_POLL_VALUE,
-		    config->dynamicPsPollValue) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_DYNAMIC_PS_POLL_VALUE to CFG");
-	}
 
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_PS_NULLDATA_AP_RESP_TIMEOUT,
-		    config->nNullDataApRespTimeout) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_PS_NULLDATA_DELAY_TIMEOUT to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_AP_DATA_AVAIL_POLL_PERIOD,
-		    config->apDataAvailPollPeriodInMs) ==
-		    QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_AP_DATA_AVAIL_POLL_PERIOD to CFG");
-	}
 	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_FRAGMENTATION_THRESHOLD,
 		    config->FragmentationThreshold) == QDF_STATUS_E_FAILURE) {
 		status = false;
@@ -8392,28 +8195,6 @@ bool hdd_update_config_cfg(struct hdd_context *hdd_ctx)
 		hdd_err("Couldn't pass on WNI_CFG_ENABLE_MC_ADDR_LIST to CFG");
 	}
 
-#ifdef WLAN_SOFTAP_VSTA_FEATURE
-	if (config->fEnableVSTASupport) {
-		sme_cfg_get_int(hdd_ctx->hHal, WNI_CFG_ASSOC_STA_LIMIT, &val);
-		if (val <= WNI_CFG_ASSOC_STA_LIMIT_STADEF)
-			val = WNI_CFG_ASSOC_STA_LIMIT_STAMAX;
-	} else {
-		val = config->maxNumberOfPeers;
-
-	}
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_ASSOC_STA_LIMIT, val) ==
-			QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_ASSOC_STA_LIMIT to CFG");
-	}
-#endif
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_ENABLE_LPWR_IMG_TRANSITION,
-			    config->enableLpwrImgTransition)
-			== QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_ENABLE_LPWR_IMG_TRANSITION to CFG");
-	}
-
 	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_ENABLE_MCC_ADAPTIVE_SCHED,
 		    config->enableMCCAdaptiveScheduler) ==
 		    QDF_STATUS_E_FAILURE) {
@@ -8426,29 +8207,6 @@ bool hdd_update_config_cfg(struct hdd_context *hdd_ctx)
 		hdd_err("Couldn't pass on WNI_CFG_DISABLE_LDPC_WITH_TXBF_AP to CFG");
 	}
 
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_DYNAMIC_THRESHOLD_ZERO,
-		    config->retryLimitZero) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_DYNAMIC_THRESHOLD_ZERO to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_DYNAMIC_THRESHOLD_ONE,
-		    config->retryLimitOne) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_DYNAMIC_THRESHOLD_ONE to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_DYNAMIC_THRESHOLD_TWO,
-		    config->retryLimitTwo) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_DYNAMIC_THRESHOLD_TWO to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_MAX_MEDIUM_TIME,
-		     config->cfgMaxMediumTime) == QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_MAX_MEDIUM_TIME to CFG");
-	}
 #ifdef FEATURE_WLAN_TDLS
 
 	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_TDLS_QOS_WMM_UAPSD_MASK,
@@ -8488,28 +8246,6 @@ bool hdd_update_config_cfg(struct hdd_context *hdd_ctx)
 		hdd_err("Couldn't pass on WNI_CFG_TDLS_WMM_MODE_ENABLED to CFG");
 	}
 #endif
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_ENABLE_ADAPT_RX_DRAIN,
-			    config->fEnableAdaptRxDrain) ==
-			QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_ENABLE_ADAPT_RX_DRAIN to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal, WNI_CFG_ANTENNA_DIVESITY,
-			    config->antennaDiversity) ==
-			QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_ANTENNA_DIVESITY to CFG");
-	}
-
-	if (sme_cfg_set_int(hdd_ctx->hHal,
-			    WNI_CFG_DEFAULT_RATE_INDEX_24GHZ,
-			    config->defaultRateIndex24Ghz) ==
-			QDF_STATUS_E_FAILURE) {
-		status = false;
-		hdd_err("Couldn't pass on WNI_CFG_DEFAULT_RATE_INDEX_24GHZ to CFG");
-	}
 
 	if (sme_cfg_set_int(hdd_ctx->hHal,
 			    WNI_CFG_DEBUG_P2P_REMAIN_ON_CHANNEL,
@@ -8905,7 +8641,6 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 	smeConfig->csrConfig.nActiveMinChnTime = pConfig->nActiveMinChnTime;
 	smeConfig->csrConfig.nPassiveMaxChnTime = pConfig->nPassiveMaxChnTime;
 	smeConfig->csrConfig.nPassiveMinChnTime = pConfig->nPassiveMinChnTime;
-#ifdef WLAN_AP_STA_CONCURRENCY
 	smeConfig->csrConfig.nActiveMaxChnTimeConc =
 		pConfig->nActiveMaxChnTimeConc;
 	smeConfig->csrConfig.nActiveMinChnTimeConc =
@@ -8918,7 +8653,6 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 	smeConfig->csrConfig.min_rest_time_conc = pConfig->min_rest_time_conc;
 	smeConfig->csrConfig.idle_time_conc     = pConfig->idle_time_conc;
 
-#endif
 	smeConfig->csrConfig.Is11eSupportEnabled = pConfig->b80211eIsEnabled;
 	smeConfig->csrConfig.WMMSupportMode =
 		hdd_to_csr_wmm_mode(pConfig->WmmMode);
@@ -8979,8 +8713,6 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 
 	hdd_set_power_save_offload_config(hdd_ctx);
 
-	smeConfig->csrConfig.csr11rConfig.IsFTResourceReqSupported =
-		pConfig->fFTResourceReqSupported;
 	smeConfig->csrConfig.isFastRoamIniFeatureEnabled =
 		pConfig->isFastRoamIniFeatureEnabled;
 	smeConfig->csrConfig.csr_mawc_config.mawc_enabled =
@@ -9063,7 +8795,6 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 	smeConfig->csrConfig.neighborRoamConfig.nhi_rssi_scan_rssi_ub =
 		pConfig->nhi_rssi_scan_rssi_ub;
 	smeConfig->csrConfig.addTSWhenACMIsOff = pConfig->AddTSWhenACMIsOff;
-	smeConfig->csrConfig.fValidateList = pConfig->fValidateScanList;
 	smeConfig->csrConfig.allowDFSChannelRoam = pConfig->allowDFSChannelRoam;
 
 	/* Enable/Disable MCC */
@@ -9168,6 +8899,12 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 		hdd_ctx->config->roam_bg_scan_client_bitmap;
 	smeConfig->csrConfig.roam_bad_rssi_thresh_offset_2g =
 		hdd_ctx->config->roam_bad_rssi_thresh_offset_2g;
+	smeConfig->csrConfig.ho_delay_for_rx =
+		hdd_ctx->config->ho_delay_for_rx;
+	smeConfig->csrConfig.min_delay_btw_roam_scans =
+		hdd_ctx->config->min_delay_btw_roam_scans;
+	smeConfig->csrConfig.roam_trigger_reason_bitmask =
+		hdd_ctx->config->roam_trigger_reason_bitmask;
 	smeConfig->csrConfig.obss_width_interval =
 			hdd_ctx->config->obss_width_trigger_interval;
 	smeConfig->csrConfig.obss_active_dwelltime =
@@ -9184,6 +8921,8 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 			hdd_ctx->config->scan_adaptive_dwell_mode_nc;
 	smeConfig->csrConfig.roamscan_adaptive_dwell_mode =
 			hdd_ctx->config->roamscan_adaptive_dwell_mode;
+	smeConfig->csrConfig.enable_ftopen =
+			hdd_ctx->config->enable_ftopen;
 
 	hdd_update_per_config_to_sme(hdd_ctx, smeConfig);
 
@@ -9224,8 +8963,24 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 
 	smeConfig->csrConfig.tx_aggregation_size =
 			hdd_ctx->config->tx_aggregation_size;
+	smeConfig->csrConfig.tx_aggregation_size_be =
+			hdd_ctx->config->tx_aggregation_size_be;
+	smeConfig->csrConfig.tx_aggregation_size_bk =
+			hdd_ctx->config->tx_aggregation_size_bk;
+	smeConfig->csrConfig.tx_aggregation_size_vi =
+			hdd_ctx->config->tx_aggregation_size_vi;
+	smeConfig->csrConfig.tx_aggregation_size_vo =
+			hdd_ctx->config->tx_aggregation_size_vo;
 	smeConfig->csrConfig.rx_aggregation_size =
 			hdd_ctx->config->rx_aggregation_size;
+	smeConfig->csrConfig.tx_aggr_sw_retry_threshold_be =
+			hdd_ctx->config->tx_aggr_sw_retry_threshold_be;
+	smeConfig->csrConfig.tx_aggr_sw_retry_threshold_bk =
+			hdd_ctx->config->tx_aggr_sw_retry_threshold_bk;
+	smeConfig->csrConfig.tx_aggr_sw_retry_threshold_vi =
+			hdd_ctx->config->tx_aggr_sw_retry_threshold_vi;
+	smeConfig->csrConfig.tx_aggr_sw_retry_threshold_vo =
+			hdd_ctx->config->tx_aggr_sw_retry_threshold_vo;
 	smeConfig->csrConfig.enable_bcast_probe_rsp =
 			hdd_ctx->config->enable_bcast_probe_rsp;
 	smeConfig->csrConfig.is_fils_enabled =

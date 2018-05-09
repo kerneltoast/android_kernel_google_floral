@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011, 2014-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #ifndef _HTT_INTERNAL__H_
@@ -188,7 +179,7 @@ static inline struct htt_host_rx_desc_base *htt_rx_desc(qdf_nbuf_t msdu)
 		~HTT_RX_DESC_ALIGN_MASK);
 }
 
-#if defined(FEATURE_LRO) && defined(HELIUMPLUS)
+#if defined(HELIUMPLUS)
 /**
  * htt_print_rx_desc_lro() - print LRO information in the rx
  * descriptor
@@ -274,7 +265,7 @@ static inline void htt_print_rx_desc_lro(struct htt_host_rx_desc_base *rx_desc)
 {}
 static inline void htt_rx_extract_lro_info(qdf_nbuf_t msdu,
 	 struct htt_host_rx_desc_base *rx_desc) {}
-#endif /* FEATURE_LRO */
+#endif /* HELIUMPLUS */
 
 static inline void htt_print_rx_desc(struct htt_host_rx_desc_base *rx_desc)
 {

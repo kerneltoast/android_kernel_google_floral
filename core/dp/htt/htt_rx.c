@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -163,7 +154,7 @@ static void htt_rx_hash_deinit(struct htt_pdev_t *pdev)
 
 	if (qdf_mem_smmu_s1_enabled(pdev->osdev) && pdev->is_ipa_uc_enabled) {
 		mem_map_table = qdf_mem_map_table_alloc(
-					pdev->rx_ring.fill_level);
+					RX_NUM_HASH_BUCKETS * RX_ENTRIES_SIZE);
 		if (!mem_map_table) {
 			qdf_print("%s: Failed to allocate memory for mem map table\n",
 				  __func__);
@@ -2323,9 +2314,40 @@ static int htt_rx_mon_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 		 */
 		htt_rx_mon_get_rx_status(pdev, rx_desc, &rx_status);
 		/*
-		 * 350 bytes of RX_STD_DESC size should be sufficient for
-		 * radiotap.
+		 * For certain platform, 350 bytes of headroom is already
+		 * appended to accomodate radiotap header but
+		 * qdf_nbuf_update_radiotap() API again will try to create
+		 * a room for radiotap header. To make our design simple
+		 * let qdf_nbuf_update_radiotap() API create a room for radiotap
+		 * header and update it, do qdf_nbuf_pull_head() operation and
+		 * pull 350 bytes of headroom.
+		 *
+		 *
+		 *
+		 *               (SKB buffer)
+		 * skb->head --> +-----------+ <-- skb->data
+		 *               |           |     (Before pulling headroom)
+		 *               |           |
+		 *               |   HEAD    |  350 bytes of headroom
+		 *               |           |
+		 *               |           |
+		 *               +-----------+ <-- skb->data
+		 *               |           |     (After pulling headroom)
+		 *               |           |
+		 *               |   DATA    |
+		 *               |           |
+		 *               |           |
+		 *               +-----------+
+		 *               |           |
+		 *               |           |
+		 *               |   TAIL    |
+		 *               |           |
+		 *               |           |
+		 *               +-----------+
+		 *
 		 */
+		if (qdf_nbuf_head(msdu) == qdf_nbuf_data(msdu))
+			qdf_nbuf_pull_head(msdu, HTT_RX_STD_DESC_RESERVATION);
 		qdf_nbuf_update_radiotap(&rx_status, msdu,
 						  HTT_RX_STD_DESC_RESERVATION);
 		amsdu_len = HTT_RX_IN_ORD_PADDR_IND_MSDU_LEN_GET(*(msg_word +

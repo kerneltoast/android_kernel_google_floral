@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*===========================================================================
@@ -213,6 +204,7 @@ static inline void sap_event_init(ptWLAN_SAPEvent sapEvent)
 	sapEvent->u2 = 0;
 }
 
+#ifdef DFS_COMPONENT_ENABLE
 /**
  * sap_random_channel_sel() - This function randomly pick up an available
  * channel
@@ -288,6 +280,12 @@ static uint8_t sap_random_channel_sel(struct sap_context *sap_ctx)
 	sap_ctx->ch_params.center_freq_seg1 = ch_params->center_freq_seg1;
 	return ch;
 }
+#else
+static uint8_t sap_random_channel_sel(struct sap_context *sap_ctx)
+{
+	return 0;
+}
+#endif
 
 /**
  * sap_is_channel_bonding_etsi_weather_channel() - check weather chan bonding.
@@ -1765,8 +1763,7 @@ QDF_STATUS sap_signal_hdd_event(struct sap_context *sap_ctx,
 		sap_ctx->acs_cfg->pri_ch = sap_ctx->channel;
 		sap_ctx->acs_cfg->ch_width =
 				sap_ctx->csr_roamProfile.ch_params.ch_width;
-		sap_config_acs_result(hal, sap_ctx,
-			sap_ctx->csr_roamProfile.ch_params.sec_ch_offset);
+		sap_config_acs_result(hal, sap_ctx, sap_ctx->secondary_ch);
 
 		sap_ap_event.sapHddEventCode = eSAP_CHANNEL_CHANGE_EVENT;
 
@@ -3301,6 +3298,15 @@ static QDF_STATUS sap_get_channel_list(struct sap_context *sap_ctx,
 				WLAN_REG_CH_NUM(loop_count),
 				sap_ctx, &spect_info_obj))
 			continue;
+		/* Dont scan DFS channels in case of MCC disallowed
+		 * As it can result in SAP starting on DFS channel
+		 * resulting  MCC on DFS channel
+		 */
+		if (wlan_reg_is_dfs_ch(mac_ctx->pdev,
+		    WLAN_REG_CH_NUM(loop_count)) &&
+		    policy_mgr_disallow_mcc(mac_ctx->psoc,
+		    WLAN_REG_CH_NUM(loop_count)))
+			continue;
 
 		/*
 		 * If we have any 5Ghz channel in the channel list
@@ -3401,6 +3407,7 @@ static QDF_STATUS sap_get_channel_list(struct sap_context *sap_ctx,
 }
 #endif
 
+#ifdef DFS_COMPONENT_ENABLE
 uint8_t sap_indicate_radar(struct sap_context *sap_ctx)
 {
 	uint8_t target_channel = 0;
@@ -3458,6 +3465,7 @@ uint8_t sap_indicate_radar(struct sap_context *sap_ctx)
 
 	return target_channel;
 }
+#endif
 
 /*
  * CAC timer callback function.

@@ -30,7 +30,7 @@ static bool g_ipa_hw_support;
 bool ipa_check_hw_present(void)
 {
 	/* Check if ipa hw is enabled */
-	if (WLAN_IPA_CHECK_HW() != -EPERM) {
+	if (qdf_ipa_uc_reg_rdyCB(NULL) != -EPERM) {
 		g_ipa_hw_support = true;
 		return true;
 	} else {
@@ -459,7 +459,7 @@ QDF_STATUS ipa_uc_ol_init(struct wlan_objmgr_pdev *pdev,
 	struct wlan_ipa_priv *ipa_obj;
 
 	if (!ipa_config_is_enabled()) {
-		ipa_info("ipa is disabled");
+		ipa_debug("ipa is disabled");
 		return QDF_STATUS_SUCCESS;
 	}
 
@@ -529,4 +529,28 @@ QDF_STATUS ipa_wlan_evt(struct wlan_objmgr_pdev *pdev, qdf_netdev_t net_dev,
 int ipa_uc_smmu_map(bool map, uint32_t num_buf, qdf_mem_info_t *buf_arr)
 {
 	return wlan_ipa_uc_smmu_map(map, num_buf, buf_arr);
+}
+
+/**
+ * ipa_is_fw_wdi_activated - Is FW WDI activated?
+ * @pdev: pdev obj
+ *
+ * Return: true if FW WDI activated, false otherwise
+ */
+bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev)
+{
+	struct wlan_ipa_priv *ipa_obj;
+
+	if (!ipa_config_is_enabled()) {
+		ipa_debug("ipa is disabled");
+		return false;
+	}
+
+	ipa_obj = ipa_pdev_get_priv_obj(pdev);
+	if (!ipa_obj) {
+		ipa_err("IPA object is NULL");
+		return false;
+	}
+
+	return wlan_ipa_is_fw_wdi_activated(ipa_obj);
 }

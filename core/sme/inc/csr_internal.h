@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -385,10 +376,6 @@ struct delstafor_sessionCmd {
 	tSirMacAddr selfMacAddr;
 };
 
-struct csr_11rconfig {
-	bool IsFTResourceReqSupported;
-};
-
 struct csr_neighbor_roamconfig {
 	uint32_t nNeighborScanTimerPeriod;
 	uint32_t neighbor_scan_min_timer_period;
@@ -470,7 +457,6 @@ struct csr_config {
 
 	uint32_t nInitialDwellTime;     /* in units of milliseconds */
 	bool initial_scan_no_dfs_chnl;
-#ifdef WLAN_AP_STA_CONCURRENCY
 	uint32_t nPassiveMinChnTimeConc;/* in units of milliseconds */
 	uint32_t nPassiveMaxChnTimeConc;/* in units of milliseconds */
 	uint32_t nActiveMinChnTimeConc; /* in units of milliseconds */
@@ -480,8 +466,6 @@ struct csr_config {
 	uint32_t  min_rest_time_conc;
 	/* In units of milliseconds */
 	uint32_t  idle_time_conc;
-
-#endif
 	/*
 	 * in dBm, the max TX power. The actual TX power is the lesser of this
 	 * value & 11d. If 11d is disable, the lesser of this & default setting.
@@ -492,7 +476,6 @@ struct csr_config {
 	uint32_t statsReqPeriodicityInPS;/* stats req freq while in powersave */
 	uint32_t dtimPeriod;
 	bool ssidHidden;
-	struct csr_11rconfig csr11rConfig;
 	uint8_t isFastRoamIniFeatureEnabled;
 	struct mawc_params csr_mawc_config;
 	uint8_t isRoamOffloadScanEnabled;
@@ -517,7 +500,6 @@ struct csr_config {
 	 * that AC This is mandated by WMM-AC certification
 	 */
 	bool addTSWhenACMIsOff;
-	bool fValidateList;
 	/*
 	 * Remove this code once SLM_Sessionization is supported
 	 * BMPS_WORKAROUND_NOT_NEEDED
@@ -546,6 +528,9 @@ struct csr_config {
 	bool enableHeartBeatOffload;
 	uint8_t max_amsdu_num;
 	uint8_t nSelect5GHzMargin;
+	uint32_t ho_delay_for_rx;
+	uint32_t min_delay_btw_roam_scans;
+	uint32_t roam_trigger_reason_bitmask;
 	uint8_t isCoalesingInIBSSAllowed;
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	uint8_t cc_switch_mode;
@@ -588,7 +573,15 @@ struct csr_config {
 	enum scan_dwelltime_adaptive_mode roamscan_adaptive_dwell_mode;
 	struct csr_sta_roam_policy_params sta_roam_policy;
 	uint32_t tx_aggregation_size;
+	uint32_t tx_aggregation_size_be;
+	uint32_t tx_aggregation_size_bk;
+	uint32_t tx_aggregation_size_vi;
+	uint32_t tx_aggregation_size_vo;
 	uint32_t rx_aggregation_size;
+	uint32_t tx_aggr_sw_retry_threshold_be;
+	uint32_t tx_aggr_sw_retry_threshold_bk;
+	uint32_t tx_aggr_sw_retry_threshold_vi;
+	uint32_t tx_aggr_sw_retry_threshold_vo;
 	struct wmi_per_roam_config per_roam_config;
 	bool enable_bcast_probe_rsp;
 	bool is_fils_enabled;
@@ -618,6 +611,7 @@ struct csr_config {
 	uint32_t offload_11k_enable_bitmask;
 	bool wep_tkip_in_he;
 	struct csr_neighbor_report_offload_params neighbor_report_offload;
+	bool enable_ftopen;
 };
 
 struct csr_channel_powerinfo {
@@ -670,12 +664,6 @@ struct csr_scanstruct {
 	 */
 	uint8_t countryCodeElected[WNI_CFG_COUNTRY_CODE_LEN];
 	/*
-	 * channelPowerInfoList24 has been seen corrupted. Set this flag to true
-	 * trying to detect when it happens. Adding this into code because we
-	 * can't reproduce it easily. We don't know when it happens.
-	 */
-	bool fValidateList;
-	/*
 	 * Customer wants to start with an active scan based on the default
 	 * country code. This optimization will minimize the driver load to
 	 * association time. Based on this flag we will bypass the initial
@@ -694,9 +682,6 @@ struct csr_scanstruct {
 	bool fFirstScanOnly2GChnl;
 	bool fDropScanCmd;      /* true means we don't accept scan commands */
 
-#ifdef WLAN_AP_STA_CONCURRENCY
-	tDblLinkList scanCmdPendingList;
-#endif
 	/* This includes all channels on which candidate APs are found */
 	struct csr_channel occupiedChannels[CSR_ROAM_SESSION_MAX];
 	int8_t roam_candidate_count[CSR_ROAM_SESSION_MAX];

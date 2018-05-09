@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -18,13 +15,6 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
-
 
 /*
  * This file sir_mac_prot_def.h contains the MAC/PHY protocol
@@ -165,10 +155,10 @@
 #define SIR_MAC_ADDBA_RSP     1
 #define SIR_MAC_DELBA_REQ     2
 
-#define SIR_MAC_BA_POLICY_DELAYED	0
-#define SIR_MAC_BA_POLICY_IMMEDIATE	1
-#define SIR_MAC_BA_AMSDU_SUPPORTED	1
-#define SIR_MAC_BA_DEFAULT_BUFF_SIZE	63
+#define SIR_MAC_BA_POLICY_DELAYED       0
+#define SIR_MAC_BA_POLICY_IMMEDIATE     1
+#define SIR_MAC_BA_AMSDU_SUPPORTED      1
+#define SIR_MAC_BA_DEFAULT_BUFF_SIZE    64
 
 #ifdef ANI_SUPPORT_11H
 #define SIR_MAC_ACTION_MEASURE_REQUEST_ID      0
@@ -1166,7 +1156,10 @@ typedef struct sSirMacCW {
 typedef struct sSirMacEdcaParamRecord {
 	tSirMacAciAifsn aci;
 	tSirMacCW cw;
-	uint16_t txoplimit;
+	union {
+		uint16_t txoplimit;
+		uint16_t mu_edca_timer;
+	};
 	uint8_t no_ack;
 } qdf_packed tSirMacEdcaParamRecord;
 

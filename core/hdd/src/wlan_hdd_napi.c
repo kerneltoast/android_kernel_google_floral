@@ -1,8 +1,6 @@
 /*
  * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -16,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -257,7 +249,7 @@ int hdd_napi_event(enum qca_napi_event event, void *data)
 	return rc;
 }
 
-#ifdef HELIUMPLUS
+#if defined HELIUMPLUS && defined MSM_PLATFORM
 /**
  * hdd_napi_perfd_cpufreq() - set/reset min CPU freq for cores
  * @req_state:  high/low
@@ -435,7 +427,7 @@ int hdd_napi_serialize(int is_on)
 	}
 	return rc;
 }
-#endif /* HELIUMPLUS */
+#endif /* HELIUMPLUS && MSM_PLATFORM */
 
 /**
  * hdd_napi_poll() - NAPI poll function
@@ -481,7 +473,7 @@ int hdd_display_napi_stats(void)
 		hdd_err("%s unable to retrieve napi structure", __func__);
 		return -EFAULT;
 	}
-	hdd_debug("[NAPI %u][BL %d]:  scheds   polls   comps    done t-lim p-lim  corr napi-buckets(%d)",
+	hdd_debug("[NAPI %u][BL %d]:  scheds   polls   comps    done t-lim p-lim  corr  max_time napi-buckets(%d)",
 		  napid->napi_mode,
 		  hif_napi_cpu_blacklist(napid, BLACKLIST_QUERY),
 		  QCA_NAPI_NUM_BUCKETS);
@@ -504,7 +496,7 @@ int hdd_display_napi_stats(void)
 				}
 
 				if (napis->napi_schedules != 0)
-					hdd_debug("NAPI[%2d]CPU[%d]: %7d %7d %7d %7d %5d %5d %5d %s",
+					hdd_debug("NAPI[%2d]CPU[%d]: %7d %7d %7d %7d %5d %5d %5d %9llu %s",
 						  i, j,
 						  napis->napi_schedules,
 						  napis->napi_polls,
@@ -513,6 +505,7 @@ int hdd_display_napi_stats(void)
 						  napis->time_limit_reached,
 						  napis->rxpkt_thresh_reached,
 						  napis->cpu_corrected,
+						  napis->napi_max_poll_time,
 						  buf);
 			}
 		}

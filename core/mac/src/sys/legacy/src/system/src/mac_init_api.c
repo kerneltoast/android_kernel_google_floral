@@ -1,8 +1,5 @@
 /*
- * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
- *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
+ * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -146,6 +137,7 @@ tSirRetStatus mac_open(struct wlan_objmgr_psoc *psoc, tHalHandle *pHalHandle,
 	/* FW: 0 to 2047 and Host: 2048 to 4095 */
 	p_mac->mgmtSeqNum = WLAN_HOST_SEQ_NUM_MIN - 1;
 	p_mac->first_scan_done = false;
+	p_mac->he_sgi_ltf_cfg_bit_mask = DEF_HE_AUTO_SGI_LTF;
 
 	status =  pe_open(p_mac, cds_cfg);
 	if (eSIR_SUCCESS != status) {

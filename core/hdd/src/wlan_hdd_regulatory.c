@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,12 +16,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
-
 /**
  * DOC: wlan_hdd_regulatory.c
  *
@@ -38,6 +29,7 @@
 #include "wlan_hdd_regulatory.h"
 #include <wlan_reg_ucfg_api.h>
 #include "cds_regdomain.h"
+#include "cds_utils.h"
 #include "pld_common.h"
 
 #define REG_RULE_2412_2462    REG_RULE(2412-10, 2462+10, 40, 0, 20, 0)
@@ -709,6 +701,127 @@ int hdd_reg_set_country(struct hdd_context *hdd_ctx, char *country_code)
 	return qdf_status_to_os_return(status);
 }
 
+int hdd_reg_set_band(struct net_device *dev, u8 ui_band)
+{
+	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(adapter);
+	enum band_info band;
+	QDF_STATUS status;
+	struct hdd_context *hdd_ctx;
+	enum band_info currBand;
+	enum band_info connectedBand;
+	long lrc;
+
+	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+
+	switch (ui_band) {
+	case WLAN_HDD_UI_BAND_AUTO:
+		band = BAND_ALL;
+		break;
+	case WLAN_HDD_UI_BAND_5_GHZ:
+		band = BAND_5G;
+		break;
+	case WLAN_HDD_UI_BAND_2_4_GHZ:
+		band = BAND_2G;
+		break;
+	default:
+		hdd_err("Invalid band value %u", ui_band);
+		return -EINVAL;
+	}
+
+	hdd_debug("change band to %u", band);
+
+	if ((band == BAND_2G && hdd_ctx->config->nBandCapability == 2) ||
+	    (band == BAND_5G && hdd_ctx->config->nBandCapability == 1) ||
+	    (band == BAND_ALL && hdd_ctx->config->nBandCapability != 0)) {
+		hdd_err("band value %u violate INI settings %u",
+			  band, hdd_ctx->config->nBandCapability);
+		return -EIO;
+	}
+
+	if (band == BAND_ALL) {
+		hdd_debug("Auto band received. Setting band same as ini value %d",
+			hdd_ctx->config->nBandCapability);
+		band = hdd_ctx->config->nBandCapability;
+	}
+
+	if (QDF_STATUS_SUCCESS != ucfg_reg_get_curr_band(hdd_ctx->hdd_pdev,
+							 &currBand)) {
+		hdd_debug("Failed to get current band config");
+		return -EIO;
+	}
+
+	if (currBand == band)
+		return 0;
+
+	hdd_ctx->curr_band = band;
+
+	/* Change band request received.
+	 * Abort pending scan requests, flush the existing scan results,
+	 * and change the band capability
+	 */
+	hdd_debug("Current band value = %u, new setting %u ",
+			currBand, band);
+
+	hdd_for_each_adapter(hdd_ctx, adapter) {
+		hHal = WLAN_HDD_GET_HAL_CTX(adapter);
+		wlan_abort_scan(hdd_ctx->hdd_pdev, INVAL_PDEV_ID,
+				adapter->session_id, INVALID_SCAN_ID, false);
+		connectedBand = hdd_conn_get_connected_band(
+				WLAN_HDD_GET_STATION_CTX_PTR(adapter));
+
+		/* Handling is done only for STA and P2P */
+		if (band != BAND_ALL &&
+			((adapter->device_mode == QDF_STA_MODE) ||
+			 (adapter->device_mode == QDF_P2P_CLIENT_MODE)) &&
+			(hdd_conn_is_connected(
+				WLAN_HDD_GET_STATION_CTX_PTR(adapter)))
+			&& (connectedBand != band)) {
+			status = QDF_STATUS_SUCCESS;
+
+			/* STA already connected on current
+			 * band, So issue disconnect first,
+			 * then change the band
+			 */
+
+			hdd_debug("STA (Device mode %s(%d)) connected in band %u, Changing band to %u, Issuing Disconnect",
+					hdd_device_mode_to_string(adapter->device_mode),
+					adapter->device_mode, currBand, band);
+			INIT_COMPLETION(adapter->disconnect_comp_var);
+
+			status = sme_roam_disconnect(
+					WLAN_HDD_GET_HAL_CTX(adapter),
+					adapter->session_id,
+					eCSR_DISCONNECT_REASON_UNSPECIFIED);
+
+			if (QDF_STATUS_SUCCESS != status) {
+				hdd_err("sme_roam_disconnect failure, status: %d",
+						(int)status);
+				return -EINVAL;
+			}
+
+			lrc = wait_for_completion_timeout(
+					&adapter->disconnect_comp_var,
+					msecs_to_jiffies(
+						WLAN_WAIT_TIME_DISCONNECT));
+
+			if (lrc == 0) {
+				hdd_err("Timeout while waiting for csr_roam_disconnect");
+				return -ETIMEDOUT;
+			}
+		}
+
+		sme_scan_flush_result(hHal);
+	}
+
+	if (QDF_IS_STATUS_ERROR(ucfg_reg_set_band(hdd_ctx->hdd_pdev, band))) {
+		hdd_err("Failed to set the band value to %u", band);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 /**
  * hdd_restore_custom_reg_settings() - restore custom reg settings
  * @wiphy: wiphy structure
@@ -794,16 +907,11 @@ void hdd_reg_notifier(struct wiphy *wiphy,
 		  request->dfs_region);
 
 	switch (request->initiator) {
-	case NL80211_REGDOM_SET_BY_CORE:
-		if (pld_get_driver_load_cnt(hdd_ctx->parent_dev) == 0) {
-			hdd_debug("ignore the 1st time notifier from CORE");
-			return;
-		}
-		/* fall through to set country */
 	case NL80211_REGDOM_SET_BY_USER:
 		status = ucfg_reg_set_country(hdd_ctx->hdd_pdev,
 					      request->alpha2);
 		break;
+	case NL80211_REGDOM_SET_BY_CORE:
 	case NL80211_REGDOM_SET_BY_COUNTRY_IE:
 	case NL80211_REGDOM_SET_BY_DRIVER:
 	default:

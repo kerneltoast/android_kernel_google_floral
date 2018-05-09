@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -51,6 +42,7 @@
 #include "ol_txrx_osif_api.h" /* ol_rx_callback */
 #include "cdp_txrx_flow_ctrl_v2.h"
 #include "cdp_txrx_peer_ops.h"
+#include <qdf_trace.h>
 
 /*
  * The target may allocate multiple IDs for a peer.
@@ -538,6 +530,7 @@ struct ol_txrx_stats_req_internal {
     int offset;
 };
 
+
 /*
  * As depicted in the diagram below, the pdev contains an array of
  * NUM_EXT_TID ol_tx_active_queues_in_tid_t elements.
@@ -1002,12 +995,14 @@ struct ol_txrx_pdev_t {
 	struct ol_txrx_peer_t *ocb_peer;
 	tx_pause_callback pause_cb;
 
-	struct {
-		void (*lro_flush_cb)(void *);
-		qdf_atomic_t lro_dev_cnt;
-	} lro_info;
+	void (*offld_flush_cb)(void *);
 	struct ol_txrx_peer_t *self_peer;
 	qdf_work_t peer_unmap_timer_work;
+
+	/* dp debug fs */
+	struct dentry *dpt_stats_log_dir;
+	enum qdf_dpt_debugfs_state state;
+	struct qdf_debugfs_fops dpt_debugfs_fops;
 
 #ifdef IPA_OFFLOAD
 	ipa_uc_op_cb_type ipa_uc_op_cb;

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,17 +16,10 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
-
 /**
  * DOC: wlan_hdd_ipa.c
  *
  * WLAN HDD and ipa interface implementation
- * Originally written by Qualcomm Atheros, Inc
  */
 
 /* Include Files */
@@ -363,7 +353,7 @@ void hdd_ipa_send_skb_to_network(qdf_nbuf_t skb, qdf_netdev_t dev)
 	unsigned int cpu_index;
 	uint8_t staid;
 
-	if (!adapter || adapter->magic != WLAN_HDD_ADAPTER_MAGIC) {
+	if (hdd_validate_adapter(adapter)) {
 		QDF_TRACE(QDF_MODULE_ID_HDD, QDF_TRACE_LEVEL_DEBUG,
 			  "Invalid adapter: 0x%pK", adapter);
 		kfree_skb(skb);
@@ -392,8 +382,15 @@ void hdd_ipa_send_skb_to_network(qdf_nbuf_t skb, qdf_netdev_t dev)
 	cpu_index = wlan_hdd_get_cpu();
 
 	++adapter->hdd_stats.tx_rx_stats.rx_packets[cpu_index];
-	++adapter->stats.rx_packets;
-	adapter->stats.rx_bytes += skb->len;
+
+	/*
+	 * Update STA RX exception packet stats.
+	 * For SAP as part of IPA HW stats are updated.
+	 */
+	if (adapter->device_mode == QDF_STA_MODE) {
+		++adapter->stats.rx_packets;
+		adapter->stats.rx_bytes += skb->len;
+	}
 
 	result = hdd_ipa_aggregated_rx_ind(skb);
 	if (result == NET_RX_SUCCESS)

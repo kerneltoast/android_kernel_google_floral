@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -556,7 +547,6 @@ static void csr_set_default_scan_timing(tpAniSirGlobal pMac,
 					tSirScanType scanType,
 					tCsrScanRequest *pScanRequest)
 {
-#ifdef WLAN_AP_STA_CONCURRENCY
 	if (csr_is_any_session_connected(pMac)) {
 		/* Reset passive scan time as per ini parameter. */
 		cfg_set_int(pMac, WNI_CFG_PASSIVE_MAXIMUM_CHANNEL_TIME,
@@ -583,11 +573,12 @@ static void csr_set_default_scan_timing(tpAniSirGlobal pMac,
 		/* Return so that fields set above will not be overwritten. */
 		return;
 	}
-#endif
 
-	/* This portion of the code executed if multi-session not supported */
-	/* (WLAN_AP_STA_CONCURRENCY not defined) or no multi-session. */
-	/* Use the "regular" (non-concurrency) default scan timing. */
+	/*
+	 * This portion of the code is executed if no multi-session.
+	 * Use the "regular" (non-concurrency) default scan timing if
+	 * no multi session.
+	 */
 	cfg_set_int(pMac, WNI_CFG_PASSIVE_MAXIMUM_CHANNEL_TIME,
 		    pMac->roam.configParam.nPassiveMaxChnTime);
 	if (pScanRequest->scanType == eSIR_ACTIVE_SCAN) {
@@ -601,14 +592,11 @@ static void csr_set_default_scan_timing(tpAniSirGlobal pMac,
 		pScanRequest->minChnTime =
 			pMac->roam.configParam.nPassiveMinChnTime;
 	}
-#ifdef WLAN_AP_STA_CONCURRENCY
 
 	/* No rest time/Idle time if no sessions are connected. */
 	pScanRequest->restTime = 0;
 	pScanRequest->min_rest_time = 0;
 	pScanRequest->idle_time = 0;
-
-#endif
 }
 
 static QDF_STATUS
@@ -775,7 +763,6 @@ QDF_STATUS csr_scan_request(tpAniSirGlobal pMac, uint16_t sessionId,
 		sme_debug("Setting default min %d and max %d ChnTime",
 			scan_req->minChnTime, scan_req->maxChnTime);
 	}
-#ifdef WLAN_AP_STA_CONCURRENCY
 	/*
 	 * Need to set restTime/min_Ret_time/idle_time
 	 * only if at least one session is connected
@@ -792,7 +779,6 @@ QDF_STATUS csr_scan_request(tpAniSirGlobal pMac, uint16_t sessionId,
 			scan_req->minChnTime = cfg_prm->nPassiveMinChnTimeConc;
 		}
 	}
-#endif
 	/* Increase dwell time in case P2P Search and Miracast is not present */
 	if (scan_req->p2pSearch && scan_req->ChannelInfo.numOfChannels
 	    == P2P_SOCIAL_CHANNELS && (!(pMac->sme.miracast_value))) {

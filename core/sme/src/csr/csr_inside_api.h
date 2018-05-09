@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -44,7 +35,6 @@
 #define CSR_ACTIVE_MAX_CHANNEL_TIME    40
 #define CSR_ACTIVE_MIN_CHANNEL_TIME    20
 
-#ifdef WLAN_AP_STA_CONCURRENCY
 #define CSR_PASSIVE_MAX_CHANNEL_TIME_CONC   110
 #define CSR_PASSIVE_MIN_CHANNEL_TIME_CONC   60
 
@@ -54,8 +44,6 @@
 #define CSR_REST_TIME_CONC                  100
 #define CSR_MIN_REST_TIME_CONC              50
 #define CSR_IDLE_TIME_CONC                  25
-
-#endif
 
 #define CSR_MAX_NUM_SUPPORTED_CHANNELS 55
 

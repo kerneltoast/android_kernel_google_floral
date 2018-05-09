@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -179,11 +170,20 @@ struct wlan_ipa_tx_hdr {
  * @reserved1: Reserved not used
  * @reserved2: Reserved not used
  */
+#if defined (QCA_WIFI_3_0) || defined (CONFIG_LITHIUM)
 struct frag_header {
 	uint16_t length;
 	uint32_t reserved1;
 	uint32_t reserved2;
 } qdf_packed;
+#else
+struct frag_header {
+	uint32_t
+		length:16,
+		reserved16:16;
+	uint32_t reserved2;
+} qdf_packed;
+#endif
 
 /**
  * struct ipa_header - ipa header type registered to IPA hardware
@@ -673,13 +673,6 @@ struct wlan_ipa_priv {
 	(((_ipa_cfg)->ipa_config & (_mask)) == (_mask))
 
 #define BW_GET_DIFF(_x, _y) (unsigned long)((ULONG_MAX - (_y)) + (_x) + 1)
-
-#if defined(QCA_WIFI_3_0) && defined(CONFIG_IPA3)
-#define WLAN_IPA_CHECK_HW() ipa_uc_reg_rdyCB(NULL)
-#else
-/* Do nothing */
-#define WLAN_IPA_CHECK_HW() 0
-#endif /* IPA3 */
 
 #define WLAN_IPA_DBG_DUMP_RX_LEN 84
 #define WLAN_IPA_DBG_DUMP_TX_LEN 48

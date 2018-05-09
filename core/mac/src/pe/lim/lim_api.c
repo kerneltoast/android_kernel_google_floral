@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -77,6 +68,8 @@
 #include "os_if_nan.h"
 #include <wlan_scan_ucfg_api.h>
 #include <wlan_p2p_ucfg_api.h>
+#include "wlan_utility.h"
+
 
 static void __lim_init_scan_vars(tpAniSirGlobal pMac)
 {
@@ -689,6 +682,7 @@ void lim_cleanup(tpAniSirGlobal pMac)
 	ucfg_scan_unregister_requester(pMac->psoc, pMac->lim.req_id);
 } /*** end lim_cleanup() ***/
 
+#ifdef WLAN_FEATURE_HDD_MEMDUMP_ENABLE
 /**
  * lim_state_info_dump() - print state information of lim layer
  * @buf: buffer pointer
@@ -743,7 +737,11 @@ static void lim_register_debug_callback(void)
 {
 	qdf_register_debug_callback(QDF_MODULE_ID_PE, &lim_state_info_dump);
 }
-
+#else /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+static void lim_register_debug_callback(void)
+{
+}
+#endif /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
 static void lim_nan_register_callbacks(tpAniSirGlobal mac_ctx)
 {
 	struct nan_callbacks cb_obj = {0};
@@ -860,6 +858,53 @@ static void p2p_register_callbacks(tpAniSirGlobal mac_ctx)
 	ucfg_p2p_register_callbacks(mac_ctx->psoc, &p2p_cb);
 }
 
+/*
+ * lim_register_sap_bcn_callback(): Register a callback with scan module for SAP
+ * @mac_ctx: pointer to the global mac context
+ *
+ * Registers the function lim_handle_sap_beacon as callback with the Scan
+ * module to handle beacon frames for SAP sessions
+ *
+ * Return: QDF Status
+ */
+static QDF_STATUS lim_register_sap_bcn_callback(tpAniSirGlobal mac_ctx)
+{
+	QDF_STATUS status;
+
+	status = ucfg_scan_register_bcn_cb(mac_ctx->psoc,
+			lim_handle_sap_beacon,
+			SCAN_CB_TYPE_UPDATE_BCN);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		pe_err("failed with status code %08d [x%08x]",
+			status, status);
+	}
+
+	return status;
+}
+
+/*
+ * lim_unregister_sap_bcn_callback(): Unregister the callback with scan module
+ * @mac_ctx: pointer to the global mac context
+ *
+ * Unregisters the callback registered with the Scan
+ * module to handle beacon frames for SAP sessions
+ *
+ * Return: QDF Status
+ */
+static QDF_STATUS lim_unregister_sap_bcn_callback(tpAniSirGlobal mac_ctx)
+{
+	QDF_STATUS status;
+
+	status = ucfg_scan_register_bcn_cb(mac_ctx->psoc,
+			NULL, SCAN_CB_TYPE_UPDATE_BCN);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		pe_err("failed with status code %08d [x%08x]",
+			status, status);
+	}
+
+	return status;
+}
+
 /** -------------------------------------------------------------
    \fn pe_open
    \brief will be called in Open sequence from mac_open
@@ -917,6 +962,7 @@ tSirRetStatus pe_open(tpAniSirGlobal pMac, struct cds_config_info *cds_cfg)
 	lim_register_debug_callback();
 	lim_nan_register_callbacks(pMac);
 	p2p_register_callbacks(pMac);
+	lim_register_sap_bcn_callback(pMac);
 
 	if (!QDF_IS_STATUS_SUCCESS(
 	    cds_shutdown_notifier_register(pe_shutdown_notifier_cb, pMac))) {
@@ -950,6 +996,7 @@ tSirRetStatus pe_close(tpAniSirGlobal pMac)
 		return eSIR_SUCCESS;
 
 	lim_cleanup(pMac);
+	lim_unregister_sap_bcn_callback(pMac);
 
 	if (pMac->lim.limDisassocDeauthCnfReq.pMlmDeauthReq) {
 		qdf_mem_free(pMac->lim.limDisassocDeauthCnfReq.pMlmDeauthReq);
@@ -1214,6 +1261,119 @@ static QDF_STATUS pe_drop_pending_rx_mgmt_frames(tpAniSirGlobal mac_ctx,
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * pe_is_ext_scan_bcn - Check if the beacon is from Ext or EPNO scan
+ *
+ * @hdr: pointer to the 802.11 header of the frame
+ * @rx_pkt_info: pointer to the rx packet meta
+ *
+ * Checks if the beacon is from Ext Scan or EPNO scan
+ *
+ * Return: true or false
+ */
+#ifdef FEATURE_WLAN_EXTSCAN
+static inline bool pe_is_ext_scan_bcn(tpSirMacMgmtHdr hdr,
+				uint8_t *rx_pkt_info)
+{
+	if ((hdr->fc.subType == SIR_MAC_MGMT_BEACON) &&
+	    (WMA_IS_EXTSCAN_SCAN_SRC(rx_pkt_info) ||
+	    WMA_IS_EPNO_SCAN_SRC(rx_pkt_info)))
+		return true;
+
+	return false;
+}
+#else
+static inline bool pe_is_ext_scan_bcn(tpSirMacMgmtHdr hdr,
+				uint8_t *rx_pkt_info)
+{
+	return false;
+}
+#endif
+
+/**
+ * pe_filter_drop_bcn_probe_frame - Apply filter on the received frame
+ *
+ * @mac_ctx: pointer to the global mac context
+ * @hdr: pointer to the 802.11 header of the frame
+ * @rx_pkt_info: pointer to the rx packet meta
+ *
+ * Applies the filter from global mac context on the received beacon/
+ * probe response frame before posting it to the PE queue
+ *
+ * Return: true if frame is allowed, false if frame is to be dropped.
+ */
+static bool pe_filter_bcn_probe_frame(tpAniSirGlobal mac_ctx,
+					tpSirMacMgmtHdr hdr,
+					uint8_t *rx_pkt_info)
+{
+	uint8_t session_id;
+	uint8_t *body;
+	const uint8_t *ssid_ie;
+	uint16_t frame_len;
+	struct mgmt_beacon_probe_filter *filter;
+	tpSirMacCapabilityInfo bcn_caps;
+	tSirMacSSid bcn_ssid;
+
+	if (pe_is_ext_scan_bcn(hdr, rx_pkt_info))
+		return true;
+
+	filter = &mac_ctx->bcn_filter;
+
+	/*
+	 * If any STA session exists and beacon source matches any of the
+	 * STA BSSIDs, allow the frame
+	 */
+	if (filter->num_sta_sessions) {
+		for (session_id = 0; session_id < SIR_MAX_SUPPORTED_BSS;
+		     session_id++) {
+			if (sir_compare_mac_addr(filter->sta_bssid[session_id],
+			    hdr->bssId)) {
+				return true;
+			}
+		}
+	}
+
+	/*
+	 * If any IBSS session exists and beacon is has IBSS capability set
+	 * and SSID matches the IBSS SSID, allow the frame
+	 */
+	if (filter->num_ibss_sessions) {
+		body = WMA_GET_RX_MPDU_DATA(rx_pkt_info);
+		frame_len = WMA_GET_RX_PAYLOAD_LEN(rx_pkt_info);
+		if (frame_len < SIR_MAC_B_PR_SSID_OFFSET)
+			return false;
+
+		bcn_caps = (tpSirMacCapabilityInfo)
+				(body + SIR_MAC_B_PR_CAPAB_OFFSET);
+		if (!bcn_caps->ibss)
+			return false;
+
+		ssid_ie = wlan_get_ie_ptr_from_eid(SIR_MAC_SSID_EID,
+				body + SIR_MAC_B_PR_SSID_OFFSET,
+				frame_len);
+
+		if (!ssid_ie)
+			return false;
+
+		bcn_ssid.length = ssid_ie[1];
+		qdf_mem_copy(&bcn_ssid.ssId,
+			     &ssid_ie[2],
+			     bcn_ssid.length);
+
+		for (session_id = 0; session_id < SIR_MAX_SUPPORTED_BSS;
+		     session_id++) {
+			if (filter->ibss_ssid[session_id].length ==
+			    bcn_ssid.length &&
+			    (!qdf_mem_cmp(filter->ibss_ssid[session_id].ssId,
+			    bcn_ssid.ssId, bcn_ssid.length))) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
 /* --------------------------------------------------------------------------- */
 /**
  * pe_handle_mgmt_frame() - Process the Management frames from TXRX
@@ -1276,6 +1436,18 @@ static QDF_STATUS pe_handle_mgmt_frame(struct wlan_objmgr_psoc *psoc,
 	 */
 
 	mHdr = WMA_GET_RX_MAC_HEADER(pRxPacketInfo);
+
+	/*
+	 * Filter the beacon/probe response frames before posting it
+	 * on the PE queue
+	 */
+	if ((mHdr->fc.subType == SIR_MAC_MGMT_BEACON ||
+	    mHdr->fc.subType == SIR_MAC_MGMT_PROBE_RSP) &&
+	    !pe_filter_bcn_probe_frame(pMac, mHdr, pRxPacketInfo)) {
+		cds_pkt_return_packet(pVosPkt);
+		pVosPkt = NULL;
+		return QDF_STATUS_SUCCESS;
+	}
 
 	if (QDF_STATUS_SUCCESS !=
 	    pe_drop_pending_rx_mgmt_frames(pMac, mHdr, pVosPkt))
@@ -1717,12 +1889,11 @@ lim_detect_change_in_ap_capabilities(tpAniSirGlobal pMac,
 			pe_warn("AP capabilities are not matching, sending directed probe request");
 			status =
 				lim_send_probe_req_mgmt_frame(pMac, &psessionEntry->ssId,
-							      psessionEntry->bssId,
-							      psessionEntry->
-							      currentOperChannel,
-							      psessionEntry->selfMacAddr,
-							      psessionEntry->dot11mode,
-							      0, NULL);
+					      psessionEntry->bssId,
+					      psessionEntry->currentOperChannel,
+					      psessionEntry->selfMacAddr,
+					      psessionEntry->dot11mode,
+					      NULL, NULL);
 
 			if (eSIR_SUCCESS != status) {
 				pe_err("send ProbeReq failed");
@@ -2270,12 +2441,13 @@ QDF_STATUS pe_roam_synch_callback(tpAniSirGlobal mac_ctx,
 		lim_print_mac_addr(mac_ctx, bss_desc->bssId, LOGE);
 		return status;
 	}
-	ft_session_ptr->peSessionId = session_id;
+	/* Update the beacon/probe filter in mac_ctx */
+	lim_set_bcn_probe_filter(mac_ctx, ft_session_ptr, NULL, 0);
+
 	sir_copy_mac_addr(ft_session_ptr->selfMacAddr, session_ptr->selfMacAddr);
 	sir_copy_mac_addr(roam_sync_ind_ptr->self_mac.bytes,
 			session_ptr->selfMacAddr);
 	sir_copy_mac_addr(ft_session_ptr->limReAssocbssId, bss_desc->bssId);
-	ft_session_ptr->bssType = eSIR_INFRASTRUCTURE_MODE;
 	session_ptr->bRoamSynchInProgress = true;
 	ft_session_ptr->bRoamSynchInProgress = true;
 	ft_session_ptr->limSystemRole = eLIM_STA_ROLE;

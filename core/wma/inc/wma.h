@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #ifndef WMA_H
@@ -78,16 +69,6 @@
 #define WMA_MAC_TO_PDEV_MAP(x) ((x) + (1))
 #define WMA_PDEV_TO_MAC_MAP(x) ((x) - (1))
 
-/* In prima 12 HW stations are supported including BCAST STA(staId 0)
- * and SELF STA(staId 1) so total ASSOC stations which can connect to Prima
- * SoftAP = 12 - 1(Self STa) - 1(Bcast Sta) = 10 Stations.
- */
-
-#ifdef WLAN_SOFTAP_VSTA_FEATURE
-#define WMA_MAX_SUPPORTED_STAS    38
-#else
-#define WMA_MAX_SUPPORTED_STAS    12
-#endif
 #define WMA_MAX_SUPPORTED_BSS     SIR_MAX_SUPPORTED_BSS
 
 #define WMA_MAX_MGMT_MPDU_LEN 2000
@@ -944,6 +925,7 @@ typedef struct {
  * @key_length: key length
  * @key: key
  * @key_id: key id
+ * @key_cipher: key type
  */
 typedef struct {
 	uint16_t key_length;
@@ -1081,7 +1063,7 @@ struct wma_txrx_node {
 	uint8_t llbCoexist;
 	uint8_t shortSlotTimeSupported;
 	uint8_t dtimPeriod;
-	WLAN_PHY_MODE chanmode;
+	WMI_HOST_WLAN_PHY_MODE chanmode;
 	uint8_t vht_capable;
 	uint8_t ht_capable;
 	A_UINT32 mhz;
@@ -1093,6 +1075,7 @@ struct wma_txrx_node {
 	uint8_t rmfEnabled;
 #ifdef WLAN_FEATURE_11W
 	wma_igtk_key_t key;
+	uint32_t ucast_key_cipher;
 #endif /* WLAN_FEATURE_11W */
 	uint32_t uapsd_cached_val;
 	tAniGetPEStatsRsp *stats_rsp;
@@ -1135,7 +1118,9 @@ struct wma_txrx_node {
 	tSirHostOffloadReq arp_offload_req;
 	tSirHostOffloadReq ns_offload_req;
 	bool is_vdev_valid;
+#ifndef QCA_SUPPORT_CP_STATS
 	struct sir_vdev_wow_stats wow_stats;
+#endif
 	struct sme_rcpi_req *rcpi_req;
 #ifdef WLAN_FEATURE_11AX
 	bool he_capable;
@@ -2474,14 +2459,6 @@ void wma_vdev_clear_pause_bit(uint8_t vdev_id, wmi_tx_pause_type bit_pos)
 
 	iface->pause_bitmap &= ~(1 << bit_pos);
 }
-
-/**
- * chanmode_to_chanwidth() - get channel width through channel mode
- * @chanmode:   channel phy mode
- *
- * Return: channel width
- */
-wmi_channel_width chanmode_to_chanwidth(WLAN_PHY_MODE chanmode);
 
 /**
  * wma_process_roaming_config() - process roam request

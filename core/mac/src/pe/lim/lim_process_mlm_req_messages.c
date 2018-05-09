@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include "cds_api.h"
@@ -642,6 +633,14 @@ lim_mlm_add_bss(tpAniSirGlobal mac_ctx,
 		addbss_param->nss_5g = mac_ctx->vdev_type_nss_5g.ibss;
 		addbss_param->tx_aggregation_size =
 			mac_ctx->roam.configParam.tx_aggregation_size;
+		addbss_param->tx_aggregation_size_be =
+			mac_ctx->roam.configParam.tx_aggregation_size_be;
+		addbss_param->tx_aggregation_size_bk =
+			mac_ctx->roam.configParam.tx_aggregation_size_bk;
+		addbss_param->tx_aggregation_size_vi =
+			mac_ctx->roam.configParam.tx_aggregation_size_vi;
+		addbss_param->tx_aggregation_size_vo =
+			mac_ctx->roam.configParam.tx_aggregation_size_vo;
 		addbss_param->rx_aggregation_size =
 			mac_ctx->roam.configParam.rx_aggregation_size;
 	}
@@ -2239,6 +2238,7 @@ end:
 	mlm_set_keys_cnf.sessionId = mlm_set_keys_req->sessionId;
 	lim_post_sme_set_keys_cnf(mac_ctx, mlm_set_keys_req, &mlm_set_keys_cnf);
 }
+
 void lim_process_join_failure_timeout(tpAniSirGlobal mac_ctx)
 {
 	tLimMlmJoinCnf mlm_join_cnf;
@@ -2331,7 +2331,7 @@ static void lim_process_periodic_join_probe_req_timer(tpAniSirGlobal mac_ctx)
 			session->pLimMlmJoinReq->bssDescription.bssId,
 			session->currentOperChannel /*chanNum */,
 			session->selfMacAddr, session->dot11mode,
-			session->pLimJoinReq->addIEScan.length,
+			&session->pLimJoinReq->addIEScan.length,
 			session->pLimJoinReq->addIEScan.addIEdata);
 		lim_deactivate_and_change_timer(mac_ctx,
 				eLIM_PERIODIC_JOIN_PROBE_REQ_TIMER);

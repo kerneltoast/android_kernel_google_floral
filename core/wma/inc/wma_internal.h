@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #ifndef WMA_INTERNAL_H
@@ -663,7 +654,8 @@ QDF_STATUS wma_set_ap_peer_uapsd(tp_wma_handle wma, uint32_t vdev_id,
 				     uint8_t max_sp);
 
 void wma_update_edca_params_for_ac(tSirMacEdcaParamRecord *edca_param,
-					  struct wmi_host_wme_vparams *wmm_param, int ac);
+				   struct wmi_host_wme_vparams *wmm_param,
+				   int ac, bool mu_edca_param);
 
 void wma_set_tx_power(WMA_HANDLE handle,
 			     tMaxTxPowerParams *tx_pwr_params);
@@ -957,10 +949,6 @@ int wma_wow_wakeup_host_event(void *handle, uint8_t *event,
 int wma_d0_wow_disable_ack_event(void *handle, uint8_t *event, uint32_t len);
 
 int wma_pdev_resume_event_handler(void *handle, uint8_t *event, uint32_t len);
-
-QDF_STATUS wma_wow_enter(tp_wma_handle wma, tpSirHalWowlEnterParams info);
-
-QDF_STATUS wma_wow_exit(tp_wma_handle wma, tpSirHalWowlExitParams info);
 
 void wma_del_ts_req(tp_wma_handle wma, tDelTsParams *msg);
 
@@ -1279,9 +1267,9 @@ int wma_wlan_bt_activity_evt_handler(void *handle, uint8_t *event,
 				     uint32_t len);
 
 /**
- * wma_peer_ant_info_evt_handler - event handler to handle antenna info
+ * wma_pdev_div_info_evt_handler - event handler to handle antenna info
  * @handle: the wma handle
- * @event: buffer with event
+ * @event_buf: buffer with event
  * @len: buffer length
  *
  * This function receives antenna info from firmware and passes the event
@@ -1289,7 +1277,7 @@ int wma_wlan_bt_activity_evt_handler(void *handle, uint8_t *event,
  *
  * Return: 0 on success
  */
-int wma_peer_ant_info_evt_handler(void *handle, u_int8_t *event,
+int wma_pdev_div_info_evt_handler(void *handle, u_int8_t *event_buf,
 	u_int32_t len);
 
 /**

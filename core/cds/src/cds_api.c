@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -303,6 +294,22 @@ cds_cfg_update_ac_specs_params(struct txrx_pdev_cfg_param_t *olcfg,
 	}
 }
 
+#ifdef QCA_LL_TX_FLOW_CONTROL_V2
+static inline void
+cds_cdp_set_flow_control_params(struct cds_config_info *cds_cfg,
+				struct txrx_pdev_cfg_param_t *cdp_cfg)
+{
+	cdp_cfg->tx_flow_stop_queue_th = cds_cfg->tx_flow_stop_queue_th;
+	cdp_cfg->tx_flow_start_queue_offset =
+				 cds_cfg->tx_flow_start_queue_offset;
+}
+#else
+static inline void
+cds_cdp_set_flow_control_params(struct cds_config_info *cds_cfg,
+				struct txrx_pdev_cfg_param_t *cdp_cfg)
+{}
+#endif
+
 /**
  * cds_cdp_cfg_attach() - attach data path config module
  * @cds_cfg: generic platform level config instance
@@ -337,8 +344,9 @@ static void cds_cdp_cfg_attach(struct cds_config_info *cds_cfg)
 	cdp_cfg_set_flow_steering(soc, gp_cds_context->cfg_ctx,
 				 cds_cfg->flow_steering_enabled);
 
+	cds_cdp_set_flow_control_params(cds_cfg, &cdp_cfg);
 	cdp_cfg_set_flow_control_parameters(soc, gp_cds_context->cfg_ctx,
-			(void *)&cdp_cfg);
+					    (void *)&cdp_cfg);
 
 	/* adjust the cfg_ctx default value based on setting */
 	cdp_cfg_set_rx_fwd_disabled(soc, gp_cds_context->cfg_ctx,
@@ -380,6 +388,8 @@ static QDF_STATUS cds_register_all_modules(void)
 					&sme_mc_process_handler);
 	status = scheduler_register_module(QDF_MODULE_ID_OS_IF,
 					&scheduler_os_if_mq_handler);
+	status = scheduler_register_module(QDF_MODULE_ID_SCAN,
+					&scheduler_scan_mq_handler);
 	return status;
 }
 
@@ -860,6 +870,7 @@ QDF_STATUS cds_pre_enable(void)
 		if ((!cds_is_fw_down()) && (!cds_is_self_recovery_enabled()))
 			QDF_BUG(0);
 
+		wma_wmi_stop();
 		htc_stop(gp_cds_context->htc_ctx);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -867,6 +878,7 @@ QDF_STATUS cds_pre_enable(void)
 	if (cdp_pdev_post_attach(soc, gp_cds_context->pdev_txrx_ctx)) {
 		QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_FATAL,
 			"Failed to attach pdev");
+		wma_wmi_stop();
 		htc_stop(gp_cds_context->htc_ctx);
 		QDF_ASSERT(0);
 		return QDF_STATUS_E_FAILURE;
@@ -1123,6 +1135,7 @@ QDF_STATUS cds_post_disable(void)
 	hif_reset_soc(hif_ctx);
 
 	if (gp_cds_context->htc_ctx) {
+		wma_wmi_stop();
 		htc_stop(gp_cds_context->htc_ctx);
 	}
 
@@ -2240,6 +2253,10 @@ QDF_STATUS cds_set_log_completion(uint32_t is_fatal,
 	p_cds_context->log_complete.recovery_needed = recovery_needed;
 	p_cds_context->log_complete.is_report_in_progress = true;
 	qdf_spinlock_release(&p_cds_context->bug_report_lock);
+	QDF_TRACE(QDF_MODULE_ID_QDF, QDF_TRACE_LEVEL_DEBUG,
+		  "%s: is_fatal %d ind %d reasn_code %d recovery needed %d",
+		  __func__, is_fatal, indicator, reason_code, recovery_needed);
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -2913,6 +2930,7 @@ QDF_STATUS cds_smmu_mem_map_setup(qdf_device_t osdev, bool ipa_present)
 			}
 		}
 	}
+	osdev->iommu_mapping = mapping;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2933,6 +2951,7 @@ int cds_smmu_map_unmap(bool map, uint32_t num_buf, qdf_mem_info_t *buf_arr)
 QDF_STATUS cds_smmu_mem_map_setup(qdf_device_t osdev, bool ipa_present)
 {
 	osdev->smmu_s1_enabled = false;
+	osdev->iommu_mapping = NULL;
 	return QDF_STATUS_SUCCESS;
 }
 

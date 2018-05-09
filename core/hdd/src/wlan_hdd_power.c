@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -84,6 +75,7 @@
 #include "wlan_hdd_packet_filter_api.h"
 #include "wlan_cfg80211_scan.h"
 #include "wlan_ipa_ucfg_api.h"
+#include <wlan_cfg80211_mc_cp_stats.h>
 
 /* Preprocessor definitions and constants */
 #ifdef QCA_WIFI_NAPIER_EMULATION
@@ -1103,7 +1095,8 @@ hdd_suspend_wlan(void)
 		}
 
 		/* stop all TX queues before suspend */
-		hdd_info("Disabling queues");
+		hdd_info("Disabling queues for dev mode %s",
+			 hdd_device_mode_to_string(adapter->device_mode));
 		wlan_hdd_netif_queue_control(adapter,
 					     WLAN_STOP_ALL_NETIF_QUEUE,
 					     WLAN_CONTROL_PATH);
@@ -1165,7 +1158,8 @@ static int hdd_resume_wlan(void)
 		hdd_disable_host_offloads(adapter, pmo_apps_resume);
 
 		/* wake the tx queues */
-		hdd_info("Enabling queues");
+		hdd_info("Enabling queues for dev mode %s",
+			 hdd_device_mode_to_string(adapter->device_mode));
 		wlan_hdd_netif_queue_control(adapter,
 					WLAN_WAKE_ALL_NETIF_QUEUE,
 					WLAN_CONTROL_PATH);
@@ -1701,7 +1695,7 @@ static int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 	 */
 	hdd_for_each_adapter(hdd_ctx, adapter) {
 		if (wlan_hdd_validate_session_id(adapter->session_id)) {
-			hdd_err("invalid session id: %d", adapter->session_id);
+			hdd_debug("invalid session id: %d", adapter->session_id);
 			continue;
 		}
 
@@ -2068,6 +2062,18 @@ int wlan_hdd_cfg80211_set_txpower(struct wiphy *wiphy,
 	return ret;
 }
 
+#ifdef QCA_SUPPORT_CP_STATS
+static void wlan_hdd_get_tx_power(struct hdd_adapter *adapter, int *dbm)
+{
+	wlan_cfg80211_mc_cp_stats_get_tx_power(adapter->hdd_vdev, dbm);
+}
+#else
+static void wlan_hdd_get_tx_power(struct hdd_adapter *adapter, int *dbm)
+{
+	wlan_hdd_get_class_astats(adapter);
+	*dbm = adapter->hdd_stats.class_a_stat.max_pwr;
+}
+#endif
 /**
  * __wlan_hdd_cfg80211_get_txpower() - get TX power
  * @wiphy: Pointer to wiphy
@@ -2126,10 +2132,10 @@ static int __wlan_hdd_cfg80211_get_txpower(struct wiphy *wiphy,
 	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
 			 TRACE_CODE_HDD_CFG80211_GET_TXPOWER,
 			 adapter->session_id, adapter->device_mode));
-	wlan_hdd_get_class_astats(adapter);
-	*dbm = adapter->hdd_stats.class_a_stat.max_pwr;
 
-	hdd_exit();
+	wlan_hdd_get_tx_power(adapter, dbm);
+	hdd_debug("power: %d", *dbm);
+
 	return 0;
 }
 
@@ -2285,14 +2291,23 @@ int hdd_wlan_fake_apps_suspend(struct wiphy *wiphy, struct net_device *dev,
 			       enum wow_interface_pause pause_setting,
 			       enum wow_resume_trigger resume_setting)
 {
+	int errno;
 	qdf_device_t qdf_dev;
 	struct hif_opaque_softc *hif_ctx;
-	int errno;
+	struct hdd_context *hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
 	struct wow_enable_params wow_params = {
 		.is_unit_test = true,
 		.interface_pause = pause_setting,
 		.resume_trigger = resume_setting
 	};
+
+	if (wlan_hdd_validate_context(hdd_ctx))
+		return -EINVAL;
+
+	if (!hdd_ctx->config->is_unit_test_framework_enabled) {
+		hdd_warn_rl("UT framework is disabled");
+		return -EINVAL;
+	}
 
 	hdd_info("Unit-test suspend WLAN");
 
@@ -2393,6 +2408,15 @@ link_down:
 int hdd_wlan_fake_apps_resume(struct wiphy *wiphy, struct net_device *dev)
 {
 	struct hif_opaque_softc *hif_ctx;
+	struct hdd_context *hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
+
+	if (wlan_hdd_validate_context(hdd_ctx))
+		return -EINVAL;
+
+	if (!hdd_ctx->config->is_unit_test_framework_enabled) {
+		hdd_warn_rl("UT framework is disabled");
+		return -EINVAL;
+	}
 
 	hif_ctx = cds_get_context(QDF_MODULE_ID_HIF);
 	if (!hif_ctx) {

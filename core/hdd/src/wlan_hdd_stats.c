@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -38,6 +35,39 @@
 #include "wlan_hdd_request_manager.h"
 #include "wlan_hdd_debugfs_llstat.h"
 #include "wlan_reg_services_api.h"
+#include <wlan_cfg80211_mc_cp_stats.h>
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
+#define HDD_INFO_SIGNAL                 STATION_INFO_SIGNAL
+#define HDD_INFO_SIGNAL_AVG             STATION_INFO_SIGNAL_AVG
+#define HDD_INFO_TX_PACKETS             STATION_INFO_TX_PACKETS
+#define HDD_INFO_TX_RETRIES             STATION_INFO_TX_RETRIES
+#define HDD_INFO_TX_FAILED              STATION_INFO_TX_FAILED
+#define HDD_INFO_TX_BITRATE             STATION_INFO_TX_BITRATE
+#define HDD_INFO_TX_BYTES               STATION_INFO_TX_BYTES
+#define HDD_INFO_CHAIN_SIGNAL_AVG       STATION_INFO_CHAIN_SIGNAL_AVG
+#define HDD_INFO_RX_BYTES               STATION_INFO_RX_BYTES
+#define HDD_INFO_RX_PACKETS             STATION_INFO_RX_PACKETS
+#define HDD_INFO_TX_BYTES64             0
+#define HDD_INFO_RX_BYTES64             0
+#define HDD_INFO_INACTIVE_TIME          0
+#define HDD_INFO_CONNECTED_TIME         0
+#else
+#define HDD_INFO_SIGNAL                 BIT(NL80211_STA_INFO_SIGNAL)
+#define HDD_INFO_SIGNAL_AVG             BIT(NL80211_STA_INFO_SIGNAL_AVG)
+#define HDD_INFO_TX_PACKETS             BIT(NL80211_STA_INFO_TX_PACKETS)
+#define HDD_INFO_TX_RETRIES             BIT(NL80211_STA_INFO_TX_RETRIES)
+#define HDD_INFO_TX_FAILED              BIT(NL80211_STA_INFO_TX_FAILED)
+#define HDD_INFO_TX_BITRATE             BIT(NL80211_STA_INFO_TX_BITRATE)
+#define HDD_INFO_TX_BYTES               BIT(NL80211_STA_INFO_TX_BYTES)
+#define HDD_INFO_CHAIN_SIGNAL_AVG       BIT(NL80211_STA_INFO_CHAIN_SIGNAL_AVG)
+#define HDD_INFO_RX_BYTES               BIT(NL80211_STA_INFO_RX_BYTES)
+#define HDD_INFO_RX_PACKETS             BIT(NL80211_STA_INFO_RX_PACKETS)
+#define HDD_INFO_TX_BYTES64             BIT(NL80211_STA_INFO_TX_BYTES64)
+#define HDD_INFO_RX_BYTES64             BIT(NL80211_STA_INFO_RX_BYTES64)
+#define HDD_INFO_INACTIVE_TIME          BIT(NL80211_STA_INFO_INACTIVE_TIME)
+#define HDD_INFO_CONNECTED_TIME         BIT(NL80211_STA_INFO_CONNECTED_TIME)
+#endif /* kernel version less than 4.0.0 && no_backport */
 
 /* 11B, 11G Rate table include Basic rate and Extended rate
  * The IDX field is the rate index
@@ -2960,20 +2990,6 @@ void wlan_hdd_cfg80211_stats_ext2_callback(void *ctx,
 
 #endif /* End of WLAN_FEATURE_STATS_EXT */
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
-static inline void wlan_hdd_fill_station_info_signal(struct station_info
-						     *sinfo)
-{
-	sinfo->filled |= STATION_INFO_SIGNAL;
-}
-#else
-static inline void wlan_hdd_fill_station_info_signal(struct station_info
-						     *sinfo)
-{
-	sinfo->filled |= BIT(NL80211_STA_INFO_SIGNAL);
-}
-#endif
-
 #ifdef LINKSPEED_DEBUG_ENABLED
 #define linkspeed_dbg(format, args...) pr_info(format, ## args)
 #else
@@ -3003,17 +3019,10 @@ static void wlan_hdd_fill_summary_stats(tCsrSummaryStatsInfo *stats,
 		info->tx_failed += stats->fail_cnt[i];
 	}
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
-	info->filled |= STATION_INFO_TX_PACKETS |
-			STATION_INFO_TX_RETRIES |
-			STATION_INFO_TX_FAILED |
-			STATION_INFO_RX_PACKETS;
-#else
-	info->filled |= BIT(NL80211_STA_INFO_RX_PACKETS) |
-			BIT(NL80211_STA_INFO_TX_PACKETS) |
-			BIT(NL80211_STA_INFO_TX_RETRIES) |
-			BIT(NL80211_STA_INFO_TX_FAILED);
-#endif
+	info->filled |= HDD_INFO_TX_PACKETS |
+			HDD_INFO_TX_RETRIES |
+			HDD_INFO_TX_FAILED  |
+			HDD_INFO_RX_PACKETS;
 }
 
 /**
@@ -3401,18 +3410,18 @@ static void hdd_fill_sinfo_rate_info(struct station_info *sinfo,
  */
 static void hdd_fill_station_info_flags(struct station_info *sinfo)
 {
-	sinfo->filled |= BIT(NL80211_STA_INFO_SIGNAL) |
-		BIT(NL80211_STA_INFO_TX_BYTES)   |
-		BIT(NL80211_STA_INFO_TX_BYTES64)   |
-		BIT(NL80211_STA_INFO_TX_BITRATE) |
-		BIT(NL80211_STA_INFO_TX_PACKETS) |
-		BIT(NL80211_STA_INFO_TX_RETRIES) |
-		BIT(NL80211_STA_INFO_TX_FAILED)  |
-		BIT(NL80211_STA_INFO_RX_BYTES)   |
-		BIT(NL80211_STA_INFO_RX_BYTES64)   |
-		BIT(NL80211_STA_INFO_RX_PACKETS) |
-		BIT(NL80211_STA_INFO_INACTIVE_TIME) |
-		BIT(NL80211_STA_INFO_CONNECTED_TIME);
+	sinfo->filled |= HDD_INFO_SIGNAL        |
+			 HDD_INFO_TX_BYTES      |
+			 HDD_INFO_TX_BYTES64    |
+			 HDD_INFO_TX_BITRATE    |
+			 HDD_INFO_TX_PACKETS    |
+			 HDD_INFO_TX_RETRIES    |
+			 HDD_INFO_TX_FAILED     |
+			 HDD_INFO_RX_BYTES      |
+			 HDD_INFO_RX_BYTES64    |
+			 HDD_INFO_RX_PACKETS    |
+			 HDD_INFO_INACTIVE_TIME |
+			 HDD_INFO_CONNECTED_TIME;
 }
 
 /**
@@ -3961,7 +3970,7 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 		 * send the cached rssi when get_station
 		 */
 		sinfo->signal = adapter->rssi;
-		wlan_hdd_fill_station_info_signal(sinfo);
+		sinfo->filled |= HDD_INFO_SIGNAL;
 		return 0;
 	}
 
@@ -3971,18 +3980,17 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 
 	wlan_hdd_get_station_stats(adapter);
 
-	if (adapter->hdd_stats.summary_stat.rssi)
-		adapter->rssi = adapter->hdd_stats.summary_stat.rssi;
+	adapter->rssi = adapter->hdd_stats.summary_stat.rssi;
+	snr = adapter->hdd_stats.summary_stat.snr;
 
 	/* for new connection there might be no valid previous RSSI */
 	if (!adapter->rssi) {
 		hdd_get_rssi_snr_by_bssid(adapter,
 				sta_ctx->conn_info.bssId.bytes,
-				&adapter->rssi, NULL);
+				&adapter->rssi, &snr);
 	}
 
 	sinfo->signal = adapter->rssi;
-	snr = adapter->hdd_stats.summary_stat.snr;
 	hdd_debug("snr: %d, rssi: %d",
 		adapter->hdd_stats.summary_stat.snr,
 		adapter->hdd_stats.summary_stat.rssi);
@@ -3991,7 +3999,7 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 		sta_ctx->conn_info.signal - snr;
 	sta_ctx->cache_conn_info.signal = sinfo->signal;
 	sta_ctx->cache_conn_info.noise = sta_ctx->conn_info.noise;
-	wlan_hdd_fill_station_info_signal(sinfo);
+	sinfo->filled |= HDD_INFO_SIGNAL;
 
 	/*
 	 * we notify connect to lpass here instead of during actual
@@ -4353,17 +4361,10 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 	qdf_mem_copy(&sta_ctx->cache_conn_info.txrate,
 		     &sinfo->txrate, sizeof(sinfo->txrate));
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
-	sinfo->filled |= STATION_INFO_TX_BITRATE |
-			 STATION_INFO_TX_BYTES   |
-			 STATION_INFO_RX_BYTES   |
-			 STATION_INFO_RX_PACKETS;
-#else
-	sinfo->filled |= BIT(NL80211_STA_INFO_TX_BITRATE) |
-			 BIT(NL80211_STA_INFO_TX_BYTES)   |
-			 BIT(NL80211_STA_INFO_RX_BYTES)   |
-			 BIT(NL80211_STA_INFO_RX_PACKETS);
-#endif
+	sinfo->filled |= HDD_INFO_TX_BITRATE |
+			 HDD_INFO_TX_BYTES   |
+			 HDD_INFO_RX_BYTES   |
+			 HDD_INFO_RX_PACKETS;
 
 	if (rate_flags & eHAL_TX_RATE_LEGACY)
 		hdd_debug("Reporting legacy rate %d pkt cnt tx %d rx %d",
@@ -4392,13 +4393,8 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 	}
 
 	if (rssi_stats_valid) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
-		sinfo->filled |= STATION_INFO_CHAIN_SIGNAL_AVG;
-		sinfo->filled |= STATION_INFO_SIGNAL_AVG;
-#else
-		sinfo->filled |= BIT(NL80211_STA_INFO_CHAIN_SIGNAL_AVG);
-		sinfo->filled |= BIT(NL80211_STA_INFO_SIGNAL_AVG);
-#endif
+		sinfo->filled |= HDD_INFO_CHAIN_SIGNAL_AVG;
+		sinfo->filled |= HDD_INFO_SIGNAL_AVG;
 	}
 #endif
 
@@ -4965,6 +4961,65 @@ int wlan_hdd_get_rcpi(struct hdd_adapter *adapter, uint8_t *mac,
 	return ret;
 }
 
+#ifdef QCA_SUPPORT_CP_STATS
+QDF_STATUS wlan_hdd_get_rssi(struct hdd_adapter *adapter, int8_t *rssi_value)
+{
+	int ret, i;
+	struct hdd_station_ctx *sta_ctx;
+	struct stats_event rssi_info;
+
+	if (NULL == adapter) {
+		hdd_err("Invalid context, adapter");
+		return QDF_STATUS_E_FAULT;
+	}
+	if (cds_is_driver_recovering() || cds_is_driver_in_bad_state()) {
+		hdd_err("Recovery in Progress. State: 0x%x Ignore!!!",
+			cds_get_driver_state());
+		/* return a cached value */
+		*rssi_value = adapter->rssi;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+
+	if (eConnectionState_Associated != sta_ctx->conn_info.connState) {
+		hdd_debug("Not associated!, rssi on disconnect %d",
+			  adapter->rssi_on_disconnect);
+		*rssi_value = adapter->rssi_on_disconnect;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	if (sta_ctx->hdd_reassoc_scenario) {
+		hdd_debug("Roaming in progress, return cached RSSI");
+		*rssi_value = adapter->rssi;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	ret = wlan_cfg80211_mc_cp_stats_get_peer_rssi(adapter->hdd_vdev,
+						sta_ctx->conn_info.bssId.bytes,
+						&rssi_info);
+	if (ret) {
+		hdd_err("Unable to retrieve peer rssi: %d", ret);
+		wlan_cfg80211_mc_cp_stats_put_peer_rssi(&rssi_info);
+		return ret;
+	}
+
+	for (i = 0; i < rssi_info.num_peer_stats; i++) {
+		if (!qdf_mem_cmp(rssi_info.peer_stats[i].peer_macaddr,
+				 sta_ctx->conn_info.bssId.bytes,
+				 WLAN_MACADDR_LEN)) {
+			*rssi_value = rssi_info.peer_stats[i].peer_rssi;
+			hdd_debug("RSSI = %d", *rssi_value);
+			wlan_cfg80211_mc_cp_stats_put_peer_rssi(&rssi_info);
+			return QDF_STATUS_SUCCESS;
+		}
+	}
+
+	wlan_cfg80211_mc_cp_stats_put_peer_rssi(&rssi_info);
+	hdd_err("bss peer not present in returned result");
+	return QDF_STATUS_E_FAULT;
+}
+#else /* QCA_SUPPORT_CP_STATS */
 struct rssi_priv {
 	int8_t rssi;
 };
@@ -5061,12 +5116,8 @@ QDF_STATUS wlan_hdd_get_rssi(struct hdd_adapter *adapter, int8_t *rssi_value)
 		} else {
 			/* update the adapter with the fresh results */
 			priv = hdd_request_priv(request);
-			/*
-			 * update rssi only if its valid else return previous
-			 * valid rssi.
-			 */
-			if (priv->rssi)
-				adapter->rssi = priv->rssi;
+
+			adapter->rssi = priv->rssi;
 
 			/*
 			 * for new connection there might be no valid previous
@@ -5092,6 +5143,7 @@ QDF_STATUS wlan_hdd_get_rssi(struct hdd_adapter *adapter, int8_t *rssi_value)
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif /* QCA_SUPPORT_CP_STATS */
 
 struct snr_priv {
 	int8_t snr;
@@ -5539,6 +5591,7 @@ int wlan_hdd_get_peer_info(struct hdd_adapter *adapter,
 	return ret;
 }
 
+#ifndef QCA_SUPPORT_CP_STATS
 struct class_a_stats {
 	tCsrGlobalClassAStatsInfo class_a_stats;
 };
@@ -5640,6 +5693,7 @@ return_cached_results:
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 struct station_stats {
 	tCsrSummaryStatsInfo summary_stats;

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -73,6 +64,7 @@
 #include <target_if_scan.h>
 #include "wlan_reg_services_api.h"
 #include "wlan_roam_debug.h"
+#include <wlan_cp_stats_mc_ucfg_api.h>
 
 #ifndef ARRAY_LENGTH
 #define ARRAY_LENGTH(a)         (sizeof(a) / sizeof((a)[0]))
@@ -86,7 +78,7 @@
 #define WMA_SET_VDEV_IE_SOURCE_HOST 0x0
 
 
-#ifdef FEATURE_WLAN_DIAG_SUPPORT
+#if defined(FEATURE_WLAN_DIAG_SUPPORT)
 /**
  * qdf_wma_wow_wakeup_stats_event()- send wow wakeup stats
  * @tp_wma_handle wma: WOW wakeup packet counter
@@ -95,6 +87,41 @@
  *
  * Return: void.
  */
+#ifdef QCA_SUPPORT_CP_STATS
+static inline void qdf_wma_wow_wakeup_stats_event(tp_wma_handle wma)
+{
+	QDF_STATUS status;
+	struct wake_lock_stats stats = {0};
+
+	WLAN_HOST_DIAG_EVENT_DEF(wow_stats,
+	struct host_event_wlan_powersave_wow_stats);
+
+	status = ucfg_mc_cp_stats_get_psoc_wake_lock_stats(wma->psoc, &stats);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+	qdf_mem_zero(&wow_stats, sizeof(wow_stats));
+
+	wow_stats.wow_bcast_wake_up_count = stats.bcast_wake_up_count;
+	wow_stats.wow_ipv4_mcast_wake_up_count = stats.ipv4_mcast_wake_up_count;
+	wow_stats.wow_ipv6_mcast_wake_up_count = stats.ipv6_mcast_wake_up_count;
+	wow_stats.wow_ipv6_mcast_ra_stats = stats.ipv6_mcast_ra_stats;
+	wow_stats.wow_ipv6_mcast_ns_stats = stats.ipv6_mcast_ns_stats;
+	wow_stats.wow_ipv6_mcast_na_stats = stats.ipv6_mcast_na_stats;
+	wow_stats.wow_pno_match_wake_up_count = stats.pno_match_wake_up_count;
+	wow_stats.wow_pno_complete_wake_up_count =
+				stats.pno_complete_wake_up_count;
+	wow_stats.wow_gscan_wake_up_count = stats.gscan_wake_up_count;
+	wow_stats.wow_low_rssi_wake_up_count = stats.low_rssi_wake_up_count;
+	wow_stats.wow_rssi_breach_wake_up_count =
+				stats.rssi_breach_wake_up_count;
+	wow_stats.wow_icmpv4_count = stats.icmpv4_count;
+	wow_stats.wow_icmpv6_count = stats.icmpv6_count;
+	wow_stats.wow_oem_response_wake_up_count =
+				stats.oem_response_wake_up_count;
+
+	WLAN_HOST_DIAG_EVENT_REPORT(&wow_stats, EVENT_WLAN_POWERSAVE_WOW_STATS);
+}
+#else /* QCA_SUPPORT_CP_STATS*/
 static inline void qdf_wma_wow_wakeup_stats_event(tp_wma_handle wma)
 {
 	QDF_STATUS status;
@@ -139,6 +166,7 @@ static inline void qdf_wma_wow_wakeup_stats_event(tp_wma_handle wma)
 
 	WLAN_HOST_DIAG_EVENT_REPORT(&WowStats, EVENT_WLAN_POWERSAVE_WOW_STATS);
 }
+#endif /* QCA_SUPPORT_CP_STATS */
 #else
 static inline void qdf_wma_wow_wakeup_stats_event(tp_wma_handle wma)
 {
@@ -1622,6 +1650,66 @@ static const u8 *wma_wow_wake_reason_str(A_INT32 wake_reason)
 	}
 }
 
+#ifdef QCA_SUPPORT_CP_STATS
+static void wma_inc_wow_stats(t_wma_handle *wma,
+			      WOW_EVENT_INFO_fixed_param *wake_info)
+{
+	ucfg_mc_cp_stats_inc_wake_lock_stats(wma->psoc,
+					     wake_info->vdev_id,
+					     wake_info->wake_reason);
+}
+
+static void wma_wow_stats_display(struct wake_lock_stats *stats)
+{
+	WMA_LOGA("uc %d bc %d v4_mc %d v6_mc %d ra %d ns %d na %d pno_match %d pno_complete %d gscan %d low_rssi %d rssi_breach %d icmp %d icmpv6 %d oem %d",
+		stats->ucast_wake_up_count,
+		stats->bcast_wake_up_count,
+		stats->ipv4_mcast_wake_up_count,
+		stats->ipv6_mcast_wake_up_count,
+		stats->ipv6_mcast_ra_stats,
+		stats->ipv6_mcast_ns_stats,
+		stats->ipv6_mcast_na_stats,
+		stats->pno_match_wake_up_count,
+		stats->pno_complete_wake_up_count,
+		stats->gscan_wake_up_count,
+		stats->low_rssi_wake_up_count,
+		stats->rssi_breach_wake_up_count,
+		stats->icmpv4_count,
+		stats->icmpv6_count,
+		stats->oem_response_wake_up_count);
+}
+
+static void wma_print_wow_stats(t_wma_handle *wma,
+				WOW_EVENT_INFO_fixed_param *wake_info)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wake_lock_stats stats = {0};
+
+	switch (wake_info->wake_reason) {
+	case WOW_REASON_BPF_ALLOW:
+	case WOW_REASON_PATTERN_MATCH_FOUND:
+	case WOW_REASON_RA_MATCH:
+	case WOW_REASON_NLOD:
+	case WOW_REASON_NLO_SCAN_COMPLETE:
+	case WOW_REASON_LOW_RSSI:
+	case WOW_REASON_EXTSCAN:
+	case WOW_REASON_RSSI_BREACH_EVENT:
+	case WOW_REASON_OEM_RESPONSE_EVENT:
+	case WOW_REASON_CHIP_POWER_FAILURE_DETECT:
+	case WOW_REASON_11D_SCAN:
+		break;
+	default:
+		return;
+	}
+
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(wma->psoc,
+						    wake_info->vdev_id,
+						    WLAN_LEGACY_WMA_ID);
+	ucfg_mc_cp_stats_get_vdev_wake_lock_stats(vdev, &stats);
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_WMA_ID);
+	wma_wow_stats_display(&stats);
+}
+#else
 /**
  * wma_wow_stats_display() - display wow wake up stats
  * @stats: per vdev stats counters
@@ -1723,6 +1811,7 @@ static void wma_inc_wow_stats(t_wma_handle *wma,
 		break;
 	}
 }
+#endif
 
 #ifdef FEATURE_WLAN_EXTSCAN
 /**
@@ -2187,36 +2276,33 @@ static void wma_log_pkt_tcpv6(uint8_t *data, uint32_t length)
 	WMA_LOGD("TCP_seq_num: %u", qdf_cpu_to_be16(seq_num));
 }
 
-/**
- * wma_wow_parse_data_pkt() - API to parse data buffer for data
- *    packet that resulted in WOW wakeup.
- * @stats: per-vdev stats for tracking packet types
- * @data: Pointer to data buffer
- * @length: data buffer length
- *
- * This function parses the data buffer received (first few bytes of
- * skb->data) to get informaton like src mac addr, dst mac addr, packet
- * len, seq_num, etc. It also increments stats for different packet types.
- *
- * Return: void
- */
-static void wma_wow_parse_data_pkt(struct sir_vdev_wow_stats *stats,
-				   uint8_t *data,
-				   uint32_t length)
+#ifdef QCA_SUPPORT_CP_STATS
+static void wma_wow_inc_wake_lock_stats_by_dst_addr(t_wma_handle *wma,
+						    uint8_t vdev_id,
+						    uint8_t *dest_mac)
 {
-	enum qdf_proto_subtype proto_subtype;
-	const char *proto_subtype_name;
-	uint8_t *dest_mac;
-	uint8_t *src_mac;
+	ucfg_mc_cp_stats_inc_wake_lock_stats_by_dst_addr(wma->psoc,
+							 vdev_id,
+							 dest_mac);
+}
 
-	WMA_LOGD("packet length: %u", length);
-	if (length < QDF_NBUF_TRAC_IPV4_OFFSET)
-		return;
+static void wma_wow_inc_wake_lock_stats_by_protocol(t_wma_handle *wma,
+			uint8_t vdev_id, enum qdf_proto_subtype proto_subtype)
+{
+	ucfg_mc_cp_stats_inc_wake_lock_stats_by_protocol(wma->psoc,
+							 vdev_id,
+							 proto_subtype);
+}
+#else
+static void wma_wow_inc_wake_lock_stats_by_dst_addr(t_wma_handle *wma,
+						    uint8_t vdev_id,
+						    uint8_t *dest_mac)
+{
+	struct wma_txrx_node *vdev;
+	struct sir_vdev_wow_stats *stats;
 
-	src_mac = data + QDF_NBUF_SRC_MAC_OFFSET;
-	dest_mac = data + QDF_NBUF_DEST_MAC_OFFSET;
-	WMA_LOGD("Src_mac: " MAC_ADDRESS_STR ", Dst_mac: " MAC_ADDRESS_STR,
-		 MAC_ADDR_ARRAY(src_mac), MAC_ADDR_ARRAY(dest_mac));
+	vdev = &wma->interfaces[vdev_id];
+	stats = &vdev->wow_stats;
 
 	switch (*dest_mac) {
 	case WMA_BCAST_MAC_ADDR:
@@ -2232,6 +2318,76 @@ static void wma_wow_parse_data_pkt(struct sir_vdev_wow_stats *stats,
 		stats->ucast++;
 		break;
 	}
+}
+
+static void wma_wow_inc_wake_lock_stats_by_protocol(t_wma_handle *wma,
+			uint8_t vdev_id, enum qdf_proto_subtype proto_subtype)
+{
+	struct wma_txrx_node *vdev;
+	struct sir_vdev_wow_stats *stats;
+
+	vdev = &wma->interfaces[vdev_id];
+	stats = &vdev->wow_stats;
+
+	switch (proto_subtype) {
+	case QDF_PROTO_ICMP_RES:
+		stats->icmpv4++;
+		break;
+	case QDF_PROTO_ICMPV6_REQ:
+	case QDF_PROTO_ICMPV6_RES:
+	case QDF_PROTO_ICMPV6_RS:
+		stats->icmpv6++;
+		break;
+	case QDF_PROTO_ICMPV6_RA:
+		stats->icmpv6++;
+		stats->ipv6_mcast_ra++;
+		break;
+	case QDF_PROTO_ICMPV6_NS:
+		stats->icmpv6++;
+		stats->ipv6_mcast_ns++;
+		break;
+	case QDF_PROTO_ICMPV6_NA:
+		stats->icmpv6++;
+		stats->ipv6_mcast_na++;
+		break;
+	default:
+		break;
+	}
+}
+#endif
+
+/**
+ * wma_wow_parse_data_pkt() - API to parse data buffer for data
+ *    packet that resulted in WOW wakeup.
+ * @stats: per-vdev stats for tracking packet types
+ * @data: Pointer to data buffer
+ * @length: data buffer length
+ *
+ * This function parses the data buffer received (first few bytes of
+ * skb->data) to get information like src mac addr, dst mac addr, packet
+ * len, seq_num, etc. It also increments stats for different packet types.
+ *
+ * Return: void
+ */
+static void wma_wow_parse_data_pkt(t_wma_handle *wma,
+				   uint8_t vdev_id, uint8_t *data,
+				   uint32_t length)
+{
+	uint8_t *src_mac;
+	uint8_t *dest_mac;
+	const char *proto_subtype_name;
+	enum qdf_proto_subtype proto_subtype;
+
+	WMA_LOGD("packet length: %u", length);
+	if (length < QDF_NBUF_TRAC_IPV4_OFFSET)
+		return;
+
+	src_mac = data + QDF_NBUF_SRC_MAC_OFFSET;
+	dest_mac = data + QDF_NBUF_DEST_MAC_OFFSET;
+	WMA_LOGD("Src_mac: " MAC_ADDRESS_STR ", Dst_mac: " MAC_ADDRESS_STR,
+		 MAC_ADDR_ARRAY(src_mac), MAC_ADDR_ARRAY(dest_mac));
+
+	wma_wow_inc_wake_lock_stats_by_dst_addr(wma, vdev_id, dest_mac);
 
 	proto_subtype = wma_wow_get_pkt_proto_subtype(data, length);
 	proto_subtype_name = wma_pkt_proto_subtype_to_string(proto_subtype);
@@ -2259,29 +2415,19 @@ static void wma_wow_parse_data_pkt(struct sir_vdev_wow_stats *stats,
 
 	case QDF_PROTO_ICMP_REQ:
 	case QDF_PROTO_ICMP_RES:
-		stats->icmpv4++;
+		wma_wow_inc_wake_lock_stats_by_protocol(wma, vdev_id,
+							proto_subtype);
 		wma_log_pkt_icmpv4(data, length);
 		break;
 
 	case QDF_PROTO_ICMPV6_REQ:
 	case QDF_PROTO_ICMPV6_RES:
 	case QDF_PROTO_ICMPV6_RS:
-		stats->icmpv6++;
-		wma_log_pkt_icmpv6(data, length);
-		break;
 	case QDF_PROTO_ICMPV6_RA:
-		stats->icmpv6++;
-		stats->ipv6_mcast_ra++;
-		wma_log_pkt_icmpv6(data, length);
-		break;
 	case QDF_PROTO_ICMPV6_NS:
-		stats->icmpv6++;
-		stats->ipv6_mcast_ns++;
-		wma_log_pkt_icmpv6(data, length);
-		break;
 	case QDF_PROTO_ICMPV6_NA:
-		stats->icmpv6++;
-		stats->ipv6_mcast_na++;
+		wma_wow_inc_wake_lock_stats_by_protocol(wma, vdev_id,
+							proto_subtype);
 		wma_log_pkt_icmpv6(data, length);
 		break;
 
@@ -2312,7 +2458,7 @@ static void wma_wow_parse_data_pkt(struct sir_vdev_wow_stats *stats,
  * @buf_len: length of data buffer
  *
  * This function parses the data buffer received (802.11 header)
- * to get informaton like src mac addr, dst mac addr, seq_num,
+ * to get information like src mac addr, dst mac addr, seq_num,
  * frag_num, etc.
  *
  * Return: void
@@ -2533,7 +2679,8 @@ static int wma_wake_event_packet(
 				   packet, packet_len);
 
 		vdev = &wma->interfaces[wake_info->vdev_id];
-		wma_wow_parse_data_pkt(&vdev->wow_stats, packet, packet_len);
+		wma_wow_parse_data_pkt(wma, wake_info->vdev_id,
+				       packet, packet_len);
 		break;
 
 	default:
@@ -2806,7 +2953,6 @@ int wma_wow_wakeup_host_event(void *handle, uint8_t *event, uint32_t len)
 	pmo_ucfg_psoc_wakeup_host_event_received(wma->psoc);
 
 	wma_print_wow_stats(wma, wake_info);
-
 	/* split based on payload type */
 	if (is_piggybacked_event(wake_info->wake_reason))
 		errno = wma_wake_event_piggybacked(wma, event_param, len);
@@ -2817,7 +2963,6 @@ int wma_wow_wakeup_host_event(void *handle, uint8_t *event, uint32_t len)
 
 	wma_inc_wow_stats(wma, wake_info);
 	wma_print_wow_stats(wma, wake_info);
-
 	wma_acquire_wow_wakelock(wma, wake_info->wake_reason);
 
 	return errno;
@@ -2880,33 +3025,6 @@ int wma_pdev_resume_event_handler(void *handle, uint8_t *event, uint32_t len)
 	pmo_ucfg_psoc_wakeup_host_event_received(wma->psoc);
 
 	return 0;
-}
-
-/**
- * wma_wow_enter() - store enable/disable status for pattern
- * @wma: wma handle
- * @info: wow parameters
- *
- * Records pattern enable/disable status locally. This choice will
- * take effect when the driver enter into suspend state.
- *
- * Return: QDF status
- */
-QDF_STATUS wma_wow_enter(tp_wma_handle wma, tpSirHalWowlEnterParams info)
-{
-	return QDF_STATUS_SUCCESS;
-}
-
-/**
- * wma_wow_exit() - clear all wma states
- * @wma: wma handle
- * @info: wow params
- *
- * Return: QDF status
- */
-QDF_STATUS wma_wow_exit(tp_wma_handle wma, tpSirHalWowlExitParams info)
-{
-	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -3940,6 +4058,9 @@ void wma_send_regdomain_info_to_fw(uint32_t reg_dmn, uint16_t regdmn2G,
 	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
+	WMA_LOGD("reg_dmn: %d regdmn2g: %d regdmn5g :%d ctl2g: %d ctl5g: %d",
+		 reg_dmn, regdmn2G, regdmn5G, ctl2G, ctl5G);
+
 	if (NULL == wma) {
 		WMA_LOGE("%s: wma context is NULL", __func__);
 		return;
@@ -4469,6 +4590,156 @@ QDF_STATUS wma_set_tx_rx_aggregation_size(
 	return QDF_STATUS_SUCCESS;
 }
 
+QDF_STATUS wma_set_tx_rx_aggregation_size_per_ac(
+	struct sir_set_tx_rx_aggregation_size *tx_rx_aggregation_size)
+{
+	tp_wma_handle wma_handle;
+	wmi_vdev_set_custom_aggr_size_cmd_fixed_param *cmd;
+	int32_t len;
+	wmi_buf_t buf;
+	u_int8_t *buf_ptr;
+	int ret;
+	int queue_num;
+	uint32_t tx_aggr_size[4];
+
+	wma_handle = cds_get_context(QDF_MODULE_ID_WMA);
+
+	if (!tx_rx_aggregation_size) {
+		WMA_LOGE("%s: invalid pointer", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!wma_handle) {
+		WMA_LOGE("%s: WMA context is invald!", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	tx_aggr_size[0] = tx_rx_aggregation_size->tx_aggregation_size_be;
+	tx_aggr_size[1] = tx_rx_aggregation_size->tx_aggregation_size_bk;
+	tx_aggr_size[2] = tx_rx_aggregation_size->tx_aggregation_size_vi;
+	tx_aggr_size[3] = tx_rx_aggregation_size->tx_aggregation_size_vo;
+
+	for (queue_num = 0; queue_num < 4; queue_num++) {
+		if (tx_aggr_size[queue_num] == 0)
+			continue;
+
+		len = sizeof(*cmd);
+		buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
+
+		if (!buf) {
+			WMA_LOGE("%s: Failed allocate wmi buffer", __func__);
+			return QDF_STATUS_E_NOMEM;
+		}
+
+		buf_ptr = (u_int8_t *)wmi_buf_data(buf);
+		cmd = (wmi_vdev_set_custom_aggr_size_cmd_fixed_param *)buf_ptr;
+
+		WMITLV_SET_HDR(&cmd->tlv_header,
+			       WMITLV_TAG_STRUC_wmi_vdev_set_custom_aggr_size_cmd_fixed_param,
+			       WMITLV_GET_STRUCT_TLVLEN(
+					wmi_vdev_set_custom_aggr_size_cmd_fixed_param));
+
+		cmd->vdev_id = tx_rx_aggregation_size->vdev_id;
+		cmd->rx_aggr_size =
+				  tx_rx_aggregation_size->rx_aggregation_size;
+
+		cmd->tx_aggr_size = tx_aggr_size[queue_num];
+		/* bit 5: tx_ac_enable, if set, ac bitmap is valid. */
+		cmd->enable_bitmap = 0x20 | queue_num;
+
+		WMA_LOGD("queue_num: %d, tx aggr: %d rx aggr: %d vdev: %d",
+			 queue_num, cmd->tx_aggr_size,
+			 cmd->rx_aggr_size, cmd->vdev_id);
+
+		ret = wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
+					WMI_VDEV_SET_CUSTOM_AGGR_SIZE_CMDID);
+		if (ret) {
+			WMA_LOGE("%s: Failed to send aggregation size command",
+				 __func__);
+			wmi_buf_free(buf);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS wma_set_sw_retry_threshold(
+	struct sir_set_tx_aggr_sw_retry_threshold *tx_sw_retry_threshold)
+{
+	tp_wma_handle wma_handle;
+	wmi_vdev_set_custom_sw_retry_th_cmd_fixed_param *cmd;
+	int32_t len;
+	wmi_buf_t buf;
+	u_int8_t *buf_ptr;
+	int ret;
+	int queue_num;
+	uint32_t tx_aggr_retry[WMI_AC_MAX];
+
+	wma_handle = cds_get_context(QDF_MODULE_ID_WMA);
+
+	if (!tx_sw_retry_threshold) {
+		WMA_LOGE("%s: invalid pointer", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!wma_handle) {
+		WMA_LOGE("%s: WMA context is invald!", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	tx_aggr_retry[0] =
+		tx_sw_retry_threshold->tx_aggr_sw_retry_threshold_be;
+	tx_aggr_retry[1] =
+		tx_sw_retry_threshold->tx_aggr_sw_retry_threshold_bk;
+	tx_aggr_retry[2] =
+		tx_sw_retry_threshold->tx_aggr_sw_retry_threshold_vi;
+	tx_aggr_retry[3] =
+		tx_sw_retry_threshold->tx_aggr_sw_retry_threshold_vo;
+
+	for (queue_num = 0; queue_num < WMI_AC_MAX; queue_num++) {
+		if (tx_aggr_retry[queue_num] == 0)
+			continue;
+
+		len = sizeof(*cmd);
+		buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
+
+		if (!buf) {
+			WMA_LOGE("%s: Failed allocate wmi buffer", __func__);
+			return QDF_STATUS_E_NOMEM;
+		}
+
+		buf_ptr = (u_int8_t *)wmi_buf_data(buf);
+		cmd =
+		    (wmi_vdev_set_custom_sw_retry_th_cmd_fixed_param *)buf_ptr;
+
+		WMITLV_SET_HDR(&cmd->tlv_header,
+			       WMITLV_TAG_STRUC_wmi_vdev_set_custom_sw_retry_th_cmd_fixed_param,
+			       WMITLV_GET_STRUCT_TLVLEN(
+				   wmi_vdev_set_custom_sw_retry_th_cmd_fixed_param));
+
+		cmd->vdev_id = tx_sw_retry_threshold->vdev_id;
+		cmd->ac_type = queue_num;
+		cmd->sw_retry_type = WMI_VDEV_CUSTOM_SW_RETRY_TYPE_AGGR;
+		cmd->sw_retry_th = tx_aggr_retry[queue_num];
+
+		WMA_LOGD("queue: %d type: %d threshold: %d vdev: %d",
+			 queue_num, cmd->sw_retry_type,
+			 cmd->sw_retry_th, cmd->vdev_id);
+
+		ret = wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
+					   WMI_VDEV_SET_CUSTOM_SW_RETRY_TH_CMDID);
+		if (ret) {
+			WMA_LOGE("%s: Failed to send retry threshold command",
+				 __func__);
+			wmi_buf_free(buf);
+			return QDF_STATUS_E_FAILURE;
+		}
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  *  wma_p2p_lo_start() - P2P listen offload start
  *  @params: p2p listen offload parameters
@@ -4664,6 +4935,7 @@ int wma_p2p_lo_event_handler(void *handle, uint8_t *event_buf,
 	return 0;
 }
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * wma_get_wakelock_stats() - Populates wake lock stats
  * @stats: non-null wakelock structure to populate
@@ -4721,6 +4993,7 @@ QDF_STATUS wma_get_wakelock_stats(struct sir_wake_lock_stats *stats)
 
 	return QDF_STATUS_SUCCESS;
 }
+#endif
 
 /**
  * wma_process_fw_test_cmd() - send unit test command to fw.
@@ -4934,7 +5207,7 @@ int wma_get_arp_stats_handler(void *handle, uint8_t *data,
 	wmi_vdev_get_arp_stats_event_fixed_param *data_event;
 	wmi_vdev_get_connectivity_check_stats *connect_stats_event;
 	uint8_t *buf_ptr;
-	struct rsp_stats rsp;
+	struct rsp_stats rsp = {0};
 	tpAniSirGlobal mac = cds_get_context(QDF_MODULE_ID_PE);
 
 	if (!mac) {
@@ -5283,57 +5556,54 @@ int wma_wlan_bt_activity_evt_handler(void *handle, uint8_t *event, uint32_t len)
 	return 0;
 }
 
-int wma_peer_ant_info_evt_handler(void *handle, u_int8_t *event,
+int wma_pdev_div_info_evt_handler(void *handle, u_int8_t *event_buf,
 	u_int32_t len)
 {
-	wmi_peer_antdiv_info *peer_ant_info;
-	WMI_PEER_ANTDIV_INFO_EVENTID_param_tlvs *param_buf;
-	wmi_peer_antdiv_info_event_fixed_param *fix_param;
-	struct chain_rssi_result *chain_rssi_result;
-	u_int32_t chain_index;
+	WMI_PDEV_DIV_RSSI_ANTID_EVENTID_param_tlvs *param_buf;
+	wmi_pdev_div_rssi_antid_event_fixed_param *event;
+	struct chain_rssi_result chain_rssi_result;
+	u_int32_t i;
+	u_int8_t macaddr[IEEE80211_ADDR_LEN];
 
 	tpAniSirGlobal pmac = (tpAniSirGlobal)cds_get_context(
 					QDF_MODULE_ID_PE);
 	if (!pmac) {
-		WMA_LOGE("%s: Invalid pmac", __func__);
+		WMA_LOGE(FL("Invalid pmac"));
 		return -EINVAL;
 	}
 
-	param_buf = (WMI_PEER_ANTDIV_INFO_EVENTID_param_tlvs *) event;
+	param_buf = (WMI_PDEV_DIV_RSSI_ANTID_EVENTID_param_tlvs *) event_buf;
 	if (!param_buf) {
-		WMA_LOGE("Invalid peer_ant_info event buffer");
-		return -EINVAL;
-	}
-	fix_param = param_buf->fixed_param;
-	peer_ant_info = param_buf->peer_info;
-
-	WMA_LOGD("num_peers=%d\tvdev_id=%d",
-		fix_param->num_peers, fix_param->vdev_id);
-	WMA_LOGD("peer_ant_info: %pK", peer_ant_info);
-
-	if (!peer_ant_info) {
-		WMA_LOGE("Invalid peer_ant_info ptr");
+		WMA_LOGE(FL("Invalid rssi antid event buffer"));
 		return -EINVAL;
 	}
 
-	chain_rssi_result = qdf_mem_malloc(sizeof(*chain_rssi_result));
-	if (!chain_rssi_result) {
-		WMA_LOGE("%s: Failed to malloc", __func__);
-		return -ENOMEM;
+	event = param_buf->fixed_param;
+	if (!event) {
+		WMA_LOGE(FL("Invalid fixed param"));
+		return -EINVAL;
 	}
 
-	for (chain_index = 0; chain_index < CHAIN_RSSI_NUM; chain_index++)
-		WMA_LOGD("chain%d rssi: %x", chain_index,
-				peer_ant_info->chain_rssi[chain_index]);
+	WMI_MAC_ADDR_TO_CHAR_ARRAY(&event->macaddr, macaddr);
+	WMA_LOGD(FL("macaddr: " MAC_ADDRESS_STR), MAC_ADDR_ARRAY(macaddr));
 
-	qdf_mem_copy(chain_rssi_result->chain_rssi,
-				peer_ant_info->chain_rssi,
-				sizeof(peer_ant_info->chain_rssi));
+	WMA_LOGD(FL("num_chains_valid: %d"), event->num_chains_valid);
+	chain_rssi_result.num_chains_valid = event->num_chains_valid;
+
+	for (i = 0; i < CHAIN_MAX_NUM; i++)
+		WMA_LOGD(FL("chain_rssi: %d, ant_id: %d"),
+			event->chain_rssi[i], event->ant_id[i]);
+
+	qdf_mem_copy(chain_rssi_result.chain_rssi, event->chain_rssi,
+				sizeof(event->chain_rssi));
+	for (i = 0; i < event->num_chains_valid; i++)
+		chain_rssi_result.chain_rssi[i] += WMA_TGT_NOISE_FLOOR_DBM;
+
+	qdf_mem_copy(chain_rssi_result.ant_id, event->ant_id,
+				sizeof(event->ant_id));
 
 	pmac->sme.get_chain_rssi_cb(pmac->sme.get_chain_rssi_context,
-				chain_rssi_result);
-
-	qdf_mem_free(chain_rssi_result);
+				&chain_rssi_result);
 
 	return 0;
 }

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -710,6 +701,9 @@ static void wma_force_vdev_cleanup(tp_wma_handle wma_handle, uint8_t vdev_id)
 					 wma_peer_remove_for_vdev_callback,
 					 wma_handle);
 
+	qdf_atomic_init(&iface->fw_peer_count);
+	qdf_event_destroy(&iface->fw_peer_delete_completion);
+
 VDEV_DETACH:
 	wma_cdp_vdev_detach(soc, wma_handle, vdev_id);
 }
@@ -729,8 +723,17 @@ void wma_vdev_wait_for_peer_delete_completion(tp_wma_handle wma_handle,
 {
 	struct wma_txrx_node *iface = &wma_handle->interfaces[vdev_id];
 
-	if (!iface) {
-		WMA_LOGE("%s: iface of vdev-%d is NULL", __func__, vdev_id);
+	/* Do NOT wait when SSR is in progress
+	 * since all WMI commands will be ignored and not sent to FW
+	 */
+	if (cds_is_driver_recovering()) {
+		WMA_LOGD("%s: SSR is in progress", __func__);
+		return;
+	}
+
+	if (!iface || !iface->vdev_active) {
+		WMA_LOGE("%s: iface of vdev-%d is not available",
+			 __func__, vdev_id);
 		return;
 	}
 
@@ -1034,56 +1037,6 @@ static void wma_find_mcc_ap(tp_wma_handle wma, uint8_t vdev_id, bool add)
 }
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
 
-static const wmi_channel_width mode_to_width[MODE_MAX] = {
-	[MODE_11A]           = WMI_CHAN_WIDTH_20,
-	[MODE_11G]           = WMI_CHAN_WIDTH_20,
-	[MODE_11B]           = WMI_CHAN_WIDTH_20,
-	[MODE_11GONLY]       = WMI_CHAN_WIDTH_20,
-	[MODE_11NA_HT20]     = WMI_CHAN_WIDTH_20,
-	[MODE_11NG_HT20]     = WMI_CHAN_WIDTH_20,
-	[MODE_11AC_VHT20]    = WMI_CHAN_WIDTH_20,
-	[MODE_11AC_VHT20_2G] = WMI_CHAN_WIDTH_20,
-	[MODE_11NA_HT40]     = WMI_CHAN_WIDTH_40,
-	[MODE_11NG_HT40]     = WMI_CHAN_WIDTH_40,
-	[MODE_11AC_VHT40]    = WMI_CHAN_WIDTH_40,
-	[MODE_11AC_VHT40_2G] = WMI_CHAN_WIDTH_40,
-	[MODE_11AC_VHT80]    = WMI_CHAN_WIDTH_80,
-	[MODE_11AC_VHT80_2G] = WMI_CHAN_WIDTH_80,
-#if CONFIG_160MHZ_SUPPORT
-	[MODE_11AC_VHT80_80] = WMI_CHAN_WIDTH_80P80,
-	[MODE_11AC_VHT160]   = WMI_CHAN_WIDTH_160,
-#endif
-
-#if SUPPORT_11AX
-	[MODE_11AX_HE20]     = WMI_CHAN_WIDTH_20,
-	[MODE_11AX_HE40]     = WMI_CHAN_WIDTH_40,
-	[MODE_11AX_HE80]     = WMI_CHAN_WIDTH_80,
-	[MODE_11AX_HE80_80]  = WMI_CHAN_WIDTH_80P80,
-	[MODE_11AX_HE160]    = WMI_CHAN_WIDTH_160,
-	[MODE_11AX_HE20_2G]  = WMI_CHAN_WIDTH_20,
-	[MODE_11AX_HE40_2G]  = WMI_CHAN_WIDTH_40,
-	[MODE_11AX_HE80_2G]  = WMI_CHAN_WIDTH_80,
-#endif
-};
-
-/**
- * chanmode_to_chanwidth() - get channel width through channel mode
- * @chanmode:   channel phy mode
- *
- * Return: channel width
- */
-wmi_channel_width chanmode_to_chanwidth(WLAN_PHY_MODE chanmode)
-{
-	wmi_channel_width chan_width;
-
-	if (chanmode >= MODE_11A && chanmode < MODE_MAX)
-		chan_width = mode_to_width[chanmode];
-	else
-		chan_width = WMI_CHAN_WIDTH_20;
-
-	return chan_width;
-}
-
 /**
  * wma_vdev_start_resp_handler() - vdev start response handler
  * @handle: wma handle
@@ -1103,7 +1056,7 @@ int wma_vdev_start_resp_handler(void *handle, uint8_t *cmd_param_info,
 	struct vdev_up_params param = {0};
 	QDF_STATUS status;
 	int err;
-	wmi_channel_width chanwidth;
+	wmi_host_channel_width chanwidth;
 	target_resource_config *wlan_res_cfg;
 	struct wlan_objmgr_psoc *psoc = wma->psoc;
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
@@ -1202,7 +1155,8 @@ int wma_vdev_start_resp_handler(void *handle, uint8_t *cmd_param_info,
 	if ((resp_event->vdev_id < wma->max_bssid) &&
 	    (qdf_atomic_read(
 	    &wma->interfaces[resp_event->vdev_id].vdev_restart_params.hidden_ssid_restart_in_progress))
-	    && (wma_is_vdev_in_ap_mode(wma, resp_event->vdev_id) == true)) {
+	    && (wma_is_vdev_in_ap_mode(wma, resp_event->vdev_id) == true)
+	    && (req_msg->msg_type == WMA_HIDDEN_SSID_VDEV_RESTART)) {
 		tpHalHiddenSsidVdevRestart hidden_ssid_restart =
 			(tpHalHiddenSsidVdevRestart)req_msg->user_data;
 		WMA_LOGE("%s: vdev restart event recevied for hidden ssid set using IOCTL",
@@ -1273,7 +1227,9 @@ int wma_vdev_start_resp_handler(void *handle, uint8_t *cmd_param_info,
 				__func__, resp_event->vdev_id,
 				iface->chanmode, err);
 
-			chanwidth = chanmode_to_chanwidth(iface->chanmode);
+			chanwidth =
+				wmi_get_ch_width_from_phy_mode(wma->wmi_handle,
+							       iface->chanmode);
 			err = wma_set_peer_param(wma, iface->bssid,
 					WMI_PEER_CHWIDTH, chanwidth,
 					resp_event->vdev_id);
@@ -2184,6 +2140,7 @@ struct cdp_vdev *wma_vdev_attach(tp_wma_handle wma_handle,
 	struct vdev_create_params params = { 0 };
 	u_int8_t vdev_id;
 	struct sir_set_tx_rx_aggregation_size tx_rx_aggregation_size;
+	struct sir_set_tx_aggr_sw_retry_threshold tx_aggr_sw_retry_threshold;
 	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 
 	WMA_LOGD("mac %pM, vdev_id %hu, type %d, sub_type %d, nss 2g %d, 5g %d",
@@ -2284,8 +2241,34 @@ struct cdp_vdev *wma_vdev_attach(tp_wma_handle wma_handle,
 	if (status != QDF_STATUS_SUCCESS)
 		WMA_LOGE("failed to set aggregation sizes(err=%d)", status);
 
+	tx_rx_aggregation_size.tx_aggregation_size_be =
+				self_sta_req->tx_aggregation_size_be;
+	tx_rx_aggregation_size.tx_aggregation_size_bk =
+				self_sta_req->tx_aggregation_size_bk;
+	tx_rx_aggregation_size.tx_aggregation_size_vi =
+				self_sta_req->tx_aggregation_size_vi;
+	tx_rx_aggregation_size.tx_aggregation_size_vo =
+				self_sta_req->tx_aggregation_size_vo;
+
+	tx_aggr_sw_retry_threshold.tx_aggr_sw_retry_threshold_be =
+				self_sta_req->tx_aggr_sw_retry_threshold_be;
+	tx_aggr_sw_retry_threshold.tx_aggr_sw_retry_threshold_bk =
+				self_sta_req->tx_aggr_sw_retry_threshold_bk;
+	tx_aggr_sw_retry_threshold.tx_aggr_sw_retry_threshold_vi =
+				self_sta_req->tx_aggr_sw_retry_threshold_vi;
+	tx_aggr_sw_retry_threshold.tx_aggr_sw_retry_threshold_vo =
+				self_sta_req->tx_aggr_sw_retry_threshold_vo;
+	tx_aggr_sw_retry_threshold.vdev_id = self_sta_req->session_id;
+
+
 	switch (self_sta_req->type) {
 	case WMI_VDEV_TYPE_STA:
+		status = wma_set_tx_rx_aggregation_size_per_ac(
+						&tx_rx_aggregation_size);
+		if (status != QDF_STATUS_SUCCESS)
+			WMA_LOGE("failed to set aggr sizes per ac(err=%d)",
+				 status);
+
 		if (wlan_cfg_get_int(mac, WNI_CFG_INFRA_STA_KEEP_ALIVE_PERIOD,
 				     &cfg_val) != eSIR_SUCCESS) {
 			WMA_LOGE("Failed to get value for WNI_CFG_INFRA_STA_KEEP_ALIVE_PERIOD");
@@ -2303,6 +2286,12 @@ struct cdp_vdev *wma_vdev_attach(tp_wma_handle wma_handle,
 			wma_set_sta_sa_query_param(wma_handle,
 						   self_sta_req->session_id);
 		}
+
+		status = wma_set_sw_retry_threshold(
+						&tx_aggr_sw_retry_threshold);
+		if (status != QDF_STATUS_SUCCESS)
+			WMA_LOGE("failed to set retry threshold(err=%d)",
+				 status);
 		break;
 	}
 
@@ -2567,6 +2556,7 @@ QDF_STATUS wma_vdev_start(tp_wma_handle wma,
 	struct wma_target_req *req_msg;
 	uint32_t chan_mode;
 	enum phy_ch_width ch_width;
+	QDF_STATUS status;
 
 	mac_ctx = cds_get_context(QDF_MODULE_ID_PE);
 	if (mac_ctx == NULL) {
@@ -2816,6 +2806,20 @@ QDF_STATUS wma_vdev_start(tp_wma_handle wma,
 		cdp_fc_vdev_unpause(cds_get_context(QDF_MODULE_ID_SOC),
 			wma->interfaces[params.vdev_id].handle,
 			0xffffffff);
+		status = cdp_flow_pool_map(cds_get_context(QDF_MODULE_ID_SOC),
+				cds_get_context(QDF_MODULE_ID_TXRX),
+				params.vdev_id);
+		/*
+		 * For Adrastea flow control v2 is based on FW MAP events,
+		 * so this above callback is not implemented.
+		 * Hence this is not actual failure. Dont return failure
+		 */
+		if ((status != QDF_STATUS_SUCCESS) &&
+		    (status != QDF_STATUS_E_INVAL)) {
+			WMA_LOGE("%s: vdev_id: %d, failed to create flow pool status %d",
+			__func__, params.vdev_id, status);
+			return status;
+		}
 		wma_vdev_update_pause_bitmap(params.vdev_id, 0);
 	}
 
@@ -3226,6 +3230,11 @@ struct wma_target_req *wma_fill_hold_req(tp_wma_handle wma,
 	struct wma_target_req *req;
 	QDF_STATUS status;
 
+	if (!cds_is_target_ready()) {
+		WMA_LOGE("target not ready, drop the request");
+		return NULL;
+	}
+
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
 		WMA_LOGE(FL("Failed to allocate memory for msg %d vdev %d"),
@@ -3534,6 +3543,11 @@ struct wma_target_req *wma_fill_vdev_req(tp_wma_handle wma,
 {
 	struct wma_target_req *req;
 	QDF_STATUS status;
+
+	if (!cds_is_target_ready()) {
+		WMA_LOGE("target not ready, drop the request");
+		return NULL;
+	}
 
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
@@ -5143,9 +5157,9 @@ static void wma_del_tdls_sta(tp_wma_handle wma, tpDeleteStaParams del_sta)
 				WMA_DELETE_STA_TIMEOUT);
 		if (!msg) {
 			WMA_LOGE(FL("Failed to allocate vdev_id %d"),
-					peerStateParams->vdevId);
+					del_sta->smesessionId);
 			wma_remove_req(wma,
-					peerStateParams->vdevId,
+					del_sta->smesessionId,
 					WMA_DELETE_STA_RSP_START);
 			del_sta->status = QDF_STATUS_E_NOMEM;
 			goto send_del_rsp;
@@ -5609,6 +5623,11 @@ void wma_delete_bss(tp_wma_handle wma, tpDeleteBssParams params)
 	cdp_fc_vdev_pause(soc,
 		wma->interfaces[params->smesessionId].handle,
 		OL_TXQ_PAUSE_REASON_VDEV_STOP);
+
+	/* smesessionId is not equal to vdev_id with which pool is created */
+	cdp_flow_pool_unmap(cds_get_context(QDF_MODULE_ID_SOC),
+			cds_get_context(QDF_MODULE_ID_TXRX),
+			params->smesessionId);
 
 	if (wma_send_vdev_stop_to_fw(wma, params->smesessionId)) {
 		WMA_LOGE("%s: %d Failed to send vdev stop", __func__, __LINE__);

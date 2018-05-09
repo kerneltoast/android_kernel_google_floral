@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #if !defined(WLAN_HDD_TX_RX_H)
@@ -65,6 +56,31 @@ void hdd_tx_timeout(struct net_device *dev);
 QDF_STATUS hdd_init_tx_rx(struct hdd_adapter *adapter);
 QDF_STATUS hdd_deinit_tx_rx(struct hdd_adapter *adapter);
 QDF_STATUS hdd_rx_packet_cbk(void *context, qdf_nbuf_t rxBuf);
+
+/**
+ * hdd_rx_ol_init() - Initialize Rx mode(LRO or GRO) method
+ * @hdd_ctx: pointer to HDD Station Context
+ *
+ * Return: 0 on success and non zero on failure.
+ */
+int hdd_rx_ol_init(struct hdd_context *hdd_ctx);
+
+/**
+ * hdd_disable_rx_ol_in_concurrency() - Disable Rx offload due to concurrency
+ * @disable: true/false to disable/enable the Rx offload
+ *
+ * Return: none
+ */
+void hdd_disable_rx_ol_in_concurrency(bool disable);
+
+/**
+ * hdd_disable_rx_ol_for_low_tput() - Disable Rx offload in low TPUT scenario
+ * @hdd_ctx: hdd context
+ * @disable: true/false to disable/enable the Rx offload
+ *
+ * Return: none
+ */
+void hdd_disable_rx_ol_for_low_tput(struct hdd_context *hdd_ctx, bool disable);
 
 QDF_STATUS hdd_get_peer_sta_id(struct hdd_station_ctx *sta_ctx,
 				struct qdf_mac_addr *peer_mac_addr,
@@ -224,4 +240,23 @@ hdd_skb_fill_gso_size(struct net_device *dev, struct sk_buff *skb)
  * Return: tx acked count
  */
 uint32_t hdd_txrx_get_tx_ack_count(struct hdd_adapter *adapter);
+
+#ifdef CONFIG_HL_SUPPORT
+static inline QDF_STATUS
+hdd_skb_nontso_linearize(struct sk_buff *skb)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#else
+static inline QDF_STATUS
+hdd_skb_nontso_linearize(struct sk_buff *skb)
+{
+	if (qdf_nbuf_is_nonlinear(skb) && qdf_nbuf_is_tso(skb) == false) {
+		if (qdf_unlikely(skb_linearize(skb)))
+			return QDF_STATUS_E_NOMEM;
+	}
+	return QDF_STATUS_SUCCESS;
+}
+#endif
+
 #endif /* end #if !defined(WLAN_HDD_TX_RX_H) */

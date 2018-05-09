@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -1827,7 +1818,8 @@ tSirRetStatus
 populate_dot11f_tpc_report(tpAniSirGlobal pMac,
 			   tDot11fIETPCReport *pDot11f, tpPESession psessionEntry)
 {
-	uint16_t staid, txPower;
+	uint16_t staid;
+	uint8_t tx_power;
 	tSirRetStatus nSirStatus;
 
 	nSirStatus = lim_get_mgmt_staid(pMac, &staid, psessionEntry);
@@ -1838,8 +1830,9 @@ populate_dot11f_tpc_report(tpAniSirGlobal pMac,
 	}
 	/* FramesToDo: This function was "misplaced" in the move to Gen4_TVM... */
 	/* txPower = halGetRateToPwrValue( pMac, staid, pMac->lim.gLimCurrentChannelId, isBeacon ); */
-	txPower = 0;
-	pDot11f->tx_power = (uint8_t) txPower;
+	tx_power = cfg_get_regulatory_max_transmit_power(pMac,
+				psessionEntry->currentOperChannel);
+	pDot11f->tx_power = tx_power;
 	pDot11f->link_margin = 0;
 	pDot11f->present = 1;
 
@@ -2228,7 +2221,7 @@ sir_validate_and_rectify_ies(tpAniSirGlobal mac_ctx,
 				uint32_t *missing_rsn_bytes)
 {
 	uint32_t length = SIZE_OF_FIXED_PARAM;
-	uint8_t *ref_frame;
+	uint8_t *ref_frame = NULL;
 
 	/* Frame contains atleast one IE */
 	if (frame_bytes > (SIZE_OF_FIXED_PARAM +
@@ -2248,7 +2241,7 @@ sir_validate_and_rectify_ies(tpAniSirGlobal mac_ctx,
 			 * Capability with junk value. To avoid this, add RSN
 			 * Capability value with default value.
 			 */
-			if ((*ref_frame == RSNIEID) &&
+			if (ref_frame && (*ref_frame == RSNIEID) &&
 				(length == (frame_bytes +
 					RSNIE_CAPABILITY_LEN))) {
 				/* Assume RSN Capability as 00 */
@@ -3052,7 +3045,6 @@ sir_convert_assoc_resp_frame2_struct(tpAniSirGlobal pMac,
 		pAssocRsp->edcaPresent = 1;
 		convert_edca_param(pMac, &pAssocRsp->edca, &ar->EDCAParamSet);
 	}
-
 	if (ar->WMMParams.present) {
 		pAssocRsp->wmeEdcaPresent = 1;
 		convert_wmm_params(pMac, &pAssocRsp->edca, &ar->WMMParams);
@@ -3195,6 +3187,13 @@ sir_convert_assoc_resp_frame2_struct(tpAniSirGlobal pMac,
 				pAssocRsp->he_op.default_pe,
 				pAssocRsp->he_op.partial_bss_col,
 				pAssocRsp->he_op.bss_col_disabled);
+	}
+
+	if (ar->mu_edca_param_set.present) {
+		pe_debug("11AX: HE MU EDCA param IE present");
+		pAssocRsp->mu_edca_present = true;
+		convert_mu_edca_param(pMac, &pAssocRsp->mu_edca,
+				&ar->mu_edca_param_set);
 	}
 
 	if (ar->MBO_IE.present && ar->MBO_IE.rssi_assoc_rej.present) {
@@ -4005,13 +4004,11 @@ sir_convert_beacon_frame2_struct(tpAniSirGlobal pMac,
 	uint8_t *pPayload;
 	tpSirMacMgmtHdr pHdr;
 	uint8_t mappedRXCh;
-	uint8_t rfBand;
 
 	pPayload = WMA_GET_RX_MPDU_DATA(pFrame);
 	nPayload = WMA_GET_RX_PAYLOAD_LEN(pFrame);
 	pHdr = WMA_GET_RX_MAC_HEADER(pFrame);
 	mappedRXCh = WMA_GET_RX_CH(pFrame);
-	rfBand = WMA_GET_RX_RFBAND(pFrame);
 
 	/* Zero-init our [out] parameter, */
 	qdf_mem_set((uint8_t *) pBeaconStruct, sizeof(tSirProbeRespBeacon), 0);

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -1790,10 +1781,11 @@ static QDF_STATUS wma_setup_install_key_cmd(tp_wma_handle wma_handle,
 	params.key_len = key_params->key_len;
 
 #ifdef WLAN_FEATURE_11W
+	iface = &wma_handle->interfaces[key_params->vdev_id];
+
 	if ((key_params->key_type == eSIR_ED_AES_128_CMAC) ||
 	   (key_params->key_type == eSIR_ED_AES_GMAC_128) ||
 	   (key_params->key_type == eSIR_ED_AES_GMAC_256)) {
-		iface = &wma_handle->interfaces[key_params->vdev_id];
 		if (iface) {
 			iface->key.key_length = key_params->key_len;
 			iface->key.key_cipher = params.key_cipher;
@@ -1807,6 +1799,9 @@ static QDF_STATUS wma_setup_install_key_cmd(tp_wma_handle wma_handle,
 					     CMAC_IPN_LEN);
 		}
 	}
+
+	if (key_params->unicast && iface)
+		iface->ucast_key_cipher = params.key_cipher;
 #endif /* WLAN_FEATURE_11W */
 
 	WMA_LOGD("Key setup : vdev_id %d key_idx %d key_type %d key_len %d",
@@ -2332,7 +2327,8 @@ QDF_STATUS wma_process_update_edca_param_req(WMA_HANDLE handle,
 			goto fail;
 		}
 
-		wma_update_edca_params_for_ac(edca_record, &wmm_param[ac], ac);
+		wma_update_edca_params_for_ac(edca_record, &wmm_param[ac], ac,
+				edca_params->mu_edca_params);
 
 		ol_tx_wmm_param.ac[ac].aifs = wmm_param[ac].aifs;
 		ol_tx_wmm_param.ac[ac].cwmin = wmm_param[ac].cwmin;
@@ -2340,7 +2336,9 @@ QDF_STATUS wma_process_update_edca_param_req(WMA_HANDLE handle,
 	}
 
 	status = wmi_unified_process_update_edca_param(wma_handle->wmi_handle,
-						vdev_id, wmm_param);
+						vdev_id,
+						edca_params->mu_edca_params,
+						wmm_param);
 	if (status == QDF_STATUS_E_NOMEM)
 		return status;
 	else if (status == QDF_STATUS_E_FAILURE)
@@ -2982,11 +2980,11 @@ void wma_process_update_opmode(tp_wma_handle wma_handle,
 			       tUpdateVHTOpMode *update_vht_opmode)
 {
 	struct wma_txrx_node *iface;
-	wmi_channel_width ch_width;
+	wmi_host_channel_width ch_width;
 
 	iface = &wma_handle->interfaces[update_vht_opmode->smesessionId];
-	ch_width = chanmode_to_chanwidth(iface->chanmode);
-
+	ch_width = wmi_get_ch_width_from_phy_mode(wma_handle->wmi_handle,
+						  iface->chanmode);
 	if (ch_width < update_vht_opmode->opMode) {
 		WMA_LOGE("%s: Invalid peer bw update %d, self bw %d",
 				__func__, update_vht_opmode->opMode,
@@ -3254,9 +3252,9 @@ wma_is_ccmp_pn_replay_attack(void *cds_ctx, struct ieee80211_frame *wh,
 	struct cdp_vdev *vdev;
 	void *peer;
 	uint8_t vdev_id, peer_id;
-	uint8_t *last_pn_valid;
-	uint64_t *last_pn, new_pn;
-	uint32_t *rmf_pn_replays;
+	uint8_t *last_pn_valid = NULL;
+	uint64_t *last_pn = NULL, new_pn;
+	uint32_t *rmf_pn_replays = NULL;
 	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 
 	pdev = cds_get_context(QDF_MODULE_ID_TXRX);
@@ -3282,7 +3280,13 @@ wma_is_ccmp_pn_replay_attack(void *cds_ctx, struct ieee80211_frame *wh,
 	}
 
 	new_pn = wma_extract_ccmp_pn(ccmp_ptr);
+
 	cdp_get_pn_info(soc, peer, &last_pn_valid, &last_pn, &rmf_pn_replays);
+
+	if (!last_pn_valid || !last_pn || !rmf_pn_replays) {
+		WMA_LOGE("%s: PN validation seems not supported", __func__);
+		return false;
+	}
 
 	if (*last_pn_valid) {
 		if (new_pn > *last_pn) {
@@ -3418,6 +3422,7 @@ int wma_process_rmf_frame(tp_wma_handle wma_handle,
 {
 	uint8_t *orig_hdr;
 	uint8_t *ccmp;
+	uint8_t mic_len, hdr_len;
 
 	if ((wh)->i_fc[1] & IEEE80211_FC1_WEP) {
 		if (IEEE80211_IS_BROADCAST(wh->i_addr1) ||
@@ -3437,15 +3442,22 @@ int wma_process_rmf_frame(tp_wma_handle wma_handle,
 			return -EINVAL;
 		}
 
+		if (iface->ucast_key_cipher == WMI_CIPHER_AES_GCM) {
+			hdr_len = WLAN_IEEE80211_GCMP_HEADERLEN;
+			mic_len = WLAN_IEEE80211_GCMP_MICLEN;
+		} else {
+			hdr_len = IEEE80211_CCMP_HEADERLEN;
+			mic_len = IEEE80211_CCMP_MICLEN;
+		}
 		/* Strip privacy headers (and trailer)
 		 * for a received frame
 		 */
 		qdf_mem_move(orig_hdr +
-			IEEE80211_CCMP_HEADERLEN, wh,
+			hdr_len, wh,
 			sizeof(*wh));
 		qdf_nbuf_pull_head(wbuf,
-			IEEE80211_CCMP_HEADERLEN);
-		qdf_nbuf_trim_tail(wbuf, IEEE80211_CCMP_MICLEN);
+			hdr_len);
+		qdf_nbuf_trim_tail(wbuf, mic_len);
 		/*
 		 * CCMP header has been pulled off
 		 * reinitialize the start pointer of mac header

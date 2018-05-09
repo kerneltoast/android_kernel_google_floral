@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #ifndef WLAN_QCT_WMA_H
@@ -44,12 +35,6 @@
 
 #ifdef FEATURE_WLAN_TDLS
 #define IS_ADVANCE_TDLS_ENABLE 0
-#endif
-
-#ifdef WLAN_SOFTAP_VSTA_FEATURE
-#define WMA_MAX_STA    (41)
-#else
-#define WMA_MAX_STA    (16)
 #endif
 
 #define WMA_NVDownload_Start(x)    ({ QDF_STATUS_SUCCESS; })
@@ -219,13 +204,6 @@
 #define WMA_ENABLE_UAPSD_REQ            SIR_HAL_ENABLE_UAPSD_REQ
 #define WMA_DISABLE_UAPSD_REQ           SIR_HAL_DISABLE_UAPSD_REQ
 
-/* / PE <-> HAL WOWL messages */
-#define WMA_WOW_ADD_PTRN               SIR_HAL_WOW_ADD_PTRN
-#define WMA_WOW_DEL_PTRN               SIR_HAL_WOW_DEL_PTRN
-#define WMA_WOWL_ENTER_REQ             SIR_HAL_WOWL_ENTER_REQ
-#define WMA_WOWL_ENTER_RSP             SIR_HAL_WOWL_ENTER_RSP
-#define WMA_WOWL_EXIT_REQ              SIR_HAL_WOWL_EXIT_REQ
-#define WMA_WOWL_EXIT_RSP              SIR_HAL_WOWL_EXIT_RSP
 /* / PE <-> HAL statistics messages */
 #define WMA_GET_STATISTICS_REQ         SIR_HAL_GET_STATISTICS_REQ
 #define WMA_GET_STATISTICS_RSP         SIR_HAL_GET_STATISTICS_RSP

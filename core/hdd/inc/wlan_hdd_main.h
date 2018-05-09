@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #if !defined(WLAN_HDD_MAIN_H)
@@ -240,6 +231,53 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
 /* Max and min IEs length in bytes */
 #define MAX_GENIE_LEN (512)
 #define MIN_GENIE_LEN (2)
+
+/** Maximum Length of WPA/RSN IE */
+#define MAX_WPA_RSN_IE_LEN 255
+
+#define WPS_OUI_TYPE   "\x00\x50\xf2\x04"
+#define WPS_OUI_TYPE_SIZE  4
+
+#define SS_OUI_TYPE    "\x00\x16\x32"
+#define SS_OUI_TYPE_SIZE   3
+
+#define P2P_OUI_TYPE   "\x50\x6f\x9a\x09"
+#define P2P_OUI_TYPE_SIZE  4
+
+#define HS20_OUI_TYPE   "\x50\x6f\x9a\x10"
+#define HS20_OUI_TYPE_SIZE  4
+
+#define OSEN_OUI_TYPE   "\x50\x6f\x9a\x12"
+#define OSEN_OUI_TYPE_SIZE  4
+
+#ifdef WLAN_FEATURE_WFD
+#define WFD_OUI_TYPE   "\x50\x6f\x9a\x0a"
+#define WFD_OUI_TYPE_SIZE  4
+#endif
+
+#define MBO_OUI_TYPE   "\x50\x6f\x9a\x16"
+#define MBO_OUI_TYPE_SIZE  4
+
+#define QCN_OUI_TYPE   "\x8c\xfd\xf0\x01"
+#define QCN_OUI_TYPE_SIZE  4
+
+#define wlan_hdd_get_wps_ie_ptr(ie, ie_len) \
+	wlan_get_vendor_ie_ptr_from_oui(WPS_OUI_TYPE, WPS_OUI_TYPE_SIZE, \
+	ie, ie_len)
+
+#define wlan_hdd_get_p2p_ie_ptr(ie, ie_len) \
+	wlan_get_vendor_ie_ptr_from_oui(P2P_OUI_TYPE, P2P_OUI_TYPE_SIZE, \
+	ie, ie_len)
+
+#ifdef WLAN_FEATURE_WFD
+#define wlan_hdd_get_wfd_ie_ptr(ie, ie_len) \
+	wlan_get_vendor_ie_ptr_from_oui(WFD_OUI_TYPE, WFD_OUI_TYPE_SIZE, \
+	ie, ie_len)
+#endif
+
+#define wlan_hdd_get_mbo_ie_ptr(ie, ie_len) \
+	wlan_get_vendor_ie_ptr_from_oui(MBO_OUI_TYPE, MBO_OUI_TYPE_SIZE, \
+	ie, ie_len)
 
 #define WLAN_CHIP_VERSION   "WCNSS"
 
@@ -985,6 +1023,7 @@ struct hdd_station_info {
  * @vendor_acs_timer_initialized: Is @vendor_acs_timer initialized?
  * @bss_stop_reason: Reason why the BSS was stopped
  * @txrx_stats: TX RX statistics from firmware
+ * @acs_in_progress: In progress acs flag for an adapter
  */
 struct hdd_ap_ctx {
 	struct hdd_hostapd_state hostapd_state;
@@ -1005,6 +1044,7 @@ struct hdd_ap_ctx {
 	bool vendor_acs_timer_initialized;
 	enum bss_stop_reason bss_stop_reason;
 	struct hdd_fw_txrx_stats txrx_stats;
+	qdf_atomic_t acs_in_progress;
 };
 
 /**
@@ -1582,6 +1622,16 @@ enum tos {
 #define HDD_AC_BIT_INDX                 0
 #define HDD_DWELL_TIME_INDX             1
 
+/**
+ * enum RX_OFFLOAD - Receive offload modes
+ * @CFG_LRO_ENABLED: Large Rx offload
+ * @CFG_GRO_ENABLED: Generic Rx Offload
+ */
+enum RX_OFFLOAD {
+	CFG_LRO_ENABLED = 1,
+	CFG_GRO_ENABLED,
+};
+
 /* One per STA: 1 for BCMC_STA_ID, 1 for each SAP_SELF_STA_ID,
  * 1 for WDS_STAID
  */
@@ -1781,6 +1831,7 @@ struct hdd_context {
 	qdf_work_t sap_pre_cac_work;
 	bool hbw_requested;
 	uint32_t last_nil_scan_bug_report_timestamp;
+	enum RX_OFFLOAD ol_enable;
 #ifdef WLAN_FEATURE_NAN_DATAPATH
 	bool nan_datapath_enabled;
 #endif
@@ -1821,7 +1872,6 @@ struct hdd_context {
 	/* Lock to control access to dnbs and coex avoid freq list */
 	struct mutex avoid_freq_lock;
 #endif
-	qdf_atomic_t is_acs_allowed;
 #ifdef WLAN_FEATURE_TSF
 	/* indicate whether tsf has been initialized */
 	qdf_atomic_t tsf_ready_flag;
@@ -1837,6 +1887,8 @@ struct hdd_context {
 	bool imps_enabled;
 	int user_configured_pkt_filter_rules;
 	bool is_fils_roaming_supported;
+	QDF_STATUS (*receive_offload_cb)(struct hdd_adapter *,
+					 struct sk_buff *);
 	qdf_atomic_t vendor_disable_lro_flag;
 	qdf_atomic_t disable_lro_in_concurrency;
 	qdf_atomic_t disable_lro_in_low_tput;
@@ -2067,9 +2119,6 @@ bool hdd_is_valid_mac_address(const uint8_t *pMacAddr);
 QDF_STATUS hdd_issta_p2p_clientconnected(struct hdd_context *hdd_ctx);
 bool wlan_hdd_validate_modules_state(struct hdd_context *hdd_ctx);
 
-struct qdf_mac_addr *
-hdd_wlan_get_ibss_mac_addr_from_staid(struct hdd_adapter *adapter,
-				      uint8_t staIdx);
 #ifdef MSM_PLATFORM
 /**
  * hdd_bus_bw_compute_timer_start() - start the bandwidth timer
@@ -3102,9 +3151,18 @@ void hdd_component_psoc_enable(struct wlan_objmgr_psoc *psoc);
  */
 void hdd_component_psoc_disable(struct wlan_objmgr_psoc *psoc);
 
+#ifdef WLAN_FEATURE_HDD_MEMDUMP_ENABLE
 int hdd_driver_memdump_init(void);
 void hdd_driver_memdump_deinit(void);
-
+#else /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+static inline int hdd_driver_memdump_init(void)
+{
+	return 0;
+}
+static inline void hdd_driver_memdump_deinit(void)
+{
+}
+#endif /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
 /**
  * hdd_is_cli_iface_up() - check if there is any cli iface up
  * @hdd_ctx: HDD context
@@ -3122,5 +3180,16 @@ bool hdd_is_cli_iface_up(struct hdd_context *hdd_ctx);
  * Return: None
  */
 void hdd_set_disconnect_status(struct hdd_adapter *adapter, bool disconnecting);
+
+/**
+ * wlan_hdd_set_mon_chan() - Set capture channel on the monitor mode interface.
+ * @adapter: Handle to adapter
+ * @chan: Monitor mode channel
+ * @bandwidth: Capture channel bandwidth
+ *
+ * Return: 0 on success else error code.
+ */
+int wlan_hdd_set_mon_chan(struct hdd_adapter *adapter, uint32_t chan,
+			  uint32_t bandwidth);
 
 #endif /* end #if !defined(WLAN_HDD_MAIN_H) */

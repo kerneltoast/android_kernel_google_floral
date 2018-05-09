@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -985,10 +976,6 @@ typedef struct tagCsrRoamConnectedProfile {
 #endif
 } tCsrRoamConnectedProfile;
 
-typedef struct tagCsr11rConfigParams {
-	bool IsFTResourceReqSupported;
-} tCsr11rConfigParams;
-
 typedef struct tagCsrNeighborRoamConfigParams {
 
 	uint32_t nNeighborScanTimerPeriod;
@@ -1128,13 +1115,11 @@ typedef struct tagCsrConfigParam {
 	uint32_t nActiveMaxChnTime;         /* in units of milliseconds */
 	uint32_t nInitialDwellTime;         /* in units of milliseconds */
 	bool initial_scan_no_dfs_chnl;
-#ifdef WLAN_AP_STA_CONCURRENCY
 	uint32_t nPassiveMinChnTimeConc;    /* in units of milliseconds */
 	uint32_t nPassiveMaxChnTimeConc;    /* in units of milliseconds */
 	uint32_t nActiveMinChnTimeConc;     /* in units of milliseconds */
 	uint32_t nActiveMaxChnTimeConc;     /* in units of milliseconds */
 	uint32_t nRestTimeConc;             /* in units of milliseconds */
-#endif
 	/*In units of milliseconds*/
 	uint32_t       min_rest_time_conc;
 	/*In units of milliseconds*/
@@ -1151,7 +1136,6 @@ typedef struct tagCsrConfigParam {
 	uint32_t statsReqPeriodicity;
 	/* stats request frequency from PE while in power save */
 	uint32_t statsReqPeriodicityInPS;
-	tCsr11rConfigParams csr11rConfig;
 #ifdef FEATURE_WLAN_ESE
 	uint8_t isEseIniFeatureEnabled;
 #endif
@@ -1167,12 +1151,6 @@ typedef struct tagCsrConfigParam {
 	 * This is mandated by WMM-AC certification
 	 */
 	bool addTSWhenACMIsOff;
-	/*
-	 * channelPowerInfoList24 has been seen corrupted. Set this flag to true
-	 * trying to detect when it happens. Adding this into code because we
-	 * can't reproduce it easily. We don't know when it happens.
-	 */
-	bool fValidateList;
 	/*
 	 * Customer wants to start with an active scan based on the default
 	 * country code. This optimization will minimize the driver load to
@@ -1224,6 +1202,9 @@ typedef struct tagCsrConfigParam {
 	bool enable_vht20_mcs9;
 	uint8_t max_amsdu_num;
 	uint8_t nSelect5GHzMargin;
+	uint32_t ho_delay_for_rx;
+	uint32_t min_delay_btw_roam_scans;
+	uint32_t roam_trigger_reason_bitmask;
 	uint8_t isCoalesingInIBSSAllowed;
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	uint8_t cc_switch_mode;
@@ -1288,7 +1269,15 @@ typedef struct tagCsrConfigParam {
 	enum scan_dwelltime_adaptive_mode roamscan_adaptive_dwell_mode;
 	struct csr_sta_roam_policy_params sta_roam_policy_params;
 	uint32_t tx_aggregation_size;
+	uint32_t tx_aggregation_size_be;
+	uint32_t tx_aggregation_size_bk;
+	uint32_t tx_aggregation_size_vi;
+	uint32_t tx_aggregation_size_vo;
 	uint32_t rx_aggregation_size;
+	uint32_t tx_aggr_sw_retry_threshold_be;
+	uint32_t tx_aggr_sw_retry_threshold_bk;
+	uint32_t tx_aggr_sw_retry_threshold_vi;
+	uint32_t tx_aggr_sw_retry_threshold_vo;
 	struct wmi_per_roam_config per_roam_config;
 	bool enable_bcast_probe_rsp;
 	bool is_fils_enabled;
@@ -1318,6 +1307,7 @@ typedef struct tagCsrConfigParam {
 	uint32_t offload_11k_enable_bitmask;
 	bool wep_tkip_in_he;
 	struct csr_neighbor_report_offload_params neighbor_report_offload;
+	bool enable_ftopen;
 } tCsrConfigParam;
 
 /* Tush */

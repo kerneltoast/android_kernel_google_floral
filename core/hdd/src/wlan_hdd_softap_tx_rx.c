@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /* denote that this file does not allow legacy hddLog */
@@ -578,24 +569,23 @@ static netdev_tx_t __hdd_softap_hard_start_xmit(struct sk_buff *skb,
 		hdd_inspect_dhcp_packet(adapter, STAId, skb, QDF_TX);
 
 	hdd_event_eapol_log(skb, QDF_TX);
-	qdf_dp_trace_log_pkt(adapter->session_id, skb, QDF_TX,
-			QDF_TRACE_DEFAULT_PDEV_ID);
 	QDF_NBUF_CB_TX_PACKET_TRACK(skb) = QDF_NBUF_TX_PKT_DATA_TRACK;
 	QDF_NBUF_UPDATE_TX_PKT_COUNT(skb, QDF_NBUF_TX_PKT_HDD);
-
 	qdf_dp_trace_set_track(skb, QDF_TX);
 	DPTRACE(qdf_dp_trace(skb, QDF_DP_TRACE_HDD_TX_PACKET_PTR_RECORD,
 			QDF_TRACE_DEFAULT_PDEV_ID, qdf_nbuf_data_addr(skb),
 			sizeof(qdf_nbuf_data(skb)),
 			QDF_TX));
-	DPTRACE(qdf_dp_trace(skb, QDF_DP_TRACE_HDD_TX_PACKET_RECORD,
-			QDF_TRACE_DEFAULT_PDEV_ID, (uint8_t *)skb->data,
-			qdf_nbuf_len(skb), QDF_TX));
-	if (qdf_nbuf_len(skb) > QDF_DP_TRACE_RECORD_SIZE)
-		DPTRACE(qdf_dp_trace(skb, QDF_DP_TRACE_HDD_TX_PACKET_RECORD,
-			QDF_TRACE_DEFAULT_PDEV_ID,
-			(uint8_t *)&skb->data[QDF_DP_TRACE_RECORD_SIZE],
-			(qdf_nbuf_len(skb)-QDF_DP_TRACE_RECORD_SIZE), QDF_TX));
+
+	/* check whether need to linearize skb, like non-linear udp data */
+	if (hdd_skb_nontso_linearize(skb) != QDF_STATUS_SUCCESS) {
+		QDF_TRACE(QDF_MODULE_ID_HDD_DATA,
+			  QDF_TRACE_LEVEL_INFO_HIGH,
+			  "%s: skb %pK linearize failed. drop the pkt",
+			  __func__, skb);
+		++adapter->hdd_stats.tx_rx_stats.tx_dropped_ac[ac];
+		goto drop_pkt_and_release_skb;
+	}
 
 	if (adapter->tx_fn(adapter->txrx_vdev,
 		 (qdf_nbuf_t) skb) != NULL) {
@@ -613,14 +603,9 @@ drop_pkt_and_release_skb:
 	qdf_net_buf_debug_release_skb(skb);
 drop_pkt:
 
-	DPTRACE(qdf_dp_trace(skb, QDF_DP_TRACE_DROP_PACKET_RECORD,
-			QDF_TRACE_DEFAULT_PDEV_ID, (uint8_t *)skb->data,
-			qdf_nbuf_len(skb), QDF_TX));
-	if (qdf_nbuf_len(skb) > QDF_DP_TRACE_RECORD_SIZE)
-		DPTRACE(qdf_dp_trace(skb, QDF_DP_TRACE_DROP_PACKET_RECORD,
-			QDF_TRACE_DEFAULT_PDEV_ID,
-			(uint8_t *)&skb->data[QDF_DP_TRACE_RECORD_SIZE],
-			(qdf_nbuf_len(skb)-QDF_DP_TRACE_RECORD_SIZE), QDF_TX));
+	qdf_dp_trace_data_pkt(skb, QDF_TRACE_DEFAULT_PDEV_ID,
+			      QDF_DP_TRACE_DROP_PACKET_RECORD, 0,
+			      QDF_TX);
 	kfree_skb(skb);
 
 drop_pkt_accounting:
@@ -843,8 +828,8 @@ QDF_STATUS hdd_softap_rx_packet_cbk(void *context, qdf_nbuf_t rxBuf)
 	struct sk_buff *next = NULL;
 	struct hdd_context *hdd_ctx = NULL;
 	struct qdf_mac_addr *src_mac;
+
 	uint8_t staid;
-	bool proto_pkt_logged = false;
 
 	/* Sanity check on inputs */
 	if (unlikely((NULL == context) || (NULL == rxBuf))) {
@@ -912,28 +897,15 @@ QDF_STATUS hdd_softap_rx_packet_cbk(void *context, qdf_nbuf_t rxBuf)
 		hdd_inspect_dhcp_packet(adapter, staid, skb, QDF_RX);
 
 		hdd_event_eapol_log(skb, QDF_RX);
-		proto_pkt_logged = qdf_dp_trace_log_pkt(adapter->session_id,
-						skb, QDF_RX,
-						QDF_TRACE_DEFAULT_PDEV_ID);
+		qdf_dp_trace_log_pkt(adapter->session_id,
+				     skb, QDF_RX, QDF_TRACE_DEFAULT_PDEV_ID);
 		DPTRACE(qdf_dp_trace(skb,
 			QDF_DP_TRACE_RX_HDD_PACKET_PTR_RECORD,
 			QDF_TRACE_DEFAULT_PDEV_ID,
 			qdf_nbuf_data_addr(skb),
 			sizeof(qdf_nbuf_data(skb)), QDF_RX));
-		if (!proto_pkt_logged) {
-			DPTRACE(qdf_dp_trace(skb,
-				QDF_DP_TRACE_HDD_RX_PACKET_RECORD,
-				QDF_TRACE_DEFAULT_PDEV_ID,
-				(uint8_t *)skb->data, qdf_nbuf_len(skb),
-				QDF_RX));
-			if (qdf_nbuf_len(skb) > QDF_DP_TRACE_RECORD_SIZE)
-				DPTRACE(qdf_dp_trace(skb,
-				QDF_DP_TRACE_HDD_RX_PACKET_RECORD,
-				QDF_TRACE_DEFAULT_PDEV_ID,
-				(uint8_t *)&skb->data[QDF_DP_TRACE_RECORD_SIZE],
-				(qdf_nbuf_len(skb)-QDF_DP_TRACE_RECORD_SIZE),
-				QDF_RX));
-			}
+		DPTRACE(qdf_dp_trace_data_pkt(skb, QDF_TRACE_DEFAULT_PDEV_ID,
+				QDF_DP_TRACE_RX_PACKET_RECORD, 0, QDF_RX));
 
 		skb->protocol = eth_type_trans(skb, skb->dev);
 
@@ -1013,13 +985,14 @@ QDF_STATUS hdd_softap_deregister_sta(struct hdd_adapter *adapter,
 
 	if (adapter->sta_info[staId].in_use) {
 		if (ucfg_ipa_is_enabled()) {
-			ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev, adapter->dev,
+			if (ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev, adapter->dev,
 					  adapter->device_mode,
 					  adapter->sta_info[staId].sta_id,
 					  adapter->session_id,
 					  WLAN_IPA_CLIENT_DISCONNECT,
 					  adapter->sta_info[staId].sta_mac.
-					  bytes);
+					  bytes) != QDF_STATUS_SUCCESS)
+				hdd_err("WLAN_CLIENT_DISCONNECT event failed");
 		}
 		spin_lock_bh(&adapter->sta_info_lock);
 		qdf_mem_zero(&adapter->sta_info[staId],
@@ -1179,8 +1152,10 @@ QDF_STATUS hdd_softap_stop_bss(struct hdd_adapter *adapter)
 	QDF_STATUS qdf_status = QDF_STATUS_E_FAILURE;
 	uint8_t staId = 0;
 	struct hdd_context *hdd_ctx;
+	struct hdd_ap_ctx *ap_ctx;
 
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
 
 	/* This is stop bss callback running in scheduler thread so do not
 	 * driver unload in progress check otherwise it can lead to peer
@@ -1188,13 +1163,9 @@ QDF_STATUS hdd_softap_stop_bss(struct hdd_adapter *adapter)
 	 */
 	qdf_status = hdd_softap_deregister_bc_sta(adapter);
 
-	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-		struct hdd_ap_ctx *ap_ctx;
-
-		ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
+	if (!QDF_IS_STATUS_SUCCESS(qdf_status))
 		hdd_err("Failed to deregister BC sta Id %d",
 			ap_ctx->broadcast_sta_id);
-	}
 
 	for (staId = 0; staId < WLAN_MAX_STA_COUNT; staId++) {
 		/* This excludes BC sta as it is already deregistered */
@@ -1211,6 +1182,16 @@ QDF_STATUS hdd_softap_stop_bss(struct hdd_adapter *adapter)
 	if (hdd_ctx->config->force_ssc_disable_indoor_channel) {
 		hdd_update_indoor_channel(hdd_ctx, false);
 		sme_update_channel_list(hdd_ctx->hHal);
+	}
+
+	if (ucfg_ipa_is_enabled()) {
+		if (ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev,
+				adapter->dev, adapter->device_mode,
+				ap_ctx->broadcast_sta_id,
+				adapter->session_id,
+				WLAN_IPA_AP_DISCONNECT,
+				adapter->dev->dev_addr) != QDF_STATUS_SUCCESS)
+			hdd_err("WLAN_AP_DISCONNECT event failed");
 	}
 
 	return qdf_status;

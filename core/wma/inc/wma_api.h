@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #ifndef WMA_API_H
@@ -75,6 +66,10 @@ enum GEN_PARAM {
  * @vht_5g: entire VHT cap for 5G band in terms of 32 bit flag
  * @he_2g: entire HE cap for 2G band in terms of 32 bit flag
  * @he_5g: entire HE cap for 5G band in terms of 32 bit flag
+ * @tx_chain_mask_2G: tx chain mask for 2g
+ * @rx_chain_mask_2G: rx chain mask for 2g
+ * @tx_chain_mask_5G: tx chain mask for 5g
+ * @rx_chain_mask_5G: rx chain mask for 5g
  */
 struct wma_caps_per_phy {
 	uint32_t ht_2g;
@@ -83,6 +78,10 @@ struct wma_caps_per_phy {
 	uint32_t vht_5g;
 	uint32_t he_2g;
 	uint32_t he_5g;
+	uint32_t tx_chain_mask_2G;
+	uint32_t rx_chain_mask_2G;
+	uint32_t tx_chain_mask_5G;
+	uint32_t rx_chain_mask_5G;
 };
 
 
@@ -191,9 +190,15 @@ int wma_unified_radio_tx_mem_free(void *handle);
 QDF_STATUS wma_form_unit_test_cmd_and_send(uint32_t vdev_id,
 		uint32_t module_id, uint32_t arg_count, uint32_t *arg);
 
-#if defined(FEATURE_LRO)
+/**
+ * wma_lro_init() - sends LRO configuration to FW
+ * @lro_config:         pointer to the config parameters
+ *
+ * This function ends LRO configuration to FW.
+ *
+ * Return: 0 for success or reasons for failure
+ */
 int wma_lro_init(struct cdp_lro_hash_config *lro_config);
-#endif
 
 QDF_STATUS wma_remove_beacon_filter(WMA_HANDLE wma,
 				struct beacon_filter_param *filter_params);
@@ -221,7 +226,9 @@ bool wma_is_p2p_lo_capable(void);
 bool wma_capability_enhanced_mcast_filter(void);
 QDF_STATUS wma_p2p_lo_start(struct sir_p2p_lo_start *params);
 QDF_STATUS wma_p2p_lo_stop(u_int32_t vdev_id);
+#ifndef QCA_SUPPORT_CP_STATS
 QDF_STATUS wma_get_wakelock_stats(struct sir_wake_lock_stats *wake_lock_stats);
+#endif
 void wma_process_pdev_hw_mode_trans_ind(void *wma,
 	wmi_pdev_hw_mode_transition_event_fixed_param *fixed_param,
 	wmi_pdev_set_hw_mode_response_vdev_mac_entry *vdev_mac_entry,
@@ -242,6 +249,27 @@ QDF_STATUS wma_set_cts2self_for_p2p_go(void *wma_handle,
 QDF_STATUS wma_set_tx_rx_aggregation_size
 	(struct sir_set_tx_rx_aggregation_size *tx_rx_aggregation_size);
 
+/**
+ * wma_set_tx_rx_aggregation_size_per_ac() - set aggregation size per ac
+ * @tx_rx_aggregation_size: the parameter for aggregation size
+ *
+ *  This function try to set the aggregation size per AC.
+ *
+ *  Return: QDF_STATUS enumeration
+ */
+QDF_STATUS wma_set_tx_rx_aggregation_size_per_ac
+	(struct sir_set_tx_rx_aggregation_size *tx_rx_aggregation_size);
+/**
+ * wma_set_sw_retry_threshold() - set sw retry threshold per AC for tx
+ * @tx_rx_aggregation_size: value needs to set to firmware
+ *
+ * This function sends WMI command to set the sw retry threshold per AC
+ * for Tx.
+ *
+ * Return: QDF_STATUS.
+ */
+QDF_STATUS wma_set_sw_retry_threshold
+	(struct sir_set_tx_aggr_sw_retry_threshold *tx_rx_aggregation_size);
 /**
  * wma_get_sar_limit() - get SAR limits from the target
  * @handle: wma handle
@@ -281,8 +309,7 @@ bool wma_is_service_enabled(uint32_t service_type);
 #ifdef FEATURE_WLAN_D0WOW
 static inline bool wma_d0_wow_is_supported(void)
 {
-	return wma_is_service_enabled(WMI_SERVICE_D0WOW) &&
-	       (!wma_is_service_enabled(WMI_SERVICE_UNIFIED_WOW_CAPABILITY));
+	return true;
 }
 #else
 static inline bool wma_d0_wow_is_supported(void)
@@ -336,5 +363,12 @@ QDF_STATUS wma_set_vc_mode_config(void *wma_handle,
 
 QDF_STATUS wma_process_dhcp_ind(WMA_HANDLE wma_handle,
 				tAniDHCPInd *ta_dhcp_ind);
+
+/**
+ * wma_wmi_stop() - send wmi stop cmd
+ *
+ *  Return: None
+ */
+void wma_wmi_stop(void);
 
 #endif

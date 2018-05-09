@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -398,6 +395,7 @@ int wlan_hdd_get_peer_info(struct hdd_adapter *adapter,
 			   struct qdf_mac_addr macaddress,
 			   struct sir_peer_info_ext *peer_info_ext);
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * wlan_hdd_get_class_astats() - Get Class A statistics
  * @adapter: adapter for which statistics are desired
@@ -405,6 +403,7 @@ int wlan_hdd_get_peer_info(struct hdd_adapter *adapter,
  * Return: QDF_STATUS_SUCCESS if adapter's Class A statistics were updated
  */
 QDF_STATUS wlan_hdd_get_class_astats(struct hdd_adapter *adapter);
+#endif
 
 /**
  * wlan_hdd_get_station_stats() - Get station statistics

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -597,6 +588,7 @@ QDF_STATUS sme_ser_cmd_callback(void *buf,
 	return status;
 }
 
+#ifdef WLAN_FEATURE_HDD_MEMDUMP_ENABLE
 /**
  * sme_get_sessionid_from_activelist() - gets session id
  * @mac: mac context
@@ -692,7 +684,11 @@ static void sme_register_debug_callback(void)
 {
 	qdf_register_debug_callback(QDF_MODULE_ID_SME, &sme_state_info_dump);
 }
-
+#else /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+static void sme_register_debug_callback(void)
+{
+}
+#endif /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
 
 /* Global APIs */
 
@@ -7081,34 +7077,6 @@ QDF_STATUS sme_update_enable_fast_roam_in_concurrency(tHalHandle hHal,
 }
 
 /*
- * sme_update_config_fw_rssi_monitoring() - enable/disable firmware RSSI
- *	Monitoring at runtime
- *  It is used at in the REG_DYNAMIC_VARIABLE macro definition of
- *  fEnableFwRssiMonitoring.
- *  This is a synchronous call
- *
- * hHal - The handle returned by mac_open.
- * Return QDF_STATUS_SUCCESS - SME update fEnableFwRssiMonitoring.
- *	config successfully.
- * Other status means SME is failed to update fEnableFwRssiMonitoring.
- */
-QDF_STATUS sme_update_config_fw_rssi_monitoring(tHalHandle hHal,
-						bool fEnableFwRssiMonitoring)
-{
-	QDF_STATUS qdf_ret_status = QDF_STATUS_SUCCESS;
-
-	if (sme_cfg_set_int (hHal, WNI_CFG_PS_ENABLE_RSSI_MONITOR,
-						fEnableFwRssiMonitoring) ==
-						QDF_STATUS_E_FAILURE) {
-		qdf_ret_status = QDF_STATUS_E_FAILURE;
-		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-			  "Could not pass on WNI_CFG_PS_RSSI_MONITOR to CFG");
-	}
-
-	return qdf_ret_status;
-}
-
-/*
  * sme_set_roam_opportunistic_scan_threshold_diff() -
  * Update Opportunistic Scan threshold diff
  *	This function is called through dynamic setConfig callback function
@@ -8842,7 +8810,7 @@ void sme_get_command_q_status(tHalHandle hHal)
 	if (pEntry)
 		pTempCmd = GET_BASE_ADDR(pEntry, tSmeCmd, Link);
 
-	sme_err("Currently smeCmdActiveList has command (0x%X)",
+	sme_err("WLAN_BUG_RCA: Currently smeCmdActiveList has command (0x%X)",
 		(pTempCmd) ? pTempCmd->command : eSmeNoCommand);
 	if (pTempCmd) {
 		if (eSmeCsrCommandMask & pTempCmd->command)
@@ -9838,6 +9806,78 @@ int sme_set_no_ack_policy(tHalHandle hal, uint8_t session_id,
 		sme_err("Not able to post update edca profile");
 		return -EIO;
 	}
+
+	return 0;
+}
+
+int sme_set_auto_rate_he_ltf(tHalHandle hal, uint8_t session_id,
+		uint8_t cfg_val)
+{
+	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
+	uint32_t set_val;
+	uint32_t bit_mask = 0;
+	int status;
+
+	if (cfg_val > QCA_WLAN_HE_LTF_4X) {
+		sme_err("invalid HE LTF cfg %d", cfg_val);
+		return -EINVAL;
+	}
+
+	/*set the corresponding HE LTF cfg BIT*/
+	if (cfg_val == QCA_WLAN_HE_LTF_AUTO)
+		bit_mask = HE_LTF_ALL;
+	else
+		bit_mask = (1 << (cfg_val - 1));
+
+	set_val = mac_ctx->he_sgi_ltf_cfg_bit_mask;
+
+	SET_AUTO_RATE_HE_LTF_VAL(set_val, bit_mask);
+
+	mac_ctx->he_sgi_ltf_cfg_bit_mask = set_val;
+	status = wma_cli_set_command(session_id,
+			WMI_VDEV_PARAM_AUTORATE_MISC_CFG,
+			set_val, VDEV_CMD);
+	if (status) {
+		sme_err("failed to set he_ltf_sgi");
+		return status;
+	}
+
+	sme_debug("HE SGI_LTF is set to 0x%08X",
+			mac_ctx->he_sgi_ltf_cfg_bit_mask);
+
+	return 0;
+}
+
+int sme_set_auto_rate_he_sgi(tHalHandle hal, uint8_t session_id,
+		uint8_t cfg_val)
+{
+	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
+	uint32_t set_val;
+	uint32_t sgi_bit_mask = 0;
+	int status;
+
+	if ((cfg_val > AUTO_RATE_GI_3200NS) ||
+			(cfg_val < AUTO_RATE_GI_400NS)) {
+		sme_err("invalid auto rate GI cfg %d", cfg_val);
+		return -EINVAL;
+	}
+
+	sgi_bit_mask = (1 << cfg_val);
+
+	set_val = mac_ctx->he_sgi_ltf_cfg_bit_mask;
+	SET_AUTO_RATE_SGI_VAL(set_val, sgi_bit_mask);
+
+	mac_ctx->he_sgi_ltf_cfg_bit_mask = set_val;
+	status = wma_cli_set_command(session_id,
+				     WMI_VDEV_PARAM_AUTORATE_MISC_CFG,
+				     set_val, VDEV_CMD);
+	if (status) {
+		sme_err("failed to set he_ltf_sgi");
+		return status;
+	}
+
+	sme_debug("auto rate HE SGI_LTF is set to 0x%08X",
+			mac_ctx->he_sgi_ltf_cfg_bit_mask);
 
 	return 0;
 }
@@ -12666,7 +12706,7 @@ bool sme_neighbor_middle_of_roaming(tHalHandle hHal, uint8_t sessionId)
 	if (CSR_IS_SESSION_VALID(mac_ctx, sessionId))
 		val = csr_neighbor_middle_of_roaming(mac_ctx, sessionId);
 	else
-		sme_err("Invalid Session: %d", sessionId);
+		sme_debug("Invalid Session: %d", sessionId);
 
 	return val;
 }
