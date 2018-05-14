@@ -3890,7 +3890,7 @@ static int voice_send_cvp_channel_info_v2(struct voice_data *v,
 		channel_info->bits_per_sample = v->dev_rx.bits_per_sample;
 		memcpy(&channel_info->channel_mapping,
 		       v->dev_rx.channel_mapping,
-		       VSS_CHANNELS_MAX * sizeof(uint8_t));
+		       VSS_NUM_CHANNELS_MAX * sizeof(uint8_t));
 		break;
 
 	case TX_PATH:
@@ -3900,7 +3900,7 @@ static int voice_send_cvp_channel_info_v2(struct voice_data *v,
 		channel_info->bits_per_sample = v->dev_tx.bits_per_sample;
 		memcpy(&channel_info->channel_mapping,
 		       v->dev_tx.channel_mapping,
-		       VSS_CHANNELS_MAX * sizeof(uint8_t));
+		       VSS_NUM_CHANNELS_MAX * sizeof(uint8_t));
 		break;
 
 	case EC_REF_PATH:
@@ -3910,7 +3910,7 @@ static int voice_send_cvp_channel_info_v2(struct voice_data *v,
 		channel_info->bits_per_sample = v->dev_rx.bits_per_sample;
 		memcpy(&channel_info->channel_mapping,
 		       v->dev_rx.channel_mapping,
-		       VSS_CHANNELS_MAX * sizeof(uint8_t));
+		       VSS_NUM_CHANNELS_MAX * sizeof(uint8_t));
 		break;
 	default:
 		pr_err("%s: Invalid param type\n",
@@ -4130,7 +4130,7 @@ static int voice_send_cvp_mfc_config_v2(struct voice_data *v)
 	mfc_config_info->sample_rate = v->dev_rx.sample_rate;
 	memcpy(&mfc_config_info->channel_type,
 	       v->dev_rx.channel_mapping,
-	       VSS_CHANNELS_MAX * sizeof(uint8_t));
+	       VSS_NUM_CHANNELS_MAX * sizeof(uint8_t));
 
 	v->cvp_state = CMD_STATUS_FAIL;
 	v->async_err = 0;
