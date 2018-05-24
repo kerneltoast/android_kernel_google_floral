@@ -77,7 +77,15 @@ QDF_STATUS tgt_scan_pno_start(struct wlan_objmgr_vdev *vdev,
 
 	psoc = wlan_vdev_get_psoc(vdev);
 
+	if (!psoc) {
+		scm_err("NULL PSOC");
+		return QDF_STATUS_E_FAILURE;
+	}
 	scan_ops = wlan_psoc_get_scan_txops(psoc);
+	if (!scan_ops) {
+		scm_err("NULL scan_ops");
+		return QDF_STATUS_E_FAILURE;
+	}
 	/* invoke wmi_unified_pno_start_cmd() */
 	QDF_ASSERT(scan_ops->pno_start);
 	if (scan_ops->pno_start)
@@ -94,7 +102,15 @@ QDF_STATUS tgt_scan_pno_stop(struct wlan_objmgr_vdev *vdev,
 
 	psoc = wlan_vdev_get_psoc(vdev);
 
+	if (!psoc) {
+		scm_err("NULL PSOC");
+		return QDF_STATUS_E_FAILURE;
+	}
 	scan_ops = wlan_psoc_get_scan_txops(psoc);
+	if (!scan_ops) {
+		scm_err("NULL scan_ops");
+		return QDF_STATUS_E_FAILURE;
+	}
 	/* invoke wmi_unified_pno_stop_cmd() */
 	QDF_ASSERT(scan_ops->pno_stop);
 	if (scan_ops->pno_stop)
@@ -112,8 +128,17 @@ tgt_scan_start(struct scan_start_request *req)
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_objmgr_vdev *vdev = req->vdev;
 
+	if (!vdev) {
+		scm_err("vdev is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
+
 	psoc = wlan_vdev_get_psoc(vdev);
 	pdev = wlan_vdev_get_pdev(vdev);
+	if (!psoc || !pdev) {
+		scm_err("psoc: 0x%pK or pdev: 0x%pK is NULL", psoc, pdev);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 
 	scan_ops = wlan_psoc_get_scan_txops(psoc);
 	/* invoke wmi_unified_scan_start_cmd_send() */
@@ -133,9 +158,16 @@ tgt_scan_cancel(struct scan_cancel_request *req)
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_objmgr_vdev *vdev = req->vdev;
 
+	if (!vdev) {
+		scm_err("vdev is NULL");
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 	psoc = wlan_vdev_get_psoc(vdev);
 	pdev = wlan_vdev_get_pdev(vdev);
-
+	if (!psoc || !pdev) {
+		scm_err("psoc: 0x%pK or pdev: 0x%pK is NULL", psoc, pdev);
+		return QDF_STATUS_E_NULL_VALUE;
+	}
 	scan_ops = wlan_psoc_get_scan_txops(psoc);
 	/* invoke wmi_unified_scan_stop_cmd_send() */
 	QDF_ASSERT(scan_ops->scan_cancel);

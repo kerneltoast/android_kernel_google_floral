@@ -466,16 +466,19 @@ static QDF_STATUS p2p_populate_mac_header(
 	struct wlan_objmgr_psoc *psoc;
 	void *mac_addr;
 	uint16_t seq_num;
+	uint8_t pdev_id;
 
 	psoc = tx_ctx->p2p_soc_obj->soc;
 
 	wh = (struct wlan_frame_hdr *)tx_ctx->buf;
 	mac_addr = wh->i_addr1;
-	peer = wlan_objmgr_get_peer(psoc, mac_addr, WLAN_P2P_ID);
+	pdev_id = wlan_get_pdev_id_from_vdev_id(psoc, tx_ctx->vdev_id,
+						WLAN_P2P_ID);
+	peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr, WLAN_P2P_ID);
 	if (!peer) {
 		mac_addr = wh->i_addr2;
-		peer = wlan_objmgr_get_peer(psoc, mac_addr,
-					WLAN_P2P_ID);
+		peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr,
+					    WLAN_P2P_ID);
 	}
 
 	if (!peer) {
@@ -877,6 +880,7 @@ static QDF_STATUS p2p_mgmt_tx(struct tx_action_context *tx_ctx,
 	struct wmi_mgmt_params mgmt_param = { 0 };
 	struct wlan_objmgr_psoc *psoc;
 	void *mac_addr;
+	uint8_t pdev_id;
 
 	psoc = tx_ctx->p2p_soc_obj->soc;
 	mgmt_param.tx_frame = packet;
@@ -893,11 +897,13 @@ static QDF_STATUS p2p_mgmt_tx(struct tx_action_context *tx_ctx,
 
 	wh = (struct wlan_frame_hdr *)frame;
 	mac_addr = wh->i_addr1;
-	peer = wlan_objmgr_get_peer(psoc, mac_addr, WLAN_P2P_ID);
+	pdev_id = wlan_get_pdev_id_from_vdev_id(psoc, tx_ctx->vdev_id,
+						WLAN_P2P_ID);
+	peer = wlan_objmgr_get_peer(psoc, pdev_id,  mac_addr, WLAN_P2P_ID);
 	if (!peer) {
 		mac_addr = wh->i_addr2;
-		peer = wlan_objmgr_get_peer(psoc, mac_addr,
-					WLAN_P2P_ID);
+		peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr,
+					    WLAN_P2P_ID);
 	}
 
 	if (!peer) {
@@ -1214,8 +1220,10 @@ static QDF_STATUS p2p_remove_tx_context(
 					&is_ack_q);
 
 	/* for not off channel tx case, won't find from queue */
-	if (!cur_tx_ctx)
+	if (!cur_tx_ctx) {
 		p2p_debug("Do not find tx context from queue");
+		goto end;
+	}
 
 	if (is_roc_q) {
 		status = qdf_list_remove_node(
@@ -1233,6 +1241,7 @@ static QDF_STATUS p2p_remove_tx_context(
 			p2p_err("Failed to  tx context from wait ack req queue");
 	}
 
+end:
 	qdf_mem_free(tx_ctx->buf);
 	qdf_mem_free(tx_ctx);
 

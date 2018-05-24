@@ -761,7 +761,7 @@ QDF_STATUS (*send_pdev_set_hw_mode_cmd)(wmi_unified_t wmi_handle,
 				uint32_t hw_mode_index);
 
 QDF_STATUS (*send_pdev_set_dual_mac_config_cmd)(wmi_unified_t wmi_handle,
-		struct wmi_dual_mac_config *msg);
+		struct policy_mgr_dual_mac_config *msg);
 
 QDF_STATUS (*send_set_led_flashing_cmd)(wmi_unified_t wmi_handle,
 				struct flashing_req_params *flashing);
@@ -1290,6 +1290,10 @@ QDF_STATUS (*extract_pdev_ext_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 QDF_STATUS (*extract_vdev_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 			 uint32_t index, wmi_host_vdev_stats *vdev_stats);
 
+QDF_STATUS (*extract_per_chain_rssi_stats)(wmi_unified_t wmi_handle,
+			void *evt_buf, uint32_t index,
+			struct wmi_host_per_chain_rssi_stats *rssi_stats);
+
 QDF_STATUS (*extract_peer_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 			 uint32_t index, wmi_host_peer_stats *peer_stats);
 
@@ -1616,6 +1620,11 @@ QDF_STATUS (*extract_twt_resume_dialog_comp_event)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
 		struct wmi_twt_resume_dialog_complete_event_param *params);
 #endif
+
+#ifdef QCA_SUPPORT_CP_STATS
+QDF_STATUS (*extract_cca_stats)(wmi_unified_t wmi_handle, void *evt_buf,
+				struct wmi_host_congestion_stats *stats);
+#endif /* QCA_SUPPORT_CP_STATS */
 };
 
 /* Forward declartion for psoc*/
@@ -1717,7 +1726,7 @@ struct wmi_soc {
 	struct wmi_ops *ops;
 	const uint32_t *svc_ids;
 	uint32_t wmi_events[wmi_events_max];
-	/* WMI service bitmap recieved from target */
+	/* WMI service bitmap received from target */
 	uint32_t *wmi_service_bitmap;
 	uint32_t *wmi_ext_service_bitmap;
 #ifndef CONFIG_MCL

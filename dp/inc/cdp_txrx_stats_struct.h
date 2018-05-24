@@ -185,7 +185,7 @@ struct cdp_rx_stats {
 	/* Raw Pakets received */
 	struct cdp_pkt_info raw;
 	/* Total multicast packets */
-	struct cdp_pkt_info nawds_mcast_drop;
+	uint32_t nawds_mcast_drop;
 
 	struct {
 	/* Intra BSS packets received */
@@ -510,9 +510,9 @@ struct cdp_htt_tx_pdev_stats_cmn_tlv {
     uint32_t mpdu_dropped_xretry;
     /* illegal rate phy errors  */
     uint32_t illgl_rate_phy_err;
-    /* wal pdev continous xretry */
+    /* wal pdev continuous xretry */
     uint32_t cont_xretry;
-    /* wal pdev continous xretry */
+    /* wal pdev continuous xretry */
     uint32_t tx_timeout;
     /* wal pdev resets  */
     uint32_t pdev_resets;
@@ -1120,9 +1120,9 @@ enum _ol_ath_param_t {
 	/* firmware should intimate us about ps state change for node  */
 	OL_ATH_PARAM_PS_STATE_CHANGE = 200,
 	OL_ATH_PARAM_MCAST_BCAST_ECHO,
-	/* OBSS RSSI threshold for 20/40 coexistance */
+	/* OBSS RSSI threshold for 20/40 coexistence */
 	OL_ATH_PARAM_OBSS_RSSI_THRESHOLD,
-	/* Link/node RX RSSI threshold  for 20/40 coexistance */
+	/* Link/node RX RSSI threshold  for 20/40 coexistence */
 	OL_ATH_PARAM_OBSS_RX_RSSI_THRESHOLD,
 #if ATH_CHANNEL_BLOCKING
 	OL_ATH_PARAM_ACS_BLOCK_MODE = 205,

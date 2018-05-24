@@ -40,6 +40,8 @@
 #include "wlan_cmn.h"
 #include "qdf_event.h"
 
+#define MAX_NUM_CHAINS              2
+
 /**
  * enum stats_req_type - enum indicating bit position of various stats type in
  * request map
@@ -52,6 +54,28 @@ enum stats_req_type {
 	TYPE_STATION_STATS,
 	TYPE_PEER_STATS,
 	TYPE_MAX,
+};
+
+/**
+ * enum tx_rate_info - tx rate flags
+ * @TX_RATE_LEGACY: Legacy rates
+ * @TX_RATE_HT20: HT20 rates
+ * @TX_RATE_HT40: HT40 rates
+ * @TX_RATE_SGI: Rate with Short guard interval
+ * @TX_RATE_LGI: Rate with Long guard interval
+ * @TX_RATE_VHT20: VHT 20 rates
+ * @TX_RATE_VHT40: VHT 40 rates
+ * @TX_RATE_VHT80: VHT 80 rates
+ */
+enum tx_rate_info {
+	TX_RATE_LEGACY = 0x1,
+	TX_RATE_HT20 = 0x2,
+	TX_RATE_HT40 = 0x4,
+	TX_RATE_SGI = 0x8,
+	TX_RATE_LGI = 0x10,
+	TX_RATE_VHT20 = 0x20,
+	TX_RATE_VHT40 = 0x40,
+	TX_RATE_VHT80 = 0x80,
 };
 
 /**
@@ -73,6 +97,14 @@ enum stats_req_type {
  * @oem_response_wake_up_count: oem response wakeup count
  * @pwr_save_fail_detected:     pwr save fail detected wakeup count
  * @scan_11d                    11d scan wakeup count
+ * @mgmt_assoc: association request management frame
+ * @mgmt_disassoc: disassociation management frame
+ * @mgmt_assoc_resp: association response management frame
+ * @mgmt_reassoc: reassociate request management frame
+ * @mgmt_reassoc_resp: reassociate response management frame
+ * @mgmt_auth: authentication managament frame
+ * @mgmt_deauth: deauthentication management frame
+ * @mgmt_action: action managament frame
  */
 struct wake_lock_stats {
 	uint32_t ucast_wake_up_count;
@@ -92,6 +124,14 @@ struct wake_lock_stats {
 	uint32_t oem_response_wake_up_count;
 	uint32_t pwr_save_fail_detected;
 	uint32_t scan_11d;
+	uint32_t mgmt_assoc;
+	uint32_t mgmt_disassoc;
+	uint32_t mgmt_assoc_resp;
+	uint32_t mgmt_reassoc;
+	uint32_t mgmt_reassoc_resp;
+	uint32_t mgmt_auth;
+	uint32_t mgmt_deauth;
+	uint32_t mgmt_action;
 };
 
 struct stats_event;
@@ -109,6 +149,8 @@ struct request_info {
 	union {
 		void (*get_tx_power_cb)(int tx_power, void *cookie);
 		void (*get_peer_rssi_cb)(struct stats_event *ev, void *cookie);
+		void (*get_station_stats_cb)(struct stats_event *ev,
+					     void *cookie);
 	} u;
 	uint32_t vdev_id;
 	uint32_t pdev_id;
@@ -123,6 +165,16 @@ struct request_info {
 struct pending_stats_requests {
 	uint32_t type_map;
 	struct request_info req[TYPE_MAX];
+};
+
+/**
+ * struct cca_stats - cca stats
+ * @congestion: the congestion percentage = (busy_time/total_time)*100
+ *    for the interval from when the vdev was started to the current time
+ *    (or the time at which the vdev was stopped).
+ */
+struct cca_stats {
+	uint32_t congestion;
 };
 
 /**
@@ -144,11 +196,51 @@ struct pdev_mc_cp_stats {
 };
 
 /**
- * struct vdev_mc_cp_stats -    vdev specific stats
- * @wow_stats:                  wake_lock stats for vdev
+ * struct summary_stats - summary stats
+ * @snr: snr of vdev
+ * @rssi: rssi of vdev
+ * @retry_cnt: retry count
+ * @multiple_retry_cnt: multiple_retry_cnt
+ * @tx_frm_cnt: num of tx frames
+ * @rx_frm_cnt: num of rx frames
+ * @frm_dup_cnt: duplicate frame count
+ * @fail_cnt: fail count
+ * @rts_fail_cnt: rts fail count
+ * @ack_fail_cnt: ack fail count
+ * @rts_succ_cnt: rts success count
+ * @rx_discard_cnt: rx frames discarded
+ * @rx_error_cnt: rx frames with error
+ */
+struct summary_stats {
+	uint32_t snr;
+	uint32_t rssi;
+	uint32_t retry_cnt[4];
+	uint32_t multiple_retry_cnt[4];
+	uint32_t tx_frm_cnt[4];
+	uint32_t rx_frm_cnt;
+	uint32_t frm_dup_cnt;
+	uint32_t fail_cnt[4];
+	uint32_t rts_fail_cnt;
+	uint32_t ack_fail_cnt;
+	uint32_t rts_succ_cnt;
+	uint32_t rx_discard_cnt;
+	uint32_t rx_error_cnt;
+};
+
+/**
+ * struct vdev_mc_cp_stats - vdev specific stats
+ * @wow_stats: wake_lock stats for vdev
+ * @cca: cca stats
+ * @tx_rate_flags: tx rate flags (enum tx_rate_info)
+ * @chain_rssi: chain rssi
+ * @vdev_summary_stats: vdev's summary stats
  */
 struct vdev_mc_cp_stats {
 	struct wake_lock_stats wow_stats;
+	struct cca_stats cca;
+	uint32_t tx_rate_flags;
+	int8_t chain_rssi[MAX_NUM_CHAINS];
+	struct summary_stats vdev_summary_stats;
 };
 
 /**
@@ -166,17 +258,61 @@ struct peer_mc_cp_stats {
 };
 
 /**
+ * struct congestion_stats_event: congestion stats event param
+ * @vdev_id: vdev_id of the event
+ * @congestion: the congestion percentage
+ */
+struct congestion_stats_event {
+	uint8_t vdev_id;
+	uint32_t congestion;
+};
+
+/**
+ * struct summary_stats_event - summary_stats event param
+ * @vdev_id: vdev_id of the event
+ * @stats: summary stats
+ */
+struct summary_stats_event {
+	uint8_t vdev_id;
+	struct summary_stats stats;
+};
+
+/**
+ * struct chain_rssi_event - chain_rssi event param
+ * @vdev_id: vdev_id of the event
+ * @chain_rssi: chain_rssi
+ */
+struct chain_rssi_event {
+	uint8_t vdev_id;
+	int8_t chain_rssi[MAX_NUM_CHAINS];
+};
+
+/**
  * struct stats_event - parameters populated by stats event
  * @num_pdev_stats: num pdev stats
  * @pdev_stats: if populated array indicating pdev stats (index = pdev_id)
  * @num_peer_stats: num peer stats
  * @peer_stats: if populated array indicating peer stats
+ * @cca_stats: if populated indicates congestion stats
+ * @num_summary_stats: number of summary stats
+ * @vdev_summary_stats: if populated indicates array of summary stats per vdev
+ * @num_chain_rssi_stats: number of chain rssi stats
+ * @vdev_chain_rssi: if populated indicates array of chain rssi per vdev
+ * @tx_rate: tx rate (kbps)
+ * @tx_rate_flags: tx rate flags, (enum tx_rate_info)
  */
 struct stats_event {
 	uint32_t num_pdev_stats;
 	struct pdev_mc_cp_stats *pdev_stats;
 	uint32_t num_peer_stats;
 	struct peer_mc_cp_stats *peer_stats;
+	struct congestion_stats_event *cca_stats;
+	uint32_t num_summary_stats;
+	struct summary_stats_event *vdev_summary_stats;
+	uint32_t num_chain_rssi_stats;
+	struct chain_rssi_event *vdev_chain_rssi;
+	uint32_t tx_rate;
+	enum tx_rate_info tx_rate_flags;
 };
 
 #endif /* CONFIG_MCL */

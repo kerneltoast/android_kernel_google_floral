@@ -90,6 +90,7 @@ typedef qdf_nbuf_t wmi_buf_t;
 #define PHYERROR_MAX_BUFFER_LENGTH 0x7F000000
 
 struct wmi_soc;
+struct policy_mgr_dual_mac_config;
 /**
  * struct wmi_ops - service callbacks to upper layer
  * @service_ready_cbk: service ready callback
@@ -1069,7 +1070,7 @@ QDF_STATUS wmi_unified_soc_set_hw_mode_cmd(void *wmi_hdl,
 				uint32_t hw_mode_index);
 
 QDF_STATUS wmi_unified_pdev_set_dual_mac_config_cmd(void *wmi_hdl,
-		struct wmi_dual_mac_config *msg);
+		struct policy_mgr_dual_mac_config *msg);
 
 QDF_STATUS wmi_unified_set_led_flashing_cmd(void *wmi_hdl,
 				struct flashing_req_params *flashing);
@@ -1704,6 +1705,9 @@ QDF_STATUS wmi_extract_atf_token_info_ev(void *wmi_hdl, void *evt_buf,
 QDF_STATUS wmi_extract_vdev_stats(void *wmi_hdl, void *evt_buf,
 		uint32_t index, wmi_host_vdev_stats *vdev_stats);
 
+QDF_STATUS wmi_extract_per_chain_rssi_stats(void *wmi_hdl, void *evt_buf,
+	uint32_t index, struct wmi_host_per_chain_rssi_stats *rssi_stats);
+
 QDF_STATUS wmi_extract_vdev_extd_stats(void *wmi_hdl, void *evt_buf,
 		uint32_t index, wmi_host_vdev_extd_stats *vdev_extd_stats);
 
@@ -2250,5 +2254,19 @@ QDF_STATUS wmi_unified_invoke_neighbor_report_cmd(void *wmi_hdl,
  */
 wmi_host_channel_width wmi_get_ch_width_from_phy_mode(void *wmi_hdl,
 					WMI_HOST_WLAN_PHY_MODE phymode);
+
+#ifdef QCA_SUPPORT_CP_STATS
+/**
+ * wmi_extract_cca_stats() - api to extract congestion stats from event buffer
+ * @wmi_handle: wma handle
+ * @evt_buf: event buffer
+ * @datalen: length of buffer
+ * @stats: buffer to populated after stats extraction
+ *
+ * Return: status of operation
+ */
+QDF_STATUS wmi_extract_cca_stats(wmi_unified_t wmi_handle, void *evt_buf,
+				 struct wmi_host_congestion_stats *stats);
+#endif /* QCA_SUPPORT_CP_STATS */
 
 #endif /* _WMI_UNIFIED_API_H_ */

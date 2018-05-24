@@ -137,6 +137,25 @@ static inline uint32_t dp_rx_rotr(uint32_t val, int bits)
 }
 
 /*
+ * dp_set_rx_queue() - set queue_mapping in skb
+ * @nbuf: skb
+ * @queue_id: rx queue_id
+ *
+ * Return: void
+ */
+#ifdef QCA_OL_RX_MULTIQ_SUPPORT
+static inline void dp_set_rx_queue(qdf_nbuf_t nbuf, uint8_t queue_id)
+{
+	qdf_nbuf_record_rx_queue(nbuf, queue_id);
+	return;
+}
+#else
+static inline void dp_set_rx_queue(qdf_nbuf_t nbuf, uint8_t queue_id)
+{
+}
+#endif
+
+/*
  *dp_rx_xswap() - swap the bits left
  *@val: unsigned integer input value
  *
@@ -228,8 +247,16 @@ void *dp_rx_cookie_2_va_rxdma_buf(struct dp_soc *soc, uint32_t cookie)
 {
 	uint8_t pool_id = DP_RX_DESC_COOKIE_POOL_ID_GET(cookie);
 	uint16_t index = DP_RX_DESC_COOKIE_INDEX_GET(cookie);
-	/* TODO */
-	/* Add sanity for pool_id & index */
+	struct rx_desc_pool *rx_desc_pool;
+
+	if (qdf_unlikely(pool_id >= MAX_RXDESC_POOLS))
+		return NULL;
+
+	rx_desc_pool = &soc->rx_desc_buf[pool_id];
+
+	if (qdf_unlikely(index >= rx_desc_pool->pool_size))
+		return NULL;
+
 	return &(soc->rx_desc_buf[pool_id].array[index].rx_desc);
 }
 
@@ -295,15 +322,18 @@ uint32_t dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota);
 uint32_t
 dp_rx_wbm_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota);
 
-void
-dp_rx_sg_create(qdf_nbuf_t nbuf,
-		uint8_t *rx_tlv_hdr,
-		uint16_t *mpdu_len,
-		bool *is_first_frag,
-		uint16_t *frag_list_len,
-		qdf_nbuf_t *head_frag_nbuf,
-		qdf_nbuf_t *frag_list_head,
-		qdf_nbuf_t *frag_list_tail);
+/**
+ * dp_rx_sg_create() - create a frag_list for MSDUs which are spread across
+ *		     multiple nbufs.
+ * @nbuf: pointer to the first msdu of an amsdu.
+ * @rx_tlv_hdr: pointer to the start of RX TLV headers.
+ *
+ * This function implements the creation of RX frag_list for cases
+ * where an MSDU is spread across multiple nbufs.
+ *
+ * Return: returns the head nbuf which contains complete frag_list.
+ */
+qdf_nbuf_t dp_rx_sg_create(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr);
 
 QDF_STATUS dp_rx_desc_pool_alloc(struct dp_soc *soc,
 				uint32_t pool_id,
@@ -650,22 +680,27 @@ static inline bool check_qwrap_multicast_loopback(struct dp_vdev *vdev,
 {
 	struct dp_vdev *psta_vdev;
 	struct dp_pdev *pdev = vdev->pdev;
+	struct dp_soc *soc = pdev->soc;
 	uint8_t *data = qdf_nbuf_data(nbuf);
+	uint8_t i;
 
-	if (qdf_unlikely(vdev->proxysta_vdev)) {
-		/* In qwrap isolation mode, allow loopback packets as all
-		 * packets go to RootAP and Loopback on the mpsta.
-		 */
-		if (vdev->isolation_vdev)
-			return false;
-		TAILQ_FOREACH(psta_vdev, &pdev->vdev_list, vdev_list_elem) {
-			if (qdf_unlikely(psta_vdev->proxysta_vdev &&
-				!qdf_mem_cmp(psta_vdev->mac_addr.raw,
-				&data[DP_MAC_ADDR_LEN], DP_MAC_ADDR_LEN))) {
-				/* Drop packet if source address is equal to
-				 * any of the vdev addresses.
-				 */
-				return true;
+	for (i = 0; i < MAX_PDEV_CNT && soc->pdev_list[i]; i++) {
+		pdev = soc->pdev_list[i];
+		if (qdf_unlikely(vdev->proxysta_vdev)) {
+			/* In qwrap isolation mode, allow loopback packets as all
+			 * packets go to RootAP and Loopback on the mpsta.
+			 */
+			if (vdev->isolation_vdev)
+				return false;
+			TAILQ_FOREACH(psta_vdev, &pdev->vdev_list, vdev_list_elem) {
+				if (qdf_unlikely(psta_vdev->proxysta_vdev &&
+					!qdf_mem_cmp(psta_vdev->mac_addr.raw,
+					&data[DP_MAC_ADDR_LEN], DP_MAC_ADDR_LEN))) {
+					/* Drop packet if source address is equal to
+					 * any of the vdev addresses.
+					 */
+					return true;
+				}
 			}
 		}
 	}

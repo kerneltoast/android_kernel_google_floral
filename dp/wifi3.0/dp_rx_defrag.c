@@ -991,8 +991,7 @@ dp_rx_defrag_nwifi_to_8023(qdf_nbuf_t nbuf, uint16_t hdrsize)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	hal_rxdma_buff_addr_info_set(msdu0, paddr, cookie,
-					HAL_RX_BUF_RBM_SW3_BM);
+	hal_rxdma_buff_addr_info_set(msdu0, paddr, cookie, DP_WBM2SW_RBM);
 
 	/* Lets fill entrance ring now !!! */
 	if (qdf_unlikely(hal_srng_access_start(soc->hal_soc, hal_srng))) {
@@ -1307,7 +1306,7 @@ static QDF_STATUS dp_rx_defrag_store_fragment(struct dp_soc *soc,
 	peer = dp_peer_find_by_id(soc, peer_id);
 
 	if (!peer) {
-		/* We should not recieve anything from unknown peer
+		/* We should not receive anything from unknown peer
 		 * however, that might happen while we are in the monitor mode.
 		 * We don't need to handle that here
 		 */

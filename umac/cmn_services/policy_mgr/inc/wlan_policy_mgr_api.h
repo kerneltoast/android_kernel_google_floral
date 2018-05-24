@@ -303,7 +303,7 @@ uint8_t policy_mgr_get_channel(struct wlan_objmgr_psoc *psoc,
  * @psoc: PSOC object information
  * @mode:	Device mode
  * @pcl_channels: PCL channels
- * @len: lenght of the PCL
+ * @len: length of the PCL
  * @pcl_weight: Weights of the PCL
  * @weight_len: Max length of the weights list
  *
@@ -532,7 +532,7 @@ bool policy_mgr_is_ibss_conn_exist(struct wlan_objmgr_psoc *psoc,
 
 /**
  * policy_mgr_get_conn_info() - get the current connections list
- * @len: lenght of the list
+ * @len: length of the list
  *
  * This function returns a pointer to the current connections
  * list
@@ -1133,6 +1133,14 @@ QDF_STATUS policy_mgr_set_connection_update(struct wlan_objmgr_psoc *psoc);
  * Return: QDF_STATUS
  */
 QDF_STATUS policy_mgr_set_opportunistic_update(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_stop_opportunistic_timer() - Stops opportunistic timer
+ * @psoc: PSOC object information
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS policy_mgr_stop_opportunistic_timer(struct wlan_objmgr_psoc *psoc);
 
 /**
  * policy_mgr_restart_opportunistic_timer() - Restarts opportunistic timer

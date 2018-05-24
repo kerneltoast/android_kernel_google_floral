@@ -348,17 +348,17 @@ dp_rx_pn_error_handle(struct dp_soc *soc, void *ring_desc,
 		/*
 		 * TODO: Check for peer specific policies & set peer_pn_policy
 		 */
+		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
+			"discard rx due to PN error for peer  %pK  "
+			"(%02x:%02x:%02x:%02x:%02x:%02x)\n",
+			peer,
+			peer->mac_addr.raw[0], peer->mac_addr.raw[1],
+			peer->mac_addr.raw[2], peer->mac_addr.raw[3],
+			peer->mac_addr.raw[4], peer->mac_addr.raw[5]);
+
 	}
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
 		"Packet received with PN error");
-
-	QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_ERROR,
-		"discard rx due to PN error for peer  %pK  "
-		"(%02x:%02x:%02x:%02x:%02x:%02x)\n",
-		peer,
-		peer->mac_addr.raw[0], peer->mac_addr.raw[1],
-		peer->mac_addr.raw[2], peer->mac_addr.raw[3],
-		peer->mac_addr.raw[4], peer->mac_addr.raw[5]);
 
 	/* No peer PN policy -- definitely drop */
 	if (!peer_pn_policy)
@@ -583,8 +583,7 @@ dp_rx_null_q_desc_handle(struct dp_soc *soc,
 					QDF_TRACE_LEVEL_DEBUG,
 					"%s free buffer for multicast packet",
 					 __func__);
-		DP_STATS_INC_PKT(peer, rx.nawds_mcast_drop,
-					1, qdf_nbuf_len(nbuf));
+		DP_STATS_INC(peer, rx.nawds_mcast_drop, 1);
 		qdf_nbuf_free(nbuf);
 		return;
 	}
@@ -919,22 +918,20 @@ dp_rx_err_process(struct dp_soc *soc, void *hal_ring, uint32_t quota)
 		link_desc_va = dp_rx_cookie_2_link_desc_va(soc, &hbi);
 		hal_rx_msdu_list_get(link_desc_va, &msdu_list, &num_msdus);
 
-		if (qdf_unlikely((msdu_list.rbm[0] !=
-						HAL_RX_BUF_RBM_SW3_BM) &&
+		if (qdf_unlikely((msdu_list.rbm[0] != DP_WBM2SW_RBM) &&
 				(msdu_list.rbm[0] !=
 					HAL_RX_BUF_RBM_WBM_IDLE_DESC_LIST))) {
 			/* TODO */
 			/* Call appropriate handler */
 			DP_STATS_INC(soc, rx.err.invalid_rbm, 1);
 			QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_ERROR,
-				FL("Invalid RBM %d"), rbm);
+				FL("Invalid RBM %d"), msdu_list.rbm[0]);
 
 			/* Return link descriptor through WBM ring (SW2WBM)*/
 			dp_rx_link_desc_return(soc, ring_desc,
 					HAL_BM_ACTION_RELEASE_MSDU_LIST);
 			continue;
 		}
-
 
 		/* Get the MPDU DESC info */
 		hal_rx_mpdu_desc_info_get(ring_desc, &mpdu_desc_info);
@@ -1132,6 +1129,9 @@ done:
 		 * handle error cases appropriately
 		 */
 		hal_rx_wbm_err_info_get_from_tlv(rx_tlv_hdr, &wbm_err_info);
+
+		/* Set queue_mapping in nbuf to 0 */
+		dp_set_rx_queue(nbuf, 0);
 
 		next = nbuf->next;
 		if (wbm_err_info.wbm_err_src == HAL_RX_WBM_ERR_SRC_REO) {

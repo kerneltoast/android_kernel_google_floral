@@ -626,7 +626,7 @@ QDF_STATUS wmi_unified_sta_ps_cmd_send(void *wmi_hdl,
 /**
  * wmi_crash_inject() - inject fw crash
  * @wma_handle: wma handle
- * @param: ponirt to crash inject paramter structure
+ * @param: ponirt to crash inject parameter structure
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
  */
@@ -1106,7 +1106,7 @@ QDF_STATUS wmi_unified_get_temperature(void *wmi_hdl)
 /**
  * wmi_unified_set_sta_uapsd_auto_trig_cmd() - set uapsd auto trigger command
  * @wmi_hdl: wmi handle
- * @end_set_sta_ps_mode_cmd: cmd paramter strcture
+ * @end_set_sta_ps_mode_cmd: cmd parameter strcture
  *
  * This function sets the trigger
  * uapsd params such as service interval, delay interval
@@ -1266,7 +1266,7 @@ QDF_STATUS wmi_extract_dcc_stats(struct wmi_unified *wmi_hdl,
  *
  * This function enable/disable mcc adaptive scheduler in fw.
  *
- * Return: QDF_STATUS_SUCCESS for sucess or error code
+ * Return: QDF_STATUS_SUCCESS for success or error code
  */
 QDF_STATUS wmi_unified_set_enable_disable_mcc_adaptive_scheduler_cmd(
 		void *wmi_hdl, uint32_t mcc_adaptive_scheduler,
@@ -3025,7 +3025,7 @@ QDF_STATUS wmi_unified_soc_set_hw_mode_cmd(void *wmi_hdl,
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failures.
  */
 QDF_STATUS wmi_unified_pdev_set_dual_mac_config_cmd(void *wmi_hdl,
-		struct wmi_dual_mac_config *msg)
+		struct policy_mgr_dual_mac_config *msg)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
@@ -6211,6 +6211,27 @@ QDF_STATUS wmi_extract_vdev_stats(void *wmi_hdl, void *evt_buf,
 }
 
 /**
+ * wmi_extract_per_chain_rssi_stats() - extract rssi stats from event
+ * @wmi_handle: wmi handle
+ * @param evt_buf: pointer to event buffer
+ * @param index: Index into rssi stats
+ * @param rssi_stats: Pointer to hold rssi stats
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_per_chain_rssi_stats(void *wmi_hdl, void *evt_buf,
+	uint32_t index, struct wmi_host_per_chain_rssi_stats *rssi_stats)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->extract_per_chain_rssi_stats)
+		return wmi_handle->ops->extract_per_chain_rssi_stats(wmi_handle,
+			evt_buf, index, rssi_stats);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
  * wmi_extract_rtt_hdr() - extract rtt header from event
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
@@ -7482,3 +7503,15 @@ wmi_host_channel_width wmi_get_ch_width_from_phy_mode(void *wmi_hdl,
 	else
 		return WMI_HOST_CHAN_WIDTH_20;
 }
+
+#ifdef QCA_SUPPORT_CP_STATS
+QDF_STATUS wmi_extract_cca_stats(wmi_unified_t wmi_handle, void *evt_buf,
+				 struct wmi_host_congestion_stats *stats)
+{
+	if (wmi_handle->ops->extract_cca_stats)
+		return wmi_handle->ops->extract_cca_stats(wmi_handle, evt_buf,
+							  stats);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* QCA_SUPPORT_CP_STATS */
