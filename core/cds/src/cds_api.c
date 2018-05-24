@@ -646,6 +646,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 		goto err_wma_close;
 	}
 
+	wlan_psoc_set_dp_handle(psoc, gp_cds_context->dp_soc);
 	pmo_ucfg_psoc_update_dp_handle(psoc, gp_cds_context->dp_soc);
 	ucfg_ocb_update_dp_handle(psoc, gp_cds_context->dp_soc);
 
@@ -694,6 +695,7 @@ err_wma_close:
 	wma_close();
 	wma_wmi_service_close();
 	pmo_ucfg_psoc_update_dp_handle(psoc, NULL);
+	wlan_psoc_set_dp_handle(psoc, NULL);
 
 err_htc_close:
 	if (gp_cds_context->htc_ctx) {
@@ -1201,6 +1203,7 @@ QDF_STATUS cds_close(struct wlan_objmgr_psoc *psoc)
 
 	cdp_soc_detach(gp_cds_context->dp_soc);
 	pmo_ucfg_psoc_update_dp_handle(psoc, NULL);
+	wlan_psoc_set_dp_handle(psoc, NULL);
 
 	cds_shutdown_notifier_purge();
 
@@ -1263,7 +1266,7 @@ QDF_STATUS cds_dp_close(struct wlan_objmgr_psoc *psoc)
 /**
  * cds_get_context() - get context data area
  *
- * @moduleId: ID of the module who's context data is being retrived.
+ * @moduleId: ID of the module who's context data is being retrieved.
  *
  * Each module in the system has a context / data area that is allocated
  * and managed by CDS.  This API allows any user to get a pointer to its
@@ -1380,7 +1383,7 @@ void *cds_get_context(QDF_MODULE_ID moduleId)
  * module context data area.
  *
  * Return: pointer to the CDS global context, NULL if the function is
- *	   unable to retreive the CDS context.
+ *	   unable to retrieve the CDS context.
  */
 void *cds_get_global_context(void)
 {
@@ -2926,7 +2929,7 @@ QDF_STATUS cds_smmu_mem_map_setup(qdf_device_t osdev, bool ipa_present)
 				cds_err("SMMU mismatch: IPA: enable, WLAN: disable");
 				return QDF_STATUS_E_FAILURE;
 			} else {
-				cds_info("SMMU diabled from both IPA and WLAN side");
+				cds_info("SMMU disabled from both IPA and WLAN side");
 			}
 		}
 	}

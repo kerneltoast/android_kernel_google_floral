@@ -696,7 +696,7 @@ enum sme_qos_statustype sme_qos_setup_req(tHalHandle hHal, uint32_t sessionId,
  *             been successful already
  *
  * This function should be called after a link has been established,
- * i.e. STA is associated with an AP etc. & a QoS setup has been succesful for
+ * i.e. STA is associated with an AP etc. & a QoS setup has been successful for
  * that flow. If the request involves admission control on the requested AC,
  * HDD needs to provide the necessary Traffic Specification (TSPEC) parameters &
  * SME might start the renegotiation process through ADDTS.
@@ -5396,7 +5396,7 @@ static QDF_STATUS sme_qos_process_add_ts_failure_rsp(tpAniSirGlobal pMac,
 }
 
 /**
- * sme_qos_update_tspec_mask() - Utiltity function to update the tspec.
+ * sme_qos_update_tspec_mask() - Utility function to update the tspec.
  * @sessionid: Session upon which the TSPEC is being updated
  * @search_key: search key
  * @new_tspec_mask: tspec to be set for this AC
@@ -5737,7 +5737,7 @@ static QDF_STATUS sme_qos_process_add_ts_success_rsp(tpAniSirGlobal pMac,
 }
 
 /*
- * sme_qos_aggregate_params() - Utiltity function to increament the TSPEC
+ * sme_qos_aggregate_params() - Utility function to increament the TSPEC
  *  params per AC. Typical usage while using flow aggregation or deletion of
  *  flows
  *
@@ -5898,7 +5898,7 @@ static QDF_STATUS sme_qos_aggregate_params(
 }
 
 /*
- * sme_qos_update_params() - Utiltity function to update the TSPEC
+ * sme_qos_update_params() - Utility function to update the TSPEC
  *  params per AC. Typical usage while deleting flows on AC which is running
  *  multiple flows
  *
@@ -5984,7 +5984,7 @@ static QDF_STATUS sme_qos_update_params(uint8_t sessionId,
 }
 
 /*
- * sme_qos_up_to_ac() - Utiltity function to map an UP to AC
+ * sme_qos_up_to_ac() - Utility function to map an UP to AC
  *
  * up - Enumeration of the various User priorities (UP).
  * Return an Access Category
@@ -7017,6 +7017,7 @@ static QDF_STATUS sme_qos_add_ts_failure_fnp(tpAniSirGlobal pMac, tListElem
 	case SME_QOS_REASON_MODIFY:
 		flow_info->reason = SME_QOS_REASON_REQ_SUCCESS;
 	case SME_QOS_REASON_REQ_SUCCESS:
+	/* fallthrough */
 	default:
 		inform_hdd = false;
 		break;

@@ -474,7 +474,7 @@ static uint32_t lim_prepare_tdls_frame_header(tpAniSirGlobal pMac, uint8_t *pFra
  * lim_mgmt_tdls_tx_complete - callback to indicate Tx completion
  * @context: pointer to mac structure
  * @buf: buffer
- * @tx_complete: indicates tx sucess/failure
+ * @tx_complete: indicates tx success/failure
  * @params: tx completion params
  *
  * function will be invoked on receiving tx completion indication
@@ -1326,7 +1326,7 @@ tSirRetStatus lim_send_tdls_link_setup_req_frame(tpAniSirGlobal pMac,
 	}
 
 	/* Copy the additional IE. */
-	/* TODO : addIe is added at the end of the frame. This means it doesnt */
+	/* TODO : addIe is added at the end of the frame. This means it doesn't */
 	/* follow the order. This should be ok, but we should consider changing this */
 	/* if there is any IOT issue. */
 	if (addIeLen != 0) {
@@ -1780,7 +1780,7 @@ static tSirRetStatus lim_send_tdls_setup_rsp_frame(tpAniSirGlobal pMac,
 	}
 
 	/* Copy the additional IE. */
-	/* TODO : addIe is added at the end of the frame. This means it doesnt */
+	/* TODO : addIe is added at the end of the frame. This means it doesn't */
 	/* follow the order. This should be ok, but we should consider changing this */
 	/* if there is any IOT issue. */
 	if (addIeLen != 0) {
@@ -1966,7 +1966,7 @@ tSirRetStatus lim_send_tdls_link_setup_cnf_frame(tpAniSirGlobal pMac,
 	}
 
 	/* Copy the additional IE. */
-	/* TODO : addIe is added at the end of the frame. This means it doesnt */
+	/* TODO : addIe is added at the end of the frame. This means it doesn't */
 	/* follow the order. This should be ok, but we should consider changing this */
 	/* if there is any IOT issue. */
 	if (addIeLen != 0) {
@@ -2822,7 +2822,7 @@ tSirRetStatus lim_process_sme_tdls_mgmt_send_req(tpAniSirGlobal mac_ctx,
 	uint8_t session_id;
 	tSirResultCodes result_code = eSIR_SME_INVALID_PARAMETERS;
 
-	pe_debug("Send Mgmt Recieved");
+	pe_debug("Send Mgmt Received");
 	session_entry = pe_find_session_by_bssid(mac_ctx,
 					 send_req->bssid.bytes, &session_id);
 	if (NULL == session_entry) {
@@ -2982,7 +2982,7 @@ tSirRetStatus lim_process_sme_tdls_add_sta_req(tpAniSirGlobal pMac,
 	tpPESession psessionEntry;
 	uint8_t sessionId;
 
-	pe_debug("TDLS Add STA Request Recieved");
+	pe_debug("TDLS Add STA Request Received");
 	psessionEntry =
 		pe_find_session_by_bssid(pMac, pAddStaReq->bssid.bytes,
 					 &sessionId);
@@ -3046,7 +3046,7 @@ tSirRetStatus lim_process_sme_tdls_del_sta_req(tpAniSirGlobal pMac,
 	uint8_t sessionId;
 	tSirRetStatus status = eSIR_FAILURE;
 
-	pe_debug("TDLS Delete STA Request Recieved");
+	pe_debug("TDLS Delete STA Request Received");
 	psessionEntry =
 		pe_find_session_by_bssid(pMac, pDelStaReq->bssid.bytes,
 					 &sessionId);
@@ -3100,7 +3100,7 @@ lim_tdls_del_sta_error:
 }
 
 /**
- * lim_check_aid_and_delete_peer() - Funtion to check aid and delete peer
+ * lim_check_aid_and_delete_peer() - Function to check aid and delete peer
  * @p_mac: pointer to mac context
  * @session_entry: pointer to PE session
  *

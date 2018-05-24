@@ -202,7 +202,7 @@ static void __lim_init_vars(tpAniSirGlobal pMac)
 	/* Place holder for Measurement Req/Rsp/Ind related info */
 
 
-	/* Deferred Queue Paramters */
+	/* Deferred Queue Parameters */
 	qdf_mem_set(&pMac->lim.gLimDeferredMsgQ, sizeof(tSirAddtsReq), 0);
 
 	/* addts request if any - only one can be outstanding at any time */
@@ -682,7 +682,7 @@ void lim_cleanup(tpAniSirGlobal pMac)
 	ucfg_scan_unregister_requester(pMac->psoc, pMac->lim.req_id);
 } /*** end lim_cleanup() ***/
 
-#ifdef WLAN_FEATURE_HDD_MEMDUMP_ENABLE
+#ifdef WLAN_FEATURE_MEMDUMP_ENABLE
 /**
  * lim_state_info_dump() - print state information of lim layer
  * @buf: buffer pointer
@@ -737,11 +737,11 @@ static void lim_register_debug_callback(void)
 {
 	qdf_register_debug_callback(QDF_MODULE_ID_PE, &lim_state_info_dump);
 }
-#else /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+#else /* WLAN_FEATURE_MEMDUMP_ENABLE */
 static void lim_register_debug_callback(void)
 {
 }
-#endif /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+#endif /* WLAN_FEATURE_MEMDUMP_ENABLE */
 static void lim_nan_register_callbacks(tpAniSirGlobal mac_ctx)
 {
 	struct nan_callbacks cb_obj = {0};
@@ -1374,6 +1374,26 @@ static bool pe_filter_bcn_probe_frame(tpAniSirGlobal mac_ctx,
 	return false;
 }
 
+static QDF_STATUS pe_handle_probe_req_frames(tpAniSirGlobal mac_ctx,
+					cds_pkt_t *pkt)
+{
+	QDF_STATUS status;
+	struct scheduler_msg msg = {0};
+
+	/* Forward to MAC via mesg = SIR_BB_XPORT_MGMT_MSG */
+	msg.type = SIR_BB_XPORT_MGMT_MSG;
+	msg.bodyptr = pkt;
+	msg.bodyval = 0;
+	msg.callback = pe_mc_process_handler;
+
+	status = scheduler_post_msg(QDF_MODULE_ID_SCAN, &msg);
+
+	if (!QDF_IS_STATUS_SUCCESS(status))
+		pe_err_rl("Failed to post probe req frame to Scan Queue");
+
+	return status;
+}
+
 /* --------------------------------------------------------------------------- */
 /**
  * pe_handle_mgmt_frame() - Process the Management frames from TXRX
@@ -1447,6 +1467,18 @@ static QDF_STATUS pe_handle_mgmt_frame(struct wlan_objmgr_psoc *psoc,
 		cds_pkt_return_packet(pVosPkt);
 		pVosPkt = NULL;
 		return QDF_STATUS_SUCCESS;
+	}
+
+	/*
+	 * Post Probe Req frames to Scan queue and return
+	 */
+	if (mHdr->fc.subType == SIR_MAC_MGMT_PROBE_REQ) {
+		qdf_status = pe_handle_probe_req_frames(pMac, pVosPkt);
+		if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
+			cds_pkt_return_packet(pVosPkt);
+			pVosPkt = NULL;
+		}
+		return qdf_status;
 	}
 
 	if (QDF_STATUS_SUCCESS !=
@@ -1882,7 +1914,7 @@ lim_detect_change_in_ap_capabilities(tpAniSirGlobal pMac,
 			 * then send unicast probe request to AP and take decision after
 			 * receiving probe response */
 			if (true == psessionEntry->fIgnoreCapsChange) {
-				pe_warn("Ignoring the Capability change as it is false alarm");
+				pe_debug("Ignoring the Capability change as it is false alarm");
 				return;
 			}
 			psessionEntry->fWaitForProbeRsp = true;
@@ -2654,29 +2686,17 @@ tMgmtFrmDropReason lim_is_pkt_candidate_for_drop(tpAniSirGlobal pMac,
 	if ((subType == SIR_MAC_MGMT_BEACON) ||
 	    (subType == SIR_MAC_MGMT_PROBE_RSP)) {
 		if (lim_is_beacon_miss_scenario(pMac, pRxPacketInfo)) {
-			MTRACE(mac_trace
-				       (pMac, TRACE_CODE_INFO_LOG, 0,
-				       eLOG_NODROP_MISSED_BEACON_SCENARIO));
+			MTRACE(mac_trace(pMac, TRACE_CODE_INFO_LOG, 0,
+					 eLOG_NODROP_MISSED_BEACON_SCENARIO));
 			return eMGMT_DROP_NO_DROP;
 		}
-		if (lim_is_system_in_scan_state(pMac)) {
+		if (lim_is_system_in_scan_state(pMac))
 			return eMGMT_DROP_NO_DROP;
-		} else if (WMA_IS_RX_IN_SCAN(pRxPacketInfo)) {
+		else if (WMA_IS_RX_IN_SCAN(pRxPacketInfo))
 			return eMGMT_DROP_SCAN_MODE_FRAME;
-		} else {
-			/* Beacons and probe responses can come in any time
-			 * because of parallel scans. Don't drop them.
-			 */
-			return eMGMT_DROP_NO_DROP;
-		}
-	}
 
-	framelen = WMA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
-	pBody = WMA_GET_RX_MPDU_DATA(pRxPacketInfo);
-
-	/* Drop INFRA Beacons and Probe Responses in IBSS Mode */
-	if ((subType == SIR_MAC_MGMT_BEACON) ||
-	    (subType == SIR_MAC_MGMT_PROBE_RSP)) {
+		framelen = WMA_GET_RX_PAYLOAD_LEN(pRxPacketInfo);
+		pBody = WMA_GET_RX_MPDU_DATA(pRxPacketInfo);
 		/* drop the frame if length is less than 12 */
 		if (framelen < LIM_MIN_BCN_PR_LENGTH)
 			return eMGMT_DROP_INVALID_SIZE;
@@ -2690,14 +2710,17 @@ tMgmtFrmDropReason lim_is_pkt_candidate_for_drop(tpAniSirGlobal pMac,
 		if (!capabilityInfo.ibss)
 			return eMGMT_DROP_NO_DROP;
 
+		/* Drop INFRA Beacons and Probe Responses in IBSS Mode */
 		/* This can be enhanced to even check the SSID before deciding to enque the frame. */
 		if (capabilityInfo.ess)
 			return eMGMT_DROP_INFRA_BCN_IN_IBSS;
+
 	} else if ((subType == SIR_MAC_MGMT_PROBE_REQ) &&
 		   (!WMA_GET_RX_BEACON_SENT(pRxPacketInfo))) {
 		pHdr = WMA_GET_RX_MAC_HEADER(pRxPacketInfo);
-		psessionEntry =
-			pe_find_session_by_bssid(pMac, pHdr->bssId, &sessionId);
+		psessionEntry = pe_find_session_by_bssid(pMac,
+							 pHdr->bssId,
+							 &sessionId);
 		if ((psessionEntry && !LIM_IS_IBSS_ROLE(psessionEntry)) ||
 		    (!psessionEntry))
 			return eMGMT_DROP_NO_DROP;

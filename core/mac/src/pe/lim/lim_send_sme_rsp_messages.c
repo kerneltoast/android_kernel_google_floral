@@ -806,7 +806,7 @@ lim_send_sme_disassoc_ntf(tpAniSirGlobal pMac,
 	tpPESession session = NULL;
 	uint16_t i, assoc_id;
 	tpDphHashNode sta_ds = NULL;
-	struct sir_sme_discon_done_ind *sir_sme_dis_ind;
+	QDF_STATUS status;
 
 	pe_debug("Disassoc Ntf with trigger : %d reasonCode: %d",
 		disassocTrigger, reasonCode);
@@ -894,36 +894,13 @@ lim_send_sme_disassoc_ntf(tpAniSirGlobal pMac,
 
 	case eLIM_PEER_ENTITY_DISASSOC:
 	case eLIM_LINK_MONITORING_DISASSOC:
-		sir_sme_dis_ind =
-			qdf_mem_malloc(sizeof(*sir_sme_dis_ind));
-		if (!sir_sme_dis_ind) {
-			pe_err("call to AllocateMemory failed for disconnect indication");
+		status = lim_prepare_disconnect_done_ind(pMac, &pMsg,
+						smesessionId,
+						reasonCode, &peerMacAddr[0]);
+		if (!QDF_IS_STATUS_SUCCESS(status)) {
+			pe_err("Failed to prepare message");
 			return;
 		}
-
-		pe_debug("send  eWNI_SME_DISCONNECT_DONE_IND with retCode: %d",
-				reasonCode);
-
-		sir_sme_dis_ind->message_type =
-			eWNI_SME_DISCONNECT_DONE_IND;
-		sir_sme_dis_ind->length =
-			sizeof(*sir_sme_dis_ind);
-		qdf_mem_copy(sir_sme_dis_ind->peer_mac, peerMacAddr,
-			     sizeof(tSirMacAddr));
-		sir_sme_dis_ind->session_id   = smesessionId;
-		sir_sme_dis_ind->reason_code  = reasonCode;
-		/*
-		 * Instead of sending deauth reason code as 505 which is
-		 * internal value(eSIR_SME_LOST_LINK_WITH_PEER_RESULT_CODE)
-		 * Send reason code as zero to Supplicant
-		 */
-		if (reasonCode == eSIR_SME_LOST_LINK_WITH_PEER_RESULT_CODE)
-			sir_sme_dis_ind->reason_code = 0;
-		else
-			sir_sme_dis_ind->reason_code = reasonCode;
-
-		pMsg = (uint32_t *)sir_sme_dis_ind;
-
 		break;
 
 	default:
@@ -1191,6 +1168,45 @@ lim_send_sme_mgmt_tx_completion(tpAniSirGlobal pMac,
 
 #endif /* FEATURE_WLAN_TDLS */
 
+QDF_STATUS lim_prepare_disconnect_done_ind(tpAniSirGlobal mac_ctx,
+					   uint32_t **msg,
+					   uint8_t session_id,
+					   tSirResultCodes reason_code,
+					   uint8_t *peer_mac_addr)
+{
+	struct sir_sme_discon_done_ind *sir_sme_dis_ind;
+
+	sir_sme_dis_ind = qdf_mem_malloc(sizeof(*sir_sme_dis_ind));
+	if (!sir_sme_dis_ind) {
+		pe_err("Failed to allocate memory");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	pe_debug("Prepare eWNI_SME_DISCONNECT_DONE_IND withretCode: %d",
+		 reason_code);
+
+	sir_sme_dis_ind->message_type = eWNI_SME_DISCONNECT_DONE_IND;
+	sir_sme_dis_ind->length = sizeof(*sir_sme_dis_ind);
+	sir_sme_dis_ind->session_id = session_id;
+	if (peer_mac_addr)
+		qdf_mem_copy(&sir_sme_dis_ind->peer_mac,
+			     &peer_mac_addr, ETH_ALEN);
+
+	/*
+	 * Instead of sending deauth reason code as 505 which is
+	 * internal value(eSIR_SME_LOST_LINK_WITH_PEER_RESULT_CODE)
+	 * Send reason code as zero to Supplicant
+	 */
+	if (reason_code == eSIR_SME_LOST_LINK_WITH_PEER_RESULT_CODE)
+		sir_sme_dis_ind->reason_code = 0;
+	else
+		sir_sme_dis_ind->reason_code = reason_code;
+
+	*msg = (uint32_t *)sir_sme_dis_ind;
+
+	return QDF_STATUS_SUCCESS;
+}
+
 /**
  * lim_send_sme_deauth_ntf()
  *
@@ -1229,8 +1245,8 @@ lim_send_sme_deauth_ntf(tpAniSirGlobal pMac, tSirMacAddr peerMacAddr,
 	tSirSmeDeauthInd *pSirSmeDeauthInd;
 	tpPESession psessionEntry;
 	uint8_t sessionId;
-	uint32_t *pMsg;
-	struct sir_sme_discon_done_ind *sir_sme_dis_ind;
+	uint32_t *pMsg = NULL;
+	QDF_STATUS status;
 
 	psessionEntry = pe_find_session_by_bssid(pMac, peerMacAddr, &sessionId);
 	switch (deauthTrigger) {
@@ -1266,38 +1282,14 @@ lim_send_sme_deauth_ntf(tpAniSirGlobal pMac, tSirMacAddr peerMacAddr,
 
 	case eLIM_PEER_ENTITY_DEAUTH:
 	case eLIM_LINK_MONITORING_DEAUTH:
-		sir_sme_dis_ind =
-			qdf_mem_malloc(sizeof(*sir_sme_dis_ind));
-		if (!sir_sme_dis_ind) {
-			pe_err("call to AllocateMemory failed for disconnect indication");
+		status = lim_prepare_disconnect_done_ind(pMac, &pMsg,
+						smesessionId, reasonCode,
+						&peerMacAddr[0]);
+		if (!QDF_IS_STATUS_SUCCESS(status)) {
+			pe_err("Failed to prepare message");
 			return;
 		}
-
-		pe_debug("send eWNI_SME_DISCONNECT_DONE_IND withretCode: %d",
-				reasonCode);
-
-		sir_sme_dis_ind->message_type =
-			eWNI_SME_DISCONNECT_DONE_IND;
-		sir_sme_dis_ind->length =
-			sizeof(*sir_sme_dis_ind);
-		sir_sme_dis_ind->session_id = smesessionId;
-		sir_sme_dis_ind->reason_code = reasonCode;
-		qdf_mem_copy(sir_sme_dis_ind->peer_mac, peerMacAddr,
-			 ETH_ALEN);
-		/*
-		 * Instead of sending deauth reason code as 505 which is
-		 * internal value(eSIR_SME_LOST_LINK_WITH_PEER_RESULT_CODE)
-		 * Send reason code as zero to Supplicant
-		 */
-		if (reasonCode == eSIR_SME_LOST_LINK_WITH_PEER_RESULT_CODE)
-			sir_sme_dis_ind->reason_code = 0;
-		else
-			sir_sme_dis_ind->reason_code = reasonCode;
-
-		pMsg = (uint32_t *)sir_sme_dis_ind;
-
 		break;
-
 	default:
 		/**
 		 * Deauthentication indication due to Deauthentication
@@ -2461,7 +2453,7 @@ lim_handle_bss_color_change_ie(tpAniSirGlobal mac_ctx,
 
 /** -----------------------------------------------------------------
    \brief lim_process_beacon_tx_success_ind() - This function is used
-   explicitely to handle successful beacon transmission indication
+   explicitly to handle successful beacon transmission indication
    from the FW. This is a generic event generated by the FW afer the
    first beacon is sent out after the beacon template update by the
    host

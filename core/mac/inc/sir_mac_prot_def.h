@@ -208,7 +208,7 @@
 #define SIR_MAC_DLP_RSP             1
 #define SIR_MAC_DLP_TEARDOWN        2
 
-/* block acknowledgement action frame types */
+/* block acknowledgment action frame types */
 #define SIR_MAC_ACTION_VENDOR_SPECIFIC 9
 #define SIR_MAC_ACTION_VENDOR_SPECIFIC_CATEGORY     0x7F
 #define SIR_MAC_ACTION_P2P_SUBTYPE_PRESENCE_RSP     2
@@ -684,7 +684,7 @@ typedef enum eSirMacStatusCodes {
 	/* element is unacceptable */
 	eSIR_MAC_SPRTD_CHANNELS_BAD_STATUS = 24,        /* Association request rejected because the information in the Supported Channels */
 	/* element is unacceptable */
-	eSIR_MAC_SHORT_SLOT_NOT_SUPORTED_STATUS = 25,   /* Association denied due to requesting station not supporting the Short Slot Time */
+	eSIR_MAC_SHORT_SLOT_NOT_SUPPORTED_STATUS = 25,   /* Association denied due to requesting station not supporting the Short Slot Time */
 	/* option */
 	eSIR_MAC_DSSS_OFDM_NOT_SUPPORTED_STATUS = 26,   /* Association denied due to requesting station not supporting the DSSS-OFDM option */
 	/* reserved                                     27-29 */
@@ -1015,9 +1015,10 @@ struct merged_mac_rate_set {
 	uint8_t rate[2 * SIR_MAC_RATESET_EID_MAX];
 };
 
+/* Reserve 1 byte for NULL character in the SSID name field to print in %s */
 typedef struct sSirMacSSid {
 	uint8_t length;
-	uint8_t ssId[SIR_MAC_MAX_SSID_LENGTH];
+	uint8_t ssId[SIR_MAC_MAX_SSID_LENGTH +1];
 } qdf_packed tSirMacSSid;
 
 typedef struct sSirMacWpaInfo {

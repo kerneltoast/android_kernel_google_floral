@@ -1455,6 +1455,13 @@ hdd_parse_set_roam_scan_channels_v1(struct hdd_adapter *adapter,
 		goto exit;
 	}
 
+	if (!sme_validate_channel_list(hdd_ctx->hHal,
+	    channel_list, num_chan)) {
+		hdd_err("List contains invalid channel(s)");
+		ret = -EINVAL;
+		goto exit;
+	}
+
 	status =
 		sme_change_roam_scan_channel_list(hdd_ctx->hHal,
 						  adapter->session_id,
@@ -1524,6 +1531,14 @@ hdd_parse_set_roam_scan_channels_v2(struct hdd_adapter *adapter,
 		}
 		channel_list[i] = channel;
 	}
+
+	if (!sme_validate_channel_list(hdd_ctx->hHal,
+	    channel_list, num_chan)) {
+		hdd_err("List contains invalid channel(s)");
+		ret = -EINVAL;
+		goto exit;
+	}
+
 	status =
 		sme_change_roam_scan_channel_list(hdd_ctx->hHal,
 						  adapter->session_id,
@@ -2866,7 +2881,7 @@ static int drv_cmd_p2p_dev_addr(struct hdd_adapter *adapter,
  * @command_len: Length of @command
  * @priv_data: Pointer to ioctl private data structure
  *
- * This is a trivial command hander function which simply forwards the
+ * This is a trivial command handler function which simply forwards the
  * command to the actual command processor within the P2P module.
  *
  * Return: 0 on success, non-zero on failure
@@ -2888,7 +2903,7 @@ static int drv_cmd_p2p_set_noa(struct hdd_adapter *adapter,
  * @command_len: Length of @command
  * @priv_data: Pointer to ioctl private data structure
  *
- * This is a trivial command hander function which simply forwards the
+ * This is a trivial command handler function which simply forwards the
  * command to the actual command processor within the P2P module.
  *
  * Return: 0 on success, non-zero on failure
@@ -5287,6 +5302,14 @@ static int drv_cmd_set_ccx_roam_scan_channels(struct hdd_adapter *adapter,
 		ret = -EINVAL;
 		goto exit;
 	}
+
+	if (!sme_validate_channel_list(hdd_ctx->hHal,
+	    ChannelList, numChannels)) {
+		hdd_err("List contains invalid channel(s)");
+		ret = -EINVAL;
+		goto exit;
+	}
+
 	status = sme_set_ese_roam_scan_channel_list(hdd_ctx->hHal,
 						    adapter->session_id,
 						    ChannelList,
@@ -5451,7 +5474,7 @@ static int drv_cmd_ccx_beacon_req(struct hdd_adapter *adapter,
 {
 	int ret;
 	uint8_t *value = command;
-	tCsrEseBeaconReq eseBcnReq;
+	tCsrEseBeaconReq eseBcnReq = {0};
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (QDF_STA_MODE != adapter->device_mode) {
@@ -5469,6 +5492,10 @@ static int drv_cmd_ccx_beacon_req(struct hdd_adapter *adapter,
 
 	if (!hdd_conn_is_connected(WLAN_HDD_GET_STATION_CTX_PTR(adapter))) {
 		hdd_debug("Not associated");
+
+		if (!eseBcnReq.numBcnReqIe)
+			return -EINVAL;
+
 		hdd_indicate_ese_bcn_report_no_results(adapter,
 			eseBcnReq.bcnReq[0].measurementToken,
 			0x02, /* BIT(1) set for measurement done */
@@ -5628,7 +5655,7 @@ static int drv_cmd_set_mc_rate(struct hdd_adapter *adapter,
 {
 	int ret = 0;
 	uint8_t *value = command;
-	int targetRate;
+	int targetRate = 0;
 
 	/* input value is in units of hundred kbps */
 
@@ -6146,7 +6173,7 @@ static int hdd_set_rx_filter(struct hdd_adapter *adapter, bool action,
 }
 
 /**
- * hdd_driver_rxfilter_comand_handler() - RXFILTER driver command handler
+ * hdd_driver_rxfilter_command_handler() - RXFILTER driver command handler
  * @command: Pointer to input string driver command
  * @adapter: Pointer to adapter
  * @action: Action to enable/disable filtering
@@ -6171,7 +6198,7 @@ static int hdd_set_rx_filter(struct hdd_adapter *adapter, bool action,
  *
  * Return: 0 for success, non-zero for failure
  */
-static int hdd_driver_rxfilter_comand_handler(uint8_t *command,
+static int hdd_driver_rxfilter_command_handler(uint8_t *command,
 						struct hdd_adapter *adapter,
 						bool action)
 {
@@ -6218,7 +6245,7 @@ static int drv_cmd_rx_filter_remove(struct hdd_adapter *adapter,
 				uint8_t command_len,
 				struct hdd_priv_data *priv_data)
 {
-	return hdd_driver_rxfilter_comand_handler(command, adapter, false);
+	return hdd_driver_rxfilter_command_handler(command, adapter, false);
 }
 
 /**
@@ -6235,7 +6262,7 @@ static int drv_cmd_rx_filter_add(struct hdd_adapter *adapter,
 				uint8_t command_len,
 				struct hdd_priv_data *priv_data)
 {
-	return hdd_driver_rxfilter_comand_handler(command, adapter, true);
+	return hdd_driver_rxfilter_command_handler(command, adapter, true);
 }
 
 /**
@@ -6375,47 +6402,16 @@ QDF_STATUS hdd_update_smps_antenna_mode(struct hdd_context *hdd_ctx, int mode)
 	return QDF_STATUS_SUCCESS;
 }
 
-/**
- * drv_cmd_set_antenna_mode() - SET ANTENNA MODE driver command
- * handler
- * @adapter: Pointer to network adapter
- * @hdd_ctx: Pointer to hdd context
- * @command: Pointer to input command
- * @command_len: Command length
- * @priv_data: Pointer to private data in command
- */
-static int drv_cmd_set_antenna_mode(struct hdd_adapter *adapter,
-				struct hdd_context *hdd_ctx,
-				uint8_t *command,
-				uint8_t command_len,
-				struct hdd_priv_data *priv_data)
+int hdd_set_antenna_mode(struct hdd_adapter *adapter,
+				  struct hdd_context *hdd_ctx, int mode)
 {
+
 	struct sir_antenna_mode_param params;
 	QDF_STATUS status;
 	int ret = 0;
-	int mode;
-	uint8_t *value = command;
-
-	if (((1 << QDF_STA_MODE) !=
-		    policy_mgr_get_concurrency_mode(hdd_ctx->hdd_psoc)) ||
-	    (policy_mgr_is_multiple_active_sta_sessions(hdd_ctx->hdd_psoc))) {
-		hdd_err("Operation invalid in non sta or concurrent mode");
-		ret = -EPERM;
-		goto exit;
-	}
-
-	mode = hdd_parse_setantennamode_command(value);
-	if (mode < 0) {
-		hdd_err("Invalid SETANTENNA command");
-		ret = mode;
-		goto exit;
-	}
-
-	hdd_debug("Processing antenna mode switch to: %d", mode);
 
 	if (hdd_ctx->current_antenna_mode == mode) {
 		hdd_err("System already in the requested mode");
-		ret = 0;
 		goto exit;
 	}
 
@@ -6429,7 +6425,6 @@ static int drv_cmd_set_antenna_mode(struct hdd_adapter *adapter,
 	if ((HDD_ANTENNA_MODE_1X1 == mode) &&
 	    hdd_is_supported_chain_mask_1x1(hdd_ctx)) {
 		hdd_err("System only supports 1x1 mode");
-		ret = 0;
 		goto exit;
 	}
 
@@ -6467,7 +6462,7 @@ static int drv_cmd_set_antenna_mode(struct hdd_adapter *adapter,
 
 	INIT_COMPLETION(hdd_ctx->set_antenna_mode_cmpl);
 	status = sme_soc_set_antenna_mode(hdd_ctx->hHal, &params);
-	if (QDF_STATUS_SUCCESS != status) {
+	if (QDF_IS_STATUS_ERROR(status)) {
 		hdd_err("set antenna mode failed status : %d", status);
 		ret = -EFAULT;
 		goto exit;
@@ -6477,8 +6472,8 @@ static int drv_cmd_set_antenna_mode(struct hdd_adapter *adapter,
 		&hdd_ctx->set_antenna_mode_cmpl,
 		msecs_to_jiffies(WLAN_WAIT_TIME_ANTENNA_MODE_REQ));
 	if (!ret) {
-		ret = -EFAULT;
 		hdd_err("send set antenna mode timed out");
+		ret = -EFAULT;
 		goto exit;
 	}
 
@@ -6491,8 +6486,36 @@ static int drv_cmd_set_antenna_mode(struct hdd_adapter *adapter,
 exit:
 	hdd_debug("Set antenna status: %d current mode: %d",
 		 ret, hdd_ctx->current_antenna_mode);
-	return ret;
 
+	return ret;
+}
+/**
+ * drv_cmd_set_antenna_mode() - SET ANTENNA MODE driver command
+ * handler
+ * @adapter: Pointer to network adapter
+ * @hdd_ctx: Pointer to hdd context
+ * @command: Pointer to input command
+ * @command_len: Command length
+ * @priv_data: Pointer to private data in command
+ */
+static int drv_cmd_set_antenna_mode(struct hdd_adapter *adapter,
+				struct hdd_context *hdd_ctx,
+				uint8_t *command,
+				uint8_t command_len,
+				struct hdd_priv_data *priv_data)
+{
+	int mode;
+	uint8_t *value = command;
+
+	mode = hdd_parse_setantennamode_command(value);
+	if (mode < 0) {
+		hdd_err("Invalid SETANTENNA command");
+		return mode;
+	}
+
+	hdd_debug("Processing antenna mode switch to: %d", mode);
+
+	return hdd_set_antenna_mode(adapter, hdd_ctx, mode);
 }
 
 /**
@@ -6739,8 +6762,6 @@ static const struct hdd_drv_cmd hdd_drv_cmds[] = {
 	{"COUNTRY",                   drv_cmd_country, true},
 	{"SETSUSPENDMODE",            drv_cmd_dummy, false},
 	{"SET_AP_WPS_P2P_IE",         drv_cmd_dummy, false},
-	{"BTCOEXSCAN",                drv_cmd_dummy, false},
-	{"RXFILTER",                  drv_cmd_dummy, false},
 	{"SETROAMTRIGGER",            drv_cmd_set_roam_trigger, true},
 	{"GETROAMTRIGGER",            drv_cmd_get_roam_trigger, false},
 	{"SETROAMSCANPERIOD",         drv_cmd_set_roam_scan_period, true},
@@ -6837,6 +6858,11 @@ static const struct hdd_drv_cmd hdd_drv_cmds[] = {
 	{"SETANTENNAMODE",            drv_cmd_set_antenna_mode, true},
 	{"GETANTENNAMODE",            drv_cmd_get_antenna_mode, false},
 	{"STOP",                      drv_cmd_dummy, false},
+	/* Deprecated commands */
+	{"RXFILTER-START",            drv_cmd_dummy, false},
+	{"RXFILTER-STOP",             drv_cmd_dummy, false},
+	{"BTCOEXSCAN-START",          drv_cmd_dummy, false},
+	{"BTCOEXSCAN-STOP",           drv_cmd_dummy, false},
 };
 
 /**

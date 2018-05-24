@@ -5436,7 +5436,7 @@ struct reg_table_entry g_registry_table[] = {
  * get_next_line() - find and locate the new line pointer
  * @str: pointer to string
  *
- * This function returns a pointer to the character after the occurence
+ * This function returns a pointer to the character after the occurrence
  * of a new line character. It also modifies the original string by replacing
  * the '\n' character with the null character.
  *
@@ -5787,7 +5787,7 @@ static QDF_STATUS hdd_apply_cfg_ini(struct hdd_context *hdd_ctx,
 				       pRegEntry->RegType)) {
 				rv = kstrtou32(value_str, 16, &value);
 				if (rv < 0) {
-					hdd_warn("Reg paramter %s invalid. Enforcing default", pRegEntry->RegName);
+					hdd_warn("Reg parameter %s invalid. Enforcing default", pRegEntry->RegName);
 					value = pRegEntry->VarDefault;
 				}
 			} else {
@@ -7417,7 +7417,7 @@ QDF_STATUS hdd_update_mac_config(struct hdd_context *hdd_ctx)
 	}
 
 	update_mac_from_string(hdd_ctx, &macTable[0], i);
-	hdd_debug("Populating remaining %d Mac addreses",
+	hdd_debug("Populating remaining %d Mac addresses",
 		   max_mac_addr - i);
 	hdd_populate_random_mac_addr(hdd_ctx, max_mac_addr - i);
 
@@ -7500,6 +7500,11 @@ static void hdd_override_all_ps(struct hdd_context *hdd_ctx)
  */
 static void hdd_set_rx_mode_value(struct hdd_context *hdd_ctx)
 {
+	/* RPS has higher priority than dynamic RPS when both bits are set */
+	if (hdd_ctx->config->rx_mode & CFG_ENABLE_RPS &&
+	    hdd_ctx->config->rx_mode & CFG_ENABLE_DYNAMIC_RPS)
+		hdd_ctx->config->rx_mode &= ~CFG_ENABLE_DYNAMIC_RPS;
+
 	if (hdd_ctx->config->rx_mode & CFG_ENABLE_RX_THREAD &&
 		 hdd_ctx->config->rx_mode & CFG_ENABLE_RPS) {
 		hdd_warn("rx_mode wrong configuration. Make it default");
@@ -7514,6 +7519,9 @@ static void hdd_set_rx_mode_value(struct hdd_context *hdd_ctx)
 
 	if (hdd_ctx->config->rx_mode & CFG_ENABLE_NAPI)
 		hdd_ctx->napi_enable = true;
+
+	if (hdd_ctx->config->rx_mode & CFG_ENABLE_DYNAMIC_RPS)
+		hdd_ctx->dynamic_rps = true;
 }
 
 /**

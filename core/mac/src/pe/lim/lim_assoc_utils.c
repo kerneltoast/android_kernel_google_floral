@@ -153,7 +153,7 @@ lim_compare_capabilities(tpAniSirGlobal pMac,
 		if (val) {
 			if (pAssocReq->capabilityInfo.shortSlotTime !=
 			    pLocalCapabs->shortSlotTime) {
-				pe_err("AP rejects association as station doesnt support shortslot time");
+				pe_err("AP rejects association as station doesn't support shortslot time");
 				return false;
 			}
 			return false;
@@ -3247,7 +3247,7 @@ lim_check_and_announce_join_success(tpAniSirGlobal mac_ctx,
 
 		/*
 		 * If MAX Noa exceeds 3 secs we will consider only 3 secs to
-		 * avoid arbitary values in noa duration field
+		 * avoid arbitrary values in noa duration field
 		 */
 		noa = noa > MAX_NOA_PERIOD_IN_MICROSECS ?
 				MAX_NOA_PERIOD_IN_MICROSECS : noa;
@@ -3583,7 +3583,7 @@ static void lim_update_vht_oper_assoc_resp(tpAniSirGlobal mac_ctx,
  * JOIN REQ parameters are saved in pMac->lim.gLimMlmJoinReq
  * ADD BSS parameters can be obtained from two sources:
  * 1) pMac->lim.gLimMlmJoinReq
- * 2) beaconStruct, passed as paramter
+ * 2) beaconStruct, passed as parameter
  * So, if a reqd parameter is found in bssDescriptions
  * then it is given preference over beaconStruct
  *
@@ -3606,6 +3606,7 @@ tSirRetStatus lim_sta_send_add_bss(tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
 	uint32_t retCode;
 	tpDphHashNode pStaDs = NULL;
 	uint8_t chanWidthSupp = 0;
+	bool is_vht_cap_in_vendor_ie = false;
 	uint32_t enableTxBF20MHz;
 	tDot11fIEVHTCaps *vht_caps = NULL;
 	tDot11fIEVHTOperation *vht_oper = NULL;
@@ -3757,7 +3758,7 @@ tSirRetStatus lim_sta_send_add_bss(tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
 			pAssocRsp->vendor_vht_ie.VHTCaps.present){
 		pAddBssParams->vhtCapable =
 			pAssocRsp->vendor_vht_ie.VHTCaps.present;
-		pe_debug("VHT Caps and Operation are present in vendor Specfic IE");
+		pe_debug("VHT Caps and Operation are present in vendor Specific IE");
 		vht_caps = &pAssocRsp->vendor_vht_ie.VHTCaps;
 		vht_oper = &pAssocRsp->vendor_vht_ie.VHTOperation;
 	} else {
@@ -3850,7 +3851,8 @@ tSirRetStatus lim_sta_send_add_bss(tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
 				vht_caps = &pAssocRsp->VHTCaps;
 			else if (pAssocRsp->vendor_vht_ie.VHTCaps.present) {
 				vht_caps = &pAssocRsp->vendor_vht_ie.VHTCaps;
-				pe_debug("VHT Caps are in vendor Specfic IE");
+				pe_debug("VHT Caps are in vendor Specific IE");
+				is_vht_cap_in_vendor_ie = true;
 			}
 
 			if ((vht_caps != NULL) && (vht_caps->suBeamFormerCap ||
@@ -3888,7 +3890,7 @@ tSirRetStatus lim_sta_send_add_bss(tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
 			else if (pAssocRsp->vendor_vht_ie.VHTCaps.present) {
 				vht_oper = &pAssocRsp->
 						vendor_vht_ie.VHTOperation;
-				pe_debug("VHT Op IE is in vendor Specfic IE");
+				pe_debug("VHT Op IE is in vendor Specific IE");
 			}
 			/*
 			 * in limExtractApCapability function intersection of FW
@@ -3931,17 +3933,17 @@ tSirRetStatus lim_sta_send_add_bss(tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
 		 * hardcode this values to 0.
 		 */
 		if (psessionEntry->htConfig.ht_sgi20) {
-				pAddBssParams->staContext.fShortGI20Mhz =
-					(uint8_t)pAssocRsp->HTCaps.shortGI20MHz;
-			} else {
-				pAddBssParams->staContext.fShortGI20Mhz = false;
-			}
+			pAddBssParams->staContext.fShortGI20Mhz =
+				(uint8_t)pAssocRsp->HTCaps.shortGI20MHz;
+		} else {
+			pAddBssParams->staContext.fShortGI20Mhz = false;
+		}
 
 		if (psessionEntry->htConfig.ht_sgi40) {
 			pAddBssParams->staContext.fShortGI40Mhz =
 				(uint8_t) pAssocRsp->HTCaps.shortGI40MHz;
 		} else {
-				pAddBssParams->staContext.fShortGI40Mhz = false;
+			pAddBssParams->staContext.fShortGI40Mhz = false;
 		}
 
 		if (!pAddBssParams->staContext.vhtCapable)
@@ -3970,14 +3972,19 @@ tSirRetStatus lim_sta_send_add_bss(tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
 				vht_caps = &pAssocRsp->VHTCaps;
 			else if (pAssocRsp->vendor_vht_ie.VHTCaps.present) {
 				vht_caps = &pAssocRsp->vendor_vht_ie.VHTCaps;
-				pe_debug("VHT Caps is in vendor Specfic IE");
+				pe_debug("VHT Caps is in vendor Specific IE");
 			}
 			if (vht_caps != NULL &&
-				(psessionEntry->txLdpcIniFeatureEnabled & 0x2))
-				pAddBssParams->staContext.vhtLdpcCapable =
-					(uint8_t) vht_caps->ldpcCodingCap;
-			else
+				(psessionEntry->txLdpcIniFeatureEnabled & 0x2)) {
+				if (!is_vht_cap_in_vendor_ie)
+					pAddBssParams->staContext.vhtLdpcCapable =
+					  (uint8_t) pAssocRsp->VHTCaps.ldpcCodingCap;
+				else
+					pAddBssParams->staContext.vhtLdpcCapable =
+					    (uint8_t) vht_caps->ldpcCodingCap;
+			} else {
 				pAddBssParams->staContext.vhtLdpcCapable = 0;
+			}
 		}
 
 		if (pBeaconStruct->HTInfo.present)
@@ -4307,7 +4314,7 @@ tSirRetStatus lim_sta_send_add_bss_pre_assoc(tpAniSirGlobal pMac, uint8_t update
 			vht_oper = &pBeaconStruct->VHTOperation;
 		else if (pBeaconStruct->vendor_vht_ie.VHTOperation.present) {
 			vht_oper = &pBeaconStruct->vendor_vht_ie.VHTOperation;
-			pe_debug("VHT Operation is present in vendor Specfic IE");
+			pe_debug("VHT Operation is present in vendor Specific IE");
 		}
 
 
@@ -4481,7 +4488,7 @@ tSirRetStatus lim_sta_send_add_bss_pre_assoc(tpAniSirGlobal pMac, uint8_t update
 			else if (pBeaconStruct->vendor_vht_ie.VHTCaps.present) {
 				vht_caps =
 					&pBeaconStruct->vendor_vht_ie.VHTCaps;
-				pe_debug("VHT Caps are in vendor Specfic IE");
+				pe_debug("VHT Caps are in vendor Specific IE");
 			}
 			if (vht_caps != NULL &&
 				(psessionEntry->txLdpcIniFeatureEnabled & 0x2))
@@ -4732,7 +4739,7 @@ tLimPreAuthNode *lim_acquire_free_pre_auth_node(tpAniSirGlobal pMac,
 
 /** -------------------------------------------------------------
    \fn lim_get_pre_auth_node_from_index
-   \brief Depending on the Index this retrives the pre auth node.
+   \brief Depending on the Index this retrieves the pre auth node.
    \param     tpAniSirGlobal    pMac
    \param     tpLimPreAuthTable pAuthTable
    \param     uint32_t authNodeIdx

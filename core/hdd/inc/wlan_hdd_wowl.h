@@ -74,13 +74,13 @@
  *
  * PBM (when enabled) can perform filtering on unicast data or
  * broadcast data or both. These configurations are part of factory
- * defaults (cfg.dat) and the deafult behavior is to perform filtering
+ * defaults (cfg.dat) and the default behavior is to perform filtering
  * on both unicast and data frames.
  *
  * MP filtering (when enabled) is performed ALWAYS on both unicast and
  * broadcast data frames.
  *
- * Mangement frames are not subjected to WoWL filtering and are
+ * Management frames are not subjected to WoWL filtering and are
  * discarded when WoWL is enabled.
  *
  * Whenever a patern match succeeds, RX path is restored and packets

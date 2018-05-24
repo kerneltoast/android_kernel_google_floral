@@ -106,6 +106,7 @@
 #include "wlan_hdd_spectralscan.h"
 #include "wlan_ipa_ucfg_api.h"
 #include <wlan_cfg80211_mc_cp_stats.h>
+#include <wlan_cp_stats_mc_ucfg_api.h>
 
 #define g_mode_rates_size (12)
 #define a_mode_rates_size (8)
@@ -689,7 +690,7 @@ static inline void hdd_add_channel_switch_support(uint32_t *flags)
 		QCA_WLAN_VENDOR_ATTR_TDLS_GET_CAPS_FEATURES_SUPPORTED
 
 /**
- * __wlan_hdd_cfg80211_get_tdls_capabilities() - Provide TDLS Capabilites.
+ * __wlan_hdd_cfg80211_get_tdls_capabilities() - Provide TDLS Capabilities.
  * @wiphy:    WIPHY structure pointer
  * @wdev:     Wireless device structure pointer
  * @data:     Pointer to the data received
@@ -764,7 +765,7 @@ fail:
 }
 
 /**
- * wlan_hdd_cfg80211_get_tdls_capabilities() - Provide TDLS Capabilites.
+ * wlan_hdd_cfg80211_get_tdls_capabilities() - Provide TDLS Capabilities.
  * @wiphy:    WIPHY structure pointer
  * @wdev:     Wireless device structure pointer
  * @data:     Pointer to the data received
@@ -1521,7 +1522,7 @@ static int is_driver_dfs_capable(struct wiphy *wiphy,
 int wlan_hdd_sap_cfg_dfs_override(struct hdd_adapter *adapter)
 {
 	struct hdd_adapter *con_sap_adapter;
-	tsap_Config_t *sap_config, *con_sap_config;
+	tsap_config_t *sap_config, *con_sap_config;
 	int con_ch;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 
@@ -1603,7 +1604,7 @@ int wlan_hdd_sap_cfg_dfs_override(struct hdd_adapter *adapter)
  * Return: 0 if success else error code
  */
 static int wlan_hdd_reset_force_acs_chan_range(struct hdd_context *hdd_ctx,
-						tsap_Config_t *sap_config)
+						tsap_config_t *sap_config)
 {
 	bool is_dfs_mode_enabled = false;
 	uint32_t i, num_channels = 0;
@@ -1719,7 +1720,7 @@ static int wlan_hdd_reset_force_acs_chan_range(struct hdd_context *hdd_ctx,
  * Return: 0 if success; -EINVAL if ACS channel list is NULL
  */
 static int wlan_hdd_set_acs_ch_range(
-	tsap_Config_t *sap_cfg, enum qca_wlan_vendor_acs_hw_mode hw_mode,
+	tsap_config_t *sap_cfg, enum qca_wlan_vendor_acs_hw_mode hw_mode,
 	bool ht_enabled, bool vht_enabled)
 {
 	int i;
@@ -1771,7 +1772,7 @@ static int wlan_hdd_set_acs_ch_range(
 static void wlan_hdd_cfg80211_start_pending_acs(struct work_struct *work);
 
 
-static void hdd_update_acs_channel_list(tsap_Config_t *sap_config,
+static void hdd_update_acs_channel_list(tsap_config_t *sap_config,
 					enum band_info band)
 {
 	int i, temp_count = 0;
@@ -1811,12 +1812,12 @@ int wlan_hdd_cfg80211_start_acs(struct hdd_adapter *adapter)
 {
 
 	struct hdd_context *hdd_ctx;
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 	tpWLAN_SAPEventCB acs_event_callback;
 	int status;
 
 	if (!adapter) {
-		hdd_err("adapater is NULL");
+		hdd_err("adapter is NULL");
 		return -EINVAL;
 	}
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
@@ -1909,7 +1910,7 @@ int wlan_hdd_cfg80211_start_acs(struct hdd_adapter *adapter)
  */
 static void hdd_update_vendor_pcl_list(struct hdd_context *hdd_ctx,
 		struct hdd_vendor_acs_chan_params *acs_chan_params,
-		tsap_Config_t *sap_config)
+		tsap_config_t *sap_config)
 {
 	int i, j;
 	/*
@@ -1952,7 +1953,7 @@ static int hdd_update_reg_chan_info(struct hdd_adapter *adapter,
 	struct ch_params ch_params = {0};
 	uint8_t bw_offset = 0, chan = 0;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	tsap_Config_t *sap_config = &adapter->session.ap.sap_config;
+	tsap_config_t *sap_config = &adapter->session.ap.sap_config;
 
 	/* memory allocation */
 	sap_config->channel_info = qdf_mem_malloc(
@@ -2050,7 +2051,7 @@ static int hdd_update_reg_chan_info(struct hdd_adapter *adapter,
  */
 static int32_t
 hdd_cfg80211_update_channel_info(struct sk_buff *skb,
-			   tsap_Config_t *sap_config, int idx)
+			   tsap_config_t *sap_config, int idx)
 {
 	struct nlattr *nla_attr, *channel;
 	struct hdd_channel_info *icv;
@@ -2157,7 +2158,7 @@ fail:
 }
 
 static void hdd_get_scan_band(struct hdd_context *hdd_ctx,
-			      tsap_Config_t *sap_config,
+			      tsap_config_t *sap_config,
 			      enum band_info *band)
 {
 	/* Get scan band */
@@ -2193,7 +2194,7 @@ int hdd_cfg80211_update_acs_config(struct hdd_adapter *adapter,
 				   uint8_t reason)
 {
 	struct sk_buff *skb;
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 	uint32_t channel_count = 0, status = -EINVAL;
 	uint8_t channel_list[QDF_MAX_NUM_CHAN] = {0};
 	uint32_t freq_list[QDF_MAX_NUM_CHAN] = {0};
@@ -2457,7 +2458,7 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 	struct net_device *ndev = wdev->netdev;
 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(ndev);
 	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 	struct sk_buff *temp_skbuff;
 	int ret, i;
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_ACS_MAX + 1];
@@ -2469,7 +2470,7 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 	/* ***Note*** Donot set SME config related to ACS operation here because
 	 * ACS operation is not synchronouse and ACS for Second AP may come when
 	 * ACS operation for first AP is going on. So only do_acs is split to
-	 * seperate start_acs routine. Also SME-PMAC struct that is used to
+	 * separate start_acs routine. Also SME-PMAC struct that is used to
 	 * pass paremeters from HDD to SAP is global. Thus All ACS related SME
 	 * config shall be set only from start_acs.
 	 */
@@ -2844,7 +2845,7 @@ static void wlan_hdd_cfg80211_start_pending_acs(struct work_struct *work)
 void wlan_hdd_cfg80211_acs_ch_select_evt(struct hdd_adapter *adapter)
 {
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	tsap_Config_t *sap_cfg = &(WLAN_HDD_GET_AP_CTX_PTR(adapter))->sap_config;
+	tsap_config_t *sap_cfg = &(WLAN_HDD_GET_AP_CTX_PTR(adapter))->sap_config;
 	struct sk_buff *vendor_event;
 	int ret_val;
 	struct hdd_adapter *con_sap_adapter;
@@ -2942,7 +2943,7 @@ void wlan_hdd_cfg80211_acs_ch_select_evt(struct hdd_adapter *adapter)
 	 * TODO: Delayed operation is used since SME-PMAC strut is global. Thus
 	 * when Primary AP ACS is complete and secondary AP ACS is started here
 	 * immediately, Primary AP start_bss may come inbetween ACS operation
-	 * and overwrite Sec AP ACS paramters. Thus Sec AP ACS is executed with
+	 * and overwrite Sec AP ACS parameters. Thus Sec AP ACS is executed with
 	 * delay. This path and below constraint will be removed on sessionizing
 	 * SAP acs parameters and decoupling SAP from PMAC (WIP).
 	 * As per design constraint user space control application must take
@@ -4490,6 +4491,32 @@ hdd_get_station_policy[STATION_MAX + 1] = {
 	[STATION_REMOTE] = {.type = NLA_BINARY, .len = QDF_MAC_ADDR_SIZE},
 };
 
+#ifdef QCA_SUPPORT_CP_STATS
+static int hdd_get_sta_congestion(struct hdd_adapter *adapter,
+				  uint32_t *congestion)
+{
+	QDF_STATUS status;
+	struct cca_stats cca_stats;
+
+	status = ucfg_mc_cp_stats_cca_stats_get(adapter->hdd_vdev, &cca_stats);
+	if (QDF_IS_STATUS_ERROR(status))
+		return -EINVAL;
+
+	*congestion = cca_stats.congestion;
+	return 0;
+}
+#else
+static int hdd_get_sta_congestion(struct hdd_adapter *adapter,
+				  uint32_t *congestion)
+{
+	struct hdd_station_ctx *hdd_sta_ctx;
+
+	hdd_sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	*congestion = hdd_sta_ctx->conn_info.cca;
+	return 0;
+}
+#endif
+
 /**
  * hdd_get_station_assoc_fail() - Handle get station assoc fail
  * @hdd_ctx: HDD context within host driver
@@ -4506,6 +4533,7 @@ static int hdd_get_station_assoc_fail(struct hdd_context *hdd_ctx,
 	struct sk_buff *skb = NULL;
 	uint32_t nl_buf_len;
 	struct hdd_station_ctx *hdd_sta_ctx;
+	uint32_t congestion;
 
 	nl_buf_len = NLMSG_HDRLEN;
 	nl_buf_len += sizeof(uint32_t);
@@ -4524,9 +4552,12 @@ static int hdd_get_station_assoc_fail(struct hdd_context *hdd_ctx,
 		goto fail;
 	}
 
-	hdd_info("congestion:%d", hdd_sta_ctx->conn_info.cca);
+	if (hdd_get_sta_congestion(adapter, &congestion))
+		congestion = 0;
+
+	hdd_info("congestion:%d", congestion);
 	if (nla_put_u32(skb, NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY,
-			hdd_sta_ctx->conn_info.cca)) {
+			congestion)) {
 		hdd_err("put fail");
 		goto fail;
 	}
@@ -6675,6 +6706,7 @@ __wlan_hdd_cfg80211_wifi_configuration_set(struct wiphy *wiphy,
 	uint16_t latency_level;
 
 	hdd_enter_dev(dev);
+	qdf_mem_zero(&request, sizeof(request));
 
 	if (QDF_GLOBAL_FTM_MODE == hdd_get_conparam()) {
 		hdd_err("Command not allowed in FTM mode");
@@ -6923,6 +6955,7 @@ __wlan_hdd_cfg80211_wifi_configuration_set(struct wiphy *wiphy,
 		request.rx_aggregation_size = nla_get_u8(
 			tb[QCA_WLAN_VENDOR_ATTR_CONFIG_RX_MPDU_AGGREGATION]);
 		request.vdev_id = adapter->session_id;
+		request.aggr_type = WMI_VDEV_CUSTOM_AGGR_TYPE_AMPDU;
 
 		if (request.tx_aggregation_size >=
 					CFG_TX_AGGREGATION_SIZE_MIN &&
@@ -7365,6 +7398,15 @@ __wlan_hdd_cfg80211_set_wifi_test_config(struct wiphy *wiphy,
 
 		ret_val = wma_cli_set_command(adapter->session_id,
 				WMI_VDEV_PARAM_BA_MODE, set_val, VDEV_CMD);
+		if (ret_val) {
+			hdd_err("Set BA operating mode failed");
+			goto send_err;
+		}
+		if (!cfg_val) {
+			ret_val = wma_cli_set_command(adapter->session_id,
+				WMI_VDEV_PARAM_AMSDU_AGGREGATION_SIZE_OPTIMIZATION,
+				0, VDEV_CMD);
+		}
 	}
 
 	if (tb[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_FRAGMENTATION]) {
@@ -9975,7 +10017,7 @@ int wlan_hdd_sap_get_valid_channellist(struct hdd_adapter *adapter,
 				       uint8_t *channel_list,
 				       enum band_info band)
 {
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	uint8_t tmp_chan_list[QDF_MAX_NUM_CHAN] = {0};
 	uint32_t chan_count;
@@ -10093,7 +10135,7 @@ static int wlan_hdd_validate_and_get_pre_cac_ch(struct hdd_context *hdd_ctx,
  * wlan_hdd_request_pre_cac() - Start pre CAC in the driver
  * @channel: Channel option provided by userspace
  *
- * Sets the driver to the required hardware mode and start an adapater for
+ * Sets the driver to the required hardware mode and start an adapter for
  * pre CAC which will mimic an AP.
  *
  * Return: Zero on success, non-zero value on error
@@ -11373,7 +11415,7 @@ static QDF_STATUS wlan_hdd_validate_acs_channel(struct hdd_adapter *adapter,
 }
 
 static void hdd_update_acs_sap_config(struct hdd_context *hdd_ctx,
-				     tsap_Config_t *sap_config,
+				     tsap_config_t *sap_config,
 				     struct hdd_vendor_chan_info *channel_list)
 {
 	sap_config->channel = channel_list->pri_ch;
@@ -11407,7 +11449,7 @@ static int hdd_update_acs_channel(struct hdd_adapter *adapter, uint8_t reason,
 				  uint8_t channel_cnt,
 				  struct hdd_vendor_chan_info *channel_list)
 {
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 	struct hdd_ap_ctx *hdd_ap_ctx;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
@@ -13877,7 +13919,7 @@ static int wlan_hdd_fill_btm_resp(struct sk_buff *reply_skb,
  * @data : Pointer to the data received
  * @data_len : Length of the data received
  *
- * This fuction is used to fetch transition status for candidate bss. The
+ * This function is used to fetch transition status for candidate bss. The
  * transition status is either accept or reason for reject.
  *
  * Return : 0 on success and errno on failure
@@ -14046,7 +14088,7 @@ static int __wlan_hdd_cfg80211_fetch_bss_transition_status(struct wiphy *wiphy,
  * @data : Pointer to the data received
  * @data_len : Length of the data received
  *
- * This fuction is used to fetch transition status for candidate bss. The
+ * This function is used to fetch transition status for candidate bss. The
  * transition status is either accept or reason for reject.
  *
  * Return : 0 on success and errno on failure
@@ -15680,6 +15722,8 @@ int wlan_hdd_cfg80211_register_frames(struct hdd_adapter *adapter)
 		goto dereg_wnm_bss_action_frm;
 	}
 
+	return 0;
+
 dereg_wnm_bss_action_frm:
 	sme_deregister_mgmt_frame(hHal, SME_SESSION_ID_ANY, type,
 			(uint8_t *) WNM_BSS_ACTION_FRAME,
@@ -16694,7 +16738,7 @@ static int __wlan_hdd_cfg80211_add_key(struct wiphy *wiphy,
 
 		/* in case of IBSS as there was no information
 		 * available about WEP keys during IBSS join, group
-		 * key intialized with NULL key, so re-initialize
+		 * key initialized with NULL key, so re-initialize
 		 * group key with correct value
 		 */
 		if ((eCSR_BSS_TYPE_START_IBSS == roam_profile->BSSType) &&
@@ -17033,7 +17077,7 @@ static int __wlan_hdd_cfg80211_set_default_key(struct wiphy *wiphy,
 				 * encryption. In this canse the key
 				 * length is 5 but the encryption type
 				 * is 104 hence checking the key
-				 * lenght(5) and encryption type(104)
+				 * length(5) and encryption type(104)
 				 * and switching encryption type to 40
 				 */
 				roam_profile->EncryptionType.
@@ -17847,7 +17891,7 @@ static int wlan_hdd_cfg80211_connect_start(struct hdd_adapter *adapter,
 			qdf_mem_copy((void *)(roam_profile->BSSIDs.bssid),
 				     bssid, QDF_MAC_ADDR_SIZE);
 			/*
-			 * Save BSSID in seperate variable as
+			 * Save BSSID in separate variable as
 			 * roam_profile's BSSID is getting zeroed out in the
 			 * association process. In case of join failure
 			 * we should send valid BSSID to supplicant
@@ -19267,20 +19311,18 @@ disconnected:
  * wlan_hdd_reassoc_bssid_hint() - Start reassociation if bssid is present
  * @adapter: Pointer to the HDD adapter
  * @req: Pointer to the structure cfg_connect_params receieved from user space
- * @status: out variable for status of reassoc request
  *
  * This function will start reassociation if prev_bssid is set and bssid/
  * bssid_hint, channel/channel_hint parameters are present in connect request.
  *
- * Return: true if connect was for ReAssociation, false otherwise
+ * Return: 0 if connect was for ReAssociation, non-zero error code otherwise
  */
 #if defined(CFG80211_CONNECT_PREV_BSSID) || \
 	(LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
-static bool wlan_hdd_reassoc_bssid_hint(struct hdd_adapter *adapter,
-					struct cfg80211_connect_params *req,
-					int *status)
+static int wlan_hdd_reassoc_bssid_hint(struct hdd_adapter *adapter,
+					struct cfg80211_connect_params *req)
 {
-	bool reassoc = false;
+	int status = -EINVAL;
 	const uint8_t *bssid = NULL;
 	uint16_t channel = 0;
 	struct hdd_station_ctx *sta_ctx;
@@ -19296,7 +19338,6 @@ static bool wlan_hdd_reassoc_bssid_hint(struct hdd_adapter *adapter,
 		channel = req->channel_hint->hw_value;
 
 	if (bssid && channel && req->prev_bssid) {
-		reassoc = true;
 		hdd_debug("REASSOC Attempt on channel %d to " MAC_ADDRESS_STR,
 			  channel, MAC_ADDR_ARRAY(bssid));
 		/*
@@ -19309,18 +19350,17 @@ static bool wlan_hdd_reassoc_bssid_hint(struct hdd_adapter *adapter,
 		qdf_mem_copy(sta_ctx->requested_bssid.bytes, bssid,
 			     QDF_MAC_ADDR_SIZE);
 
-		*status = hdd_reassoc(adapter, bssid, channel,
+		status = hdd_reassoc(adapter, bssid, channel,
 				      CONNECT_CMD_USERSPACE);
-		hdd_debug("hdd_reassoc: status: %d", *status);
+		hdd_debug("hdd_reassoc: status: %d", status);
 	}
-	return reassoc;
+	return status;
 }
 #else
-static bool wlan_hdd_reassoc_bssid_hint(struct hdd_adapter *adapter,
-					struct cfg80211_connect_params *req,
-					int *status)
+static int wlan_hdd_reassoc_bssid_hint(struct hdd_adapter *adapter,
+					struct cfg80211_connect_params *req)
 {
-	return false;
+	return -ENOTSUPP;
 }
 #endif
 
@@ -19446,7 +19486,11 @@ static int __wlan_hdd_cfg80211_connect(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (true == wlan_hdd_reassoc_bssid_hint(adapter, req, &status))
+	/*
+	 * Check if this is reassoc to same bssid, if reassoc is success, return
+	 */
+	status = wlan_hdd_reassoc_bssid_hint(adapter, req);
+	if (!status)
 		return status;
 
 	/* Try disconnecting if already in connected state */
@@ -19731,6 +19775,28 @@ static const char *hdd_ieee80211_reason_code_to_str(uint16_t reason)
 }
 
 /**
+ * hdd_print_netdev_txq_status() - print netdev tx queue status
+ * @dev: Pointer to network device
+ *
+ * This function is used to print netdev tx queue status
+ *
+ * Return: none
+ */
+static void hdd_print_netdev_txq_status(struct net_device *dev)
+{
+	unsigned int i;
+
+	if (!dev)
+		return;
+
+	for (i = 0; i < dev->num_tx_queues; i++) {
+		struct netdev_queue *txq = netdev_get_tx_queue(dev, i);
+
+		hdd_info("netdev tx queue[%u] state: 0x%lx", i, txq->state);
+	}
+}
+
+/**
  * __wlan_hdd_cfg80211_disconnect() - cfg80211 disconnect api
  * @wiphy: Pointer to wiphy
  * @dev: Pointer to network device
@@ -19764,6 +19830,7 @@ static int __wlan_hdd_cfg80211_disconnect(struct wiphy *wiphy,
 	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
 			 TRACE_CODE_HDD_CFG80211_DISCONNECT,
 			 adapter->session_id, reason));
+	hdd_print_netdev_txq_status(dev);
 	hdd_debug("Device_mode %s(%d) reason code(%d)",
 		hdd_device_mode_to_string(adapter->device_mode),
 		adapter->device_mode, reason);
@@ -19954,7 +20021,7 @@ static int wlan_hdd_cfg80211_set_privacy_ibss(struct hdd_adapter *adapter,
 
 	if (params->privacy) {
 		/* Security enabled IBSS, At this time there is no information
-		 * available about the security paramters, so initialise the
+		 * available about the security parameters, so initialise the
 		 * encryption type to eCSR_ENCRYPT_TYPE_WEP40_STATICKEY.
 		 * The correct security parameters will be updated later in
 		 * wlan_hdd_cfg80211_add_key Hal expects encryption type to be
@@ -20826,8 +20893,7 @@ static void hdd_fill_pmksa_info(tPmkidCacheInfo *pmk_cache,
 		qdf_mem_copy(pmk_cache->BSSID.bytes,
 			     pmksa->bssid, QDF_MAC_ADDR_SIZE);
 	} else {
-		qdf_mem_copy(pmk_cache->ssid, pmksa->ssid,
-			     SIR_MAC_MAX_SSID_LENGTH);
+		qdf_mem_copy(pmk_cache->ssid, pmksa->ssid, pmksa->ssid_len);
 		qdf_mem_copy(pmk_cache->cache_id, pmksa->cache_id,
 			     CACHE_ID_LEN);
 		pmk_cache->ssid_len = pmksa->ssid_len;
@@ -21403,7 +21469,7 @@ static int __wlan_hdd_cfg80211_set_mac_acl(struct wiphy *wiphy,
 	int i;
 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
 	struct hdd_hostapd_state *hostapd_state;
-	tsap_Config_t *pConfig;
+	tsap_config_t *pConfig;
 	struct hdd_context *hdd_ctx;
 	int status;
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
@@ -21917,7 +21983,7 @@ int wlan_hdd_change_hw_mode_for_given_chnl(struct hdd_adapter *adapter,
 	switch (status) {
 	case QDF_STATUS_E_FAILURE:
 		/*
-		 * QDF_STATUS_E_FAILURE indicates that some error has occured
+		 * QDF_STATUS_E_FAILURE indicates that some error has occurred
 		 * while changing the hw mode
 		 */
 		hdd_err("ERROR: connections update failed!!");

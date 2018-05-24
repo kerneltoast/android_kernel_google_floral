@@ -44,7 +44,7 @@
 
 #include <cds_utils.h>
 
-/* IPA Micro controler TX data packet HTT Header Preset
+/* IPA Micro controller TX data packet HTT Header Preset
  * 31 | 30  29 | 28 | 27 | 26  22  | 21   16 | 15  13   | 12  8      | 7 0
  ***----------------------------------------------------------------------------
  * R  | CS  OL | R  | PP | ext TID | vdev ID | pkt type | pkt subtyp | msg type
@@ -473,7 +473,7 @@ int htt_tx_credit_update(struct htt_pdev_t *pdev)
 /**
  * htt_tx_get_paddr() - get physical address for htt desc
  *
- * Get HTT descriptor physical address from virtaul address
+ * Get HTT descriptor physical address from virtual address
  * Find page first and find offset
  * Not required for HL systems
  *
@@ -838,7 +838,7 @@ htt_tx_resume_handler(void *context) { }
 qdf_nbuf_t
 htt_tx_send_batch(htt_pdev_handle pdev, qdf_nbuf_t head_msdu, int num_msdus)
 {
-	qdf_print("*** %s curently only applies for HL systems\n", __func__);
+	qdf_print("*** %s currently only applies for HL systems\n", __func__);
 	qdf_assert(0);
 	return head_msdu;
 
@@ -1719,7 +1719,7 @@ htt_tx_desc_init(htt_pdev_handle pdev,
 		(struct htt_host_tx_desc_t *)
 		(((char *)htt_tx_desc) - HTT_TX_DESC_VADDR_OFFSET);
 	bool desc_ext_required = (type != EXT_HEADER_NOT_PRESENT);
-	uint16_t channel_freq;
+	int channel_freq;
 	void *qdf_ctx = cds_get_context(QDF_MODULE_ID_QDF_DEVICE);
 	QDF_STATUS status;
 
@@ -1816,7 +1816,7 @@ htt_tx_desc_init(htt_pdev_handle pdev,
 	 */
 	local_word3 = HTT_INVALID_PEER;
 	channel_freq = htt_get_channel_freq(type, ext_header_data);
-	if (channel_freq != HTT_INVALID_CHANNEL)
+	if (channel_freq != HTT_INVALID_CHANNEL && channel_freq > 0)
 		HTT_TX_DESC_CHAN_FREQ_SET(local_word3, channel_freq);
 #if HTT_PADDR64
 	*word4 = local_word3;

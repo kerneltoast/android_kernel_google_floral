@@ -157,7 +157,7 @@ void lim_update_assoc_sta_datas(tpAniSirGlobal mac_ctx,
 	sta_ds->shortPreambleEnabled =
 		(uint8_t) assoc_rsp->capabilityInfo.shortPreamble;
 
-	/* Update HT Capabilites only when the self mode supports HT */
+	/* Update HT Capabilities only when the self mode supports HT */
 	if (IS_DOT11_MODE_HT(session_entry->dot11mode))
 		lim_update_stads_htcap(mac_ctx, sta_ds, assoc_rsp,
 				       session_entry);
@@ -544,7 +544,7 @@ lim_process_assoc_rsp_frame(tpAniSirGlobal mac_ctx,
 		 * Should not have received Re/Association
 		 * Response frame on AP. Log error
 		 */
-		pe_err("Should not recieved Re/Assoc Response in role: %d",
+		pe_err("Should not received Re/Assoc Response in role: %d",
 			GET_LIM_SYSTEM_ROLE(session_entry));
 		qdf_mem_free(beacon);
 		return;
@@ -565,7 +565,7 @@ lim_process_assoc_rsp_frame(tpAniSirGlobal mac_ctx,
 		eLIM_MLM_WT_FT_REASSOC_RSP_STATE)
 		))) {
 		/* Received unexpected Re/Association Response frame */
-		pe_debug("Recieved Re/Assoc rsp in unexpected state: %d on session: %d",
+		pe_debug("Received Re/Assoc rsp in unexpected state: %d on session: %d",
 			session_entry->limMlmState, session_entry->peSessionId);
 		if (!hdr->fc.retry) {
 			if (!(mac_ctx->lim.retry_packet_cnt & 0xf)) {

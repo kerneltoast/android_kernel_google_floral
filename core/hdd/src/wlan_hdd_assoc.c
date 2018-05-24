@@ -269,7 +269,7 @@ static inline bool
 hdd_conn_get_connection_state(struct hdd_station_ctx *sta_ctx,
 			      eConnectionState *pConnState)
 {
-	bool fConnected = false;
+	bool connected = false;
 	eConnectionState connState;
 
 	/* get the connection state. */
@@ -278,13 +278,13 @@ hdd_conn_get_connection_state(struct hdd_station_ctx *sta_ctx,
 	if (eConnectionState_Associated == connState ||
 	    eConnectionState_IbssConnected == connState ||
 	    eConnectionState_IbssDisconnected == connState) {
-		fConnected = true;
+		connected = true;
 	}
 
 	if (pConnState)
 		*pConnState = connState;
 
-	return fConnected;
+	return connected;
 }
 
 /**
@@ -343,14 +343,14 @@ static inline bool
 hdd_conn_get_connected_cipher_algo(struct hdd_station_ctx *sta_ctx,
 				   eCsrEncryptionType *pConnectedCipherAlgo)
 {
-	bool fConnected = false;
+	bool connected = false;
 
-	fConnected = hdd_conn_get_connection_state(sta_ctx, NULL);
+	connected = hdd_conn_get_connection_state(sta_ctx, NULL);
 
 	if (pConnectedCipherAlgo)
 		*pConnectedCipherAlgo = sta_ctx->conn_info.ucEncryptionType;
 
-	return fConnected;
+	return connected;
 }
 
 struct hdd_adapter *hdd_get_sta_connection_in_progress(
@@ -1327,7 +1327,7 @@ static void hdd_send_association_event(struct net_device *dev,
 	if (eConnectionState_Associated == sta_ctx->conn_info.connState) {
 		tSirSmeChanInfo chan_info = {0};
 
-		if (!pCsrRoamInfo) {
+		if (!pCsrRoamInfo || !pCsrRoamInfo->pBssDesc) {
 			hdd_warn("STA in associated state but pCsrRoamInfo is null");
 			return;
 		}
@@ -1776,12 +1776,12 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 	if ((eConnectionState_Disconnecting ==
 	    sta_ctx->conn_info.connState) ||
 	    (eConnectionState_NotConnected ==
+	    sta_ctx->conn_info.connState) ||
+	    (eConnectionState_Connecting ==
 	    sta_ctx->conn_info.connState)) {
 		hdd_debug("HDD has initiated a disconnect, no need to send disconnect indication to kernel");
 		sendDisconInd = false;
-	}
-
-	if (sta_ctx->conn_info.connState != eConnectionState_Disconnecting) {
+	} else {
 		INIT_COMPLETION(adapter->disconnect_comp_var);
 		hdd_conn_set_connection_state(adapter,
 					      eConnectionState_Disconnecting);
@@ -1894,7 +1894,14 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 	}
 	/* Clear saved connection information in HDD */
 	hdd_conn_remove_connect_info(sta_ctx);
-	hdd_conn_set_connection_state(adapter, eConnectionState_NotConnected);
+	/*
+	* eConnectionState_Connecting state mean that connection is in
+	* progress so no need to set state to eConnectionState_NotConnected
+	*/
+	if ((eConnectionState_Connecting != sta_ctx->conn_info.connState)) {
+		 hdd_conn_set_connection_state(adapter,
+					       eConnectionState_NotConnected);
+	}
 	pmo_ucfg_flush_gtk_offload_req(adapter->hdd_vdev);
 
 	if ((QDF_STA_MODE == adapter->device_mode) ||
@@ -2311,7 +2318,8 @@ static void hdd_send_re_assoc_event(struct net_device *dev,
 		hdd_err("Unable to allocate Assoc Req IE");
 		goto done;
 	}
-	if (pCsrRoamInfo == NULL) {
+
+	if (!pCsrRoamInfo || !pCsrRoamInfo->pBssDesc) {
 		hdd_err("Invalid CSR roam info");
 		goto done;
 	}
@@ -2640,7 +2648,7 @@ hdd_roam_set_key_complete_handler(struct hdd_adapter *adapter,
 				  eCsrRoamResult roamResult)
 {
 	eCsrEncryptionType connectedCipherAlgo;
-	bool fConnected = false;
+	bool connected = false;
 	struct hdd_station_ctx *sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 
 	hdd_enter();
@@ -2659,9 +2667,9 @@ hdd_roam_set_key_complete_handler(struct hdd_adapter *adapter,
 		  MAC_ADDRESS_STR, roamStatus, roamResult,
 		  MAC_ADDR_ARRAY(roam_info->peerMac.bytes));
 
-	fConnected = hdd_conn_get_connected_cipher_algo(sta_ctx,
+	connected = hdd_conn_get_connected_cipher_algo(sta_ctx,
 						   &connectedCipherAlgo);
-	if (fConnected) {
+	if (connected) {
 		hdd_change_peer_state_after_set_key(adapter, roam_info,
 						    roamResult);
 	}
@@ -5370,7 +5378,7 @@ int hdd_set_genie_to_csr(struct hdd_adapter *adapter,
 
 		hdd_debug("MFPEnabled %d", roam_profile->MFPEnabled);
 		/*
-		 * Reset MFPEnabled if testmode RSNE passed doesnt have MFPR
+		 * Reset MFPEnabled if testmode RSNE passed doesn't have MFPR
 		 * or MFPC bit set
 		 */
 		if (roam_profile->MFPEnabled &&

@@ -991,7 +991,7 @@ static netdev_tx_t __hdd_hard_start_xmit(struct sk_buff *skb,
 		bool isDefaultAc = false;
 		/*
 		 * ADDTS request for this AC is sent, for now
-		 * send this packet through next avaiable lower
+		 * send this packet through next available lower
 		 * Access category until ADDTS negotiation completes.
 		 */
 		while (!likely
@@ -1091,10 +1091,15 @@ drop_pkt_and_release_skb:
 drop_pkt:
 
 	if (skb) {
+		/* track connectivity stats */
+		if (adapter->pkt_type_bitmap)
+			hdd_tx_rx_collect_connectivity_stats_info(skb, adapter,
+						PKT_TYPE_TX_DROPPED, &pkt_type);
 		qdf_dp_trace_data_pkt(skb, QDF_TRACE_DEFAULT_PDEV_ID,
 				      QDF_DP_TRACE_DROP_PACKET_RECORD, 0,
 				      QDF_TX);
 		kfree_skb(skb);
+		skb = NULL;
 	}
 
 drop_pkt_accounting:
@@ -1106,11 +1111,6 @@ drop_pkt_accounting:
 		QDF_TRACE(QDF_MODULE_ID_HDD_DATA, QDF_TRACE_LEVEL_INFO_HIGH,
 			"%s : ARP packet dropped", __func__);
 	}
-
-	/* track connectivity stats */
-	if (adapter->pkt_type_bitmap)
-		hdd_tx_rx_collect_connectivity_stats_info(skb, adapter,
-						PKT_TYPE_TX_DROPPED, &pkt_type);
 
 	return NETDEV_TX_OK;
 }
@@ -1228,7 +1228,7 @@ static void __hdd_tx_timeout(struct net_device *dev)
 		 */
 		adapter->hdd_stats.tx_rx_stats.cont_txtimeout_cnt = 0;
 		QDF_TRACE(QDF_MODULE_ID_HDD_DATA, QDF_TRACE_LEVEL_DEBUG,
-			  "Reset continous tx timeout stat");
+			  "Reset continuous tx timeout stat");
 	}
 
 	adapter->hdd_stats.tx_rx_stats.jiffies_last_txtimeout = jiffies;
@@ -1620,6 +1620,8 @@ static void hdd_register_rx_ol(void)
 	if  (!hdd_ctx)
 		hdd_err("HDD context is NULL");
 
+	hdd_ctx->en_tcp_delack_no_lro = 0;
+
 	if (hdd_ctx->ol_enable == CFG_LRO_ENABLED) {
 		cdp_register_rx_offld_flush_cb(soc, hdd_qdf_lro_flush);
 		hdd_ctx->receive_offload_cb = hdd_lro_rx;
@@ -1633,6 +1635,8 @@ static void hdd_register_rx_ol(void)
 						       hdd_hif_napi_gro_flush);
 		hdd_ctx->receive_offload_cb = hdd_gro_rx;
 		hdd_debug("GRO is enabled");
+	} else if (HDD_MSM_CFG(hdd_ctx->config->enable_tcp_delack)) {
+		hdd_ctx->en_tcp_delack_no_lro = 1;
 	}
 }
 
@@ -1685,7 +1689,7 @@ void hdd_disable_rx_ol_in_concurrency(bool disable)
 	}
 
 	if (disable) {
-		if (hdd_ctx->en_tcp_delack_no_lro) {
+		if (HDD_MSM_CFG(hdd_ctx->config->enable_tcp_delack)) {
 			struct wlan_rx_tp_data rx_tp_data;
 
 			hdd_info("Enable TCP delack as LRO disabled in concurrency");
@@ -1699,7 +1703,7 @@ void hdd_disable_rx_ol_in_concurrency(bool disable)
 		}
 		qdf_atomic_set(&hdd_ctx->disable_lro_in_concurrency, 1);
 	} else {
-		if (hdd_ctx->en_tcp_delack_no_lro) {
+		if (HDD_MSM_CFG(hdd_ctx->config->enable_tcp_delack)) {
 			hdd_info("Disable TCP delack as LRO is enabled");
 			hdd_ctx->en_tcp_delack_no_lro = 0;
 			hdd_reset_tcp_delack(hdd_ctx);
@@ -2460,7 +2464,6 @@ err:
  */
 void hdd_send_rps_disable_ind(struct hdd_adapter *adapter)
 {
-	uint8_t cpu_map_list_len = 0;
 	struct hdd_context *hdd_ctxt = NULL;
 	struct wlan_rps_data rps_data;
 	struct cds_config_info *cds_cfg;
@@ -2483,10 +2486,6 @@ void hdd_send_rps_disable_ind(struct hdd_adapter *adapter)
 	hdd_info("Set cpu_map_list 0");
 
 	qdf_mem_zero(&rps_data.cpu_map_list, sizeof(rps_data.cpu_map_list));
-	cpu_map_list_len = 0;
-	rps_data.num_queues =
-		(cpu_map_list_len < rps_data.num_queues) ?
-				cpu_map_list_len : rps_data.num_queues;
 
 	strlcpy(rps_data.ifname, adapter->dev->name, sizeof(rps_data.ifname));
 	wlan_hdd_send_svc_nlink_msg(hdd_ctxt->radio_index,

@@ -457,6 +457,11 @@ static void ol_rx_reorder_detect_hole(struct ol_txrx_peer_t *peer,
 {
 	uint32_t win_sz_mask, next_rel_idx, hole_size;
 
+	if (tid >= OL_TXRX_NUM_EXT_TIDS) {
+		ol_txrx_err("%s:  invalid tid, %u\n", __FUNCTION__, tid);
+		return;
+	}
+
 	if (peer->tids_next_rel_idx[tid] == INVALID_REORDER_INDEX)
 		return;
 
@@ -633,7 +638,7 @@ ol_rx_flush_handler(ol_txrx_pdev_handle pdev,
 			ol_rx_reorder_flush_frag(htt_pdev, peer, tid,
 						 idx_start);
 			/*
-			 * Assuming flush message sent seperately for frags
+			 * Assuming flush message sent separately for frags
 			 * and for normal frames
 			 */
 			OL_RX_REORDER_TIMEOUT_MUTEX_UNLOCK(pdev);

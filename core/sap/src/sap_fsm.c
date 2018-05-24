@@ -592,7 +592,16 @@ void sap_dfs_set_current_channel(void *ctx)
 			ic_flagext, ic_ieee, vht_seg0, vht_seg1);
 
 	if (wlan_reg_is_dfs_ch(pdev, sap_ctx->channel)) {
-		tgt_dfs_get_radars(pdev);
+		if (policy_mgr_concurrent_beaconing_sessions_running(
+		    mac_ctx->psoc)) {
+			uint16_t con_ch;
+
+			con_ch = sme_get_concurrent_operation_channel(hal);
+			if (!con_ch || !wlan_reg_is_dfs_ch(pdev, con_ch))
+				tgt_dfs_get_radars(pdev);
+		} else {
+			tgt_dfs_get_radars(pdev);
+		}
 		tgt_dfs_set_phyerr_filter_offload(pdev);
 		if (sap_ctx->csr_roamProfile.disableDFSChSwitch)
 			tgt_dfs_control(pdev, DFS_SET_USENOL, &use_nol,
@@ -834,6 +843,7 @@ QDF_STATUS sap_goto_channel_sel(struct sap_context *sap_context,
 	struct scan_start_request *req;
 	struct wlan_objmgr_vdev *vdev;
 	uint8_t i;
+	uint8_t pdev_id;
 
 #ifdef SOFTAP_CHANNEL_RANGE
 	uint8_t *channel_list = NULL;
@@ -979,8 +989,10 @@ QDF_STATUS sap_goto_channel_sel(struct sap_context *sap_context,
 			  FL("Failed to allocate memory"));
 			return QDF_STATUS_E_NOMEM;
 		}
-		vdev = wlan_objmgr_get_vdev_by_macaddr_from_psoc(
-						mac_ctx->psoc,
+
+		pdev_id = wlan_objmgr_pdev_get_pdev_id(mac_ctx->pdev);
+		vdev = wlan_objmgr_get_vdev_by_macaddr_from_psoc(mac_ctx->psoc,
+						pdev_id,
 						sap_context->self_mac_addr,
 						WLAN_LEGACY_SME_ID);
 		if (!vdev) {
@@ -1197,11 +1209,18 @@ QDF_STATUS sap_set_session_param(tHalHandle hal, struct sap_context *sapctx,
 				uint32_t session_id)
 {
 	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
+	int i;
 
 	sapctx->sessionId = session_id;
 	sapctx->is_pre_cac_on = false;
 	sapctx->pre_cac_complete = false;
 	sapctx->chan_before_pre_cac = 0;
+
+	/* When SSR, SAP will restart, clear the old context,sessionId */
+	for (i = 0; i < SAP_MAX_NUM_SESSION; i++) {
+		if (mac_ctx->sap.sapCtxList[i].pSapContext == sapctx)
+			mac_ctx->sap.sapCtxList[i].pSapContext = NULL;
+	}
 	mac_ctx->sap.sapCtxList[sapctx->sessionId].sessionID =
 				sapctx->sessionId;
 	mac_ctx->sap.sapCtxList[sapctx->sessionId].pSapContext = sapctx;
@@ -2710,7 +2729,7 @@ static QDF_STATUS sap_fsm_state_disconnecting(struct sap_context *sap_ctx,
 			qdf_status = sap_goto_disconnecting(sap_ctx);
 	} else if ((msg == eSAP_HDD_STOP_INFRA_BSS) &&
 			(sap_ctx->is_chan_change_inprogress)) {
-		/* stop bss is recieved while processing channel change */
+		/* stop bss is received while processing channel change */
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO,
 			  FL("in state %s, event msg %d result %d"),
 			  "eSAP_DISCONNECTING ", msg, sap_event->u2);
@@ -2798,7 +2817,7 @@ QDF_STATUS sap_fsm(struct sap_context *sap_ctx, ptWLAN_SAPEvent sap_event)
 }
 
 eSapStatus
-sapconvert_to_csr_profile(tsap_Config_t *pconfig_params, eCsrRoamBssType bssType,
+sapconvert_to_csr_profile(tsap_config_t *pconfig_params, eCsrRoamBssType bssType,
 			  struct csr_roam_profile *profile)
 {
 	/* Create Roam profile for SoftAP to connect */

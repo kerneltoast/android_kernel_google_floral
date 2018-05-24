@@ -1712,7 +1712,7 @@ lim_send_assoc_req_mgmt_frame(tpAniSirGlobal mac_ctx,
 			extr_ext_flag = (extr_ext_cap.num_bytes > 0);
 		}
 	} else {
-		pe_debug("No addn IE or peer dosen't support addnIE for Assoc Req");
+		pe_debug("No addn IE or peer doesn't support addnIE for Assoc Req");
 		extr_ext_flag = false;
 	}
 
@@ -2008,8 +2008,6 @@ lim_send_assoc_req_mgmt_frame(tpAniSirGlobal mac_ctx,
 		assoc_cnf.sessionId = pe_session->peSessionId;
 
 		assoc_cnf.resultCode = eSIR_SME_RESOURCES_UNAVAILABLE;
-
-		cds_packet_free((void *)packet);
 
 		lim_post_sme_message(mac_ctx, LIM_MLM_ASSOC_CNF,
 			(uint32_t *) &assoc_cnf);
@@ -4603,7 +4601,7 @@ tSirRetStatus lim_send_sa_query_response_frame(tpAniSirGlobal pMac,
 					       tpPESession psessionEntry)
 {
 
-	tDot11fSaQueryRsp frm;  /* SA query reponse action frame */
+	tDot11fSaQueryRsp frm;  /* SA query response action frame */
 	uint8_t *pFrame;
 	tSirRetStatus nSirStatus;
 	tpSirMacMgmtHdr pMacHdr;
@@ -4739,7 +4737,7 @@ QDF_STATUS lim_send_addba_response_frame(tpAniSirGlobal mac_ctx,
 	uint8_t *frame_ptr;
 	tpSirMacMgmtHdr mgmt_hdr;
 	uint32_t num_bytes, payload_size, status;
-	void *pkt_ptr;
+	void *pkt_ptr = NULL;
 	QDF_STATUS qdf_status;
 	uint8_t tx_flag = 0;
 	uint8_t sme_sessionid = 0;
@@ -4782,7 +4780,10 @@ QDF_STATUS lim_send_addba_response_frame(tpAniSirGlobal mac_ctx,
 	frm.addba_param_set.buff_size = SIR_MAC_BA_DEFAULT_BUFF_SIZE;
 	if (mac_ctx->usr_cfg_ba_buff_size)
 		frm.addba_param_set.buff_size = mac_ctx->usr_cfg_ba_buff_size;
-	frm.addba_param_set.amsdu_supp = amsdu_support;
+	if (mac_ctx->is_usr_cfg_amsdu_enabled)
+		frm.addba_param_set.amsdu_supp = amsdu_support;
+	else
+		frm.addba_param_set.amsdu_supp = 0;
 	frm.addba_param_set.policy = SIR_MAC_BA_POLICY_IMMEDIATE;
 	frm.ba_timeout.timeout = batimeout;
 	if (addba_extn_present) {
@@ -4822,7 +4823,7 @@ QDF_STATUS lim_send_addba_response_frame(tpAniSirGlobal mac_ctx,
 	num_bytes = payload_size + sizeof(*mgmt_hdr);
 	qdf_status = cds_packet_alloc(num_bytes, (void **)&frame_ptr,
 				      (void **)&pkt_ptr);
-	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
+	if (!QDF_IS_STATUS_SUCCESS(qdf_status) || (!pkt_ptr)) {
 		pe_err("Failed to allocate %d bytes for a ADDBA response action frame",
 			num_bytes);
 		return QDF_STATUS_E_FAILURE;

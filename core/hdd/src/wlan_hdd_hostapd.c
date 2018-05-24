@@ -1897,7 +1897,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 	case eSAP_DFS_RADAR_DETECT:
 	{
 		int i;
-		tsap_Config_t *sap_config =
+		tsap_config_t *sap_config =
 				&adapter->session.ap.sap_config;
 
 		hdd_dfs_indicate_radar(hdd_ctx);
@@ -2121,7 +2121,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 				 * After Kernel 4.0, it's no longer need to set
 				 * STATION_INFO_ASSOC_REQ_IES flag, as it
 				 * changed to use assoc_req_ies_len length to
-				 * check the existance of request IE.
+				 * check the existence of request IE.
 				 */
 				sta_info->filled |= STATION_INFO_ASSOC_REQ_IES;
 #endif
@@ -3021,6 +3021,10 @@ static int __iw_softap_set_two_ints_getnone(struct net_device *dev,
 	int *value = (int *)extra;
 	int sub_cmd = value[0];
 	struct hdd_context *hdd_ctx;
+	struct cdp_vdev *vdev = NULL;
+	struct cdp_pdev *pdev = NULL;
+	void *soc = NULL;
+	struct cdp_txrx_stats_req req = {0};
 
 	hdd_enter_dev(dev);
 
@@ -3034,9 +3038,27 @@ static int __iw_softap_set_two_ints_getnone(struct net_device *dev,
 		return ret;
 
 	switch (sub_cmd) {
+	case QCSAP_PARAM_SET_TXRX_STATS:
+	{
+		ret = cds_get_datapath_handles(&soc, &pdev, &vdev,
+				 adapter->session_id);
+		if (ret != 0) {
+			hdd_err("Invalid Handles");
+			break;
+		}
+		req.stats = value[1];
+		req.mac_id = value[2];
+		hdd_info("QCSAP_PARAM_SET_TXRX_STATS stats_id: %d mac_id: %d",
+			req.stats, req.mac_id);
+		ret = cdp_txrx_stats_request(soc, vdev, &req);
+		break;
+	}
+
+	/* Firmware debug log */
 	case QCSAP_IOCTL_SET_FW_CRASH_INJECT:
 		ret = hdd_crash_inject(adapter, value[1], value[2]);
 		break;
+
 	case QCSAP_IOCTL_DUMP_DP_TRACE_LEVEL:
 		hdd_debug("WE_DUMP_DP_TRACE: %d %d",
 		       value[1], value[2]);
@@ -3050,6 +3072,7 @@ static int __iw_softap_set_two_ints_getnone(struct net_device *dev,
 		else if (value[1] == DISABLE_DP_TRACE_LIVE_MODE)
 			qdf_dp_trace_disable_live_mode();
 		break;
+
 	case QCSAP_ENABLE_FW_PROFILE:
 		hdd_debug("QCSAP_ENABLE_FW_PROFILE: %d %d",
 		       value[1], value[2]);
@@ -3057,20 +3080,25 @@ static int __iw_softap_set_two_ints_getnone(struct net_device *dev,
 				 WMI_WLAN_PROFILE_ENABLE_PROFILE_ID_CMDID,
 					value[1], value[2], DBG_CMD);
 		break;
+
 	case QCSAP_SET_FW_PROFILE_HIST_INTVL:
 		hdd_debug("QCSAP_SET_FW_PROFILE_HIST_INTVL: %d %d",
 		       value[1], value[2]);
 		ret = wma_cli_set2_command(adapter->session_id,
 					WMI_WLAN_PROFILE_SET_HIST_INTVL_CMDID,
 					value[1], value[2], DBG_CMD);
+		break;
+
 	case QCSAP_SET_WLAN_SUSPEND:
 		hdd_info("SAP unit-test suspend(%d, %d)", value[1], value[2]);
 		ret = hdd_wlan_fake_apps_suspend(hdd_ctx->wiphy, dev,
 						 value[1], value[2]);
 		break;
+
 	case QCSAP_SET_WLAN_RESUME:
 		ret = hdd_wlan_fake_apps_resume(hdd_ctx->wiphy, dev);
 		break;
+
 	default:
 		hdd_err("Invalid IOCTL command: %d", sub_cmd);
 		break;
@@ -3237,10 +3265,6 @@ static __iw_softap_setparam(struct net_device *dev,
 	QDF_STATUS status;
 	int ret = 0;
 	struct hdd_context *hdd_ctx;
-	struct cdp_vdev *vdev = NULL;
-	struct cdp_pdev *pdev = NULL;
-	void *soc = NULL;
-	struct cdp_txrx_stats_req req;
 
 	hdd_enter_dev(dev);
 
@@ -3383,21 +3407,6 @@ static __iw_softap_setparam(struct net_device *dev,
 		break;
 	}
 
-	case QCSAP_PARAM_SET_TXRX_STATS:
-	{
-		ret = cds_get_datapath_handles(&soc, &pdev, &vdev,
-				 adapter->session_id);
-		if (ret != 0) {
-			hdd_err("Invalid Handles");
-			break;
-		}
-		req.stats = set_value;
-		req.channel = adapter->session.ap.operating_channel;
-		hdd_info("QCSAP_PARAM_SET_TXRX_STATS val %d", set_value);
-		ret = cdp_txrx_stats_request(soc, vdev, &req);
-		break;
-	}
-
 	/* Firmware debug log */
 	case QCSAP_DBGLOG_LOG_LEVEL:
 	{
@@ -3507,7 +3516,7 @@ static __iw_softap_setparam(struct net_device *dev,
 	case QCASAP_SET_11N_RATE:
 	{
 		uint8_t preamble = 0, nss = 0, rix = 0;
-		tsap_Config_t *pConfig =
+		tsap_config_t *pConfig =
 			&adapter->session.ap.sap_config;
 
 		hdd_debug("SET_HT_RATE val %d", set_value);
@@ -3570,7 +3579,7 @@ static __iw_softap_setparam(struct net_device *dev,
 	case QCASAP_SET_VHT_RATE:
 	{
 		uint8_t preamble = 0, nss = 0, rix = 0;
-		tsap_Config_t *pConfig =
+		tsap_config_t *pConfig =
 			&adapter->session.ap.sap_config;
 
 		if (pConfig->SapHw_mode != eCSR_DOT11_MODE_11ac &&
@@ -3780,6 +3789,7 @@ static __iw_softap_setparam(struct net_device *dev,
 		ret = wma_cli_set_command(adapter->session_id,
 					  WMI_PDEV_PARAM_TX_CHAIN_MASK,
 					  set_value, PDEV_CMD);
+		ret = hdd_set_antenna_mode(adapter, hdd_ctx, set_value);
 		break;
 	}
 
@@ -3789,6 +3799,7 @@ static __iw_softap_setparam(struct net_device *dev,
 		ret = wma_cli_set_command(adapter->session_id,
 					  WMI_PDEV_PARAM_RX_CHAIN_MASK,
 					  set_value, PDEV_CMD);
+		ret = hdd_set_antenna_mode(adapter, hdd_ctx, set_value);
 		break;
 	}
 
@@ -5480,7 +5491,7 @@ static const struct iw_priv_args hostapd_private_args[] = {
 		"txrx_fw_stats"
 	}, {
 		QCSAP_PARAM_SET_TXRX_STATS,
-		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,
+		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 2, 0,
 		"txrx_stats"
 	}, {
 		QCSAP_PARAM_SET_MCC_CHANNEL_LATENCY,
@@ -6407,7 +6418,7 @@ int wlan_hdd_set_channel(struct wiphy *wiphy,
 	int status;
 
 	tSmeConfigParams *sme_config;
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 
 	hdd_enter();
 
@@ -6933,7 +6944,7 @@ int wlan_hdd_cfg80211_update_apies(struct hdd_adapter *adapter)
 	uint8_t *genie;
 	uint16_t total_ielen = 0;
 	int ret = 0;
-	tsap_Config_t *pConfig;
+	tsap_config_t *pConfig;
 	tSirUpdateIE updateIE;
 	struct hdd_beacon_data *beacon = NULL;
 	uint16_t proberesp_ies_len;
@@ -6956,6 +6967,10 @@ int wlan_hdd_cfg80211_update_apies(struct hdd_adapter *adapter)
 
 	wlan_hdd_add_extra_ie(adapter, genie, &total_ielen,
 			      WLAN_EID_INTERWORKING);
+
+	if (test_bit(SOFTAP_BSS_STARTED, &adapter->event_flags))
+		wlan_hdd_add_extra_ie(adapter, genie, &total_ielen,
+				      WLAN_EID_RSN);
 
 #ifdef FEATURE_WLAN_WAPI
 	if (QDF_SAP_MODE == adapter->device_mode) {
@@ -7070,7 +7085,7 @@ done:
  */
 static void wlan_hdd_set_sap_hwmode(struct hdd_adapter *adapter)
 {
-	tsap_Config_t *pConfig = &adapter->session.ap.sap_config;
+	tsap_config_t *pConfig = &adapter->session.ap.sap_config;
 	struct hdd_beacon_data *pBeacon = adapter->session.ap.beacon;
 	struct ieee80211_mgmt *pMgmt_frame =
 		(struct ieee80211_mgmt *)pBeacon->head;
@@ -7126,14 +7141,14 @@ static void wlan_hdd_set_sap_hwmode(struct hdd_adapter *adapter)
  * @hdd_ctx: HDD context
  * @adapter: Adapter pointer
  *
- * This function get ACS related INI paramters and populated
+ * This function get ACS related INI parameters and populated
  * sap config and smeConfig for ACS needed configurations.
  *
  * Return: The QDF_STATUS code associated with performing the operation.
  */
 QDF_STATUS wlan_hdd_config_acs(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter)
 {
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 	struct hdd_config *ini_config;
 	tHalHandle hal;
 
@@ -7148,7 +7163,7 @@ QDF_STATUS wlan_hdd_config_acs(struct hdd_context *hdd_ctx, struct hdd_adapter *
 						hdd_ctx->skip_acs_scan_status);
 	if (hdd_ctx->skip_acs_scan_status == eSAP_SKIP_ACS_SCAN) {
 		struct hdd_adapter *con_sap_adapter;
-		tsap_Config_t *con_sap_config = NULL;
+		tsap_config_t *con_sap_config = NULL;
 
 		con_sap_adapter = hdd_get_con_sap_adapter(adapter, false);
 
@@ -7264,7 +7279,7 @@ QDF_STATUS wlan_hdd_config_acs(struct hdd_context *hdd_ctx, struct hdd_adapter *
  */
 static int wlan_hdd_sap_p2p_11ac_overrides(struct hdd_adapter *ap_adapter)
 {
-	tsap_Config_t *sap_cfg = &ap_adapter->session.ap.sap_config;
+	tsap_config_t *sap_cfg = &ap_adapter->session.ap.sap_config;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(ap_adapter);
 
 	/* Fixed channel 11AC override:
@@ -7339,7 +7354,7 @@ static int wlan_hdd_sap_p2p_11ac_overrides(struct hdd_adapter *ap_adapter)
  */
 static int wlan_hdd_setup_acs_overrides(struct hdd_adapter *ap_adapter)
 {
-	tsap_Config_t *sap_cfg = &ap_adapter->session.ap.sap_config;
+	tsap_config_t *sap_cfg = &ap_adapter->session.ap.sap_config;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(ap_adapter);
 
 	hdd_debug("** Driver force ACS override **");
@@ -7468,7 +7483,7 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 				       enum nl80211_hidden_ssid hidden_ssid,
 				       bool check_for_concurrency)
 {
-	tsap_Config_t *pConfig;
+	tsap_config_t *pConfig;
 	struct hdd_beacon_data *pBeacon = NULL;
 	struct ieee80211_mgmt *pMgmt_frame;
 	const uint8_t *pIe = NULL;
@@ -8069,7 +8084,7 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 	}
 
 	if (!hdd_set_connection_in_progress(true)) {
-		hdd_err("Can't start BSS: set connnection in progress failed");
+		hdd_err("Can't start BSS: set connection in progress failed");
 		ret = -EINVAL;
 		goto error;
 	}
@@ -8109,7 +8124,7 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 		ret = -EINVAL;
 		goto error;
 	}
-	/* Succesfully started Bss update the state bit. */
+	/* Successfully started Bss update the state bit. */
 	set_bit(SOFTAP_BSS_STARTED, &adapter->event_flags);
 	/* Initialize WMM configuation */
 	hdd_wmm_init(adapter);
@@ -8555,7 +8570,7 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 	if (cds_is_sub_20_mhz_enabled()) {
 		enum channel_state ch_state;
 		enum phy_ch_width sub_20_ch_width = CH_WIDTH_INVALID;
-		tsap_Config_t *sap_cfg = &adapter->session.ap.sap_config;
+		tsap_config_t *sap_cfg = &adapter->session.ap.sap_config;
 
 		/* Avoid ACS/DFS, and overwrite ch wd to 20 */
 		if (channel == 0) {
@@ -8605,10 +8620,22 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 	if (!QDF_IS_STATUS_SUCCESS(status))
 		hdd_err("ERR: clear event failed");
 
+	/*
+	 * Stop opportunistic timer here if running as we are already doing
+	 * hw mode change before vdev start based on the new concurrency
+	 * situation. If timer is not stopped and if it gets triggered before
+	 * VDEV_UP, it will reset the hw mode to some wrong value.
+	 */
+	status = policy_mgr_stop_opportunistic_timer(hdd_ctx->hdd_psoc);
+	if (status != QDF_STATUS_SUCCESS) {
+		hdd_err("Failed to stop DBS opportunistic timer");
+		return -EINVAL;
+	}
+
 	status = policy_mgr_current_connections_update(hdd_ctx->hdd_psoc,
 			adapter->session_id, channel,
 			POLICY_MGR_UPDATE_REASON_START_AP);
-	if (QDF_STATUS_E_FAILURE == status) {
+	if (status == QDF_STATUS_E_FAILURE) {
 		hdd_err("ERROR: connections update failed!!");
 		return -EINVAL;
 	}
@@ -8637,7 +8664,7 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 	    ) {
 		struct hdd_beacon_data *old, *new;
 		enum nl80211_channel_type channel_type;
-		tsap_Config_t *sap_config =
+		tsap_config_t *sap_config =
 			&((WLAN_HDD_GET_AP_CTX_PTR(adapter))->sap_config);
 
 		old = adapter->session.ap.beacon;

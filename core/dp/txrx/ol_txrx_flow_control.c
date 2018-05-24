@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015-2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -284,12 +284,14 @@ static const char *ol_tx_flow_pool_status_to_str
 
 /**
  * ol_tx_dump_flow_pool_info() - dump global_pool and flow_pool info
+ * @ctx: cdp_soc context, required only in lithium_dp flow control.
+ *	 Remove void * while cleaning up cds_get_context.
  *
  * Return: none
  */
 void ol_tx_dump_flow_pool_info(void *ctx)
 {
-	struct ol_txrx_pdev_t *pdev = ctx;
+	struct ol_txrx_pdev_t *pdev = cds_get_context(QDF_MODULE_ID_TXRX);
 	struct ol_tx_flow_pool_t *pool = NULL, *pool_prev = NULL;
 	struct ol_tx_flow_pool_t tmp_pool;
 
@@ -429,7 +431,7 @@ static int ol_tx_move_desc_n(struct ol_tx_flow_pool_t *src_pool,
  * Distribute all descriptors of source pool to all
  * deficient pools as per flow_pool_list.
  *
- * Return: 0 for sucess
+ * Return: 0 for success
  */
 static int
 ol_tx_distribute_descs_to_deficient_pools(struct ol_tx_flow_pool_t *src_pool)

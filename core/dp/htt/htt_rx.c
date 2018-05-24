@@ -2315,7 +2315,7 @@ static int htt_rx_mon_amsdu_rx_in_order_pop_ll(htt_pdev_handle pdev,
 		htt_rx_mon_get_rx_status(pdev, rx_desc, &rx_status);
 		/*
 		 * For certain platform, 350 bytes of headroom is already
-		 * appended to accomodate radiotap header but
+		 * appended to accommodate radiotap header but
 		 * qdf_nbuf_update_radiotap() API again will try to create
 		 * a room for radiotap header. To make our design simple
 		 * let qdf_nbuf_update_radiotap() API create a room for radiotap
@@ -3163,7 +3163,7 @@ static void *htt_rx_in_ord_mpdu_desc_list_next_ll(htt_pdev_handle pdev,
  * for HL, the returned value is not mpdu_desc,
  * it's translated hl_rx_desc just after the hl_ind_msg
  * for HL AMSDU, we can't point to payload now, because
- * hl rx desc is not fixed, we can't retrive the desc
+ * hl rx desc is not fixed, we can't retrieve the desc
  * by minus rx_desc_size when release. keep point to hl rx desc
  * now
  *

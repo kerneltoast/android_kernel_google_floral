@@ -55,9 +55,9 @@
 
 /**
  * htt_rx_frag_set_last_msdu() - set last msdu bit in rx descriptor
- *				 for recieved frames
+ *				 for received frames
  * @pdev: Handle (pointer) to HTT pdev.
- * @msg: htt recieved msg
+ * @msg: htt received msg
  *
  * Return: None
  */
@@ -169,7 +169,7 @@ static void htt_ipa_op_response(struct htt_pdev_t *pdev, uint32_t *msg_word)
 				(struct htt_wdi_ipa_op_response_t) +
 				len);
 	if (!op_msg_buffer) {
-		qdf_print("OPCODE messsage buffer alloc fail");
+		qdf_print("OPCODE message buffer alloc fail");
 		return;
 	}
 	qdf_mem_copy(op_msg_buffer,
@@ -247,6 +247,13 @@ static void htt_t2h_lp_msg_handler(void *context, qdf_nbuf_t htt_t2h_msg,
 	{
 		uint16_t msdu_cnt;
 
+		if (!pdev->cfg.is_high_latency &&
+		    pdev->cfg.is_full_reorder_offload) {
+			qdf_print("HTT_T2H_MSG_TYPE_RX_OFFLOAD_DELIVER_IND not ");
+			qdf_print("supported when full reorder offload is ");
+			qdf_print("enabled in the configuration.\n");
+			break;
+		}
 		msdu_cnt =
 			HTT_RX_OFFLOAD_DELIVER_IND_MSDU_CNT_GET(*msg_word);
 		ol_rx_offload_deliver_ind_handler(pdev->txrx_pdev,
@@ -404,7 +411,7 @@ static void htt_t2h_lp_msg_handler(void *context, qdf_nbuf_t htt_t2h_msg,
 		int msg_len = qdf_nbuf_len(htt_t2h_msg);
 		if (msg_len < (sizeof(struct htt_mgmt_tx_compl_ind) + sizeof(*msg_word))) {
 			QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_ERROR,
-				  "Invalid msg_word lenght in HTT_T2H_MSG_TYPE_MGMT_TX_COMPL_IND");
+				  "Invalid msg_word length in HTT_T2H_MSG_TYPE_MGMT_TX_COMPL_IND");
 			WARN_ON(1);
 			break;
 		}
@@ -565,7 +572,7 @@ static void htt_t2h_lp_msg_handler(void *context, qdf_nbuf_t htt_t2h_msg,
 
 		if (msg_len < sizeof(struct htt_flow_pool_unmap_t)) {
 			QDF_TRACE(QDF_MODULE_ID_HTT, QDF_TRACE_LEVEL_ERROR,
-				  "Invalid msg_word lenght in HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP");
+				  "Invalid msg_word length in HTT_T2H_MSG_TYPE_FLOW_POOL_UNMAP");
 			WARN_ON(1);
 			break;
 		}

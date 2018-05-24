@@ -84,12 +84,12 @@
 #include <ol_txrx_ipa.h>
 #include "wlan_roam_debug.h"
 
-#ifdef QCA_SUPPORT_TXRX_LOCAL_PEER_ID
 #define DPT_DEBUGFS_PERMS	(QDF_FILE_USR_READ |	\
 				QDF_FILE_USR_WRITE |	\
 				QDF_FILE_GRP_READ |	\
 				QDF_FILE_OTH_READ)
 
+#ifdef QCA_SUPPORT_TXRX_LOCAL_PEER_ID
 ol_txrx_peer_handle
 ol_txrx_peer_find_by_local_id(struct cdp_pdev *pdev,
 			      uint8_t local_peer_id);
@@ -848,7 +848,7 @@ ol_txrx_rsrc_threshold_lo(int desc_pool_size)
 	/*
 	 * 5% margin of unallocated desc is too much for per
 	 * vdev mechanism.
-	 * Define the value seperately.
+	 * Define the value separately.
 	 */
 	threshold_low = TXRX_HL_TX_FLOW_CTRL_MGMT_RESERVED;
 
@@ -2172,7 +2172,7 @@ static void ol_txrx_debugfs_exit(ol_txrx_pdev_handle pdev)
 static void ol_txrx_pdev_detach(struct cdp_pdev *ppdev, int force)
 {
 	struct ol_txrx_pdev_t *pdev = (struct ol_txrx_pdev_t *)ppdev;
-	struct ol_txrx_stats_req_internal *req;
+	struct ol_txrx_stats_req_internal *req, *temp_req;
 	int i = 0;
 
 	/*checking to ensure txrx pdev structure is not NULL */
@@ -2190,7 +2190,7 @@ static void ol_txrx_pdev_detach(struct cdp_pdev *ppdev, int force)
 			"Warning: the txrx req list is not empty, depth=%d\n",
 			pdev->req_list_depth
 			);
-	TAILQ_FOREACH(req, &pdev->req_list, req_list_elem) {
+	TAILQ_FOREACH_SAFE(req, &pdev->req_list, req_list_elem, temp_req) {
 		TAILQ_REMOVE(&pdev->req_list, req, req_list_elem);
 		pdev->req_list_depth--;
 		ol_txrx_err(
@@ -4820,7 +4820,7 @@ static ol_txrx_vdev_handle ol_txrx_get_vdev_from_sta_id(uint8_t sta_id)
  * @osif_fc_ctx: callback context
  * @flow_control_is_pause: is vdev paused by flow control
  *
- * Return: 0 for sucess or error code
+ * Return: 0 for success or error code
  */
 static int ol_txrx_register_tx_flow_control(uint8_t vdev_id,
 	ol_txrx_tx_flow_control_fp flowControl, void *osif_fc_ctx,
@@ -5973,7 +5973,7 @@ static QDF_STATUS ol_txrx_wrapper_peer_state_update(struct cdp_pdev *pdev,
 /**
  * ol_txrx_wrapper_find_peer_by_addr() - find peer instance by address
  * @pdev: pdev handle
- * @peer_addr: peer address wnat to find
+ * @peer_addr: peer address want to find
  * @peer_id: peer id
  *
  * Return: peer instance pointer

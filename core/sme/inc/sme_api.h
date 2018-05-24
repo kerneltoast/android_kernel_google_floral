@@ -2155,6 +2155,17 @@ int sme_update_he_rx_stbc_cap(tHalHandle hal, uint8_t session_id, int value);
  */
 int sme_update_he_frag_supp(tHalHandle hal, uint8_t session_id,
 		uint16_t he_frag);
+
+/**
+ * sme_update_he_ldpc_supp() - sets the HE LDPC support
+ * @hal: Pointer to HAL
+ * @session_id: SME session id
+ * @he_ldpc: HE LDPC support value
+ *
+ * Return: 0 on success else err code
+ */
+int sme_update_he_ldpc_supp(tHalHandle hal, uint8_t session_id,
+			    uint16_t he_ldpc);
 #else
 static inline void sme_update_he_cap_nss(tHalHandle hal, uint8_t session_id,
 		uint8_t nss)
@@ -2181,6 +2192,11 @@ static inline int sme_update_he_frag_supp(tHalHandle hal, uint8_t session_id,
 {
 	return 0;
 }
+static inline int sme_update_he_ldpc_supp(tHalHandle hal, uint8_t session_id,
+					  uint16_t he_ldpc)
+{
+	return 0;
+}
 #endif
 
 /**
@@ -2194,5 +2210,27 @@ static inline int sme_update_he_frag_supp(tHalHandle hal, uint8_t session_id,
  *         false - if not in progress
  */
 bool sme_is_sta_key_exchange_in_progress(tHalHandle hal, uint8_t session_id);
+
+/*
+ * sme_validate_channel_list() - Validate the given channel list
+ * @hal: handle to global hal context
+ * @chan_list: Pointer to the channel list
+ * @num_channels: number of channels present in the chan_list
+ *
+ * Validates the given channel list with base channels in mac context
+ *
+ * Return: True if all channels in the list are valid, false otherwise
+ */
+bool sme_validate_channel_list(tHalHandle hal,
+				      uint8_t *chan_list,
+				      uint8_t num_channels);
+/**
+ * sme_set_amsdu() - set amsdu enable/disable based on user cfg
+ * @hal: Pointer to HAL
+ * @enable: enable or disable
+ *
+ * Return: None
+ */
+void sme_set_amsdu(tHalHandle hal, bool enable);
 
 #endif /* #if !defined( __SME_API_H ) */

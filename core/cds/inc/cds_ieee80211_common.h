@@ -1325,7 +1325,7 @@ struct ieee80211_country_ie {
 struct ieee80211_fh_ie {
 	uint8_t ie;             /* IEEE80211_ELEMID_FHPARMS */
 	uint8_t len;
-	uint16_t dwell_time;    /* endianess?? */
+	uint16_t dwell_time;    /* endianness?? */
 	uint8_t hop_set;
 	uint8_t hop_pattern;
 	uint8_t hop_index;
@@ -1850,7 +1850,7 @@ enum {
 #define IEEE80211_FRAGMT_THRESHOLD_MAX       2346       /* max frag threshold */
 
 /*
- * Regulatory extention identifier for country IE.
+ * Regulatory extension identifier for country IE.
  */
 #define IEEE80211_REG_EXT_ID        201
 
@@ -1910,7 +1910,7 @@ struct ieee80211_ie_ext_cap {
 #define IEEE80211_EXTCAPIE_OP_MODE_NOTIFY   0x40000000  /* bit-62 Operating Mode notification */
 
 /*
- * These caps are populated when we recieve beacon/probe response
+ * These caps are populated when we receive beacon/probe response
  * This is used to maintain local TDLS cap bit masks
  */
 

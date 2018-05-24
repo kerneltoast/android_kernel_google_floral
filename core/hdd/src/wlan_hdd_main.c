@@ -56,6 +56,7 @@
 #include <cdp_txrx_peer_ops.h>
 #include <cdp_txrx_misc.h>
 #include <cdp_txrx_stats.h>
+#include "cdp_txrx_flow_ctrl_legacy.h"
 
 #include <net/addrconf.h>
 #include <linux/wireless.h>
@@ -1417,7 +1418,8 @@ static void hdd_update_tgt_ht_cap(struct hdd_context *hdd_ctx,
 	if (sme_cfg_get_str(hdd_ctx->hHal, WNI_CFG_SUPPORTED_MCS_SET, mcs_set,
 			    &value) == QDF_STATUS_SUCCESS) {
 		hdd_debug("Read MCS rate set");
-
+		if (cfg->num_rf_chains > SIZE_OF_SUPPORTED_MCS_SET)
+			cfg->num_rf_chains = SIZE_OF_SUPPORTED_MCS_SET;
 		if (pconfig->enable2x2) {
 			for (value = 0; value < cfg->num_rf_chains; value++)
 				mcs_set[value] =
@@ -2052,12 +2054,14 @@ bool hdd_dfs_indicate_radar(struct hdd_context *hdd_ctx)
 
 		if ((QDF_SAP_MODE == adapter->device_mode ||
 		    QDF_P2P_GO_MODE == adapter->device_mode) &&
-		    (wlan_reg_is_dfs_ch(hdd_ctx->hdd_pdev,
+		    (wlan_reg_is_passive_or_disable_ch(hdd_ctx->hdd_pdev,
 		     ap_ctx->operating_channel))) {
 			WLAN_HDD_GET_AP_CTX_PTR(adapter)->dfs_cac_block_tx =
 				true;
 			hdd_info("tx blocked for session: %d",
 				adapter->session_id);
+			cdp_fc_vdev_flush(cds_get_context(QDF_MODULE_ID_SOC),
+					adapter->txrx_vdev);
 		}
 	}
 
@@ -2706,7 +2710,7 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx,
 			goto deinit_config;
 		}
 
-		/* initalize components configurations  after psoc open */
+		/* initialize components configurations  after psoc open */
 		ret = hdd_update_components_config(hdd_ctx);
 		if (ret) {
 			hdd_err("Failed to update component configs; errno: %d",
@@ -3233,7 +3237,7 @@ static void hdd_close_cesium_nl_sock(void)
  * @addr:	Pointer to the sockaddr.
  *
  * This function sets the user specified mac address using
- * the command ifconfig wlanX hw ether <mac adress>.
+ * the command ifconfig wlanX hw ether <mac address>.
  *
  * Return: 0 for success, non zero for failure
  */
@@ -3297,7 +3301,7 @@ static int __hdd_set_mac_address(struct net_device *dev, void *addr)
  * @addr: Pointer to the sockaddr
  *
  * This function sets the user specified mac address using
- * the command ifconfig wlanX hw ether <mac adress>.
+ * the command ifconfig wlanX hw ether <mac address>.
  *
  * Return: 0 for success.
  */
@@ -3516,7 +3520,7 @@ void hdd_set_station_ops(struct net_device *dev)
  * @name: User-visible name of the interface
  *
  * hdd adapter pointer would point to the netdev->priv space, this function
- * would retrive the pointer, and setup the hdd adapter configuration.
+ * would retrieve the pointer, and setup the hdd adapter configuration.
  *
  * Return: the pointer to hdd adapter, otherwise NULL
  */
@@ -4896,7 +4900,7 @@ QDF_STATUS hdd_stop_adapter(struct hdd_context *hdd_ctx,
 	union iwreq_data wrqu;
 	tSirUpdateIE updateIE;
 	unsigned long rc;
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 
 	hdd_enter();
 
@@ -5842,6 +5846,32 @@ int wlan_hdd_set_mon_chan(struct hdd_adapter *adapter, uint32_t chan,
 		return -EINVAL;
 	}
 
+	/* Validate Channel */
+	if (!WLAN_REG_IS_24GHZ_CH(chan) && !WLAN_REG_IS_5GHZ_CH(chan)) {
+		hdd_err("Channel %d Not supported", chan);
+		return -EINVAL;
+	}
+
+	if (WLAN_REG_IS_24GHZ_CH(chan)) {
+		if (bandwidth == CH_WIDTH_80MHZ) {
+			hdd_err("BW80 not possible in 2.4GHz band");
+			return -EINVAL;
+		}
+		if ((bandwidth != CH_WIDTH_20MHZ) && (chan == 14) &&
+				(bandwidth != CH_WIDTH_MAX)) {
+			hdd_err("Only BW20 possible on channel 14");
+			return -EINVAL;
+		}
+	}
+
+	if (WLAN_REG_IS_5GHZ_CH(chan)) {
+		if ((bandwidth != CH_WIDTH_20MHZ) && (chan == 165) &&
+				(bandwidth != CH_WIDTH_MAX)) {
+			hdd_err("Only BW20 possible on channel 165");
+			return -EINVAL;
+		}
+	}
+
 	hdd_debug("Set monitor mode Channel %d", chan);
 	qdf_mem_zero(&roam_profile, sizeof(roam_profile));
 	roam_profile.ChannelInfo.ChannelList = &ch_info->channel;
@@ -6200,7 +6230,7 @@ enum tQDF_ADAPTER_MODE hdd_get_device_mode(uint32_t session_id)
  * hdd_get_operating_channel() - return operating channel of the device mode
  * @hdd_ctx:	Pointer to the HDD context.
  * @mode:	Device mode for which operating channel is required.
- *              Suported modes:
+ *              Supported modes:
  *			QDF_STA_MODE,
  *			QDF_P2P_CLIENT_MODE,
  *			QDF_SAP_MODE,
@@ -7044,6 +7074,20 @@ void hdd_display_periodic_stats(struct hdd_context *hdd_ctx,
 }
 
 /**
+ * hdd_clear_rps_cpu_mask - clear RPS CPU mask for interfaces
+ * @hdd_ctx: pointer to struct hdd_context
+ *
+ * Return: none
+ */
+static void hdd_clear_rps_cpu_mask(struct hdd_context *hdd_ctx)
+{
+	struct hdd_adapter *adapter;
+
+	hdd_for_each_adapter(hdd_ctx, adapter)
+		hdd_send_rps_disable_ind(adapter);
+}
+
+/**
  * hdd_pld_request_bus_bandwidth() - Function to control bus bandwidth
  * @hdd_ctx - handle to hdd context
  * @tx_packets - transmit packet count
@@ -7086,13 +7130,17 @@ static void hdd_pld_request_bus_bandwidth(struct hdd_context *hdd_ctx,
 		hdd_ctx->cur_vote_level = next_vote_level;
 		vote_level_change = true;
 		pld_request_bus_bandwidth(hdd_ctx->parent_dev, next_vote_level);
-		if (next_vote_level == PLD_BUS_WIDTH_LOW) {
+		if ((next_vote_level == PLD_BUS_WIDTH_LOW) ||
+		    (next_vote_level == PLD_BUS_WIDTH_NONE)) {
 			if (hdd_ctx->hbw_requested) {
 				pld_remove_pm_qos(hdd_ctx->parent_dev);
 				hdd_ctx->hbw_requested = false;
 			}
 			if (cds_sched_handle_throughput_req(false))
 				hdd_warn("low bandwidth set rx affinity fail");
+
+			if (hdd_ctx->dynamic_rps)
+				hdd_clear_rps_cpu_mask(hdd_ctx);
 		} else {
 			if (!hdd_ctx->hbw_requested) {
 				pld_request_pm_qos(hdd_ctx->parent_dev, 1);
@@ -7101,6 +7149,9 @@ static void hdd_pld_request_bus_bandwidth(struct hdd_context *hdd_ctx,
 
 			if (cds_sched_handle_throughput_req(true))
 				hdd_warn("high bandwidth set rx affinity fail");
+
+			if (hdd_ctx->dynamic_rps)
+				hdd_set_rps_cpu_mask(hdd_ctx);
 		}
 		hdd_napi_apply_throughput_policy(hdd_ctx, tx_packets, rx_packets);
 	}
@@ -7140,7 +7191,7 @@ static void hdd_pld_request_bus_bandwidth(struct hdd_context *hdd_ctx,
 		 * to default delayed ack. Note that this will disable the
 		 * dynamic delayed ack mechanism across the system
 		 */
-		if (hdd_ctx->config->enable_tcp_delack)
+		if (hdd_ctx->en_tcp_delack_no_lro)
 			rx_tp_data.rx_tp_flags |= TCP_DEL_ACK_IND;
 
 		if (hdd_ctx->config->enable_tcp_adv_win_scale)
@@ -7437,7 +7488,7 @@ void wlan_hdd_display_tx_rx_histogram(struct hdd_context *hdd_ctx)
 		hdd_ctx->config->busBandwidthMediumThreshold,
 		hdd_ctx->config->busBandwidthLowThreshold);
 	hdd_debug("Enable TCP DEL ACK: %d",
-		hdd_ctx->config->enable_tcp_delack);
+		hdd_ctx->en_tcp_delack_no_lro);
 	hdd_debug("TCP DEL High TH: %d TCP DEL Low TH: %d",
 		hdd_ctx->config->tcpDelackThresholdHigh,
 		hdd_ctx->config->tcpDelackThresholdLow);
@@ -10483,7 +10534,7 @@ done:
 }
 
 
-#ifdef WLAN_FEATURE_HDD_MEMDUMP_ENABLE
+#ifdef WLAN_FEATURE_MEMDUMP_ENABLE
 /**
  * hdd_state_info_dump() - prints state information of hdd layer
  * @buf: buffer pointer
@@ -10549,11 +10600,11 @@ static void hdd_register_debug_callback(void)
 {
 	qdf_register_debug_callback(QDF_MODULE_ID_HDD, &hdd_state_info_dump);
 }
-#else /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+#else /* WLAN_FEATURE_MEMDUMP_ENABLE */
 static void hdd_register_debug_callback(void)
 {
 }
-#endif /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+#endif /* WLAN_FEATURE_MEMDUMP_ENABLE */
 
 /*
  * wlan_init_bug_report_lock() - Initialize bug report lock
@@ -10603,12 +10654,16 @@ void hdd_dp_trace_init(struct hdd_config *config)
 	switch (num_entries) {
 	case 4:
 		proto_bitmap = config_params[3];
+		/* fall through */
 	case 3:
 		verbosity = config_params[2];
+		/* fall through */
 	case 2:
 		thresh = config_params[1];
+		/* fall through */
 	case 1:
 		live_mode = config_params[0];
+		/* fall through */
 	default:
 		hdd_debug("live_mode %u thresh %u time_limit %u verbosity %u bitmap 0x%x",
 			live_mode, thresh, thresh_time_limit,
@@ -11613,7 +11668,7 @@ void wlan_hdd_start_sap(struct hdd_adapter *ap_adapter, bool reinit)
 	struct hdd_hostapd_state *hostapd_state;
 	QDF_STATUS qdf_status;
 	struct hdd_context *hdd_ctx;
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 
 	if (NULL == ap_adapter) {
 		hdd_err("ap_adapter is NULL here");
@@ -12078,15 +12133,11 @@ static void __hdd_module_exit(void)
 	pr_info("%s: Unloading driver v%s\n", WLAN_MODULE_NAME,
 		QWLAN_VERSIONSTR);
 
-	if (!hdd_ctx) {
-		hdd_err("hdd context is NULL return!!");
-		return;
-	}
-
 	if (!hdd_wait_for_recovery_completion())
 		return;
 
-	qdf_cancel_delayed_work(&hdd_ctx->iface_idle_work);
+	if (hdd_ctx)
+		qdf_cancel_delayed_work(&hdd_ctx->iface_idle_work);
 
 	wlan_hdd_unregister_driver();
 
@@ -12654,7 +12705,7 @@ void hdd_clean_up_pre_cac_interface(struct hdd_context *hdd_ctx)
 
 	precac_adapter = hdd_get_adapter_by_vdev(hdd_ctx, session_id);
 	if (!precac_adapter) {
-		hdd_err("invalid pre cac adapater");
+		hdd_err("invalid pre cac adapter");
 		return;
 	}
 
@@ -13392,7 +13443,7 @@ void hdd_restart_sap(struct hdd_adapter *ap_adapter)
 	struct hdd_hostapd_state *hostapd_state;
 	QDF_STATUS qdf_status;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(ap_adapter);
-	tsap_Config_t *sap_config;
+	tsap_config_t *sap_config;
 	void *sap_ctx;
 
 	hdd_ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(ap_adapter);
@@ -13815,11 +13866,21 @@ void hdd_pld_ipa_uc_shutdown_pipes(void)
 void hdd_set_rx_mode_rps(bool enable)
 {
 	struct cds_config_info *cds_cfg = cds_get_ini_config();
-	struct hdd_context *hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
-	struct hdd_adapter *adapter = hdd_get_adapter(hdd_ctx, QDF_SAP_MODE);
+	struct hdd_context *hdd_ctx;
+	struct hdd_adapter *adapter;
 
-	if (adapter && hdd_ctx &&
-	    !hdd_ctx->rps && cds_cfg->uc_offload_enabled) {
+	if (!cds_cfg)
+		return;
+
+	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
+	if (!hdd_ctx)
+		return;
+
+	adapter = hdd_get_adapter(hdd_ctx, QDF_SAP_MODE);
+	if (!adapter)
+		return;
+
+	if (!hdd_ctx->rps && cds_cfg->uc_offload_enabled) {
 		if (enable && !cds_cfg->rps_enabled)
 			hdd_send_rps_ind(adapter);
 		else if (!enable && cds_cfg->rps_enabled)

@@ -71,9 +71,6 @@
 /* max number of legacy bssid we can store during scan on one channel */
 #define MAX_NUM_LEGACY_BSSID_PER_CHANNEL    10
 
-#define P2P_WILDCARD_SSID "DIRECT-"     /* TODO Put it in proper place; */
-#define P2P_WILDCARD_SSID_LEN 7
-
 #ifdef WLAN_FEATURE_CONCURRENT_P2P
 #define MAX_NO_OF_P2P_SESSIONS  5
 #endif /* WLAN_FEATURE_CONCURRENT_P2P */
@@ -823,7 +820,7 @@ typedef struct sRrmContext {
 } tRrmContext, *tpRrmContext;
 
 typedef struct sHalMacStartParameters {
-	/* parametes for the Firmware */
+	/* parameters for the Firmware */
 	enum qdf_driver_type driverType;
 
 } tHalMacStartParameters;
@@ -960,6 +957,7 @@ typedef struct sAniSirGlobal {
 	bool is_11k_offload_supported;
 	uint8_t reject_addba_req;
 	uint16_t usr_cfg_ba_buff_size;
+	bool is_usr_cfg_amsdu_enabled;
 	uint8_t no_ack_policy_cfg[MAX_NUM_AC];
 	uint32_t he_sgi_ltf_cfg_bit_mask;
 	struct mgmt_beacon_probe_filter bcn_filter;

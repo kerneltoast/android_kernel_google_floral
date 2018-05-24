@@ -620,7 +620,7 @@ static int8_t csr_find_channel_pwr(struct channel_power *
 			return pdefaultPowerTable[i].tx_power;
 	}
 	/* could not find the channel list in default list */
-	/* this should not have occured */
+	/* this should not have occurred */
 	QDF_ASSERT(0);
 	return 0;
 }
@@ -753,7 +753,7 @@ static void csr_roam_sort_channel_for_early_stop(tpAniSirGlobal mac_ctx,
 	num_fixed_greedy_chan = sizeof(fixed_greedy_chan_list)/sizeof(uint8_t);
 	/*
 	 * Browse through the chan_list and put all the non-greedy channels
-	 * into a seperate list by name chan_list_non_greedy
+	 * into a separate list by name chan_list_non_greedy
 	 */
 	for (i = 0; i < num_channel; i++) {
 		for (j = 0; j < num_fixed_greedy_chan; j++) {
@@ -775,7 +775,7 @@ static void csr_roam_sort_channel_for_early_stop(tpAniSirGlobal mac_ctx,
 	}
 	/*
 	 * Browse through the fixed_greedy_chan_list and put all the greedy
-	 * channels in the chan_list into a seperate list by name
+	 * channels in the chan_list into a separate list by name
 	 * chan_list_greedy
 	 */
 	for (i = 0; i < num_fixed_greedy_chan; i++) {
@@ -1996,7 +1996,7 @@ QDF_STATUS csr_get_tsm_stats(tpAniSirGlobal pMac,
 /**
  * csr_fetch_ch_lst_from_received_list() - fetch channel list from received list
  * and update req msg
- * paramters
+ * parameters
  * @mac_ctx:            global mac ctx
  * @roam_info:          roam info struct
  * @curr_ch_lst_info:   current channel list info
@@ -2890,7 +2890,7 @@ QDF_STATUS csr_change_default_config_param(tpAniSirGlobal pMac,
 		pMac->scan.fFirstScanOnly2GChnl = pParam->fFirstScanOnly2GChnl;
 		pMac->scan.max_scan_count = pParam->max_scan_count;
 		/* This parameter is not available in cfg and not passed from
-		 * upper layers. Instead it is initialized here This paramtere
+		 * upper layers. Instead it is initialized here This parametere
 		 * is used in concurrency to determine if there are concurrent
 		 * active sessions. Is used as a temporary fix to disconnect
 		 * all active sessions when BMPS enabled so the active session
@@ -3906,17 +3906,17 @@ static void csr_roam_remove_duplicate_pending_cmd_from_list(
 						LL_ACCESS_NOLOCK);
 		dup_cmd = GET_BASE_ADDR(entry, tSmeCmd, Link);
 		/*
-		 * Remove the previous command if..
-		 * - the new roam command is for the same RoamReason...
-		 * - the new roam command is a NewProfileList.
-		 * - the new roam command is a Forced Dissoc
-		 * - the new roam command is from an 802.11 OID
-		 *   (OID_SSID or OID_BSSID).
+		 * If command is not NULL remove the similar duplicate cmd for
+		 * same reason as command. If command is NULL then check if
+		 * roam_reason is eCsrForcedDisassoc (disconnect) and remove
+		 * all roam command for the sessionId, else if roam_reason is
+		 * eCsrHddIssued (connect) remove all connect (non disconenct)
+		 * commands.
 		 */
 		if ((command && (command->sessionId == dup_cmd->sessionId) &&
 			((command->command == dup_cmd->command) &&
 			/*
-			 * This peermac check is requried for Softap/GO
+			 * This peermac check is required for Softap/GO
 			 * scenarios. for STA scenario below OR check will
 			 * suffice as command will always be NULL for
 			 * STA scenarios
@@ -3934,7 +3934,8 @@ static void csr_roam_remove_duplicate_pending_cmd_from_list(
 			((session_id == dup_cmd->sessionId) &&
 			(eSmeCommandRoam == dup_cmd->command) &&
 			((eCsrForcedDisassoc == roam_reason) ||
-			(eCsrHddIssued == roam_reason)))) {
+			(eCsrHddIssued == roam_reason &&
+			!CSR_IS_DISCONNECT_COMMAND(dup_cmd))))) {
 			sme_debug("RoamReason: %d",
 					dup_cmd->u.roamCmd.roamReason);
 			/* Remove the roam command from the pending list */
@@ -4270,8 +4271,8 @@ QDF_STATUS csr_roam_call_callback(tpAniSirGlobal pMac, uint32_t sessionId,
 			 * the reasonCode will be passed to supplicant by
 			 * cfg80211_disconnected. Based on the document,
 			 * the reason code passed to supplicant needs to set
-			 * to 0 if unknow. eSIR_BEACON_MISSED reason code is not
-			 * recognizable so that we set to 0 instead.
+			 * to 0 if unknown. eSIR_BEACON_MISSED reason code is
+			 * not recognizable so that we set to 0 instead.
 			 */
 			roam_info->reasonCode =
 				(roam_info->reasonCode == eSIR_BEACON_MISSED) ?
@@ -7548,7 +7549,7 @@ static inline void csr_process_fils_join_rsp(tpAniSirGlobal mac_ctx,
  * @cmd:              Command to be processed
  * @context:          Additional data in context of the cmd
  *
- * Process the join results which are obtained in a succesful join
+ * Process the join results which are obtained in a successful join
  *
  * Return: None
  */
@@ -9633,7 +9634,7 @@ static void csr_roam_join_rsp_processor(tpAniSirGlobal pMac,
 			 * gets enqueued and an associated timer for the SME
 			 * command timeout is started which is currently 120
 			 * seconds. This command would be dequeued only upon
-			 * succesfull connections. In case of join failures, if
+			 * successful connections. In case of join failures, if
 			 * there are too many BSS in the cache, and if we fail
 			 * Join requests with all of them, there is a chance of
 			 * timing out the above timer.
@@ -10739,7 +10740,7 @@ QDF_STATUS csr_roam_issue_set_context_req(tpAniSirGlobal pMac,
  * @is_key_valid:    indicates if key is valid
  *
  * This function will validate the key length, adjust if too long. It will
- * update is_key_valid flag to false if some error has occured key are local.
+ * update is_key_valid flag to false if some error has occurred key are local.
  *
  * Return: status of operation
  */
@@ -10964,7 +10965,7 @@ tpAniSirGlobal mac_ctx, uint32_t session_id,
 	 * following function will validate the key length, Adjust if too long.
 	 * for static WEP the keys are not set thru' SetContextReq
 	 *
-	 * it will update bool is_key_valid, to false if some error has occured
+	 * it will update bool is_key_valid, to false if some error has occurred
 	 * key are local. enqueue sme command only if is_key_valid is true
 	 * status is indication of success or failure and will be returned to
 	 * called of current function if command is not enqueued due to key req
@@ -11723,6 +11724,12 @@ csr_roam_send_disconnect_done_indication(tpAniSirGlobal mac_ctx, tSirSmeRsp
 	} else
 		sme_err("Inactive session %d",
 			discon_ind->session_id);
+
+	/*
+	 * Release WM status change command as eWNI_SME_DISCONNECT_DONE_IND
+	 * has been sent to HDD and there is nothing else left to do.
+	 */
+	csr_roam_wm_status_change_complete(mac_ctx, discon_ind->session_id);
 }
 
 static void
@@ -12016,9 +12023,10 @@ csr_roam_diag_joined_new_bss(tpAniSirGlobal mac_ctx,
 	pIbssLog->eventId = WLAN_IBSS_EVENT_COALESCING;
 	if (pNewBss) {
 		qdf_copy_macaddr(&pIbssLog->bssid, &pNewBss->bssId);
-		if (pNewBss->ssId.length)
-			qdf_mem_copy(pIbssLog->ssid, pNewBss->ssId.ssId,
-				     pNewBss->ssId.length);
+		if (pNewBss->ssId.length > HOST_LOG_MAX_SSID_SIZE)
+			pNewBss->ssId.length = HOST_LOG_MAX_SSID_SIZE;
+		qdf_mem_copy(pIbssLog->ssid, pNewBss->ssId.ssId,
+			     pNewBss->ssId.length);
 		pIbssLog->operatingChannel = pNewBss->channelNumber;
 	}
 	if (IS_SIR_STATUS_SUCCESS(wlan_cfg_get_int(mac_ctx,
@@ -13034,8 +13042,8 @@ QDF_STATUS csr_roam_lost_link(tpAniSirGlobal pMac, uint32_t sessionId,
 }
 
 
-static void csr_roam_wm_status_change_complete(tpAniSirGlobal pMac,
-						uint8_t session_id)
+void csr_roam_wm_status_change_complete(tpAniSirGlobal pMac,
+					uint8_t session_id)
 {
 	tListElem *pEntry;
 	tSmeCmd *pCommand;
@@ -13074,7 +13082,7 @@ void csr_roam_process_wm_status_change_command(
 
 	if (!pSession) {
 		sme_err("session %d not found", pCommand->sessionId);
-		return;
+		goto end;
 	}
 	sme_debug("session:%d, CmdType : %d",
 		pCommand->sessionId, pCommand->u.wmStatusChangeCmd.Type);
@@ -13101,10 +13109,15 @@ void csr_roam_process_wm_status_change_command(
 			pCommand->u.wmStatusChangeCmd.Type);
 		break;
 	}
-	/* Lost Link just triggers a roaming sequence.  We can complte the
-	 * Lost Link command here since there is nothing else to do.
-	 */
-	csr_roam_wm_status_change_complete(pMac, pCommand->sessionId);
+
+end:
+	if (status != QDF_STATUS_SUCCESS) {
+		/*
+		 * As status returned is not success, there is nothing else
+		 * left to do so release WM status change command here.
+		 */
+		csr_roam_wm_status_change_complete(pMac, pCommand->sessionId);
+	}
 }
 
 
@@ -15174,7 +15187,7 @@ QDF_STATUS csr_send_join_req_msg(tpAniSirGlobal pMac, uint32_t sessionId,
 		 * So, take the size of the tSirSmeJoinReq, subtract  size of
 		 * bssDescription, add the number of bytes indicated by the
 		 * length field of the bssDescription, add the size of length
-		 * field  because it not included in the lenghth field.
+		 * field because it not included in the length field.
 		 */
 		msgLen = sizeof(tSirSmeJoinReq) - sizeof(*pBssDescription) +
 				pBssDescription->length +
@@ -17815,7 +17828,7 @@ QDF_STATUS csr_roam_set_key_mgmt_offload(tpAniSirGlobal mac_ctx,
 
 /**
  * csr_update_roam_scan_offload_request() - updates req msg with roam offload
- * paramters
+ * parameters
  * @pMac:          mac global context
  * @req_buf:       out param, roam offload scan request packet
  * @session:       roam session
@@ -17868,7 +17881,7 @@ csr_update_roam_scan_offload_request(tpAniSirGlobal mac_ctx,
 #if defined(WLAN_FEATURE_HOST_ROAM) || defined(WLAN_FEATURE_ROAM_OFFLOAD)
 /**
  * csr_check_band_channel_match() - check if passed band and channel match
- * paramters
+ * parameters
  * @band:       band to match with channel
  * @channel:    channel to match with band
  *
@@ -17891,7 +17904,7 @@ csr_check_band_channel_match(enum band_info band, uint8_t channel)
 
 /**
  * csr_fetch_ch_lst_from_ini() - fetch channel list from ini and update req msg
- * paramters
+ * parameters
  * @mac_ctx:      global mac ctx
  * @roam_info:    roam info struct
  * @req_buf:      out param, roam offload scan request packet
@@ -17981,7 +17994,7 @@ csr_fetch_ch_lst_from_ini(tpAniSirGlobal mac_ctx,
 /**
  * csr_fetch_ch_lst_from_occupied_lst() - fetch channel list from occupied list
  * and update req msg
- * paramters
+ * parameters
  * @mac_ctx:      global mac ctx
  * @session_id:   session id
  * @reason:       reason to roam
@@ -18082,7 +18095,7 @@ csr_fetch_ch_lst_from_occupied_lst(tpAniSirGlobal mac_ctx,
 /**
  * csr_fetch_valid_ch_lst() - fetch channel list from valid channel list and
  * update req msg
- * paramters
+ * parameters
  * @mac_ctx:            global mac ctx
  * @req_buf:            out param, roam offload scan request packet
  *
@@ -18189,7 +18202,7 @@ csr_fetch_valid_ch_lst(tpAniSirGlobal mac_ctx,
 /**
  * csr_create_roam_scan_offload_request() - init roam offload scan request
  *
- * paramters
+ * parameters
  * @mac_ctx:      global mac ctx
  * @command:      roam scan offload command input
  * @session_id:   session id
@@ -18269,6 +18282,8 @@ csr_create_roam_scan_offload_request(tpAniSirGlobal mac_ctx,
 	req_buf->ConnectedNetwork.mcencryption =
 		mac_ctx->roam.roamSession[session_id].
 		connectedProfile.mcEncryptionType;
+	/* Copy the RSN capabilities in roam offload request from session*/
+	req_buf->rsn_caps = session->rsn_caps;
 #ifdef WLAN_FEATURE_11W
 	req_buf->ConnectedNetwork.mfp_enabled =
 	    mac_ctx->roam.roamSession[session_id].connectedProfile.MFPEnabled;
@@ -19313,7 +19328,7 @@ uint8_t csr_get_roam_enabled_sta_sessionid(tpAniSirGlobal mac_ctx)
  * csr_roam_offload_scan() - populates roam offload scan request and sends to
  * WMA
  *
- * paramters
+ * parameters
  * @mac_ctx:      global mac ctx
  * @session_id:   session id
  * @command:      roam scan offload command input
@@ -19442,7 +19457,7 @@ csr_roam_offload_scan(tpAniSirGlobal mac_ctx, uint8_t session_id,
 	/*
 	 * For CTX INT cmd if rssi disallow bssid list have any member
 	 * fill it and send it to firmware so that firmware does not
-	 * try to roam to these BSS untill RSSI OR time condition are
+	 * try to roam to these BSS until RSSI OR time condition are
 	 * matched.
 	 */
 	if (reason == REASON_CTX_INIT)

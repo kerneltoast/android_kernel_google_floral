@@ -162,7 +162,7 @@ typedef struct tagSmeCmd {
 #endif
 		struct policy_mgr_hw_mode set_hw_mode_cmd;
 		struct s_nss_update_cmd nss_update_cmd;
-		struct sir_dual_mac_config set_dual_mac_cmd;
+		struct policy_mgr_dual_mac_config set_dual_mac_cmd;
 		struct sir_antenna_mode_param set_antenna_mode_cmd;
 	} u;
 } tSmeCmd;
@@ -199,6 +199,20 @@ bool qos_process_command(tpAniSirGlobal pMac, tSmeCmd *pCommand);
 void qos_release_command(tpAniSirGlobal pMac, tSmeCmd *pCommand);
 QDF_STATUS csr_process_scan_command(tpAniSirGlobal pMac, tSmeCmd *pCommand);
 QDF_STATUS csr_roam_process_command(tpAniSirGlobal pMac, tSmeCmd *pCommand);
+
+/**
+ * csr_roam_wm_status_change_complete() - Remove WM status change command
+ *                                        from SME active command list
+ * @mac_ctx: global mac context
+ * @session_id: session id
+ *
+ * This API removes WM status change command from SME active command list
+ * if present.
+ *
+ * Return: void
+ */
+void csr_roam_wm_status_change_complete(tpAniSirGlobal mac_ctx,
+					uint8_t session_id);
 void csr_roam_process_wm_status_change_command(tpAniSirGlobal pMac,
 		tSmeCmd *pCommand);
 void csr_reinit_roam_cmd(tpAniSirGlobal pMac, tSmeCmd *pCommand);

@@ -3431,6 +3431,19 @@ int wma_process_rmf_frame(tp_wma_handle wma_handle,
 			cds_pkt_return_packet(rx_pkt);
 			return -EINVAL;
 		}
+	if (iface->ucast_key_cipher == WMI_CIPHER_AES_GCM) {
+		hdr_len = WLAN_IEEE80211_GCMP_HEADERLEN;
+		mic_len = WLAN_IEEE80211_GCMP_MICLEN;
+	} else {
+		hdr_len = IEEE80211_CCMP_HEADERLEN;
+		mic_len = IEEE80211_CCMP_MICLEN;
+	}
+	if (qdf_nbuf_len(wbuf) < (sizeof(*wh) + hdr_len + mic_len)) {
+		WMA_LOGE("Buffer length less than expected %d",
+					(int)qdf_nbuf_len(wbuf));
+		cds_pkt_return_packet(rx_pkt);
+		return -EINVAL;
+	}
 
 		orig_hdr = (uint8_t *) qdf_nbuf_data(wbuf);
 		/* Pointer to head of CCMP header */
@@ -3442,13 +3455,6 @@ int wma_process_rmf_frame(tp_wma_handle wma_handle,
 			return -EINVAL;
 		}
 
-		if (iface->ucast_key_cipher == WMI_CIPHER_AES_GCM) {
-			hdr_len = WLAN_IEEE80211_GCMP_HEADERLEN;
-			mic_len = WLAN_IEEE80211_GCMP_MICLEN;
-		} else {
-			hdr_len = IEEE80211_CCMP_HEADERLEN;
-			mic_len = IEEE80211_CCMP_MICLEN;
-		}
 		/* Strip privacy headers (and trailer)
 		 * for a received frame
 		 */
@@ -3574,7 +3580,7 @@ static bool wma_is_pkt_drop_candidate(tp_wma_handle wma_handle,
 	if (!peer) {
 		if (IEEE80211_FC0_SUBTYPE_ASSOC_REQ != subtype) {
 			WMA_LOGI(
-			   FL("Received mgmt frame: %0x from unknow peer: %pM"),
+			   FL("Received mgmt frame: %0x from unknown peer: %pM"),
 			   subtype, peer_addr);
 			should_drop = true;
 		}
@@ -3736,6 +3742,19 @@ int wma_form_rx_packet(qdf_nbuf_t buf,
 	rx_pkt->pkt_meta.timestamp = (uint32_t) jiffies;
 	rx_pkt->pkt_meta.mpdu_hdr_len = sizeof(struct ieee80211_frame);
 	rx_pkt->pkt_meta.mpdu_len = mgmt_rx_params->buf_len;
+
+	/*
+	 * The buf_len should be at least 802.11 header len
+	 */
+	if (mgmt_rx_params->buf_len < rx_pkt->pkt_meta.mpdu_hdr_len) {
+		WMA_LOGE("MPDU Len %d lesser than header len %d",
+			 mgmt_rx_params->buf_len,
+			 rx_pkt->pkt_meta.mpdu_hdr_len);
+		qdf_nbuf_free(buf);
+		qdf_mem_free(rx_pkt);
+		return -EINVAL;
+	}
+
 	rx_pkt->pkt_meta.mpdu_data_len = mgmt_rx_params->buf_len -
 					 rx_pkt->pkt_meta.mpdu_hdr_len;
 
@@ -3867,6 +3886,7 @@ static void wma_mem_endianness_based_copy(
 }
 #endif
 
+#define RESERVE_BYTES                   100
 /**
  * wma_mgmt_rx_process() - process management rx frame.
  * @handle: wma handle
@@ -3913,8 +3933,29 @@ static int wma_mgmt_rx_process(void *handle, uint8_t *data,
 	mgmt_rx_params->pdev_id = 0;
 	mgmt_rx_params->rx_params = NULL;
 
-	wbuf = qdf_nbuf_alloc(NULL, roundup(mgmt_rx_params->buf_len, 4),
-				0, 4, false);
+	/*
+	 * Allocate the memory for this rx packet, add extra 100 bytes for:-
+	 *
+	 * 1.  Filling the missing RSN capabilites by some APs, which fill the
+	 *     RSN IE length as extra 2 bytes but dont fill the IE data with
+	 *     capabilities, resulting in failure in unpack core due to length
+	 *     mismatch. Check sir_validate_and_rectify_ies for more info.
+	 *
+	 * 2.  In the API wma_process_rmf_frame(), the driver trims the CCMP
+	 *     header by overwriting the IEEE header to memory occupied by CCMP
+	 *     header, but an overflow is possible if the memory allocated to
+	 *     frame is less than the sizeof(struct ieee80211_frame) +CCMP
+	 *     HEADER len, so allocating 100 bytes would solve this issue too.
+	 *
+	 * 3.  CCMP header is pointing to orig_hdr +
+	 *     sizeof(struct ieee80211_frame) which could also result in OOB
+	 *     access, if the data len is less than
+	 *     sizeof(struct ieee80211_frame), allocating extra bytes would
+	 *     result in solving this issue too.
+	 */
+	wbuf = qdf_nbuf_alloc(NULL, roundup(mgmt_rx_params->buf_len +
+							RESERVE_BYTES,
+							4), 0, 4, false);
 	if (!wbuf) {
 		WMA_LOGE("%s: Failed to allocate wbuf for mgmt rx len(%u)",
 			    __func__, mgmt_rx_params->buf_len);

@@ -396,7 +396,7 @@ populate_dot11f_country(tpAniSirGlobal pMac,
  * This routine will populate DS param in management frame like
  * beacon, probe response, and etc.
  *
- * Return: Overall sucess
+ * Return: Overall success
  */
 tSirRetStatus
 populate_dot11f_ds_params(tpAniSirGlobal mac_ctx,
@@ -1215,7 +1215,7 @@ populate_dot11f_ext_cap(tpAniSirGlobal pMac,
 	if (psessionEntry && psessionEntry->enable_bcast_probe_rsp)
 		p_ext_cap->fils_capability = 1;
 
-	/* Need to calulate the num_bytes based on bits set */
+	/* Need to calculate the num_bytes based on bits set */
 	if (pDot11f->present)
 		pDot11f->num_bytes = lim_compute_ext_cap_ie_length(pDot11f);
 
@@ -1949,7 +1949,7 @@ void populate_dot11f_wmm_info_ap(tpAniSirGlobal pMac, tDot11fIEWMMInfoAp *pInfo,
 	pInfo->version = SIR_MAC_OUI_VERSION_1;
 
 	/* WMM Specification 3.1.3, 3.2.3
-	 * An IBSS staion shall always use its default WMM parameters.
+	 * An IBSS station shall always use its default WMM parameters.
 	 */
 	if (LIM_IS_IBSS_ROLE(psessionEntry)) {
 		pInfo->param_set_count = 0;
@@ -2330,6 +2330,7 @@ void update_fils_data(struct sir_fils_indication *fils_ind,
 		      tDot11fIEfils_indication *fils_indication)
 {
 	uint8_t *data;
+	uint8_t remaining_data = fils_indication->num_variable_data;
 
 	data = fils_indication->variable_data;
 	fils_ind->is_present = true;
@@ -2342,18 +2343,37 @@ void update_fils_data(struct sir_fils_indication *fils_ind,
 	fils_ind->is_pk_auth_supported =
 			fils_indication->is_pk_auth_supported;
 	if (fils_indication->is_cache_id_present) {
+		if (remaining_data < SIR_CACHE_IDENTIFIER_LEN) {
+			pe_err("Failed to copy Cache Identifier, Invalid remaining data %d",
+				remaining_data);
+			return;
+		}
 		fils_ind->cache_identifier.is_present = true;
 		qdf_mem_copy(fils_ind->cache_identifier.identifier,
 				data, SIR_CACHE_IDENTIFIER_LEN);
 		data = data + SIR_CACHE_IDENTIFIER_LEN;
+		remaining_data = remaining_data - SIR_CACHE_IDENTIFIER_LEN;
 	}
 	if (fils_indication->is_hessid_present) {
+		if (remaining_data < SIR_HESSID_LEN) {
+			pe_err("Failed to copy HESSID, Invalid remaining data %d",
+				remaining_data);
+			return;
+		}
 		fils_ind->hessid.is_present = true;
 		qdf_mem_copy(fils_ind->hessid.hessid,
 				data, SIR_HESSID_LEN);
 		data = data + SIR_HESSID_LEN;
+		remaining_data = remaining_data - SIR_HESSID_LEN;
 	}
 	if (fils_indication->realm_identifiers_cnt) {
+		if (remaining_data < (fils_indication->realm_identifiers_cnt *
+		    SIR_REALM_LEN)) {
+			pe_err("Failed to copy Realm Identifier, Invalid remaining data %d realm_cnt %d",
+				remaining_data,
+				fils_indication->realm_identifiers_cnt);
+			return;
+		}
 		fils_ind->realm_identifier.is_present = true;
 		fils_ind->realm_identifier.realm_cnt =
 			fils_indication->realm_identifiers_cnt;
@@ -5769,7 +5789,7 @@ tSirRetStatus populate_dot11f_assoc_res_wsc_ie(tpAniSirGlobal pMac,
 	wscIe = limGetWscIEPtr(pMac, pRcvdAssocReq->addIE.addIEdata,
 			       pRcvdAssocReq->addIE.length);
 	if (wscIe != NULL) {
-		/* retreive WSC IE from given AssocReq */
+		/* retrieve WSC IE from given AssocReq */
 		ret = dot11f_unpack_ie_wsc_assoc_req(pMac,
 						     /* EID, length, OUI */
 						     (uint8_t *)wscIe + 2 + 4,

@@ -127,7 +127,7 @@
 #define WE_SET_MAX_ASSOC     4
 /*
  * <ioctl>
- * scan_diable - Disable scan
+ * scan_disable - Disable scan
  *
  * @INPUT: set_value
  *
@@ -3503,27 +3503,43 @@ int hdd_set_ldpc(struct hdd_adapter *adapter, int value)
 {
 	tHalHandle hal = WLAN_HDD_GET_HAL_CTX(adapter);
 	int ret;
+	QDF_STATUS status;
+	uint32_t cfg_value;
+	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	struct hdd_config *config = hdd_ctx->config;
+	union {
+		uint16_t cfg_value16;
+		tSirMacHTCapabilityInfo ht_cap_info;
+	} u;
 
 	hdd_debug("%d", value);
 	if (value) {
 		/* make sure HT capabilities allow this */
-		QDF_STATUS status;
-		uint32_t cfg_value;
-		union {
-			uint16_t cfg_value16;
-			tSirMacHTCapabilityInfo ht_cap_info;
-		} u;
-
-		status = sme_cfg_get_int(hal, WNI_CFG_HT_CAP_INFO, &cfg_value);
-		if (QDF_STATUS_SUCCESS != status) {
-			hdd_err("Failed to get HT capability info");
-			return -EIO;
-		}
-		u.cfg_value16 = cfg_value & 0xFFFF;
-		if (!u.ht_cap_info.advCodingCap) {
+		if (!config->enable_rx_ldpc) {
 			hdd_err("LDCP not supported");
 			return -EINVAL;
 		}
+	} else if (!config->enable_rx_ldpc) {
+			hdd_err("LDCP is already disabled");
+			return 0;
+	}
+	status = sme_cfg_get_int(hal, WNI_CFG_HT_CAP_INFO, &cfg_value);
+	if (QDF_STATUS_SUCCESS != status) {
+		hdd_err("Failed to get HT capability info");
+		return -EIO;
+	}
+	u.cfg_value16 = cfg_value & 0xFFFF;
+
+	u.ht_cap_info.advCodingCap = value;
+	status = sme_cfg_set_int(hal, WNI_CFG_HT_CAP_INFO, u.cfg_value16);
+	if (QDF_STATUS_SUCCESS != status) {
+		hdd_err("Failed to set HT capability info");
+		return -EIO;
+	}
+	status = sme_cfg_set_int(hal, WNI_CFG_VHT_LDPC_CODING_CAP, value);
+	if (QDF_STATUS_SUCCESS != status) {
+		hdd_err("Failed to set VHT LDPC capability info");
+		return -EIO;
 	}
 
 	ret = sme_update_ht_config(hal, adapter->session_id,
@@ -3531,6 +3547,9 @@ int hdd_set_ldpc(struct hdd_adapter *adapter, int value)
 				   value);
 	if (ret)
 		hdd_err("Failed to set LDPC value");
+	ret = sme_update_he_ldpc_supp(hal, adapter->session_id, value);
+	if (ret)
+		hdd_err("Failed to set HE LDPC value");
 
 	return ret;
 }
@@ -3689,7 +3708,7 @@ int hdd_assemble_rate_code(uint8_t preamble, uint8_t nss, uint8_t rate)
 }
 
 int hdd_set_11ax_rate(struct hdd_adapter *adapter, int set_value,
-		      struct sap_Config *sap_config)
+		      struct sap_config *sap_config)
 {
 	uint8_t preamble = 0, nss = 0, rix = 0;
 	int ret;
@@ -3896,7 +3915,7 @@ int wlan_hdd_update_phymode(struct net_device *net, tHalHandle hal,
 			return -EIO;
 		}
 		break;
-	/* UMAC doesnt have option to set MODE_11NA/MODE_11NG as phymode
+	/* UMAC doesn't have option to set MODE_11NA/MODE_11NG as phymode
 	 * so setting phymode as eCSR_DOT11_MODE_11n and updating the band
 	 * and channel bonding in configuration to reflect MODE_11NA/MODE_11NG
 	 */
@@ -4262,10 +4281,6 @@ static int __iw_setint_getnone(struct net_device *dev,
 	int set_value = value[1];
 	int ret;
 	QDF_STATUS status;
-	void *soc = NULL;
-	struct cdp_pdev *pdev = NULL;
-	struct cdp_vdev *vdev = NULL;
-	struct cdp_txrx_stats_req req;
 
 	hdd_enter_dev(dev);
 
@@ -4786,6 +4801,11 @@ static int __iw_setint_getnone(struct net_device *dev,
 	case WE_SET_AMSDU:
 	{
 		hdd_debug("SET AMSDU val %d", set_value);
+		if (set_value > 1)
+			sme_set_amsdu(hdd_ctx->hHal, true);
+		else
+			sme_set_amsdu(hdd_ctx->hHal, false);
+
 		ret = wma_cli_set_command(adapter->session_id,
 					  GEN_VDEV_PARAM_AMSDU,
 					  set_value, GEN_CMD);
@@ -4825,6 +4845,7 @@ static int __iw_setint_getnone(struct net_device *dev,
 		ret = wma_cli_set_command(adapter->session_id,
 					  WMI_PDEV_PARAM_TX_CHAIN_MASK,
 					  set_value, PDEV_CMD);
+		ret = hdd_set_antenna_mode(adapter, hdd_ctx, set_value);
 		break;
 	}
 
@@ -4835,6 +4856,7 @@ static int __iw_setint_getnone(struct net_device *dev,
 		ret = wma_cli_set_command(adapter->session_id,
 					  WMI_PDEV_PARAM_RX_CHAIN_MASK,
 					  set_value, PDEV_CMD);
+		ret = hdd_set_antenna_mode(adapter, hdd_ctx, set_value);
 		break;
 	}
 
@@ -4953,23 +4975,6 @@ static int __iw_setint_getnone(struct net_device *dev,
 		ret = wma_cli_set_command(adapter->session_id,
 					  WMA_VDEV_TXRX_FWSTATS_ENABLE_CMDID,
 					  set_value, VDEV_CMD);
-		break;
-	}
-
-	case WE_SET_TXRX_STATS:
-	{
-		hdd_debug("WE_SET_TXRX_STATS val %d", set_value);
-		ret = cds_get_datapath_handles(&soc, &pdev, &vdev,
-				       adapter->session_id);
-
-		if (ret != 0) {
-			hdd_err("Invalid handles");
-			break;
-		}
-
-		req.stats = set_value;
-		req.channel = adapter->session.station.conn_info.operationChannel;
-		ret = cdp_txrx_stats_request(soc, vdev, &req);
 		break;
 	}
 
@@ -8245,7 +8250,8 @@ static int __iw_set_packet_filter_params(struct net_device *dev,
 		return -EINVAL;
 	}
 
-	if ((NULL == priv_data.pointer) || (0 == priv_data.length)) {
+	if ((NULL == priv_data.pointer) || (0 == priv_data.length) ||
+	   priv_data.length < sizeof(struct pkt_filter_cfg)) {
 		hdd_err("invalid priv data %pK or invalid priv data length %d",
 			priv_data.pointer, priv_data.length);
 		return -EINVAL;
@@ -8661,8 +8667,6 @@ static int __iw_set_pno(struct net_device *dev,
 		return -EIO;
 	}
 
-	hdd_debug("PNO data len %d data %s", wrqu->data.length, extra);
-
 	/* making sure argument string ends with '\0' */
 	len = (wrqu->data.length + 1);
 	data = qdf_mem_malloc(len);
@@ -8672,6 +8676,8 @@ static int __iw_set_pno(struct net_device *dev,
 	}
 	qdf_mem_copy(data, extra, (len-1));
 	ptr = data;
+
+	hdd_debug("PNO data len %d data %s", wrqu->data.length, data);
 
 	if (1 != sscanf(ptr, " %hhu %n", &value, &offset)) {
 		hdd_err("PNO enable input is not valid %s", ptr);
@@ -9005,6 +9011,10 @@ static int __iw_set_two_ints_getnone(struct net_device *dev,
 	int sub_cmd = value[0];
 	int ret;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	void *soc = NULL;
+	struct cdp_pdev *pdev = NULL;
+	struct cdp_vdev *vdev = NULL;
+	struct cdp_txrx_stats_req req = {0};
 
 	hdd_enter_dev(dev);
 
@@ -9017,6 +9027,23 @@ static int __iw_set_two_ints_getnone(struct net_device *dev,
 		return ret;
 
 	switch (sub_cmd) {
+	case WE_SET_TXRX_STATS:
+	{
+		ret = cds_get_datapath_handles(&soc, &pdev, &vdev,
+				       adapter->session_id);
+
+		if (ret != 0) {
+			hdd_err("Invalid handles");
+			break;
+		}
+
+		req.stats = value[1];
+		req.mac_id = value[2];
+		hdd_debug("WE_SET_TXRX_STATS stats cmd: %d mac_id: %d",
+			req.stats, req.mac_id);
+		ret = cdp_txrx_stats_request(soc, vdev, &req);
+		break;
+	}
 	case WE_SET_SMPS_PARAM:
 		hdd_debug("WE_SET_SMPS_PARAM val %d %d", value[1], value[2]);
 		ret = wma_cli_set_command(adapter->session_id,
@@ -9452,7 +9479,7 @@ static const struct iw_priv_args we_private_args[] = {
 	 "txrx_fw_stats"},
 
 	{WE_SET_TXRX_STATS,
-	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
+	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 2,
 	 0,
 	 "txrx_stats"},
 

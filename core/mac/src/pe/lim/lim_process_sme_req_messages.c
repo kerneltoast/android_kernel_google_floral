@@ -200,7 +200,7 @@ static QDF_STATUS lim_process_set_dual_mac_cfg_req(tpAniSirGlobal mac,
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 	struct scheduler_msg message = {0};
-	struct sir_dual_mac_config *req_msg;
+	struct policy_mgr_dual_mac_config *req_msg;
 	uint32_t len;
 	struct sir_set_dual_mac_cfg *buf;
 	struct scheduler_msg resp_msg = {0};
@@ -1154,7 +1154,7 @@ void lim_get_random_bssid(tpAniSirGlobal pMac, uint8_t *data)
  * __lim_process_clear_dfs_channel_list()
  *
  ***FUNCTION:
- ***Clear DFS channel list  when country is changed/aquired.
+ ***Clear DFS channel list  when country is changed/acquired.
    .*This message is sent from SME.
  *
  ***LOGIC:
@@ -1371,7 +1371,7 @@ __lim_process_sme_join_req(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 		session->enable_bcast_probe_rsp =
 				sme_join_req->enable_bcast_probe_rsp;
 
-		/* Store vendor specfic IE for CISCO AP */
+		/* Store vendor specific IE for CISCO AP */
 		ie_len = (bss_desc->length + sizeof(bss_desc->length) -
 			 GET_FIELD_OFFSET(tSirBssDescription, ieFields));
 
@@ -2155,7 +2155,7 @@ static void __lim_process_sme_disassoc_req(tpAniSirGlobal pMac, uint32_t *pMsgBu
 			break;
 
 		case eLIM_SME_WT_DISASSOC_STATE:
-			/* PE Recieved a Disassoc frame. Normally it gets DISASSOC_CNF but it
+			/* PE Received a Disassoc frame. Normally it gets DISASSOC_CNF but it
 			 * received DISASSOC_REQ. Which means host is also trying to disconnect.
 			 * PE can continue processing DISASSOC_REQ and send the response instead
 			 * of failing the request. SME will anyway ignore DEAUTH_IND that was sent
@@ -2282,6 +2282,8 @@ static void __lim_process_sme_disassoc_cnf(tpAniSirGlobal pMac, uint32_t *pMsgBu
 	tpDphHashNode pStaDs;
 	tpPESession psessionEntry;
 	uint8_t sessionId;
+	uint32_t *msg = NULL;
+	QDF_STATUS status;
 
 	qdf_mem_copy(&smeDisassocCnf, pMsgBuf,
 			sizeof(struct sSirSmeDisassocCnf));
@@ -2291,11 +2293,26 @@ static void __lim_process_sme_disassoc_cnf(tpAniSirGlobal pMac, uint32_t *pMsgBu
 				&sessionId);
 	if (psessionEntry == NULL) {
 		pe_err("session does not exist for given bssId");
+		status = lim_prepare_disconnect_done_ind(pMac, &msg,
+						CSR_SESSION_ID_INVALID,
+						eSIR_SME_INVALID_SESSION,
+						NULL);
+		if (QDF_IS_STATUS_SUCCESS(status))
+			lim_send_sme_disassoc_deauth_ntf(pMac,
+							 QDF_STATUS_SUCCESS,
+							 (uint32_t *)msg);
 		return;
 	}
 
 	if (!lim_is_sme_disassoc_cnf_valid(pMac, &smeDisassocCnf, psessionEntry)) {
 		pe_err("received invalid SME_DISASSOC_CNF message");
+		status = lim_prepare_disconnect_done_ind(pMac, &msg, sessionId,
+						eSIR_SME_INVALID_PARAMETERS,
+						&smeDisassocCnf.bssid.bytes[0]);
+		if (QDF_IS_STATUS_SUCCESS(status))
+			lim_send_sme_disassoc_deauth_ntf(pMac,
+							 QDF_STATUS_SUCCESS,
+							 (uint32_t *)msg);
 		return;
 	}
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM    /* FEATURE_WLAN_DIAG_SUPPORT */
@@ -2319,6 +2336,15 @@ static void __lim_process_sme_disassoc_cnf(tpAniSirGlobal pMac, uint32_t *pMsgBu
 				psessionEntry->limSmeState);
 			lim_print_sme_state(pMac, LOGE,
 					    psessionEntry->limSmeState);
+			status = lim_prepare_disconnect_done_ind(pMac, &msg,
+							sessionId,
+							eSIR_SME_INVALID_STATE,
+							&smeDisassocCnf.bssid.
+							bytes[0]);
+			if (QDF_IS_STATUS_SUCCESS(status))
+				lim_send_sme_disassoc_deauth_ntf(pMac,
+							QDF_STATUS_SUCCESS,
+							(uint32_t *)msg);
 			return;
 		}
 		break;
@@ -2331,7 +2357,13 @@ static void __lim_process_sme_disassoc_cnf(tpAniSirGlobal pMac, uint32_t *pMsgBu
 	default:                /* eLIM_UNKNOWN_ROLE */
 		pe_err("received unexpected SME_DISASSOC_CNF role %d",
 			GET_LIM_SYSTEM_ROLE(psessionEntry));
-
+		status = lim_prepare_disconnect_done_ind(pMac, &msg, sessionId,
+						eSIR_SME_INVALID_STATE,
+						&smeDisassocCnf.bssid.bytes[0]);
+		if (QDF_IS_STATUS_SUCCESS(status))
+			lim_send_sme_disassoc_deauth_ntf(pMac,
+							 QDF_STATUS_SUCCESS,
+							 (uint32_t *)msg);
 		return;
 	}
 
@@ -2345,16 +2377,32 @@ static void __lim_process_sme_disassoc_cnf(tpAniSirGlobal pMac, uint32_t *pMsgBu
 			pe_err("DISASSOC_CNF for a STA with no context, addr= "
 				MAC_ADDRESS_STR,
 				MAC_ADDR_ARRAY(smeDisassocCnf.peer_macaddr.bytes));
+			status = lim_prepare_disconnect_done_ind(pMac, &msg,
+						sessionId,
+						eSIR_SME_INVALID_PARAMETERS,
+						&smeDisassocCnf.bssid.bytes[0]);
+			if (QDF_IS_STATUS_SUCCESS(status))
+				lim_send_sme_disassoc_deauth_ntf(pMac,
+							QDF_STATUS_SUCCESS,
+							(uint32_t *)msg);
 			return;
 		}
 
 		if ((pStaDs->mlmStaContext.mlmState ==
 				eLIM_MLM_WT_DEL_STA_RSP_STATE) ||
 			(pStaDs->mlmStaContext.mlmState ==
-				eLIM_MLM_WT_DEL_STA_RSP_STATE)) {
+				eLIM_MLM_WT_DEL_BSS_RSP_STATE)) {
 			pe_err("No need of cleanup for addr:" MAC_ADDRESS_STR "as MLM state is %d",
 				MAC_ADDR_ARRAY(smeDisassocCnf.peer_macaddr.bytes),
 				pStaDs->mlmStaContext.mlmState);
+			status = lim_prepare_disconnect_done_ind(pMac, &msg,
+							CSR_SESSION_ID_INVALID,
+							eSIR_SME_SUCCESS,
+							NULL);
+			if (QDF_IS_STATUS_SUCCESS(status))
+				lim_send_sme_disassoc_deauth_ntf(pMac,
+							QDF_STATUS_SUCCESS,
+							(uint32_t *)msg);
 			return;
 		}
 
@@ -2440,6 +2488,7 @@ static void __lim_process_sme_deauth_req(tpAniSirGlobal mac_ctx,
 		case eLIM_SME_LINK_EST_STATE:
 			/* Delete all TDLS peers connected before leaving BSS */
 			lim_delete_tdls_peers(mac_ctx, session_entry);
+		/* fallthrough */
 		case eLIM_SME_WT_ASSOC_STATE:
 		case eLIM_SME_JOIN_FAILURE_STATE:
 		case eLIM_SME_IDLE_STATE:
@@ -2454,7 +2503,7 @@ static void __lim_process_sme_deauth_req(tpAniSirGlobal mac_ctx,
 		case eLIM_SME_WT_DEAUTH_STATE:
 		case eLIM_SME_WT_DISASSOC_STATE:
 			/*
-			 * PE Recieved a Deauth/Disassoc frame. Normally it get
+			 * PE Received a Deauth/Disassoc frame. Normally it get
 			 * DEAUTH_CNF/DISASSOC_CNF but it received DEAUTH_REQ.
 			 * Which means host is also trying to disconnect.
 			 * PE can continue processing DEAUTH_REQ and send
@@ -2826,7 +2875,7 @@ lim_assoc_sta_end:
  *
  * LOGIC: on AP, disassoc all STA associated thru TKIP,
  * we don't do the proper STA disassoc sequence since the
- * BSS will be stoped anyway
+ * BSS will be stopped anyway
  *
  ***ASSUMPTIONS:
  *
@@ -2955,7 +3004,7 @@ __lim_handle_sme_stop_bss_request(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 		 */
 		pMac->lim.gLimIbssCoalescingHappened = false;
 	}
-	for (i = 1; i < pMac->lim.gLimAssocStaLimit; i++) {
+	for (i = 1; i <= pMac->lim.gLimAssocStaLimit; i++) {
 		pStaDs =
 			dph_get_hash_entry(pMac, i, &psessionEntry->dph.dphHashTable);
 		if (NULL == pStaDs)
@@ -3935,7 +3984,7 @@ static void __lim_process_sme_set_ht2040_mode(tpAniSirGlobal pMac,
 				qdf_mem_free(pHtOpMode);
 				return;
 			}
-			pe_debug("Notifed FW about OP mode: %d for staId=%d",
+			pe_debug("Notified FW about OP mode: %d for staId=%d",
 				pHtOpMode->opMode, staId);
 
 		} else
@@ -4465,7 +4514,7 @@ static void lim_process_sme_update_access_policy_vendor_ie(
 {
 	struct sme_update_access_policy_vendor_ie *update_vendor_ie;
 	struct sPESession *pe_session_entry;
-	uint8_t num_bytes;
+	uint16_t num_bytes;
 
 	if (!msg) {
 		pe_err("Buffer is Pointing to NULL");
@@ -4520,7 +4569,7 @@ static void lim_process_sme_update_access_policy_vendor_ie(
 bool lim_process_sme_req_messages(tpAniSirGlobal pMac,
 				  struct scheduler_msg *pMsg)
 {
-	bool bufConsumed = true;        /* Set this flag to false within case block of any following message, that doesnt want pMsgBuf to be freed. */
+	bool bufConsumed = true;        /* Set this flag to false within case block of any following message, that doesn't want pMsgBuf to be freed. */
 	uint32_t *pMsgBuf = pMsg->bodyptr;
 
 	pe_debug("LIM Received SME Message %s(%d) Global LimSmeState:%s(%d) Global LimMlmState: %s(%d)",

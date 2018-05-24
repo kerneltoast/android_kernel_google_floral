@@ -239,7 +239,7 @@ lim_change_channel_with_callback(tpAniSirGlobal mac_ctx, uint8_t new_chan,
  * This function is called to get the list,
  * change the channel type and set again.
  * NOTE: If a channel is ACTIVE, this function will make it as PASSIVE
- *       If a channel is PASSIVE, this fucntion will make it as ACTIVE
+ *       If a channel is PASSIVE, this function will make it as ACTIVE
  *
  * Return: None
  */
@@ -545,6 +545,12 @@ lim_mlm_add_bss(tpAniSirGlobal mac_ctx,
 		mlm_start_req->cfParamSet.cfpDurRemaining;
 
 	addbss_param->rateSet.numRates = mlm_start_req->rateSet.numRates;
+	if (addbss_param->rateSet.numRates > SIR_MAC_RATESET_EID_MAX) {
+		pe_warn("num of sup rates %d exceeding the limit %d, resetting",
+			addbss_param->rateSet.numRates,
+			SIR_MAC_RATESET_EID_MAX);
+		addbss_param->rateSet.numRates = SIR_MAC_RATESET_EID_MAX;
+	}
 	qdf_mem_copy(addbss_param->rateSet.rate, mlm_start_req->rateSet.rate,
 		     mlm_start_req->rateSet.numRates);
 
@@ -575,9 +581,16 @@ lim_mlm_add_bss(tpAniSirGlobal mac_ctx,
 	addbss_param->sessionId = mlm_start_req->sessionId;
 
 	/* Send the SSID to HAL to enable SSID matching for IBSS */
-	qdf_mem_copy(&(addbss_param->ssId.ssId),
-		     mlm_start_req->ssId.ssId, mlm_start_req->ssId.length);
 	addbss_param->ssId.length = mlm_start_req->ssId.length;
+	if (addbss_param->ssId.length > SIR_MAC_MAX_SSID_LENGTH) {
+		pe_err("Invalid ssid length %d, max length allowed %d",
+		       addbss_param->ssId.length,
+		       SIR_MAC_MAX_SSID_LENGTH);
+		qdf_mem_free(addbss_param);
+		return eSIR_SME_INVALID_PARAMETERS;
+	}
+	qdf_mem_copy(addbss_param->ssId.ssId,
+		     mlm_start_req->ssId.ssId, addbss_param->ssId.length);
 	addbss_param->bHiddenSSIDEn = mlm_start_req->ssidHidden;
 	pe_debug("TRYING TO HIDE SSID %d", addbss_param->bHiddenSSIDEn);
 	/* CR309183. Disable Proxy Probe Rsp.  Host handles Probe Requests.  Until FW fixed. */
@@ -815,7 +828,7 @@ failure:
  *
  * This function does following:
  *   Check for suspend state.
- *   If success, proceed with setting link state to recieve the
+ *   If success, proceed with setting link state to receive the
  *   probe response/beacon from intended AP.
  *   Switch to the APs channel.
  *   On an error case, send the MLM_JOIN_CNF with error status.

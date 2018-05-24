@@ -578,7 +578,7 @@ ol_rx_indication_handler(ol_txrx_pdev_handle pdev,
 				 * needs to be set in the netbuf to locate the
 				 * corresponding rx descriptor.)
 				 *
-				 * It is neccessary to call htt_rx_amsdu_pop
+				 * It is necessary to call htt_rx_amsdu_pop
 				 * before htt_rx_mpdu_desc_list_next, because
 				 * the (MPDU) rx descriptor has DMA unmapping
 				 * done during the htt_rx_amsdu_pop call.
@@ -1629,7 +1629,7 @@ ol_rx_in_order_deliver(struct ol_txrx_vdev_t *vdev,
 	/*
 	 * Currently, this does not check each MSDU to see whether it requires
 	 * special handling. MSDUs that need special handling (example: IGMP
-	 * frames) should be sent via a seperate HTT message. Also, this does
+	 * frames) should be sent via a separate HTT message. Also, this does
 	 * not do rx->tx forwarding or filtering.
 	 */
 

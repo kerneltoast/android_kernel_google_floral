@@ -267,7 +267,7 @@ ibss_sta_caps_update(tpAniSirGlobal pMac,
 	}
 	/* peer is 11e capable but is not 11e enabled yet */
 	/* some STA's when joining Airgo IBSS, assert qos capability even when */
-	/* they don't suport qos. however, they do not include the edca parameter */
+	/* they don't support qos. however, they do not include the edca parameter */
 	/* set. so let's check for edcaParam in addition to the qos capability */
 	if (pPeerNode->capabilityInfo.qos && (psessionEntry->limQosEnabled)
 	    && pPeerNode->edcaPresent) {
@@ -501,7 +501,7 @@ static void ibss_bss_add(tpAniSirGlobal pMac, tpPESession psessionEntry)
 
 	/* This function ibss_bss_add (and hence the below code) is only called during ibss coalescing. We need to
 	 * adapt to peer's capability with respect to short slot time. Changes have been made to lim_apply_configuration()
-	 * so that the IBSS doesnt blindly start with short slot = 1. If IBSS start is part of coalescing then it will adapt
+	 * so that the IBSS doesn't blindly start with short slot = 1. If IBSS start is part of coalescing then it will adapt
 	 * to peer's short slot using code below.
 	 */
 	/* If cfg is already set to current peer's capability then no need to set it again */
@@ -851,7 +851,7 @@ lim_ibss_decide_protection(tpAniSirGlobal pMac, tpDphHashNode pStaDs,
 		if ((phyMode == WNI_CFG_PHY_MODE_11G)
 		    || (psessionEntry->htCapability)) {
 			/* As we found in the past, it is possible that a 11n STA sends
-			 * Beacon with HT IE but not ERP IE.  So the absense of ERP IE
+			 * Beacon with HT IE but not ERP IE.  So the absence of ERP IE
 			 * in the Beacon is not enough to conclude that STA is 11b.
 			 */
 			if ((pStaDs->erpEnabled == eHAL_CLEAR) &&

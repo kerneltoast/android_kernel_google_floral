@@ -987,7 +987,7 @@ int wma_peer_state_change_event_handler(void *handle,
  *
  * This function enable/disable mcc adaptive scheduler in fw.
  *
- * Return: QDF_STATUS_SUCCESS for sucess or error code
+ * Return: QDF_STATUS_SUCCESS for success or error code
  */
 QDF_STATUS wma_set_enable_disable_mcc_adaptive_scheduler(uint32_t
 							 mcc_adaptive_scheduler)
@@ -2369,6 +2369,7 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 	struct wlan_objmgr_psoc *psoc;
 	void *mac_addr;
 	bool is_5g = false;
+	uint8_t pdev_id;
 
 	if (NULL == wma_handle) {
 		WMA_LOGE("wma_handle is NULL");
@@ -2685,10 +2686,7 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 	if (tx_flag & HAL_USE_BD_RATE2_FOR_MANAGEMENT_FRAME)
 		use_6mbps = 1;
 
-	if (wma_handle->interfaces[vdev_id].scan_info.chan_freq != 0) {
-		chanfreq = wma_handle->interfaces[vdev_id].scan_info.chan_freq;
-		WMA_LOGI("%s: Preauth frame on channel %d", __func__, chanfreq);
-	} else if (pFc->subType == SIR_MAC_MGMT_PROBE_RSP) {
+	if (pFc->subType == SIR_MAC_MGMT_PROBE_RSP) {
 		if ((wma_is_vdev_in_ap_mode(wma_handle, vdev_id)) &&
 		    (0 != wma_handle->interfaces[vdev_id].mhz))
 			chanfreq = wma_handle->interfaces[vdev_id].mhz;
@@ -2743,12 +2741,18 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 		goto error;
 	}
 
+	if (!wma_handle->pdev) {
+		WMA_LOGE("%s: pdev ctx is NULL", __func__);
+		goto error;
+	}
+
+	pdev_id = wlan_objmgr_pdev_get_pdev_id(wma_handle->pdev);
 	wh = (struct ieee80211_frame *)(qdf_nbuf_data(tx_frame));
 	mac_addr = wh->i_addr1;
-	peer = wlan_objmgr_get_peer(psoc, mac_addr, WLAN_MGMT_NB_ID);
+	peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr, WLAN_MGMT_NB_ID);
 	if (!peer) {
 		mac_addr = wh->i_addr2;
-		peer = wlan_objmgr_get_peer(psoc, mac_addr,
+		peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr,
 					WLAN_MGMT_NB_ID);
 	}
 
@@ -2824,6 +2828,7 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 
 error:
 	wma_handle->tx_frm_download_comp_cb = NULL;
+	wma_handle->umac_data_ota_ack_cb = NULL;
 	return QDF_STATUS_E_FAILURE;
 }
 

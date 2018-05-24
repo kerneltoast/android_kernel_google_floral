@@ -85,7 +85,7 @@
 #include <target_if_spectral.h>
 #include <wlan_spectral_utils_api.h>
 #include "init_event_handler.h"
-#include "init_deinit_ucfg.h"
+#include "init_deinit_lmac.h"
 #include "target_if_green_ap.h"
 #include "service_ready_param.h"
 #include "wlan_cp_stats_mc_ucfg_api.h"
@@ -1099,6 +1099,7 @@ static void wma_process_cli_set_cmd(tp_wma_handle wma,
 	struct sir_set_tx_rx_aggregation_size aggr;
 
 	WMA_LOGD("wmihandle %pK", wma->wmi_handle);
+	qdf_mem_zero(&aggr, sizeof(aggr));
 
 	if (NULL == pMac) {
 		WMA_LOGE("%s: Failed to get pMac", __func__);
@@ -1179,6 +1180,7 @@ static void wma_process_cli_set_cmd(tp_wma_handle wma,
 			 privcmd->param_value);
 
 		switch (privcmd->param_id) {
+		case GEN_VDEV_PARAM_AMSDU:
 		case GEN_VDEV_PARAM_AMPDU:
 			if (soc) {
 				ret = cdp_aggr_cfg(soc, vdev,
@@ -1194,6 +1196,13 @@ static void wma_process_cli_set_cmd(tp_wma_handle wma,
 					privcmd->param_value;
 				aggr.rx_aggregation_size =
 					privcmd->param_value;
+				if (privcmd->param_id == GEN_VDEV_PARAM_AMSDU)
+					aggr.aggr_type =
+						WMI_VDEV_CUSTOM_AGGR_TYPE_AMSDU;
+				else
+					aggr.aggr_type =
+						WMI_VDEV_CUSTOM_AGGR_TYPE_AMPDU;
+
 				ret = wma_set_tx_rx_aggregation_size(&aggr);
 				if (QDF_IS_STATUS_ERROR(ret)) {
 					WMA_LOGE("set_aggr_size failed ret %d",
@@ -1204,22 +1213,6 @@ static void wma_process_cli_set_cmd(tp_wma_handle wma,
 				WMA_LOGE("%s:SOC context is NULL", __func__);
 				return;
 			}
-			break;
-		case GEN_VDEV_PARAM_AMSDU:
-			/*
-			 * Firmware currently does not support set operation
-			 * for AMSDU. It may cause crash if the configuration
-			 * is sent to firmware.
-			 * Firmware enhancement will advertise a service bit
-			 * to enable AMSDU configuration through WMI. Then
-			 * add the WMI command to configure AMSDU parameter.
-			 * For the older chipset that does not advertise the
-			 * service bit, enable the following legacy code:
-			 *    ol_txrx_aggr_cfg(vdev, 0, privcmd->param_value);
-			 *    intr[privcmd->param_vdev_id].config.amsdu =
-			 *            privcmd->param_value;
-			 */
-			WMA_LOGE("SET GEN_VDEV_PARAM_AMSDU command is currently not supported");
 			break;
 		case GEN_PARAM_CRASH_INJECT:
 			if (QDF_GLOBAL_FTM_MODE  == cds_get_conparam())
@@ -2033,6 +2026,27 @@ static void wma_cleanup_hold_req(tp_wma_handle wma)
 }
 
 /**
+ * wma_cleanup_vdev_resp_and_hold_req() - cleaunup the vdev resp and hold req
+ * queue
+ * @msg :scheduler msg
+ *
+ * Return: QDF_STATUS
+ */
+static QDF_STATUS
+wma_cleanup_vdev_resp_and_hold_req(struct scheduler_msg *msg)
+{
+	if (!msg || !msg->bodyptr) {
+		WMA_LOGE(FL("msg or body pointer is NULL"));
+		return QDF_STATUS_E_INVAL;
+	}
+
+	wma_cleanup_vdev_resp_queue(msg->bodyptr);
+	wma_cleanup_hold_req(msg->bodyptr);
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
  * wma_shutdown_notifier_cb - Shutdown notifer call back
  * @priv : WMA handle
  *
@@ -2047,16 +2061,22 @@ static void wma_cleanup_hold_req(tp_wma_handle wma)
 static void wma_shutdown_notifier_cb(void *priv)
 {
 	tp_wma_handle wma_handle = priv;
+	struct scheduler_msg msg = { 0 };
+	QDF_STATUS status;
 
 	qdf_event_set(&wma_handle->wma_resume_event);
-	wma_cleanup_vdev_resp_queue(wma_handle);
-	wma_cleanup_hold_req(wma_handle);
 	pmo_ucfg_psoc_wakeup_host_event_received(wma_handle->psoc);
+
+	msg.bodyptr = priv;
+	msg.callback = wma_cleanup_vdev_resp_and_hold_req;
+	status = scheduler_post_msg(QDF_MODULE_ID_TARGET_IF, &msg);
+	if (QDF_IS_STATUS_ERROR(status))
+		WMA_LOGE(FL("Failed to post SYS_MSG_ID_CLEAN_VDEV_RSP_QUEUE"));
 }
 
 struct wma_version_info g_wmi_version_info;
 
-#ifdef WLAN_FEATURE_HDD_MEMDUMP_ENABLE
+#ifdef WLAN_FEATURE_MEMDUMP_ENABLE
 /**
  * wma_state_info_dump() - prints state information of wma layer
  * @buf: buffer pointer
@@ -2092,6 +2112,8 @@ static void wma_state_info_dump(char **buf_ptr, uint16_t *size)
 
 		vdev = wlan_objmgr_get_vdev_by_id_from_psoc(wma->psoc,
 						vdev_id, WLAN_LEGACY_WMA_ID);
+		if (vdev == NULL)
+			continue;
 		ucfg_mc_cp_stats_get_vdev_wake_lock_stats(vdev, &stats);
 		len += qdf_scnprintf(buf + len, *size - len,
 			"\n"
@@ -2166,6 +2188,7 @@ static void wma_state_info_dump(char **buf_ptr, uint16_t *size)
 			iface->chain_mask,
 			iface->nss_2g,
 			iface->nss_5g);
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_WMA_ID);
 	}
 
 	*size -= len;
@@ -2283,11 +2306,11 @@ static void wma_register_debug_callback(void)
 {
 	qdf_register_debug_callback(QDF_MODULE_ID_WMA, &wma_state_info_dump);
 }
-#else /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+#else /* WLAN_FEATURE_MEMDUMP_ENABLE */
 static void wma_register_debug_callback(void)
 {
 }
-#endif /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+#endif /* WLAN_FEATURE_MEMDUMP_ENABLE */
 /**
  * wma_register_tx_ops_handler() - register tx_ops of southbound
  * @tx_ops:  tx_ops pointer in southbound
@@ -3624,7 +3647,7 @@ QDF_STATUS wma_pre_start(void)
 		goto end;
 	}
 
-	htc_handle = ucfg_get_htc_hdl(wma_handle->psoc);
+	htc_handle = lmac_get_htc_hdl(wma_handle->psoc);
 	if (!htc_handle) {
 		WMA_LOGE("%s: invalid htc handle", __func__);
 		qdf_status = QDF_STATUS_E_INVAL;
@@ -4129,7 +4152,7 @@ QDF_STATUS wma_start(void)
 		goto end;
 	}
 
-	wmi_handle = ucfg_get_wmi_hdl(wma_handle->psoc);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(wma_handle->psoc);
 	if (!wmi_handle) {
 		WMA_LOGE("%s: Invalid wmi handle", __func__);
 		qdf_status = QDF_STATUS_E_INVAL;
@@ -5425,7 +5448,7 @@ static void wma_update_hdd_cfg(tp_wma_handle wma_handle)
 	}
 	service_ext_param =
 			target_psoc_get_service_ext_param(tgt_hdl);
-	wmi_handle = target_psoc_get_wmi_hdl(tgt_hdl);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(wma_handle->psoc);
 	if (!wmi_handle) {
 		WMA_LOGE("%s: wmi handle is NULL", __func__);
 		return;
@@ -5641,7 +5664,7 @@ int wma_rx_service_ready_event(void *handle, uint8_t *cmd_param_info,
 		return -EINVAL;
 	}
 
-	wmi_handle = target_psoc_get_wmi_hdl(tgt_hdl);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(wma_handle->psoc);
 	if (!wmi_handle) {
 		WMA_LOGE("%s: wmi handle is NULL", __func__);
 		return -EINVAL;
@@ -8309,7 +8332,7 @@ static QDF_STATUS wma_mc_process_msg(struct scheduler_msg *msg)
 		break;
 	case SIR_HAL_PDEV_DUAL_MAC_CFG_REQ:
 		wma_send_pdev_set_dual_mac_config(wma_handle,
-				(struct sir_dual_mac_config *)msg->bodyptr);
+				(struct policy_mgr_dual_mac_config *)msg->bodyptr);
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_SET_IE_INFO:
@@ -8462,7 +8485,7 @@ void wma_log_completion_timeout(void *data)
 {
 	tp_wma_handle wma_handle;
 
-	WMA_LOGE("%s: Timeout occured for log completion command", __func__);
+	WMA_LOGE("%s: Timeout occurred for log completion command", __func__);
 
 	wma_handle = (tp_wma_handle) data;
 	if (!wma_handle)
@@ -8640,7 +8663,7 @@ fail:
  * Return: QDF_STATUS. 0 on success.
  */
 QDF_STATUS wma_send_pdev_set_dual_mac_config(tp_wma_handle wma_handle,
-		struct sir_dual_mac_config *msg)
+		struct policy_mgr_dual_mac_config *msg)
 {
 	QDF_STATUS status;
 
@@ -8663,7 +8686,7 @@ QDF_STATUS wma_send_pdev_set_dual_mac_config(tp_wma_handle wma_handle,
 			     WMA_VDEV_PLCY_MGR_CMD_TIMEOUT);
 	status = wmi_unified_pdev_set_dual_mac_config_cmd(
 				wma_handle->wmi_handle,
-				(struct wmi_dual_mac_config *)msg);
+				(struct policy_mgr_dual_mac_config *)msg);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		WMA_LOGE("%s: Failed to send WMI_PDEV_SET_DUAL_MAC_CONFIG_CMDID: %d",
 				__func__, status);

@@ -1037,7 +1037,7 @@ struct hdd_ap_ctx {
 	tCsrRoamSetKey wep_key[CSR_MAX_NUM_KEY];
 	uint8_t wep_def_key_idx;
 	struct sap_context *sap_context;
-	tsap_Config_t sap_config;
+	tsap_config_t sap_config;
 	uint8_t operating_channel;
 	struct hdd_beacon_data *beacon;
 	qdf_mc_timer_t vendor_acs_timer;
@@ -1842,6 +1842,7 @@ struct hdd_context {
 	/* Interface change lock */
 	struct mutex iface_change_lock;
 	bool rps;
+	bool dynamic_rps;
 	bool enable_rxthread;
 	bool napi_enable;
 	bool stop_modules_in_progress;
@@ -2912,7 +2913,7 @@ static inline void hdd_send_peer_status_ind_to_app(
  *
  * Send P2P quota value to FW
  *
- * Return: 0 sucess else failure
+ * Return: 0 success else failure
  */
 int wlan_hdd_send_p2p_quota(struct hdd_adapter *adapter, int sval);
 
@@ -2923,7 +2924,7 @@ int wlan_hdd_send_p2p_quota(struct hdd_adapter *adapter, int sval);
  *
  * Send MCC latency value to FW
  *
- * Return: 0 sucess else failure
+ * Return: 0 success else failure
  */
 int wlan_hdd_send_mcc_latency(struct hdd_adapter *adapter, int sval);
 
@@ -3116,7 +3117,7 @@ void hdd_stop_driver_ops_timer(void);
 void hdd_pld_ipa_uc_shutdown_pipes(void);
 
 /**
- * hdd_limit_max_per_index_score() -check if per index score doesnt exceed 100%
+ * hdd_limit_max_per_index_score() -check if per index score doesn't exceed 100%
  * (0x64). If it exceed make it 100%
  *
  * @per_index_score: per_index_score as input
@@ -3151,10 +3152,10 @@ void hdd_component_psoc_enable(struct wlan_objmgr_psoc *psoc);
  */
 void hdd_component_psoc_disable(struct wlan_objmgr_psoc *psoc);
 
-#ifdef WLAN_FEATURE_HDD_MEMDUMP_ENABLE
+#ifdef WLAN_FEATURE_MEMDUMP_ENABLE
 int hdd_driver_memdump_init(void);
 void hdd_driver_memdump_deinit(void);
-#else /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+#else /* WLAN_FEATURE_MEMDUMP_ENABLE */
 static inline int hdd_driver_memdump_init(void)
 {
 	return 0;
@@ -3162,7 +3163,7 @@ static inline int hdd_driver_memdump_init(void)
 static inline void hdd_driver_memdump_deinit(void)
 {
 }
-#endif /* WLAN_FEATURE_HDD_MEMDUMP_ENABLE */
+#endif /* WLAN_FEATURE_MEMDUMP_ENABLE */
 /**
  * hdd_is_cli_iface_up() - check if there is any cli iface up
  * @hdd_ctx: HDD context

@@ -228,6 +228,17 @@ typedef enum eSirScanType {
 	eSIR_BEACON_TABLE,
 } tSirScanType;
 
+/* Rsn Capabilities structure */
+struct rsn_caps {
+	uint16_t PreAuthSupported:1;
+	uint16_t NoPairwise:1;
+	uint16_t PTKSAReplayCounter:2;
+	uint16_t GTKSAReplayCounter:2;
+	uint16_t MFPRequired:1;
+	uint16_t MFPCapable:1;
+	uint16_t Reserved:8;
+};
+
 /* / Result codes Firmware return to Host SW */
 typedef enum eSirResultCodes {
 	eSIR_SME_SUCCESS,
@@ -452,18 +463,6 @@ struct s_sir_set_hw_mode {
 };
 
 /**
- * struct sir_dual_mac_config - Dual MAC configuration
- * @scan_config: Scan configuration
- * @fw_mode_config: FW mode configuration
- * @set_dual_mac_cb: Callback function to be executed on response to the command
- */
-struct sir_dual_mac_config {
-	uint32_t scan_config;
-	uint32_t fw_mode_config;
-	void *set_dual_mac_cb;
-};
-
-/**
  * struct sir_set_dual_mac_cfg - Set Dual mac config request
  * @message_type: Message type
  * @length: Length of the message
@@ -472,7 +471,7 @@ struct sir_dual_mac_config {
 struct sir_set_dual_mac_cfg {
 	uint16_t message_type;
 	uint16_t length;
-	struct sir_dual_mac_config set_dual_mac;
+	struct policy_mgr_dual_mac_config set_dual_mac;
 };
 
 /**
@@ -563,7 +562,7 @@ typedef struct sSirHtConfig {
 } qdf_packed tSirHTConfig, *tpSirHTConfig;
 
 /**
- * struct sir_vht_config - VHT capabilites
+ * struct sir_vht_config - VHT capabilities
  * @max_mpdu_len: MPDU length
  * @supported_channel_widthset: channel width set
  * @ldpc_coding: LDPC coding capability
@@ -792,7 +791,7 @@ typedef struct sSirSmeStartBssRsp {
 	tSirResultCodes statusCode;
 	tSirBssType bssType;    /* Add new type for WDS mode */
 	uint16_t beaconInterval;        /* Beacon Interval for both type */
-	uint32_t staId;         /* Staion ID for Self */
+	uint32_t staId;         /* Station ID for Self */
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 	tSirSmeHTProfile HTProfile;
 #endif
@@ -1116,7 +1115,7 @@ typedef struct sSirSmeJoinReq {
 	 */
 } tSirSmeJoinReq, *tpSirSmeJoinReq;
 
-/* / Definition for reponse message to previously issued join request */
+/* / Definition for response message to previously issued join request */
 /* / MAC ---> */
 typedef struct sSirSmeJoinRsp {
 	uint16_t messageType;   /* eWNI_SME_JOIN_RSP */
@@ -2872,6 +2871,7 @@ typedef struct sSirRoamOffloadScanReq {
 	uint8_t OpportunisticScanThresholdDiff;
 	uint8_t RoamRescanRssiDiff;
 	uint8_t RoamRssiDiff;
+	struct rsn_caps rsn_caps;
 	int32_t rssi_abs_thresh;
 	uint8_t ChannelCacheType;
 	uint8_t Command;
@@ -4846,7 +4846,7 @@ typedef struct {
 	uint32_t txMpdu;
 	/* number of received unicast mpdus */
 	uint32_t rxMpdu;
-	/* number of succesfully transmitted multicast data packets */
+	/* number of successfully transmitted multicast data packets */
 	/* STA case: implies ACK received from AP for the unicast */
 	/* packet in which mcast pkt was sent */
 	uint32_t txMcast;
@@ -5383,7 +5383,7 @@ struct sir_rx_threshold {
  *     threshold is not set in the bitmap, global threshold will take
  *     effect.
  * @global: whether clobal threshold is enabled.
- *     When both global and dedicated threshold are diabled, MAC counter
+ *     When both global and dedicated threshold are disabled, MAC counter
  *     will indicate stats periodically.
  * @global_threshold: global threshold value
  * @cca_bitmap: bitmap for CCA.
@@ -5674,8 +5674,6 @@ typedef void (*hw_mode_transition_cb)(uint32_t old_hw_mode_index,
 		uint32_t new_hw_mode_index,
 		uint32_t num_vdev_mac_entries,
 		struct policy_mgr_vdev_mac_map *vdev_mac_map);
-typedef void (*dual_mac_cb)(uint32_t status, uint32_t scan_config,
-		uint32_t fw_mode_config);
 typedef void (*antenna_mode_cb)(uint32_t status);
 
 /**
@@ -6753,6 +6751,7 @@ struct sme_ndp_peer_ind {
 /**
  * struct sir_set_tx_rx_aggregation_size - sets tx rx aggregation size
  * @vdev_id: vdev id of the session
+ * @aggr_type: TX Aggregation Type (0=A-MPDU, 1=A-MSDU)
  * @tx_aggregation_size: Tx aggregation size
  * @tx_aggregation_size_be: Tx aggregation size for be queue
  * @tx_aggregation_size_bk: Tx aggregation size for bk queue
@@ -6762,6 +6761,7 @@ struct sme_ndp_peer_ind {
  */
 struct sir_set_tx_rx_aggregation_size {
 	uint8_t vdev_id;
+	wmi_vdev_custom_aggr_type_t aggr_type;
 	uint32_t tx_aggregation_size;
 	uint32_t tx_aggregation_size_be;
 	uint32_t tx_aggregation_size_bk;
@@ -7338,7 +7338,7 @@ struct sir_rssi_disallow_lst {
 
 /**
  * struct chain_rssi_result - chain rssi result
- * num_chains_valid: vaild chain num
+ * num_chains_valid: valid chain num
  * @chain_rssi: chain rssi result as dBm unit
  * @ant_id: antenna id
  */

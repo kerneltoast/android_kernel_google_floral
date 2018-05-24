@@ -1143,7 +1143,7 @@ static QDF_STATUS wma_roam_scan_offload_ap_profile(tp_wma_handle wma_handle,
  * list that need to be applied to the scan results to form the
  * probable candidates for roaming.
  *
- * Return: Return success upon succesfully passing the
+ * Return: Return success upon successfully passing the
  *         parameters to the firmware, otherwise failure.
  */
 static QDF_STATUS wma_roam_scan_filter(tp_wma_handle wma_handle,
@@ -1600,11 +1600,16 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 						       NULL, &scan_params);
 
 			if (roam_req->reason == REASON_ROAM_STOP_ALL ||
-			    roam_req->reason == REASON_ROAM_SYNCH_FAILED)
+			    roam_req->reason == REASON_ROAM_SYNCH_FAILED) {
 				mode = WMI_ROAM_SCAN_MODE_NONE;
-			else
-				mode = WMI_ROAM_SCAN_MODE_NONE |
-					WMI_ROAM_SCAN_MODE_ROAMOFFLOAD;
+			} else {
+				if (csr_roamIsRoamOffloadEnabled(pMac))
+					mode = WMI_ROAM_SCAN_MODE_NONE |
+						WMI_ROAM_SCAN_MODE_ROAMOFFLOAD;
+				else
+					mode = WMI_ROAM_SCAN_MODE_NONE;
+			}
+
 			qdf_status = wma_roam_scan_offload_mode(wma_handle,
 						&scan_params, NULL, mode,
 						roam_req->sessionId);
@@ -2241,6 +2246,14 @@ int wma_roam_synch_event_handler(void *handle, uint8_t *event,
 		return status;
 	}
 
+	/*
+	 * This flag is set during ROAM_START and once this event is being
+	 * executed which is a run to completion, no other event can interrupt
+	 * this in MC thread context. So, it is OK to reset the flag here as
+	 * soon as we receive this event.
+	 */
+	wma->interfaces[synch_event->vdev_id].roaming_in_progress = false;
+
 	if (synch_event->bcn_probe_rsp_len >
 	    param_buf->num_bcn_probe_rsp_frame ||
 	    synch_event->reassoc_req_len >
@@ -2561,6 +2574,7 @@ cleanup_label:
 	return status;
 }
 
+#define RSN_CAPS_SHIFT               16
 /**
  * wma_roam_scan_fill_self_caps() - fill capabilities
  * @wma_handle: wma handle
@@ -2665,7 +2679,19 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	selfCaps.immediateBA =
 		(uint16_t) ((val >> WNI_CFG_BLOCK_ACK_ENABLED_IMMEDIATE) & 1);
 	pCfgValue16 = (uint16_t *) &selfCaps;
-	roam_offload_params->capability = (*pCfgValue16) & 0xFFFF;
+
+	/*
+	 * RSN caps arent been sent to firmware, so in case of PMF required,
+	 * the firmware connects to a non PMF AP advertising PMF not required
+	 * in the re-assoc request which violates protocol.
+	 * So send this to firmware in the roam SCAN offload command to
+	 * let it configure the params in the re-assoc request too.
+	 * Instead of making another infra, send the RSN-CAPS in MSB of
+	 * beacon Caps.
+	 */
+	roam_offload_params->capability = *((uint32_t *)(&roam_req->rsn_caps));
+	roam_offload_params->capability <<= RSN_CAPS_SHIFT;
+	roam_offload_params->capability |= ((*pCfgValue16) & 0xFFFF);
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_HT_CAP_INFO, &nCfgValue) !=
 	    eSIR_SUCCESS) {
@@ -2826,9 +2852,18 @@ int wma_rssi_breached_event_handler(void *handle,
  */
 static void wma_roam_ho_fail_handler(tp_wma_handle wma, uint32_t vdev_id)
 {
+	struct wma_txrx_node *iface = &wma->interfaces[vdev_id];
 	tSirSmeHOFailureInd *ho_failure_ind;
 	struct scheduler_msg sme_msg = { 0 };
 	QDF_STATUS qdf_status;
+
+	/* For LFR 3.0 hand-off failure, peers will be deleted by FW
+	 * no WMI_PEER_DELETE_CMDID will be sent to FW
+	 * reset the peer count here
+	 */
+	WMA_LOGD("Reset FW peer count");
+	qdf_atomic_init(&iface->fw_peer_count);
+	qdf_event_set(&iface->fw_peer_delete_completion);
 
 	ho_failure_ind = qdf_mem_malloc(sizeof(tSirSmeHOFailureInd));
 
@@ -5492,6 +5527,8 @@ int wma_roam_event_callback(WMA_HANDLE handle, uint8_t *event_buf,
 		WMA_LOGE("LFR3:Hand-Off Failed for vdevid %x",
 			 wmi_event->vdev_id);
 		wma_roam_ho_fail_handler(wma_handle, wmi_event->vdev_id);
+		wma_handle->interfaces[wmi_event->vdev_id].
+			roaming_in_progress = false;
 		break;
 #endif
 	case WMI_ROAM_REASON_INVALID:
@@ -5500,10 +5537,16 @@ int wma_roam_event_callback(WMA_HANDLE handle, uint8_t *event_buf,
 			WMA_LOGE("Memory unavailable for roam synch data");
 			return -ENOMEM;
 		}
-		if (wmi_event->notif == WMI_ROAM_NOTIF_ROAM_START)
+		if (wmi_event->notif == WMI_ROAM_NOTIF_ROAM_START) {
 			op_code = SIR_ROAMING_START;
-		if (wmi_event->notif == WMI_ROAM_NOTIF_ROAM_ABORT)
+			wma_handle->interfaces[wmi_event->vdev_id].
+				roaming_in_progress = true;
+		}
+		if (wmi_event->notif == WMI_ROAM_NOTIF_ROAM_ABORT) {
 			op_code = SIR_ROAMING_ABORT;
+			wma_handle->interfaces[wmi_event->vdev_id].
+				roaming_in_progress = false;
+		}
 		roam_synch_data->roamedVdevId = wmi_event->vdev_id;
 		wma_handle->pe_roam_synch_cb(
 				(tpAniSirGlobal)wma_handle->mac_context,

@@ -873,7 +873,7 @@ uint8_t lim_write_deferred_msg_q(tpAniSirGlobal mac_ctx,
 	if (SIR_BB_XPORT_MGMT_MSG == lim_msg->type) {
 		lim_util_get_type_subtype(lim_msg->bodyptr,
 					&type, &subtype);
-		pe_debug(" Deferred managment type %d subtype %d ",
+		pe_debug(" Deferred management type %d subtype %d ",
 			type, subtype);
 	}
 
@@ -2935,7 +2935,7 @@ uint8_t lim_get_ht_capability(tpAniSirGlobal pMac,
  * @bcn_prms:   beacon parameters
  * @pe_session: pe session entry
  *
- * This fucntion updates protection params for enable 11a protection request
+ * This function updates protection params for enable 11a protection request
  *
  * @Return: void
  */
@@ -2996,7 +2996,7 @@ lim_enable_11a_protection(tpAniSirGlobal mac_ctx,
  * @bcn_prms:   beacon parameters
  * @pe_session: pe session entry
  *
- * This fucntion updates protection params for disable 11a protection request
+ * This function updates protection params for disable 11a protection request
  *
  * @Return: void
  */
@@ -5010,7 +5010,7 @@ __lim_fill_tx_control_params(tpAniSirGlobal pMac, tpTxControlParams pTxCtrlMsg,
 		break;
 
 	case eLIM_TX_BSS_BUT_BEACON:
-		/** Stops/resumes transmission on a particular BSS. Stopping BSS, doesnt
+		/** Stops/resumes transmission on a particular BSS. Stopping BSS, doesn't
 		 *  stop beacon transmission.
 		 */
 		pTxCtrlMsg->ctrlBss = 1;
@@ -6243,7 +6243,7 @@ void lim_set_vht_caps(tpAniSirGlobal p_mac, tpPESession p_session_entry,
  * @a1: received frame's a1 address which is nothing but our self address
  * @session: PE session pointer
  *
- * This routine will validate, A1 addres of the received frame
+ * This routine will validate, A1 address of the received frame
  *
  * Return: true or false
  */
@@ -6546,7 +6546,7 @@ QDF_STATUS lim_send_ext_cap_ie(tpAniSirGlobal mac_ctx,
  * @addn_ie: Additional IE buffer
  * @addn_ielen: Length of additional IE
  * @eid: EID of IE to strip
- * @size_of_len_field: lenght of IE length field
+ * @size_of_len_field: length of IE length field
  * @oui: if present matches OUI also
  * @oui_length: if previous present, this is length of oui
  * @extracted_ie: if not NULL, copy the stripped IE to this buffer
@@ -6773,7 +6773,7 @@ tSirRetStatus lim_strip_extcap_update_struct(tpAniSirGlobal mac_ctx,
  * lim_merge_extcap_struct() - merge extended capabilities info
  * @dst: destination extended capabilities
  * @src: source extended capabilities
- * @add: true if add the capabilites, false if strip the capabilites.
+ * @add: true if add the capabilities, false if strip the capabilities.
  *
  * This function is used to take @src info and add/strip it to/from
  * @dst extended capabilities info.
@@ -6792,11 +6792,11 @@ void lim_merge_extcap_struct(tDot11fIEExtCap *dst,
 	if (!src->present)
 		return;
 
-	/* Return if strip the capabilites from @dst which not present */
+	/* Return if strip the capabilities from @dst which not present */
 	if (!dst->present && !add)
 		return;
 
-	/* Merge the capabilites info in other cases */
+	/* Merge the capabilities info in other cases */
 	while (tempdst && tempsrc && structlen--) {
 		if (add)
 			*tempdst |= *tempsrc;
@@ -6944,7 +6944,7 @@ void lim_update_obss_scanparams(tpPESession session,
 			tDot11fIEOBSSScanParameters *scan_params)
 {
 	/*
-	 * If the recieved value is not in the range specified
+	 * If the received value is not in the range specified
 	 * by the Specification then it will be the default value
 	 * configured through cfg
 	 */
@@ -6959,7 +6959,7 @@ void lim_update_obss_scanparams(tpPESession session,
 		WNI_CFG_OBSS_HT40_SCAN_PASSIVE_DWELL_TIME_STAMIN) &&
 		(scan_params->obssScanPassiveDwell <
 		WNI_CFG_OBSS_HT40_SCAN_PASSIVE_DWELL_TIME_STAMAX))
-		session->obss_ht40_scanparam.obss_active_dwelltime =
+		session->obss_ht40_scanparam.obss_passive_dwelltime =
 			scan_params->obssScanPassiveDwell;
 
 	if ((scan_params->bssWidthChannelTransitionDelayFactor >
@@ -8171,7 +8171,7 @@ QDF_STATUS lim_util_get_type_subtype(void *pkt, uint8_t *type,
 		*type = hdr->fc.type;
 		*subtype = hdr->fc.subType;
 	} else {
-		pe_err("Not a managment packet type %d", hdr->fc.type);
+		pe_err("Not a management packet type %d", hdr->fc.type);
 		return QDF_STATUS_E_INVAL;
 	}
 	return QDF_STATUS_SUCCESS;

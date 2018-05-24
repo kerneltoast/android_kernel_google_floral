@@ -1259,7 +1259,7 @@ int wma_nan_rsp_event_handler(void *handle, uint8_t *event_buf,
 	alloc_len = sizeof(tSirNanEvent);
 	alloc_len += nan_rsp_event_hdr->data_len;
 	if (nan_rsp_event_hdr->data_len > ((WMI_SVC_MSG_MAX_SIZE -
-	    sizeof(*nan_rsp_event_hdr)) / sizeof(uint8_t)) ||
+	    WMI_TLV_HDR_SIZE - sizeof(*nan_rsp_event_hdr)) / sizeof(uint8_t)) ||
 	    nan_rsp_event_hdr->data_len > param_buf->num_data) {
 		WMA_LOGE("excess data length:%d, num_data:%d",
 			nan_rsp_event_hdr->data_len, param_buf->num_data);
@@ -1339,6 +1339,14 @@ int wma_csa_offload_handler(void *handle, uint8_t *event, uint32_t len)
 	csa_offload_event = qdf_mem_malloc(sizeof(*csa_offload_event));
 	if (!csa_offload_event) {
 		WMA_LOGE("QDF MEM Alloc Failed for csa_offload_event");
+		return -EINVAL;
+	}
+
+	if (wma->interfaces[vdev_id].roaming_in_progress ||
+		wma->interfaces[vdev_id].roam_synch_in_progress) {
+		WMA_LOGE("Roaming in progress for vdev %d, ignore csa_offload_event",
+				vdev_id);
+		qdf_mem_free(csa_offload_event);
 		return -EINVAL;
 	}
 
@@ -1651,41 +1659,17 @@ static const u8 *wma_wow_wake_reason_str(A_INT32 wake_reason)
 }
 
 #ifdef QCA_SUPPORT_CP_STATS
-static void wma_inc_wow_stats(t_wma_handle *wma,
-			      WOW_EVENT_INFO_fixed_param *wake_info)
+static bool wma_wow_reason_has_stats(enum wake_reason_e reason)
 {
-	ucfg_mc_cp_stats_inc_wake_lock_stats(wma->psoc,
-					     wake_info->vdev_id,
-					     wake_info->wake_reason);
-}
-
-static void wma_wow_stats_display(struct wake_lock_stats *stats)
-{
-	WMA_LOGA("uc %d bc %d v4_mc %d v6_mc %d ra %d ns %d na %d pno_match %d pno_complete %d gscan %d low_rssi %d rssi_breach %d icmp %d icmpv6 %d oem %d",
-		stats->ucast_wake_up_count,
-		stats->bcast_wake_up_count,
-		stats->ipv4_mcast_wake_up_count,
-		stats->ipv6_mcast_wake_up_count,
-		stats->ipv6_mcast_ra_stats,
-		stats->ipv6_mcast_ns_stats,
-		stats->ipv6_mcast_na_stats,
-		stats->pno_match_wake_up_count,
-		stats->pno_complete_wake_up_count,
-		stats->gscan_wake_up_count,
-		stats->low_rssi_wake_up_count,
-		stats->rssi_breach_wake_up_count,
-		stats->icmpv4_count,
-		stats->icmpv6_count,
-		stats->oem_response_wake_up_count);
-}
-
-static void wma_print_wow_stats(t_wma_handle *wma,
-				WOW_EVENT_INFO_fixed_param *wake_info)
-{
-	struct wlan_objmgr_vdev *vdev;
-	struct wake_lock_stats stats = {0};
-
-	switch (wake_info->wake_reason) {
+	switch (reason) {
+	case WOW_REASON_ASSOC_REQ_RECV:
+	case WOW_REASON_DISASSOC_RECVD:
+	case WOW_REASON_ASSOC_RES_RECV:
+	case WOW_REASON_REASSOC_REQ_RECV:
+	case WOW_REASON_REASSOC_RES_RECV:
+	case WOW_REASON_AUTH_REQ_RECV:
+	case WOW_REASON_DEAUTH_RECVD:
+	case WOW_REASON_ACTION_FRAME_RECV:
 	case WOW_REASON_BPF_ALLOW:
 	case WOW_REASON_PATTERN_MATCH_FOUND:
 	case WOW_REASON_RA_MATCH:
@@ -1697,10 +1681,65 @@ static void wma_print_wow_stats(t_wma_handle *wma,
 	case WOW_REASON_OEM_RESPONSE_EVENT:
 	case WOW_REASON_CHIP_POWER_FAILURE_DETECT:
 	case WOW_REASON_11D_SCAN:
-		break;
+		return true;
 	default:
-		return;
+		return false;
 	}
+}
+
+static void wma_inc_wow_stats(t_wma_handle *wma,
+			      WOW_EVENT_INFO_fixed_param *wake_info)
+{
+	ucfg_mc_cp_stats_inc_wake_lock_stats(wma->psoc,
+					     wake_info->vdev_id,
+					     wake_info->wake_reason);
+}
+
+static void wma_wow_stats_display(struct wake_lock_stats *stats)
+{
+	WMA_LOGA("WLAN wake reason counters:");
+	WMA_LOGA("uc:%d bc:%d v4_mc:%d v6_mc:%d ra:%d ns:%d na:%d "
+		 "icmp:%d icmpv6:%d",
+		 stats->ucast_wake_up_count,
+		 stats->bcast_wake_up_count,
+		 stats->ipv4_mcast_wake_up_count,
+		 stats->ipv6_mcast_wake_up_count,
+		 stats->ipv6_mcast_ra_stats,
+		 stats->ipv6_mcast_ns_stats,
+		 stats->ipv6_mcast_na_stats,
+		 stats->icmpv4_count,
+		 stats->icmpv6_count);
+
+	WMA_LOGA("assoc:%d disassoc:%d assoc_resp:%d reassoc:%d "
+		 "reassoc_resp:%d auth:%d deauth:%d action:%d",
+		 stats->mgmt_assoc,
+		 stats->mgmt_disassoc,
+		 stats->mgmt_assoc_resp,
+		 stats->mgmt_reassoc,
+		 stats->mgmt_reassoc_resp,
+		 stats->mgmt_auth,
+		 stats->mgmt_deauth,
+		 stats->mgmt_action);
+
+	WMA_LOGA("pno_match:%d pno_complete:%d gscan:%d "
+		 "low_rssi:%d rssi_breach:%d oem:%d scan_11d:%d",
+		 stats->pno_match_wake_up_count,
+		 stats->pno_complete_wake_up_count,
+		 stats->gscan_wake_up_count,
+		 stats->low_rssi_wake_up_count,
+		 stats->rssi_breach_wake_up_count,
+		 stats->oem_response_wake_up_count,
+		 stats->scan_11d);
+}
+
+static void wma_print_wow_stats(t_wma_handle *wma,
+				WOW_EVENT_INFO_fixed_param *wake_info)
+{
+	struct wlan_objmgr_vdev *vdev;
+	struct wake_lock_stats stats = {0};
+
+	if (!wma_wow_reason_has_stats(wake_info->wake_reason))
+		return;
 
 	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(wma->psoc,
 						    wake_info->vdev_id,
@@ -2217,7 +2256,7 @@ static void wma_log_pkt_ipv4(uint8_t *data, uint32_t length)
 		 ip_addr[2], ip_addr[3]);
 	src_port = *(uint16_t *)(data + IPV4_SRC_PORT_OFFSET);
 	dst_port = *(uint16_t *)(data + IPV4_DST_PORT_OFFSET);
-	WMA_LOGD("Pkt_len: %u, src_port: %u, dst_port: %u",
+	WMA_LOGI("Pkt_len: %u, src_port: %u, dst_port: %u",
 		 qdf_cpu_to_be16(pkt_len),
 		 qdf_cpu_to_be16(src_port),
 		 qdf_cpu_to_be16(dst_port));
@@ -2248,7 +2287,7 @@ static void wma_log_pkt_ipv6(uint8_t *data, uint32_t length)
 		 ip_addr[15]);
 	src_port = *(uint16_t *)(data + IPV6_SRC_PORT_OFFSET);
 	dst_port = *(uint16_t *)(data + IPV6_DST_PORT_OFFSET);
-	WMA_LOGD("Pkt_len: %u, src_port: %u, dst_port: %u",
+	WMA_LOGI("Pkt_len: %u, src_port: %u, dst_port: %u",
 		 qdf_cpu_to_be16(pkt_len),
 		 qdf_cpu_to_be16(src_port),
 		 qdf_cpu_to_be16(dst_port));
@@ -2384,7 +2423,7 @@ static void wma_wow_parse_data_pkt(t_wma_handle *wma,
 
 	src_mac = data + QDF_NBUF_SRC_MAC_OFFSET;
 	dest_mac = data + QDF_NBUF_DEST_MAC_OFFSET;
-	WMA_LOGD("Src_mac: " MAC_ADDRESS_STR ", Dst_mac: " MAC_ADDRESS_STR,
+	WMA_LOGI("Src_mac: " MAC_ADDRESS_STR ", Dst_mac: " MAC_ADDRESS_STR,
 		 MAC_ADDR_ARRAY(src_mac), MAC_ADDR_ARRAY(dest_mac));
 
 	wma_wow_inc_wake_lock_stats_by_dst_addr(wma, vdev_id, dest_mac);
@@ -2392,7 +2431,7 @@ static void wma_wow_parse_data_pkt(t_wma_handle *wma,
 	proto_subtype = wma_wow_get_pkt_proto_subtype(data, length);
 	proto_subtype_name = wma_pkt_proto_subtype_to_string(proto_subtype);
 	if (proto_subtype_name)
-		WMA_LOGD("WOW Wakeup: %s rcvd", proto_subtype_name);
+		WMA_LOGI("WOW Wakeup: %s rcvd", proto_subtype_name);
 
 	switch (proto_subtype) {
 	case QDF_PROTO_EAPOL_M1:
@@ -4565,6 +4604,7 @@ QDF_STATUS wma_set_tx_rx_aggregation_size(
 
 	buf_ptr = (u_int8_t *) wmi_buf_data(buf);
 	cmd = (wmi_vdev_set_custom_aggr_size_cmd_fixed_param *) buf_ptr;
+	qdf_mem_zero(cmd, sizeof(*cmd));
 
 	WMITLV_SET_HDR(&cmd->tlv_header,
 		WMITLV_TAG_STRUC_wmi_vdev_set_custom_aggr_size_cmd_fixed_param,
@@ -4574,9 +4614,14 @@ QDF_STATUS wma_set_tx_rx_aggregation_size(
 	cmd->vdev_id = tx_rx_aggregation_size->vdev_id;
 	cmd->tx_aggr_size = tx_rx_aggregation_size->tx_aggregation_size;
 	cmd->rx_aggr_size = tx_rx_aggregation_size->rx_aggregation_size;
+	/* bit 2 (aggr_type): TX Aggregation Type (0=A-MPDU, 1=A-MSDU) */
+	if (tx_rx_aggregation_size->aggr_type ==
+	    WMI_VDEV_CUSTOM_AGGR_TYPE_AMSDU)
+		cmd->enable_bitmap |= 0x04;
 
-	WMA_LOGD("tx aggr: %d rx aggr: %d vdev: %d",
-		cmd->tx_aggr_size, cmd->rx_aggr_size, cmd->vdev_id);
+	WMA_LOGD("tx aggr: %d rx aggr: %d vdev: %d enable_bitmap %d",
+		 cmd->tx_aggr_size, cmd->rx_aggr_size, cmd->vdev_id,
+		 cmd->enable_bitmap);
 
 	ret = wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
 				WMI_VDEV_SET_CUSTOM_AGGR_SIZE_CMDID);
@@ -4633,6 +4678,7 @@ QDF_STATUS wma_set_tx_rx_aggregation_size_per_ac(
 
 		buf_ptr = (u_int8_t *)wmi_buf_data(buf);
 		cmd = (wmi_vdev_set_custom_aggr_size_cmd_fixed_param *)buf_ptr;
+		qdf_mem_zero(cmd, sizeof(*cmd));
 
 		WMITLV_SET_HDR(&cmd->tlv_header,
 			       WMITLV_TAG_STRUC_wmi_vdev_set_custom_aggr_size_cmd_fixed_param,
@@ -4646,10 +4692,15 @@ QDF_STATUS wma_set_tx_rx_aggregation_size_per_ac(
 		cmd->tx_aggr_size = tx_aggr_size[queue_num];
 		/* bit 5: tx_ac_enable, if set, ac bitmap is valid. */
 		cmd->enable_bitmap = 0x20 | queue_num;
+		/* bit 2 (aggr_type): TX Aggregation Type (0=A-MPDU, 1=A-MSDU) */
+		if (tx_rx_aggregation_size->aggr_type ==
+		    WMI_VDEV_CUSTOM_AGGR_TYPE_AMSDU)
+			cmd->enable_bitmap |= 0x04;
 
-		WMA_LOGD("queue_num: %d, tx aggr: %d rx aggr: %d vdev: %d",
+		WMA_LOGD("queue_num: %d, tx aggr: %d rx aggr: %d vdev: %d, bitmap: %d",
 			 queue_num, cmd->tx_aggr_size,
-			 cmd->rx_aggr_size, cmd->vdev_id);
+			 cmd->rx_aggr_size, cmd->vdev_id,
+			 cmd->enable_bitmap);
 
 		ret = wmi_unified_cmd_send(wma_handle->wmi_handle, buf, len,
 					WMI_VDEV_SET_CUSTOM_AGGR_SIZE_CMDID);

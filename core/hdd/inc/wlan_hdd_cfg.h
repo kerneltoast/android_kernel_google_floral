@@ -47,6 +47,7 @@ struct hdd_context;
 #define CFG_ENABLE_RX_THREAD		(1 << 0)
 #define CFG_ENABLE_RPS			(1 << 1)
 #define CFG_ENABLE_NAPI			(1 << 2)
+#define CFG_ENABLE_DYNAMIC_RPS		(1 << 3)
 
 #ifdef DHCP_SERVER_OFFLOAD
 #define IPADDR_NUM_ENTRIES     (4)
@@ -447,7 +448,7 @@ enum hdd_dot11_mode {
  * This ini is used to set opportunistic threshold diff.
  * This parameter is the RSSI diff above neighbor lookup
  * threshold, when opportunistic scan should be triggered.
- * MAX value is choosen so that this type of scan can be
+ * MAX value is chosen so that this type of scan can be
  * always enabled by user.
  * MIN value will cause opportunistic scan to be triggered
  * in neighbor lookup RSSI range.
@@ -8684,7 +8685,7 @@ enum hdd_link_speed_rpt_type {
  *
  * If active mode offload(gActiveModeOffload=1) is enabled then all applicable
  * data offload/filtering is enabled immediately in FW once config is available
- * in WLAN driver and FW caches this configuration accross suspend/resume
+ * in WLAN driver and FW caches this configuration across suspend/resume
  *
  * If active mode offload is disabled(gActiveModeOffload=0) then all applicable
  * data offload/filtering is enabled during cfg80211 suspend and disabled
@@ -9959,7 +9960,8 @@ enum dot11p_mode {
  * rx_mode - Control to decide rx mode
  *
  * @Min: 0
- * @Max: (CFG_ENABLE_RX_THREAD | CFG_ENABLE_RPS | CFG_ENABLE_NAPI)
+ * @Max: (CFG_ENABLE_RX_THREAD | CFG_ENABLE_RPS | CFG_ENABLE_NAPI | \
+ *        CFG_ENABLE_DYNAMIC_RPS)
  * @Default: MDM_PLATFORM   -  0
  *           HELIUMPLUS     -  CFG_ENABLE_NAPI
  *           Other cases    -  (CFG_ENABLE_RX_THREAD | CFG_ENABLE_NAPI)
@@ -9975,7 +9977,7 @@ enum dot11p_mode {
 #define CFG_RX_MODE_NAME     "rx_mode"
 #define CFG_RX_MODE_MIN      (0)
 #define CFG_RX_MODE_MAX      (CFG_ENABLE_RX_THREAD | CFG_ENABLE_RPS | \
-				 CFG_ENABLE_NAPI)
+				 CFG_ENABLE_NAPI | CFG_ENABLE_DYNAMIC_RPS)
 #ifdef MDM_PLATFORM
 #define CFG_RX_MODE_DEFAULT  (0)
 #elif defined(HELIUMPLUS)
@@ -10192,7 +10194,7 @@ enum dot11p_mode {
 #define CFG_SIFS_BURST_DURATION_MAX      (12)
 #define CFG_SIFS_BURST_DURATION_DEFAULT  (8)
 
-/* Optimize channel avoidance indication comming from firmware */
+/* Optimize channel avoidance indication coming from firmware */
 #define CFG_OPTIMIZE_CA_EVENT_NAME       "goptimize_chan_avoid_event"
 #define CFG_OPTIMIZE_CA_EVENT_DISABLE    (0)
 #define CFG_OPTIMIZE_CA_EVENT_ENABLE     (1)
@@ -10203,7 +10205,7 @@ enum dot11p_mode {
  * fw_timeout_crash - Enable/Disable BUG ON
  * @Min: 0
  * @Max: 1
- * @Default: 0
+ * @Default: 1
  *
  * This ini is used to Trigger host crash when firmware fails to send the
  * response to host
@@ -10221,7 +10223,7 @@ enum dot11p_mode {
 #define CFG_CRASH_FW_TIMEOUT_NAME       "fw_timeout_crash"
 #define CFG_CRASH_FW_TIMEOUT_DISABLE    (0)
 #define CFG_CRASH_FW_TIMEOUT_ENABLE     (1)
-#define CFG_CRASH_FW_TIMEOUT_DEFAULT    (0)
+#define CFG_CRASH_FW_TIMEOUT_DEFAULT    (1)
 
 /*
  * <ini>

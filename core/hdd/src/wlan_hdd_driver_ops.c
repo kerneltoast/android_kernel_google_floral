@@ -359,7 +359,7 @@ static int check_for_probe_defer(int ret)
  * @bus_type: underlying bus type
  * @reinit: true if we are reinitiallizing the driver after a subsystem restart
  *
- * Return: 0 on successfull probe
+ * Return: 0 on successful probe
  */
 static int wlan_hdd_probe(struct device *dev, void *bdev,
 			  const struct hif_bus_id *bid,
@@ -578,8 +578,8 @@ static void wlan_hdd_shutdown(void)
 /**
  * wlan_hdd_crash_shutdown() - wlan_hdd_crash_shutdown
  *
- * HDD crash shutdown funtion: This function is called by
- * platfrom driver's crash shutdown routine
+ * HDD crash shutdown function: This function is called by
+ * platform driver's crash shutdown routine
  *
  * Return: void
  */

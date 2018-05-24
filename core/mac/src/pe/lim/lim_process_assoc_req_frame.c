@@ -567,7 +567,7 @@ static bool lim_check_11ax_basic_mcs(tpAniSirGlobal mac_ctx,
 			lim_send_assoc_rsp_mgmt_frame(mac_ctx,
 				eSIR_MAC_CAPABILITIES_NOT_SUPPORTED_STATUS,
 				1, hdr->sa, sub_type, 0, session);
-			pe_err("STA did not suport basic MCS required by SAP");
+			pe_err("STA did not support basic MCS required by SAP");
 			return false;
 		}
 	}
@@ -671,7 +671,7 @@ lim_process_for_spectrum_mgmt(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 
 			/*
 			 * TODO: presently, this is not handled. In the current
-			 * implemetation, the AP would allow the station to
+			 * implementation, the AP would allow the station to
 			 * associate even if it doesn't support spectrum
 			 * management.
 			 */
@@ -2109,7 +2109,7 @@ sendIndToSme:
 		goto error;
 	}
 
-	/* AddSta is sucess here */
+	/* AddSta is success here */
 	if (LIM_IS_AP_ROLE(session) && IS_DOT11_MODE_HT(session->dot11mode) &&
 		assoc_req->HTCaps.present && assoc_req->wmeInfoPresent) {
 		/*
