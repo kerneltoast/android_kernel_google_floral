@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,11 +16,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
 /**
  * @file cdp_txrx_stats_struct.h
  * @brief Define the host data path stats API functions
@@ -770,6 +762,10 @@ struct cdp_pdev_stats {
 	struct {
 		/* desc alloc failed errors */
 		uint32_t desc_alloc_fail;
+		/* ip csum errors */
+		uint32_t ip_csum_err;
+		/* tcp/udp csum errors */
+		uint32_t tcp_udp_csum_err;
 	} err;
 
 	/* buffers added back in freelist */
@@ -1243,6 +1239,9 @@ enum _ol_ath_param_t {
 	OL_ATH_PARAM_PAPI_ENABLE = 364,
 	OL_ATH_PARAM_ISOLATION = 365,
 	OL_ATH_PARAM_MAX_CLIENTS_PER_RADIO = 366,
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+	OL_ATH_PARAM_DFS_HOST_WAIT_TIMEOUT = 367,
+#endif
 };
 
 /* Enumeration of PDEV Configuration parameter */

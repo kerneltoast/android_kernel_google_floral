@@ -67,6 +67,7 @@ typedef enum {
  *   like PSOC, PDEV, VDEV and PEER. A component needs to populate flush
  *   callback in message body pointer for those messages which have taken ref
  *   count for above mentioned common objects.
+ * @node: list node for queue membership
  */
 struct scheduler_msg {
 	uint16_t type;
@@ -75,6 +76,7 @@ struct scheduler_msg {
 	void *bodyptr;
 	void *callback;
 	void *flush_callback;
+	qdf_list_node_t node;
 };
 
 typedef QDF_STATUS (*scheduler_msg_process_fn_t) (struct scheduler_msg  *msg);
@@ -140,7 +142,7 @@ QDF_STATUS scheduler_deregister_module(QDF_MODULE_ID qid);
 /**
  * scheduler_post_msg_by_priority() - post messages by priority
  * @qid: queue id to to post message
- * @msg: mesage pointer
+ * @msg: message pointer
  * @is_high_priority: set to true for high priority message else false
  *
  * Return: QDF status
@@ -151,7 +153,7 @@ QDF_STATUS scheduler_post_msg_by_priority(QDF_MODULE_ID qid,
 /**
  * scheduler_post_msg() - post normal messages(no priority)
  * @qid: queue id to to post message
- * @msg: mesage pointer
+ * @msg: message pointer
  *
  * Return: QDF status
  */

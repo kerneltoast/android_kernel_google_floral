@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -93,15 +84,15 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 
 /**
  * QDF_MAX - get maximum of two values
- * @_x: 1st arguement
- * @_y: 2nd arguement
+ * @_x: 1st argument
+ * @_y: 2nd argument
  */
 #define QDF_MAX(_x, _y) (((_x) > (_y)) ? (_x) : (_y))
 
 /**
  * QDF_MIN - get minimum of two values
- * @_x: 1st arguement
- * @_y: 2nd arguement
+ * @_x: 1st argument
+ * @_y: 2nd argument
  */
 #define QDF_MIN(_x, _y) (((_x) < (_y)) ? (_x) : (_y))
 
@@ -126,6 +117,17 @@ typedef __qdf_wait_queue_head_t qdf_wait_queue_head_t;
 static inline int qdf_status_to_os_return(QDF_STATUS status)
 {
 	return __qdf_status_to_os_return(status);
+}
+
+/**
+ * qdf_status_from_os_return() - map OS specific return code to a QDF_STATUS
+ * @rc: the input return code to map
+ *
+ * Return: QDF_STATUS
+ */
+static inline QDF_STATUS qdf_status_from_os_return(int rc)
+{
+	return __qdf_status_from_os_return(rc);
 }
 
 /**

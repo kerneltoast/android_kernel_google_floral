@@ -165,6 +165,12 @@ typedef enum wlan_crypto_key_mgmt {
 	WLAN_CRYPTO_KEY_MGMT_OSEN                  = 15,
 	WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B     = 16,
 	WLAN_CRYPTO_KEY_MGMT_IEEE8021X_SUITE_B_192 = 17,
+	WLAN_CRYPTO_KEY_MGMT_FILS_SHA256           = 18,
+	WLAN_CRYPTO_KEY_MGMT_FILS_SHA384           = 19,
+	WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA256        = 20,
+	WLAN_CRYPTO_KEY_MGMT_FT_FILS_SHA384        = 21,
+	WLAN_CRYPTO_KEY_MGMT_OWE                   = 22,
+	WLAN_CRYPTO_KEY_MGMT_DPP                   = 23,
 } wlan_crypto_key_mgmt;
 
 /**
@@ -318,7 +324,7 @@ struct wlan_lmac_if_crypto_rx_ops {
 					uint8_t encapdone);
 	QDF_STATUS(*crypto_demic)(struct wlan_objmgr_vdev *vdev,
 					qdf_nbuf_t wbuf, uint8_t *macaddr,
-					uint8_t tid);
+					uint8_t tid, uint8_t keyid);
 	QDF_STATUS(*set_peer_wep_keys)(struct wlan_objmgr_vdev *vdev,
 					struct wlan_objmgr_peer *peer);
 };

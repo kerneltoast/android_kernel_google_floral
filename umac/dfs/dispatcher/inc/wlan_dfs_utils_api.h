@@ -331,8 +331,13 @@ QDF_STATUS utils_dfs_get_random_channel(struct wlan_objmgr_pdev *pdev,
  *
  * Return: None
  */
+#ifdef QCA_DFS_NOL_PLATFORM_DRV_SUPPORT
 void utils_dfs_init_nol(struct wlan_objmgr_pdev *pdev);
-
+#else
+static inline void utils_dfs_init_nol(struct wlan_objmgr_pdev *pdev)
+{
+}
+#endif
 /**
  * utils_dfs_save_nol() - save nol list to platform driver.
  * @pdev: pdev handler.
@@ -351,7 +356,13 @@ void utils_dfs_save_nol(struct wlan_objmgr_pdev *pdev);
  *
  * Return: None
  */
+#ifdef DFS_COMPONENT_ENABLE
 void utils_dfs_print_nol_channels(struct wlan_objmgr_pdev *pdev);
+#else
+static inline void utils_dfs_print_nol_channels(struct wlan_objmgr_pdev *pdev)
+{
+}
+#endif
 
 /**
  * utils_dfs_clear_nol_channels() - clear nol list.
@@ -371,8 +382,10 @@ void utils_dfs_clear_nol_channels(struct wlan_objmgr_pdev *pdev);
  *
  * Return: True if channel dfs, else false.
  */
-bool utils_is_dfs_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan);
-
+static inline bool utils_is_dfs_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
+{
+	return wlan_reg_is_dfs_ch(pdev, chan);
+}
 /**
  * utils_dfs_reg_update_nol_ch() - set nol channel
  *
@@ -402,8 +415,14 @@ uint8_t utils_dfs_freq_to_chan(uint32_t freq);
  *
  * Return: frequency
  */
+#ifdef DFS_COMPONENT_ENABLE
 uint32_t utils_dfs_chan_to_freq(uint8_t chan);
-
+#else
+static inline uint32_t utils_dfs_chan_to_freq(uint8_t chan)
+{
+	return 0;
+}
+#endif
 /**
  * utils_dfs_update_cur_chan_flags() - Update DFS channel flag and flagext.
  * @pdev: Pointer to DFS pdev object.
@@ -434,8 +453,16 @@ QDF_STATUS utils_dfs_mark_leaking_ch(struct wlan_objmgr_pdev *pdev,
 	enum phy_ch_width ch_width,
 	uint8_t temp_ch_lst_sz,
 	uint8_t *temp_ch_lst);
+#else
+static inline QDF_STATUS utils_dfs_mark_leaking_ch
+	(struct wlan_objmgr_pdev *pdev,
+	enum phy_ch_width ch_width,
+	uint8_t temp_ch_lst_sz,
+	uint8_t *temp_ch_lst)
+{
+	return QDF_STATUS_SUCCESS;
+}
 #endif
-
 /**
  * utils_get_dfsdomain() - Get DFS domain.
  * @pdev: Pointer to PDEV structure.
@@ -452,4 +479,22 @@ int utils_get_dfsdomain(struct wlan_objmgr_pdev *pdev);
  */
 uint16_t utils_dfs_get_cur_rd(struct wlan_objmgr_pdev *pdev);
 
+/**
+ * utils_dfs_is_spoof_check_failed() - get spoof check status.
+ * @pdev: pdev ptr
+ * @is_spoof_check_failed: pointer containing the status.
+ *
+ * Return: QDF_STATUS.
+ */
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+QDF_STATUS utils_dfs_is_spoof_check_failed(struct wlan_objmgr_pdev *pdev,
+					   bool *is_spoof_check_failed);
+#else
+static inline
+QDF_STATUS utils_dfs_is_spoof_check_failed(struct wlan_objmgr_pdev *pdev,
+					   bool *is_spoof_check_failed)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 #endif /* _WLAN_DFS_UTILS_API_H_ */

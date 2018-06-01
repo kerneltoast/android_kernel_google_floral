@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include "wmi_tlv_platform.c"
@@ -71,28 +62,28 @@ uint32_t g_wmi_static_max_cmd_param_tlvs;
 /**
  * wmitlv_set_static_param_tlv_buf() - tlv helper function
  * @param_tlv_buf: tlv buffer parameter
- * @max_tlvs_accomodated: max no of tlv entries
+ * @max_tlvs_accommodated: max no of tlv entries
  *
  *
  * WMI TLV Helper function to set the static cmd_param_tlv structure
- * and number of TLVs that can be accomodated in the structure.
+ * and number of TLVs that can be accommodated in the structure.
  * This function should be used when dynamic memory allocation is not
  * supported. When dynamic memory allocation is not supported by any
  * component then NO_DYNAMIC_MEMALLOC macro has to be defined in respective
  * tlv_platform.c file. And respective component has to allocate
- * cmd_param_tlv structure buffer to accomodate whatever number of TLV's.
- * Both the buffer address and number of TLV's that can be accomodated in
+ * cmd_param_tlv structure buffer to accommodate whatever number of TLV's.
+ * Both the buffer address and number of TLV's that can be accommodated in
  * the buffer should be sent as arguments to this function.
  *
  * Return None
  */
 void
 wmitlv_set_static_param_tlv_buf(void *param_tlv_buf,
-				uint32_t max_tlvs_accomodated)
+				uint32_t max_tlvs_accommodated)
 {
 #ifdef NO_DYNAMIC_MEM_ALLOC
 	g_wmi_static_cmd_param_info_buf = param_tlv_buf;
-	g_wmi_static_max_cmd_param_tlvs = max_tlvs_accomodated;
+	g_wmi_static_max_cmd_param_tlvs = max_tlvs_accommodated;
 #endif
 }
 
@@ -542,9 +533,9 @@ wmitlv_check_and_pad_tlvs(void *os_handle, void *param_struc_ptr,
 	 * for base structure of format wmi_cmd_event_id##_param_tlvs */
 	*wmi_cmd_struct_ptr = g_wmi_static_cmd_param_info_buf;
 	if (attr_struct_ptr.cmd_num_tlv > g_wmi_static_max_cmd_param_tlvs) {
-		/* Error: Expecting more TLVs that accomodated for static structure  */
+		/* Error: Expecting more TLVs that accommodated for static structure  */
 		wmi_tlv_print_error
-			("%s: Error: Expecting more TLVs that accomodated for static structure. Expected:%d Accomodated:%d\n",
+			("%s: Error: Expecting more TLVs that accommodated for static structure. Expected:%d Accomodated:%d\n",
 			__func__, attr_struct_ptr.cmd_num_tlv,
 			g_wmi_static_max_cmd_param_tlvs);
 		return error;
@@ -836,11 +827,11 @@ wmitlv_check_and_pad_tlvs(void *os_handle, void *param_struc_ptr,
 					/* Incoming structure size is greater than expected size
 					 * then this needs shrinking for each element in the array */
 
-					/* Find amount of bytes to be shrinked for one element */
+					/* Find amount of bytes to be shrunk for one element */
 					num_padding_bytes = tlv_size_diff * -1;
 
 					/* Move subsequent elements of array up by number of bytes
-					 * to be shrinked for one element */
+					 * to be shrunk for one element */
 					tlv_buf_ptr = buf_ptr;
 					for (i = 0; i < (num_of_elems - 1); i++) {
 						src_addr =
@@ -861,7 +852,7 @@ wmitlv_check_and_pad_tlvs(void *os_handle, void *param_struc_ptr,
 							tag_struct_size;
 					}
 
-					/* Move subsequent TLVs by number of bytes to be shrinked
+					/* Move subsequent TLVs by number of bytes to be shrunk
 					 * for all elements */
 					if (param_buf_len >
 					    (buf_idx + curr_tlv_len)) {
@@ -881,7 +872,7 @@ wmitlv_check_and_pad_tlvs(void *os_handle, void *param_struc_ptr,
 					}
 
 					/* Update the number of padding bytes to total number of
-					 * bytes shrinked for all elements in the array */
+					 * bytes shrunk for all elements in the array */
 					num_padding_bytes =
 						num_padding_bytes * num_of_elems;
 

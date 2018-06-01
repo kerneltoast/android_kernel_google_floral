@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,11 +16,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
 #include "targcfg.h"
 #include "qdf_lock.h"
 #include "qdf_status.h"
@@ -1004,7 +996,7 @@ int hif_ce_bus_late_resume(struct hif_softc *scn)
  * ce_oom_recovery() - try to recover rx ce from oom condition
  * @context: CE_state of the CE with oom rx ring
  *
- * the executing work Will continue to be rescheduled untill
+ * the executing work Will continue to be rescheduled until
  * at least 1 descriptor is successfully posted to the rx ring.
  *
  * return: none
@@ -1467,7 +1459,7 @@ void *hif_get_ce_handle(struct hif_opaque_softc *hif_ctx, int id)
  * the TX CE has been processed completely.
  *
  * This is called while dismantling CE structures. No other thread
- * should be using these structures while dismantling is occuring
+ * should be using these structures while dismantling is occurring
  * therfore no locking is needed.
  *
  * Return: none
@@ -2689,6 +2681,7 @@ void hif_unconfig_ce(struct hif_softc *hif_sc)
 	int pipe_num;
 	struct HIF_CE_pipe_info *pipe_info;
 	struct HIF_CE_state *hif_state = HIF_GET_CE_STATE(hif_sc);
+	struct hif_opaque_softc *hif_hdl = GET_HIF_OPAQUE_HDL(hif_sc);
 
 	for (pipe_num = 0; pipe_num < hif_sc->ce_count; pipe_num++) {
 		pipe_info = &hif_state->pipe_info[pipe_num];
@@ -2700,6 +2693,7 @@ void hif_unconfig_ce(struct hif_softc *hif_sc)
 			qdf_spinlock_destroy(&pipe_info->recv_bufs_needed_lock);
 		}
 	}
+	deinit_tasklet_workers(hif_hdl);
 	if (hif_sc->athdiag_procfs_inited) {
 		athdiag_procfs_remove();
 		hif_sc->athdiag_procfs_inited = false;
@@ -3494,10 +3488,14 @@ irqreturn_t hif_fw_interrupt_handler(int irq, void *arg)
 			/*
 			 * Probable Target failure before we're prepared
 			 * to handle it.  Generally unexpected.
+			 * fw_indicator used as bitmap, and defined as below:
+			 *     FW_IND_EVENT_PENDING    0x1
+			 *     FW_IND_INITIALIZED      0x2
+			 *     FW_IND_NEEDRECOVER      0x4
 			 */
 			AR_DEBUG_PRINTF(ATH_DEBUG_ERR,
-				("%s: Early firmware event indicated\n",
-				 __func__));
+				("%s: Early firmware event indicated 0x%x\n",
+				 __func__, fw_indicator));
 		}
 	} else {
 		if (Q_TARGET_ACCESS_END(scn) < 0)

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -1483,7 +1474,6 @@ QDF_STATUS (*extract_rcpi_response_event)(wmi_unified_t wmi_handle,
 					  void *evt_buf,
 					  struct rcpi_res *res);
 
-#ifdef DFS_COMPONENT_ENABLE
 QDF_STATUS (*extract_dfs_cac_complete_event)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
 		uint32_t *vdev_id,
@@ -1496,7 +1486,7 @@ QDF_STATUS (*extract_wlan_radar_event_info)(wmi_unified_t wmi_handle,
 		uint8_t *evt_buf,
 		struct radar_event_info *wlan_radar_event,
 		uint32_t len);
-#endif
+
 QDF_STATUS (*send_set_country_cmd)(wmi_unified_t wmi_handle,
 				struct set_country *param);
 
@@ -1536,6 +1526,8 @@ QDF_STATUS (*extract_ndp_end_rsp)(wmi_unified_t wmi_handle,
 		uint8_t *data, struct nan_datapath_end_rsp_event *rsp);
 QDF_STATUS (*extract_ndp_end_ind)(wmi_unified_t wmi_handle,
 		uint8_t *data, struct nan_datapath_end_indication_event **ind);
+QDF_STATUS (*extract_ndp_sch_update)(wmi_unified_t wmi_handle,
+		uint8_t *data, struct nan_datapath_sch_update_event *ind);
 #endif /* WLAN_FEATURE_NAN_CONVERGENCE */
 
 QDF_STATUS (*send_btm_config)(wmi_unified_t wmi_handle,
@@ -1625,6 +1617,16 @@ QDF_STATUS (*extract_twt_resume_dialog_comp_event)(wmi_unified_t wmi_handle,
 QDF_STATUS (*extract_cca_stats)(wmi_unified_t wmi_handle, void *evt_buf,
 				struct wmi_host_congestion_stats *stats);
 #endif /* QCA_SUPPORT_CP_STATS */
+
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+QDF_STATUS (*send_dfs_average_radar_params_cmd)(
+		wmi_unified_t wmi_handle,
+		struct dfs_radar_found_params *params);
+
+QDF_STATUS (*extract_dfs_status_from_fw)(wmi_unified_t wmi_handle,
+					 void *evt_buf,
+					 uint32_t *dfs_status_check);
+#endif
 };
 
 /* Forward declartion for psoc*/
@@ -1743,7 +1745,7 @@ void wmi_unified_register_module(enum wmi_target_type target_type,
 void wmi_tlv_init(void);
 void wmi_non_tlv_init(void);
 #ifdef WMI_NON_TLV_SUPPORT
-/* ONLY_NON_TLV_TARGET:TLV attach dummy function defintion for case when
+/* ONLY_NON_TLV_TARGET:TLV attach dummy function definition for case when
  * driver supports only NON-TLV target (WIN mainline) */
 #define wmi_tlv_attach(x) qdf_print("TLV Unavailable\n")
 #else

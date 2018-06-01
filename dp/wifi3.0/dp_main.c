@@ -335,12 +335,13 @@ static int dp_peer_update_ast_wifi3(struct cdp_soc_t *soc_hdl,
 
 /*
  * dp_wds_reset_ast_wifi3() - Reset the is_active param for ast entry
- * @soc_handle:		Datapath SOC handle
- * @ast_entry_hdl:	AST Entry handle
+ * @soc_handle: Datapath SOC handle
+ * @wds_macaddr: MAC address of the WDS entry to be added
+ * @vdev_hdl: vdev handle
  * Return: None
  */
 static void dp_wds_reset_ast_wifi3(struct cdp_soc_t *soc_hdl,
-						uint8_t *wds_macaddr)
+				    uint8_t *wds_macaddr, void *vdev_hdl)
 {
 	struct dp_soc *soc = (struct dp_soc *)soc_hdl;
 	struct dp_ast_entry *ast_entry = NULL;
@@ -356,11 +357,13 @@ static void dp_wds_reset_ast_wifi3(struct cdp_soc_t *soc_hdl,
 
 /*
  * dp_wds_reset_ast_table_wifi3() - Reset the is_active param for all ast entry
- * @soc:		Datapath SOC handle
+ * @soc: Datapath SOC handle
+ * @vdev_hdl: vdev handle
  *
  * Return: None
  */
-static void dp_wds_reset_ast_table_wifi3(struct cdp_soc_t  *soc_hdl)
+static void dp_wds_reset_ast_table_wifi3(struct cdp_soc_t *soc_hdl,
+					 void *vdev_hdl)
 {
 	struct dp_soc *soc = (struct dp_soc *) soc_hdl;
 	struct dp_pdev *pdev;
@@ -5190,6 +5193,10 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 			pdev->stats.replenish.rxdma_err);
 	DP_PRINT_STATS("	Desc Alloc Failed: = %d",
 			pdev->stats.err.desc_alloc_fail);
+	DP_PRINT_STATS("IP checksum error = %d",
+		       pdev->stats.err.ip_csum_err);
+	DP_PRINT_STATS("TCP/UDP checksum error = %d",
+		       pdev->stats.err.tcp_udp_csum_err);
 
 	/* Get bar_recv_cnt */
 	dp_aggregate_pdev_ctrl_frames_stats(pdev);
@@ -5221,6 +5228,8 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 		       rx_mon_stats->dest_ppdu_done);
 	DP_PRINT_STATS("dest_mpdu_done_cnt = %d",
 		       rx_mon_stats->dest_mpdu_done);
+	DP_PRINT_STATS("dest_mpdu_drop_cnt = %d",
+		       rx_mon_stats->dest_mpdu_drop);
 }
 
 /**
@@ -5232,7 +5241,17 @@ dp_print_pdev_rx_mon_stats(struct dp_pdev *pdev)
 static inline void
 dp_print_soc_tx_stats(struct dp_soc *soc)
 {
+	uint8_t desc_pool_id;
+	soc->stats.tx.desc_in_use = 0;
+
 	DP_PRINT_STATS("SOC Tx Stats:\n");
+
+	for (desc_pool_id = 0;
+	     desc_pool_id < wlan_cfg_get_num_tx_desc_pool(soc->wlan_cfg_ctx);
+	     desc_pool_id++)
+		soc->stats.tx.desc_in_use +=
+			soc->tx_desc[desc_pool_id].num_allocated;
+
 	DP_PRINT_STATS("Tx Descriptors In Use = %d",
 			soc->stats.tx.desc_in_use);
 	DP_PRINT_STATS("Invalid peer:");

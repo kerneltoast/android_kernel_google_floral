@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include "../dfs.h"
@@ -1037,7 +1028,7 @@ static void dfs_random_channel_sel_set_bitmap(
 		if (channel >= start_chan && channel <= start_chan + 12) {
 			bitmap->chan_bonding_set[i].chan_map |=
 			(1 << ((channel - start_chan) /
-			DFS_80_NUM_SUB_CHANNNEL));
+			DFS_80_NUM_SUB_CHANNEL));
 			return;
 		}
 	}
@@ -1151,26 +1142,26 @@ static uint8_t dfs_find_ch_with_fallback(
 		rand_byte = (rand_byte + qdf_mc_timer_get_system_ticks())
 			% DFS_MAX_20M_SUB_CH;
 		target_channel = new_160_start_ch + (rand_byte *
-				DFS_80_NUM_SUB_CHANNNEL);
+				DFS_80_NUM_SUB_CHANNEL);
 	} else if (*ch_wd == DFS_CH_WIDTH_80P80MHZ) {
 		get_random_bytes((uint8_t *)&rand_byte, 1);
 		index = (rand_byte + qdf_mc_timer_get_system_ticks()) %
 			final_cnt;
 		target_channel = final_lst[index];
-		index -= (index % DFS_80_NUM_SUB_CHANNNEL);
+		index -= (index % DFS_80_NUM_SUB_CHANNEL);
 		primary_seg_start_ch = final_lst[index];
 
 		/* reset channels associate with primary 80Mhz */
-		for (i = 0; i < DFS_80_NUM_SUB_CHANNNEL; i++)
+		for (i = 0; i < DFS_80_NUM_SUB_CHANNEL; i++)
 			final_lst[i + index] = 0;
-		/* select and calculate center freq for secondary segement */
-		for (i = 0; i < final_cnt / DFS_80_NUM_SUB_CHANNNEL; i++) {
-			if (final_lst[i * DFS_80_NUM_SUB_CHANNNEL] &&
+		/* select and calculate center freq for secondary segment */
+		for (i = 0; i < final_cnt / DFS_80_NUM_SUB_CHANNEL; i++) {
+			if (final_lst[i * DFS_80_NUM_SUB_CHANNEL] &&
 			    (abs(primary_seg_start_ch -
-			     final_lst[i * DFS_80_NUM_SUB_CHANNNEL]) >
+			     final_lst[i * DFS_80_NUM_SUB_CHANNEL]) >
 			     (DFS_MAX_20M_SUB_CH * 2))) {
 				sec_seg_ch =
-					final_lst[i * DFS_80_NUM_SUB_CHANNNEL] +
+					final_lst[i * DFS_80_NUM_SUB_CHANNEL] +
 					DFS_80MHZ_START_CENTER_CH_DIFF;
 				break;
 			}
@@ -1250,7 +1241,7 @@ static bool dfs_freq_is_in_nol(struct wlan_dfs *dfs, uint32_t freq)
  * dfs_apply_rules()- prepare channel list based on flags
  * @dfs: dfs handler
  * @flags: channel flags
- * @random_chan_list: ouput channel list
+ * @random_chan_list: output channel list
  * @random_chan_cnt: output channel count
  * @ch_list: input channel list
  * @ch_cnt: input channel count

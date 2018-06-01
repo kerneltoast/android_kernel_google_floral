@@ -26,6 +26,9 @@
 #include "../dfs_channel.h"
 #include "../dfs_internal.h"
 #include "../dfs_process_radar_found_ind.h"
+#include "wlan_dfs_utils_api.h"
+#include "wlan_dfs_lmac_api.h"
+#include "../dfs_partial_offload_radar.h"
 
 #define FREQ_5500_MHZ  5500
 #define FREQ_5500_MHZ       5500
@@ -110,7 +113,7 @@ static void dfs_print_radar_events(struct wlan_dfs *dfs)
 	for (i = 0; (i < DFS_EVENT_LOG_SIZE) && (i < dfs->dfs_event_log_count);
 			i++) {
 		dfs_debug(dfs, WLAN_DEBUG_DFS,
-			"ts=%llu diff_ts=%u rssi=%u dur=%u, is_chirp=%d, seg_id=%d, sidx=%d, freq_offset=%d.%dMHz, peak_mag=%d, total_gain=%d, mb_gain=%d, relpwr_db=%d, delta_diff=%d, delta_peak=%d",
+			"ts=%llu diff_ts=%u rssi=%u dur=%u, is_chirp=%d, seg_id=%d, sidx=%d, freq_offset=%d.%dMHz, peak_mag=%d, total_gain=%d, mb_gain=%d, relpwr_db=%d, delta_diff=%d, delta_peak=%d, psidx_diff=%d",
 			dfs->radar_log[i].ts, dfs->radar_log[i].diff_ts,
 			dfs->radar_log[i].rssi, dfs->radar_log[i].dur,
 			dfs->radar_log[i].is_chirp, dfs->radar_log[i].seg_id,
@@ -122,7 +125,8 @@ static void dfs_print_radar_events(struct wlan_dfs *dfs)
 			dfs->radar_log[i].mb_gain,
 			dfs->radar_log[i].relpwr_db,
 			dfs->radar_log[i].delta_diff,
-			dfs->radar_log[i].delta_peak);
+			dfs->radar_log[i].delta_peak,
+			dfs->radar_log[i].psidx_diff);
 	}
 	dfs->dfs_event_log_count = 0;
 	dfs->dfs_phyerr_count = 0;
@@ -188,11 +192,12 @@ static int dfs_confirm_radar(struct wlan_dfs *dfs,
 			index =  (pl->pl_firstelem + i) &
 				DFS_MAX_PULSE_BUFFER_MASK;
 			dfs_debug(dfs, WLAN_DEBUG_DFS2,
-					"Elem %u: ts=%llu dur=%u, seq_num=%d, delta_peak=%d\n",
+					"Elem %u: ts=%llu dur=%u, seq_num=%d, delta_peak=%d, psidx_diff=%d\n",
 					i, pl->pl_elems[index].p_time,
 					pl->pl_elems[index].p_dur,
 					pl->pl_elems[index].p_seq_num,
-					pl->pl_elems[index].p_delta_peak);
+					pl->pl_elems[index].p_delta_peak,
+					pl->pl_elems[index].p_psidx_diff);
 		}
 	}
 
@@ -277,12 +282,14 @@ static int dfs_confirm_radar(struct wlan_dfs *dfs,
 	}
 
 	if ((rf->rf_check_delta_peak) &&
-			((dl->dl_delta_peak_match_count) <
-			 rf->rf_threshold)) {
+			((dl->dl_delta_peak_match_count +
+			dl->dl_psidx_diff_match_count - 1) <
+			rf->rf_threshold)) {
 		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS,
-				"%s: Rejecting Radar since delta peak values are invalid : dl_delta_peak_match_count=%d, rf_threshold=%d\n",
-				__func__, dl->dl_delta_peak_match_count,
-				rf->rf_threshold);
+			"%s: Rejecting Radar since delta peak values are invalid : dl_delta_peak_match_count=%d, dl_psidx_diff_match_count=%d, rf_threshold=%d\n",
+			__func__, dl->dl_delta_peak_match_count,
+			dl->dl_psidx_diff_match_count,
+			rf->rf_threshold);
 		return 0;
 	}
 
@@ -382,6 +389,7 @@ void __dfs_process_radarevent(struct wlan_dfs *dfs,
 	uint64_t deltaT = 0;
 	int ext_chan_event_flag = 0;
 	struct dfs_filter *rf = NULL;
+	int8_t ori_rf_check_delta_peak = 0;
 
 	for (p = 0, *found = 0; (p < ft->ft_numfilters) &&
 			(!(*found)) && !(*false_radar_found); p++) {
@@ -414,11 +422,24 @@ void __dfs_process_radarevent(struct wlan_dfs *dfs,
 					(uint32_t) deltaT, re->re_dur,
 					ext_chan_event_flag);
 
-				if (*found)
+				if (*found) {
+					ori_rf_check_delta_peak =
+						rf->rf_check_delta_peak;
+					/*
+					 * If FW does not send valid psidx_diff
+					 * Do not do chirp check.
+					 */
+					if (rf->rf_check_delta_peak &&
+						(!(re->re_flags &
+						DFS_EVENT_VALID_PSIDX_DIFF)))
+						rf->rf_check_delta_peak = false;
 					dfs_confirm_radar_check(dfs,
 							rf, ext_chan_event_flag,
 							found,
 							false_radar_found);
+					rf->rf_check_delta_peak =
+						ori_rf_check_delta_peak;
+				}
 			}
 
 			if (dfs->dfs_debug_mask & WLAN_DEBUG_DFS2)
@@ -439,6 +460,53 @@ void __dfs_process_radarevent(struct wlan_dfs *dfs,
 
 	return;
 }
+
+/**
+ * dfs_cal_average_radar_parameters() - Calculate the average radar parameters.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+static void dfs_cal_average_radar_parameters(struct wlan_dfs *dfs)
+{
+	int i, count = 0;
+	u_int32_t total_pri = 0;
+	u_int32_t total_duration = 0;
+	u_int32_t total_sidx = 0;
+
+	/* Calculating average PRI, Duration, SIDX from
+	 * the 2nd pulse, ignoring the 1st pulse (radar_log[0]).
+	 * This is because for the first pulse, the diff_ts will be
+	 * (0 - current_ts) which will be a huge value.
+	 * Average PRI computation will be wrong. FW returns a
+	 * failure test result as PRI does not match their expected
+	 * value.
+	 */
+
+	for (i = 1; (i < DFS_EVENT_LOG_SIZE) && (i < dfs->dfs_event_log_count);
+			i++) {
+		total_pri +=  dfs->radar_log[i].diff_ts;
+		total_duration += dfs->radar_log[i].dur;
+		total_sidx +=  dfs->radar_log[i].sidx;
+		count++;
+	}
+
+	if (count > 0) {
+		dfs->dfs_average_pri = total_pri / count;
+		dfs->dfs_average_duration = total_duration / count;
+		dfs->dfs_average_sidx = total_sidx / count;
+
+		dfs_info(dfs, WLAN_DEBUG_DFS2,
+			 "Avg.PRI =%u, Avg.duration =%u Avg.sidx =%u",
+			 dfs->dfs_average_pri,
+			 dfs->dfs_average_duration,
+			 dfs->dfs_average_sidx);
+	}
+}
+#else
+static void dfs_cal_average_radar_parameters(struct wlan_dfs *dfs)
+{
+}
+#endif
 
 /**
  * dfs_radarfound_reset_vars() - Reset dfs variables after radar found
@@ -473,8 +541,10 @@ static inline void dfs_radarfound_reset_vars(
 	 * filter match. This can be used to collect information
 	 * on false radar detection.
 	 */
-	if (dfs->dfs_event_log_on)
+	if (dfs->dfs_event_log_on) {
+		dfs_cal_average_radar_parameters(dfs);
 		dfs_print_radar_events(dfs);
+	}
 
 	dfs_reset_radarq(dfs);
 	dfs_reset_alldelaylines(dfs);
@@ -687,6 +757,7 @@ static inline void dfs_log_event(
 		dfs->radar_log[i].relpwr_db = (*re).re_relpwr_db;
 		dfs->radar_log[i].delta_diff = (*re).re_delta_diff;
 		dfs->radar_log[i].delta_peak = (*re).re_delta_peak;
+		dfs->radar_log[i].psidx_diff = (*re).re_psidx_diff;
 		dfs->radar_log[i].is_chirp = DFS_EVENT_NOTCHIRP(re) ?
 			0 : 1;
 		dfs->dfs_event_log_count++;
@@ -1046,6 +1117,7 @@ static inline void dfs_add_to_pulseline(
 	pl->pl_elems[*index].p_rssi = (*re).re_rssi;
 	pl->pl_elems[*index].p_sidx = (*re).re_sidx;
 	pl->pl_elems[*index].p_delta_peak = (*re).re_delta_peak;
+	pl->pl_elems[*index].p_psidx_diff = (*re).re_psidx_diff;
 	*diff_ts = (uint32_t)*this_ts - *test_ts;
 	*test_ts = (uint32_t)*this_ts;
 
@@ -1099,6 +1171,7 @@ static inline void dfs_conditional_clear_delaylines(
 		pl->pl_elems[index].p_rssi = re.re_rssi;
 		pl->pl_elems[index].p_sidx = re.re_sidx;
 		pl->pl_elems[index].p_delta_peak = re.re_delta_peak;
+		pl->pl_elems[index].p_psidx_diff = re.re_psidx_diff;
 		dfs->dfs_seq_num++;
 		pl->pl_elems[index].p_seq_num = dfs->dfs_seq_num;
 	}
@@ -1196,6 +1269,30 @@ static inline void dfs_false_radarfound_reset_vars(
 	dfs->dfs_phyerr_w53_counter  = 0;
 }
 
+void dfs_radarfound_action_generic(struct wlan_dfs *dfs,
+		uint8_t seg_id, int false_radar_found)
+{
+	struct radar_found_info *radar_found;
+
+	radar_found = qdf_mem_malloc(sizeof(*radar_found));
+	if (!radar_found) {
+		dfs_alert(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			  "radar_found allocation failed");
+		return;
+	}
+
+	qdf_mem_zero(radar_found, sizeof(*radar_found));
+	radar_found->segment_id = seg_id;
+	radar_found->pdev_id =
+		wlan_objmgr_pdev_get_pdev_id(dfs->dfs_pdev_obj);
+
+	dfs_process_radar_ind(dfs, radar_found);
+	qdf_mem_free(radar_found);
+
+	if (false_radar_found)
+		dfs_false_radarfound_reset_vars(dfs);
+}
+
 void dfs_process_radarevent(
 	struct wlan_dfs *dfs,
 	struct dfs_channel *chan)
@@ -1222,26 +1319,21 @@ void dfs_process_radarevent(
 
 dfsfound:
 	if (retval) {
-		struct radar_found_info *radar_found;
-
 		dfs_radarfound_reset_vars(dfs, rs, chan, seg_id);
-
-		radar_found = qdf_mem_malloc(sizeof(*radar_found));
-		if (!radar_found) {
-			dfs_alert(dfs, WLAN_DEBUG_DFS_ALWAYS,
-					"radar_found allocation failed");
-			return;
+		/* If Host DFS confirmation is supported, save the curchan as
+		 * radar found chan, send radar found indication along with
+		 * average radar parameters to FW and start the host status
+		 * wait timer.
+		 */
+		if (utils_get_dfsdomain(dfs->dfs_pdev_obj) == DFS_FCC_DOMAIN &&
+		    lmac_is_host_dfs_check_support_enabled(
+				dfs->dfs_pdev_obj)) {
+			dfs_radarfound_action_fcc(dfs, seg_id,
+				false_radar_found);
+		} else {
+			dfs_radarfound_action_generic(dfs, seg_id,
+				false_radar_found);
 		}
-
-		qdf_mem_zero(radar_found, sizeof(*radar_found));
-		radar_found->segment_id = seg_id;
-		radar_found->pdev_id =
-			wlan_objmgr_pdev_get_pdev_id(dfs->dfs_pdev_obj);
-
-		dfs_process_radar_ind(dfs, radar_found);
-		qdf_mem_free(radar_found);
 	}
 
-	if (false_radar_found)
-		dfs_false_radarfound_reset_vars(dfs);
 }

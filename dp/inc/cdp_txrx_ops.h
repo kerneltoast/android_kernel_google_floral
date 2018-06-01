@@ -189,7 +189,7 @@ struct cdp_cmn_ops {
 			ol_txrx_data_tx_cb callback, void *ctxt);
 
 	/*******************************************************************
-	 * Statistics and Debugging Interface (C Inteface)
+	 * Statistics and Debugging Interface (C Interface)
 	 ********************************************************************/
 
 	int (*txrx_aggr_cfg)(struct cdp_vdev *vdev, int max_subfrms_ampdu,
@@ -297,9 +297,10 @@ struct cdp_cmn_ops {
 			void *dp_txrx_handle);
 
 	void (*txrx_peer_reset_ast)
-		(ol_txrx_soc_handle soc, uint8_t *ast_macaddr);
+		(ol_txrx_soc_handle soc, uint8_t *ast_macaddr, void *vdev_hdl);
 
-	void (*txrx_peer_reset_ast_table)(ol_txrx_soc_handle soc);
+	void (*txrx_peer_reset_ast_table)(ol_txrx_soc_handle soc,
+					  void *vdev_hdl);
 
 	void (*txrx_peer_flush_ast_table)(ol_txrx_soc_handle soc);
 

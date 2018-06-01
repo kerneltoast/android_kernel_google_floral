@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,11 +16,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
 #include "wmi_unified_priv.h"
 #include "wmi_unified_param.h"
 #include "qdf_module.h"
@@ -5404,7 +5396,7 @@ QDF_STATUS wmi_extract_ext_tbttoffset_num_vdevs(void *wmi_hdl, void *evt_buf,
  * wmi_extract_tbttoffset_update_params() - extract tbtt offset update param
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
- * @param idx: Index refering to a vdev
+ * @param idx: Index referring to a vdev
  * @param tbtt_param: Pointer to tbttoffset event param
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
@@ -5425,7 +5417,7 @@ QDF_STATUS wmi_extract_tbttoffset_update_params(void *wmi_hdl, void *evt_buf,
  * wmi_extract_ext_tbttoffset_update_params() - extract tbtt offset update param
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
- * @param idx: Index refering to a vdev
+ * @param idx: Index referring to a vdev
  * @param tbtt_param: Pointer to tbttoffset event param
  *
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
@@ -7376,6 +7368,16 @@ QDF_STATUS wmi_extract_ndp_end_ind(wmi_unified_t wmi_handle, uint8_t *data,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS wmi_extract_ndp_sch_update(wmi_unified_t wmi_handle, uint8_t *data,
+				      struct nan_datapath_sch_update_event *ind)
+{
+	if (wmi_handle->ops->extract_ndp_sch_update)
+		return wmi_handle->ops->extract_ndp_sch_update(wmi_handle,
+							       data, ind);
+
+	return QDF_STATUS_E_FAILURE;
+}
 #endif
 QDF_STATUS wmi_unified_send_btm_config(void *wmi_hdl,
 				       struct wmi_btm_config *params)
@@ -7515,3 +7517,30 @@ QDF_STATUS wmi_extract_cca_stats(wmi_unified_t wmi_handle, void *evt_buf,
 	return QDF_STATUS_E_FAILURE;
 }
 #endif /* QCA_SUPPORT_CP_STATS */
+
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+QDF_STATUS
+wmi_unified_dfs_send_avg_params_cmd(void *wmi_hdl,
+				    struct dfs_radar_found_params *params)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->send_dfs_average_radar_params_cmd)
+		return wmi_handle->ops->send_dfs_average_radar_params_cmd(
+			wmi_handle, params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS wmi_extract_dfs_status_from_fw(void *wmi_hdl, void *evt_buf,
+					  uint32_t *dfs_status_check)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->extract_dfs_status_from_fw)
+		return wmi_handle->ops->extract_dfs_status_from_fw(wmi_handle,
+				evt_buf, dfs_status_check);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif

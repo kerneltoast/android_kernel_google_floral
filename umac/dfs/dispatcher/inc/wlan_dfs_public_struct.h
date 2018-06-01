@@ -78,6 +78,10 @@ struct dfs_acs_info {
  *  the time that the radar event uploading to host.
  * @peak_sidx: index of peak magnitude bin (signed)
  * @pdev_id: pdev_id for identifying the MAC.
+ * @delta_diff: Delta diff value.
+ * @delta_peak: Delta peak value.
+ * @psidx_diff: Psidx diff value.
+ * @is_psidx_diff_valid: Does fw send valid psidx diff.
  */
 struct radar_event_info {
 	uint8_t  pulse_is_chirp;
@@ -91,6 +95,8 @@ struct radar_event_info {
 	uint8_t  pdev_id;
 	uint8_t  delta_diff;
 	int8_t   delta_peak;
+	int8_t   psidx_diff;
+	int8_t   is_psidx_diff_valid;
 };
 
 /**
@@ -99,5 +105,23 @@ struct radar_event_info {
  */
 struct dfs_user_config {
 	bool dfs_is_phyerr_filter_offload;
+};
+
+/**
+ * struct dfs_radar_found_params - radar found parameters.
+ * @pri_min: Minimum PRI of detected radar pulse.
+ * @pri_max: Max PRI of detected radar pulse.
+ * @duration_min: Min duration of detected pulse in us.
+ * @duration_max: Max duration of detected pulse in us.
+ * @sidx_min: Min softare index of detected radar pulse.
+ * @sidx_max: Max software index of detected radar pulse.
+ */
+struct dfs_radar_found_params {
+	u_int32_t pri_min;
+	u_int32_t pri_max;
+	u_int32_t duration_min;
+	u_int32_t duration_max;
+	u_int32_t sidx_min;
+	u_int32_t sidx_max;
 };
 #endif

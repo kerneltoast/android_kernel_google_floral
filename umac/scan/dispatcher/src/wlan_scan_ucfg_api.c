@@ -424,7 +424,7 @@ ucfg_scan_update_dbs_scan_ctrl_ext_flag(struct scan_start_request *req)
 {
 	uint32_t num_chan;
 	struct wlan_objmgr_psoc *psoc;
-	uint32_t scan_dbs_policy = SCAN_DBS_POLICY_FORCE_NONDBS;
+	uint32_t scan_dbs_policy = SCAN_DBS_POLICY_DEFAULT;
 	uint32_t conn_cnt;
 
 	psoc = wlan_vdev_get_psoc(req->vdev);
@@ -1114,7 +1114,7 @@ ucfg_scan_cancel_sync(struct scan_cancel_request *req)
 
 	/*
 	 * If cancel req is to cancel all scan of pdev or vdev
-	 * wait untill all scan of pdev or vdev get cancelled
+	 * wait until all scan of pdev or vdev get cancelled
 	 */
 	qdf_event_create(&cancel_scan_event);
 	qdf_event_reset(&cancel_scan_event);

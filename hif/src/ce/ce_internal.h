@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,11 +16,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
 #ifndef __COPY_ENGINE_INTERNAL_H__
 #define __COPY_ENGINE_INTERNAL_H__
 
@@ -401,7 +393,7 @@ union ce_desc {
  * @FAST_TX_WRITE_INDEX_UPDATE: event recorded before updating the write index
  *	of the TX ring in fastpath
  * @FAST_TX_WRITE_INDEX_SOFTWARE_UPDATE: recored when dropping a write to
- *	the wirte index in fastpath
+ *	the write index in fastpath
  * @FAST_TX_SOFTWARE_INDEX_UPDATE: event recorded before updating the software
  *	index of the RX ring in fastpath
  * @HIF_IRQ_EVENT: event recorded in the irq before scheduling the bh

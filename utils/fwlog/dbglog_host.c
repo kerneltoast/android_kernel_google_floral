@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /* Host Debug log implementation */
@@ -185,7 +176,7 @@ char *DBG_MSG_ARR[WLAN_MODULE_ID_MAX][MAX_DBG_MSGS] = {
 		"WMI_TARGET_WMI_SYNC_CMD",
 		"WMI_SET_SNR_THRESHOLD_PARAMS",
 		"WMI_SET_RSSI_THRESHOLD_PARAMS",
-		"WMI_SET_LQ_TRESHOLD_PARAMS",
+		"WMI_SET_LQ_THRESHOLD_PARAMS",
 		"WMI_TARGET_CREATE_PSTREAM_CMD",
 		"WMI_WI_DTM_INUSE",
 		"WMI_TARGET_DELETE_PSTREAM_CMD",

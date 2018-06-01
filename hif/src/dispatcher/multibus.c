@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -18,13 +15,6 @@
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
-
 
 /* this file dispatches functions to bus specific definitions */
 #include "hif_debug.h"
@@ -44,11 +34,11 @@
 #include "qdf_module.h"
 
 /**
- * hif_intialize_default_ops() - intializes default operations values
+ * hif_initialize_default_ops() - initializes default operations values
  *
  * bus specific features should assign their dummy implementations here.
  */
-static void hif_intialize_default_ops(struct hif_softc *hif_sc)
+static void hif_initialize_default_ops(struct hif_softc *hif_sc)
 {
 	struct hif_bus_ops *bus_ops = &hif_sc->bus_ops;
 
@@ -131,7 +121,7 @@ QDF_STATUS hif_bus_open(struct hif_softc *hif_sc,
 {
 	QDF_STATUS status = QDF_STATUS_E_INVAL;
 
-	hif_intialize_default_ops(hif_sc);
+	hif_initialize_default_ops(hif_sc);
 
 	switch (bus_type) {
 	case QDF_BUS_TYPE_PCI:

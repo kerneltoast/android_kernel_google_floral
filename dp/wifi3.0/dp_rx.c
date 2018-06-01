@@ -62,7 +62,7 @@ static inline bool dp_rx_check_ap_bridge(struct dp_vdev *vdev)
  * @soc: core txrx main context
  * @mac_id: mac_id which is one of 3 mac_ids
  * @dp_rxdma_srng: dp rxdma circular ring
- * @rx_desc_pool: Poiter to free Rx descriptor pool
+ * @rx_desc_pool: Pointer to free Rx descriptor pool
  * @num_req_buffers: number of buffer to be replenished
  * @desc_list: list of descs if called from dp_rx_process
  *	       or NULL during dp rx initialization or out of buffer
@@ -109,7 +109,7 @@ QDF_STATUS dp_rx_buffers_replenish(struct dp_soc *dp_soc, uint32_t mac_id,
 						   sync_hw_ptr);
 
 	QDF_TRACE(QDF_MODULE_ID_DP, QDF_TRACE_LEVEL_DEBUG,
-		"no of availble entries in rxdma ring: %d",
+		"no of available entries in rxdma ring: %d",
 		num_entries_avail);
 
 	if (!(*desc_list) && (num_entries_avail >
@@ -1027,7 +1027,7 @@ static inline void dp_rx_deliver_to_stack(struct dp_vdev *vdev,
 						qdf_nbuf_t nbuf_tail)
 {
 	/*
-	 * highly unlikely to have a vdev without a registerd rx
+	 * highly unlikely to have a vdev without a registered rx
 	 * callback function. if so let us free the nbuf_list.
 	 */
 	if (qdf_unlikely(!vdev->osif_rx)) {
@@ -1061,15 +1061,20 @@ static inline void dp_rx_deliver_to_stack(struct dp_vdev *vdev,
  *
  * Return: void
  */
-static inline void dp_rx_cksum_offload(qdf_nbuf_t nbuf, uint8_t *rx_tlv_hdr)
+static inline void dp_rx_cksum_offload(struct dp_pdev *pdev,
+				       qdf_nbuf_t nbuf,
+				       uint8_t *rx_tlv_hdr)
 {
 	qdf_nbuf_rx_cksum_t cksum = {0};
+	bool ip_csum_err = hal_rx_attn_ip_cksum_fail_get(rx_tlv_hdr);
+	bool tcp_udp_csum_er = hal_rx_attn_tcp_udp_cksum_fail_get(rx_tlv_hdr);
 
-	if (qdf_likely(!hal_rx_attn_tcp_udp_cksum_fail_get(rx_tlv_hdr) &&
-		       !hal_rx_attn_ip_cksum_fail_get(rx_tlv_hdr))) {
+	if (qdf_likely(!ip_csum_err && !tcp_udp_csum_er)) {
 		cksum.l4_result = QDF_NBUF_RX_CKSUM_TCP_UDP_UNNECESSARY;
-
 		qdf_nbuf_set_rx_cksum(nbuf, &cksum);
+	} else {
+		DP_STATS_INCC(pdev, err.ip_csum_err, 1, ip_csum_err);
+		DP_STATS_INCC(pdev, err.tcp_udp_csum_err, 1, tcp_udp_csum_er);
 	}
 }
 
@@ -1139,8 +1144,6 @@ static void dp_rx_msdu_stats_update(struct dp_soc *soc,
 	/* Save tid to skb->priority */
 	DP_RX_TID_SAVE(nbuf, tid);
 
-	DP_STATS_INC(vdev->pdev, rx.bw[bw], 1);
-	DP_STATS_INC(vdev->pdev, rx.reception_type[reception_type], 1);
 	DP_STATS_INC(peer, rx.nss[nss], 1);
 	DP_STATS_INC(peer, rx.sgi_count[sgi], 1);
 	DP_STATS_INCC(peer, rx.err.mic_err, 1,
@@ -1298,7 +1301,8 @@ dp_rx_process(struct dp_intr *int_ctx, void *hal_ring, uint32_t quota)
 	qdf_nbuf_t nbuf, next;
 	union dp_rx_desc_list_elem_t *head[MAX_PDEV_CNT] = { NULL };
 	union dp_rx_desc_list_elem_t *tail[MAX_PDEV_CNT] = { NULL };
-	uint32_t rx_bufs_used = 0, rx_buf_cookie, l2_hdr_offset;
+	uint32_t rx_bufs_used = 0, rx_buf_cookie;
+	uint32_t l2_hdr_offset = 0;
 	uint16_t msdu_len;
 	uint16_t peer_id;
 	struct dp_peer *peer = NULL;
@@ -1561,7 +1565,7 @@ done:
 			continue;
 		}
 
-		dp_rx_cksum_offload(nbuf, rx_tlv_hdr);
+		dp_rx_cksum_offload(vdev->pdev, nbuf, rx_tlv_hdr);
 
 		dp_set_rx_queue(nbuf, ring_id);
 
@@ -1575,8 +1579,12 @@ done:
 			FL("rxhash: flow id toeplitz: 0x%x\n"),
 			hal_rx_msdu_start_toeplitz_get(rx_tlv_hdr));
 
-		l2_hdr_offset =
-			hal_rx_msdu_end_l3_hdr_padding_get(rx_tlv_hdr);
+		/*L2 header offset will not be set in raw mode*/
+		if (qdf_likely(vdev->rx_decap_type !=
+				htt_cmn_pkt_type_raw)) {
+			l2_hdr_offset =
+				hal_rx_msdu_end_l3_hdr_padding_get(rx_tlv_hdr);
+		}
 
 		msdu_len = hal_rx_msdu_start_msdu_len_get(rx_tlv_hdr);
 		pkt_len = msdu_len + l2_hdr_offset + RX_PKT_TLVS_LEN;

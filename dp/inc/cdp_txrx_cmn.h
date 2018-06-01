@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,11 +16,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
 /**
  * @file cdp_txrx_cmn.h
  * @brief Define the host data path converged API functions
@@ -354,7 +346,7 @@ static inline int cdp_peer_add_ast
 }
 
 static inline void cdp_peer_reset_ast
-	(ol_txrx_soc_handle soc, uint8_t *wds_macaddr)
+	(ol_txrx_soc_handle soc, uint8_t *wds_macaddr, void *vdev_hdl)
 {
 
 	if (!soc || !soc->ops) {
@@ -367,11 +359,11 @@ static inline void cdp_peer_reset_ast
 	    !soc->ops->cmn_drv_ops->txrx_peer_reset_ast)
 		return;
 
-	soc->ops->cmn_drv_ops->txrx_peer_reset_ast(soc, wds_macaddr);
+	soc->ops->cmn_drv_ops->txrx_peer_reset_ast(soc, wds_macaddr, vdev_hdl);
 }
 
 static inline void cdp_peer_reset_ast_table
-	(ol_txrx_soc_handle soc)
+	(ol_txrx_soc_handle soc, void *vdev_hdl)
 {
 	if (!soc || !soc->ops) {
 		QDF_TRACE(QDF_MODULE_ID_CDP, QDF_TRACE_LEVEL_DEBUG,
@@ -384,7 +376,7 @@ static inline void cdp_peer_reset_ast_table
 	    !soc->ops->cmn_drv_ops->txrx_peer_reset_ast_table)
 		return;
 
-	soc->ops->cmn_drv_ops->txrx_peer_reset_ast_table(soc);
+	soc->ops->cmn_drv_ops->txrx_peer_reset_ast_table(soc, vdev_hdl);
 }
 
 static inline void cdp_peer_flush_ast_table
@@ -720,7 +712,7 @@ cdp_data_tx_cb_set(ol_txrx_soc_handle soc, struct cdp_vdev *data_vdev,
 }
 
 /******************************************************************************
- * Statistics and Debugging Interface (C Inteface)
+ * Statistics and Debugging Interface (C Interface)
  *****************************************************************************/
 /**
  * External Device physical address types

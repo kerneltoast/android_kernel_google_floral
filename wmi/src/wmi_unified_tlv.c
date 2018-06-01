@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include "wmi_unified_api.h"
@@ -48,6 +39,7 @@
 #ifdef WLAN_FEATURE_NAN_CONVERGENCE
 #include "nan_public_structs.h"
 #endif
+#include "wmi_unified_twt_api.h"
 
 #ifdef WLAN_POLICY_MGR_ENABLE
 #include "wlan_policy_mgr_public_struct.h"
@@ -1131,7 +1123,7 @@ send_pdev_utf_cmd_tlv(wmi_unified_t wmi_handle,
 
 	while (param->len) {
 		if (param->len > MAX_WMI_UTF_LEN)
-			chunk_len = MAX_WMI_UTF_LEN;    /* MAX messsage */
+			chunk_len = MAX_WMI_UTF_LEN;    /* MAX message */
 		else
 			chunk_len = param->len;
 
@@ -6862,7 +6854,7 @@ static QDF_STATUS send_dbs_scan_sel_params_cmd_tlv(wmi_unified_t wmi_handle,
  * list that need to be applied to the scan results to form the
  * probable candidates for roaming.
  *
- * Return: Return success upon succesfully passing the
+ * Return: Return success upon successfully passing the
  *         parameters to the firmware, otherwise failure.
  */
 static QDF_STATUS send_roam_scan_filter_cmd_tlv(wmi_unified_t wmi_handle,
@@ -13096,7 +13088,7 @@ send_pdev_qvit_cmd_tlv(wmi_unified_t wmi_handle,
 
 	while (param->len) {
 		if (param->len > MAX_WMI_QVIT_LEN)
-			chunk_len = MAX_WMI_QVIT_LEN;    /* MAX messsage */
+			chunk_len = MAX_WMI_QVIT_LEN;    /* MAX message */
 		else
 			chunk_len = param->len;
 
@@ -14034,7 +14026,7 @@ static QDF_STATUS fips_align_data_be(wmi_unified_t wmi_handle,
 	data_unaligned = qdf_mem_malloc(
 		sizeof(u_int8_t)*param->data_len + FIPS_ALIGN);
 
-	/* Checking if kmalloc is succesful to allocate space */
+	/* Checking if kmalloc is successful to allocate space */
 	if (key_unaligned == NULL)
 		return QDF_STATUS_SUCCESS;
 	/* Checking if space is aligned */
@@ -14057,7 +14049,7 @@ static QDF_STATUS fips_align_data_be(wmi_unified_t wmi_handle,
 		DUMP_PREFIX_NONE,
 		16, 1, key_aligned, param->key_len, true);
 
-	/* Checking if kmalloc is succesful to allocate space */
+	/* Checking if kmalloc is successful to allocate space */
 	if (data_unaligned == NULL)
 		return QDF_STATUS_SUCCESS;
 	/* Checking of space is aligned */
@@ -17817,6 +17809,69 @@ static QDF_STATUS extract_ndp_end_ind_tlv(wmi_unified_t wmi_handle,
 
 	return QDF_STATUS_SUCCESS;
 }
+
+static QDF_STATUS extract_ndp_sch_update_tlv(wmi_unified_t wmi_handle,
+		uint8_t *data, struct nan_datapath_sch_update_event *ind)
+{
+	uint8_t i;
+	WMI_HOST_WLAN_PHY_MODE ch_mode;
+	WMI_NDL_SCHEDULE_UPDATE_EVENTID_param_tlvs *event;
+	wmi_ndl_schedule_update_fixed_param *fixed_params;
+
+	event = (WMI_NDL_SCHEDULE_UPDATE_EVENTID_param_tlvs *)data;
+	fixed_params = event->fixed_param;
+
+	WMI_LOGD(FL("flags: %d, num_ch: %d, num_ndp_instances: %d"),
+		 fixed_params->flags, fixed_params->num_channels,
+		 fixed_params->num_ndp_instances);
+
+	ind->vdev =
+		wlan_objmgr_get_vdev_by_id_from_psoc(wmi_handle->soc->wmi_psoc,
+						     fixed_params->vdev_id,
+						     WLAN_NAN_ID);
+	if (!ind->vdev) {
+		WMI_LOGE("vdev is null");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	ind->flags = fixed_params->flags;
+	ind->num_channels = fixed_params->num_channels;
+	ind->num_ndp_instances = fixed_params->num_ndp_instances;
+	WMI_MAC_ADDR_TO_CHAR_ARRAY(&fixed_params->peer_macaddr,
+				   ind->peer_addr.bytes);
+
+	if (ind->num_ndp_instances > NDP_NUM_INSTANCE_ID) {
+		WMI_LOGE(FL("uint32 overflow"));
+		wlan_objmgr_vdev_release_ref(ind->vdev, WLAN_NAN_ID);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	qdf_mem_copy(ind->ndp_instances, event->ndp_instance_list,
+		     sizeof(uint32_t) * ind->num_ndp_instances);
+
+	if (ind->num_channels > NAN_CH_INFO_MAX_CHANNELS) {
+		WMI_LOGE(FL("too many channels"));
+		ind->num_channels = NAN_CH_INFO_MAX_CHANNELS;
+	}
+	for (i = 0; i < ind->num_channels; i++) {
+		ind->ch[i].channel = event->ndl_channel_list[i].mhz;
+		ind->ch[i].nss = event->nss_list[i];
+		ch_mode = WMI_GET_CHANNEL_MODE(&event->ndl_channel_list[i]);
+		ind->ch[i].ch_width = wmi_get_ch_width_from_phy_mode(wmi_handle,
+								     ch_mode);
+		WMI_LOGD(FL("ch: %d, ch_mode: %d, nss: %d"),
+			 ind->ch[i].channel,
+			 ind->ch[i].ch_width,
+			 ind->ch[i].nss);
+	}
+
+	for (i = 0; i < fixed_params->num_ndp_instances; i++)
+		WMI_LOGD(FL("instance_id[%d]: %d"),
+			 i, event->ndp_instance_list[i]);
+
+	return QDF_STATUS_SUCCESS;
+}
+
 #endif
 
 #ifdef QCA_SUPPORT_CP_STATS
@@ -18459,7 +18514,7 @@ static QDF_STATUS extract_ext_tbttoffset_num_vdevs_tlv(void *wmi_hdl,
  * extract_tbttoffset_update_params_tlv() - extract tbtt offset param
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
- * @param idx: Index refering to a vdev
+ * @param idx: Index referring to a vdev
  * @param tbtt_param: Pointer to tbttoffset event param
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
@@ -18493,7 +18548,7 @@ static QDF_STATUS extract_tbttoffset_update_params_tlv(void *wmi_hdl,
  * extract_ext_tbttoffset_update_params_tlv() - extract ext tbtt offset param
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
- * @param idx: Index refering to a vdev
+ * @param idx: Index referring to a vdev
  * @param tbtt_param: Pointer to tbttoffset event param
  *
  * Return: QDF_STATUS_SUCCESS for success or error code
@@ -20431,7 +20486,7 @@ static QDF_STATUS fips_conv_data_be(uint32_t data_len, uint8_t *data)
 	data_unaligned = qdf_mem_malloc(((sizeof(uint8_t) * data_len) +
 					FIPS_ALIGN));
 	/* Assigning unaligned space to copy the data */
-	/* Checking if kmalloc does succesful allocation */
+	/* Checking if kmalloc does successful allocation */
 	if (data_unaligned == NULL)
 		return QDF_STATUS_E_FAILURE;
 
@@ -20773,7 +20828,8 @@ extract_nfcal_power_ev_param_tlv(wmi_unified_t wmi_handle,
 		ch_freqnum++;
 	}
 
-	param->pdev_id = event->pdev_id;
+	param->pdev_id = wmi_handle->ops->
+		convert_pdev_id_target_to_host(event->pdev_id);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -21211,6 +21267,14 @@ static QDF_STATUS extract_wlan_radar_event_info_tlv(
 	wlan_radar_event->peak_sidx = radar_event->peak_sidx;
 	wlan_radar_event->delta_peak = radar_event->pulse_delta_peak;
 	wlan_radar_event->delta_diff = radar_event->pulse_delta_diff;
+	if (radar_event->pulse_flags &
+			WMI_DFS_RADAR_PULSE_FLAG_MASK_PSIDX_DIFF_VALID) {
+		wlan_radar_event->is_psidx_diff_valid = true;
+		wlan_radar_event->psidx_diff = radar_event->psidx_diff;
+	} else {
+		wlan_radar_event->is_psidx_diff_valid = false;
+	}
+
 	wlan_radar_event->pdev_id = radar_event->pdev_id;
 
 	return QDF_STATUS_SUCCESS;
@@ -22963,6 +23027,7 @@ struct wmi_ops tlv_ops =  {
 	.extract_ndp_responder_rsp = extract_ndp_responder_rsp_tlv,
 	.extract_ndp_end_rsp = extract_ndp_end_rsp_tlv,
 	.extract_ndp_end_ind = extract_ndp_end_ind_tlv,
+	.extract_ndp_sch_update = extract_ndp_sch_update_tlv,
 #endif
 	.send_btm_config = send_btm_config_cmd_tlv,
 	.send_obss_detection_cfg_cmd = send_obss_detection_cfg_cmd_tlv,
@@ -23236,6 +23301,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_ndp_end_indication_event_id] =
 		WMI_NDP_END_INDICATION_EVENTID;
 	event_ids[wmi_ndp_end_rsp_event_id] = WMI_NDP_END_RSP_EVENTID;
+	event_ids[wmi_ndl_schedule_update_event_id] =
+					WMI_NDL_SCHEDULE_UPDATE_EVENTID;
 
 	event_ids[wmi_oem_response_event_id] = WMI_OEM_RESPONSE_EVENTID;
 	event_ids[wmi_peer_stats_info_event_id] = WMI_PEER_STATS_INFO_EVENTID;
@@ -23276,6 +23343,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 		WMI_OBSS_COLOR_COLLISION_DETECTION_EVENTID;
 	event_ids[wmi_pdev_div_rssi_antid_event_id] =
 		WMI_PDEV_DIV_RSSI_ANTID_EVENTID;
+	event_ids[wmi_twt_enable_complete_event_id] =
+		WMI_TWT_ENABLE_COMPLETE_EVENTID;
 }
 
 /**
@@ -23936,14 +24005,6 @@ static inline void wmi_ocb_ut_attach(struct wmi_unified *wmi_handle)
 }
 #endif
 
-#ifdef WLAN_SUPPORT_TWT
-void wmi_twt_attach_tlv(struct wmi_unified *wmi_handle);
-#else
-static void wmi_twt_attach_tlv(struct wmi_unified *wmi_handle)
-{
-	return;
-}
-#endif
 /**
  * wmi_tlv_attach() - Attach TLV APIs
  *

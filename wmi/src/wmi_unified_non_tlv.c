@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include "wmi_unified_api.h"
@@ -849,7 +840,7 @@ send_pdev_utf_cmd_non_tlv(wmi_unified_t wmi_handle,
 
 	while (param->len) {
 		if (param->len > MAX_WMI_UTF_LEN)
-			chunkLen = MAX_WMI_UTF_LEN; /* MAX messsage.. */
+			chunkLen = MAX_WMI_UTF_LEN; /* MAX message.. */
 		else
 			chunkLen = param->len;
 
@@ -948,7 +939,7 @@ send_pdev_qvit_cmd_non_tlv(wmi_unified_t wmi_handle,
 
 	while (param->len) {
 		if (param->len > MAX_WMI_QVIT_LEN)
-			chunkLen = MAX_WMI_QVIT_LEN; /* MAX messsage.. */
+			chunkLen = MAX_WMI_QVIT_LEN; /* MAX message.. */
 		else
 			chunkLen = param->len;
 
@@ -4292,7 +4283,7 @@ send_pdev_fips_cmd_non_tlv(wmi_unified_t wmi_handle,
 
 			int c;
 
-			/* Checking if kmalloc is succesful to allocate space */
+			/* Checking if kmalloc is successful to allocate space */
 			if (key_unaligned == NULL)
 				return QDF_STATUS_SUCCESS;
 			/* Checking if space is aligned */
@@ -4315,7 +4306,7 @@ send_pdev_fips_cmd_non_tlv(wmi_unified_t wmi_handle,
 			    DUMP_PREFIX_NONE,
 				16, 1, key_aligned, param->key_len, true);
 
-			/* Checking if kmalloc is succesful to allocate space */
+			/* Checking if kmalloc is successful to allocate space */
 			if (data_unaligned == NULL)
 				return QDF_STATUS_SUCCESS;
 			/* Checking of space is aligned */
@@ -6158,7 +6149,7 @@ static QDF_STATUS extract_fips_event_data_non_tlv(wmi_unified_t wmi_handle,
 		u_int8_t *data_aligned = NULL;
 		int c;
 
-		/* Checking if kmalloc does succesful allocation */
+		/* Checking if kmalloc does successful allocation */
 		if (data_unaligned == NULL)
 			return QDF_STATUS_E_FAILURE;
 
@@ -6249,7 +6240,7 @@ static QDF_STATUS extract_tbttoffset_num_vdevs_non_tlv(void *wmi_hdl,
  * extract_tbttoffset_update_params_non_tlv() - extract tbtt offset update param
  * @wmi_handle: wmi handle
  * @param evt_buf: pointer to event buffer
- * @param idx: Index refering to a vdev
+ * @param idx: Index referring to a vdev
  * @param tbtt_param: Pointer to tbttoffset event param
  *
  * Return: 0 for success or error code
@@ -8422,6 +8413,83 @@ QDF_STATUS send_wds_entry_list_cmd_non_tlv(wmi_unified_t wmi_handle)
 	return QDF_STATUS_SUCCESS;
 }
 
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+/**
+ * send_dfs_average_radar_params_cmd_non_tlv() - send average radar params to
+ * fw.
+ * @wmi_handle: wmi handle
+ * @params: pointer to dfs_radar_found_params.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+static QDF_STATUS send_dfs_average_radar_params_cmd_non_tlv(
+		wmi_unified_t wmi_handle,
+		struct dfs_radar_found_params *params)
+{
+	wmi_host_dfs_radar_found_cmd *cmd;
+	wmi_buf_t buf;
+
+	int len = sizeof(wmi_host_dfs_radar_found_cmd);
+
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		WMI_LOGD("%s:wmi_buf_alloc failed\n", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	cmd = (wmi_host_dfs_radar_found_cmd *)wmi_buf_data(buf);
+
+	/* Fill the WMI structure (PRI, duration, SIDX) from
+	 * the radar_found_param structure and then send
+	 * out.
+	 */
+	cmd->pri_min_value = params->pri_min;
+	cmd->pri_max_value = params->pri_max;
+	cmd->duration_min_value = params->duration_min;
+	cmd->duration_max_value = params->duration_max;
+	cmd->sidx_min_value = params->sidx_min;
+	cmd->sidx_max_value = params->sidx_max;
+
+	if (wmi_unified_cmd_send(wmi_handle, buf, len,
+				WMI_HOST_DFS_RADAR_FOUND_CMDID)) {
+		WMI_LOGD("%s:Failed to send WMI command\n", __func__);
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * extract_dfs_status_from_fw_non_tlv() - extract the result of host dfs check
+ * from fw
+ * @wmi_handle: wmi handle
+ * @evt_buf:  pointer to event buffer
+ * @fw_dfs_status_code: pointer to the status received from fw.
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+static QDF_STATUS
+extract_dfs_status_from_fw_non_tlv(wmi_unified_t wmi_handle,
+				   void *evt_buf,
+				   uint32_t *fw_dfs_status_code)
+{
+	wmi_host_dfs_status_check_event *ev =
+		(wmi_host_dfs_status_check_event *)evt_buf;
+
+	if ((ev->status == WMI_HOST_DFS_CHECK_PASSED) ||
+			(ev->status == WMI_HOST_DFS_CHECK_FAILED) ||
+			(ev->status == WMI_HOST_DFS_CHECK_HW_RADAR)) {
+		*fw_dfs_status_code = ev->status;
+		return QDF_STATUS_SUCCESS;
+	}
+
+	WMI_LOGD("%s..Invalid status code : %d received\n", __func__,
+		 ev->status);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
 
 /**
  * wmi_non_tlv_pdev_id_conversion_enable() - Enable pdev_id conversion
@@ -8668,6 +8736,11 @@ struct wmi_ops non_tlv_ops =  {
 	.extract_swfda_vdev_id = extract_swfda_vdev_id_non_tlv,
 #endif /* WLAN_SUPPORT_FILS */
 	.wmi_pdev_id_conversion_enable = wmi_non_tlv_pdev_id_conversion_enable,
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+	.send_dfs_average_radar_params_cmd =
+		send_dfs_average_radar_params_cmd_non_tlv,
+	.extract_dfs_status_from_fw = extract_dfs_status_from_fw_non_tlv,
+#endif
 };
 
 /**
@@ -8861,6 +8934,8 @@ static void populate_non_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_widebw_scan] = WMI_SERVICE_UNAVAILABLE;
 	wmi_service[wmi_service_support_dma] =
 				WMI_SERVICE_UNAVAILABLE;
+	wmi_service[wmi_service_host_dfs_check_support] =
+		WMI_SERVICE_HOST_DFS_CHECK_SUPPORT;
 }
 
 /**
@@ -8960,6 +9035,10 @@ static void populate_non_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_pdev_wds_entry_list_event_id] =
 					WMI_PDEV_WDS_ENTRY_LIST_EVENTID;
 	event_ids[wmi_host_swfda_event_id] = WMI_HOST_SWFDA_EVENTID;
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+	event_ids[wmi_host_dfs_status_check_event_id] =
+		WMI_HOST_DFS_STATUS_CHECK_EVENTID;
+#endif
 }
 
 /**

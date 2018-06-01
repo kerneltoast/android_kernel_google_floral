@@ -262,6 +262,11 @@
 #define DFS_NO_FAST_CLOCK_MULTIPLIER (80)
 #define DFS_BIG_SIDX 10000
 
+/* Min value of valid psidx diff */
+#define DFS_MIN_PSIDX_DIFF 4
+/* Max value of valid psidx diff */
+#define DFS_MAX_PSIDX_DIFF 16
+
 /**
  * Software use: channel interference used for as AR as well as RADAR
  * interference detection.
@@ -353,6 +358,13 @@
 		WLAN_DFSNOL_UNLOCK(dfs);                    \
 	} while (0)
 
+/* Host sends the average parameters of the radar pulses and starts the status
+ * wait timer with this timeout.
+ */
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+#define HOST_DFS_STATUS_WAIT_TIMER_MS 100
+#endif
+
 /**
  * struct dfs_pulseparams - DFS pulse param structure.
  * @p_time:        Time for start of pulse in usecs.
@@ -361,6 +373,8 @@
  * @p_seg_id:      Segment id.
  * @p_sidx:        Sidx value.
  * @p_delta_peak:  Delta peak value.
+ * @p_psidx_diff:  The difference in the FFT peak index between the short FFT
+ *                 and the first long FFT.
  * @p_seq_num:     Sequence number.
  */
 struct dfs_pulseparams {
@@ -370,6 +384,7 @@ struct dfs_pulseparams {
 	uint8_t  p_seg_id;
 	int16_t  p_sidx;
 	int8_t   p_delta_peak;
+	int16_t  p_psidx_diff;
 	uint32_t p_seq_num;
 } qdf_packed;
 
@@ -390,6 +405,8 @@ struct dfs_pulseline {
 #define DFS_EVENT_CHECKCHIRP  0x01 /* Whether to check the chirp flag */
 #define DFS_EVENT_HW_CHIRP    0x02 /* hardware chirp */
 #define DFS_EVENT_SW_CHIRP    0x04 /* software chirp */
+/* Whether the event contains valid psidx diff value*/
+#define DFS_EVENT_VALID_PSIDX_DIFF 0x08
 
 /* Use this only if the event has CHECKCHIRP set. */
 #define DFS_EVENT_ISCHIRP(e) \
@@ -424,6 +441,7 @@ struct dfs_pulseline {
  * @re_relpwr_db:        Relpower in db.
  * @re_delta_diff:       Delta diff.
  * @re_delta_peak:       Delta peak.
+ * @re_psidx_diff:       Psidx diff.
  * @re_list:             List of radar events.
  */
 struct dfs_event {
@@ -445,6 +463,7 @@ struct dfs_event {
 	int       re_relpwr_db;
 	uint8_t   re_delta_diff;
 	int8_t    re_delta_peak;
+	int16_t   re_psidx_diff;
 
 	STAILQ_ENTRY(dfs_event) re_list;
 } qdf_packed;
@@ -499,6 +518,7 @@ struct dfs_ar_state {
  * @de_seg_id:     Segment id for HT80_80/HT160 use.
  * @de_sidx:       Sidx value.
  * @de_delta_peak: Delta peak.
+ * @de_psidx_diff: Psidx diff.
  * @de_seq_num:    Sequence number.
  */
 struct dfs_delayelem {
@@ -509,6 +529,7 @@ struct dfs_delayelem {
 	uint8_t  de_seg_id;
 	int16_t  de_sidx;
 	int8_t   de_delta_peak;
+	int16_t  de_psidx_diff;
 	uint32_t de_seq_num;
 } qdf_packed;
 
@@ -538,6 +559,8 @@ struct dfs_delayelem {
  *                     Used for sidx spread check.
  * @dl_delta_peak_match_count: Number of pulse in the delay line that had valid
  *                             delta peak value.
+ * @dl_psidx_diff_match_count: Number of pulse in the delay line that had valid
+ *                             psidx diff value.
  */
 struct dfs_delayline {
 	struct dfs_delayelem dl_elems[DFS_MAX_DL_SIZE];
@@ -552,6 +575,7 @@ struct dfs_delayline {
 	int16_t  dl_min_sidx;
 	int8_t   dl_max_sidx;
 	uint8_t  dl_delta_peak_match_count;
+	uint8_t  dl_psidx_diff_match_count;
 } qdf_packed;
 
 /**
@@ -788,6 +812,7 @@ struct dfs_stats {
  * @relpwr_db:        Relpower in db.
  * @delta_diff:       Delta diff.
  * @delta_peak:       Delta peak.
+ * @psidx_diff:       Psidx diff.
  */
 
 struct dfs_event_log {
@@ -805,6 +830,7 @@ struct dfs_event_log {
 	int       relpwr_db;
 	uint8_t   delta_diff;
 	int8_t    delta_peak;
+	int16_t   psidx_diff;
 };
 
 #define WLAN_DFS_RESET_TIME_S 7
@@ -921,6 +947,26 @@ struct dfs_event_log {
  * @dfs_use_nol_subchannel_marking:  Use subchannel marking logic to add only
  *                                   radar affected subchannel instead of all
  *                                   bonding channels.
+ * @dfs_host_wait_timer:             The timer that is started from host after
+ *                                   sending the average radar parameters.
+ *                                   Before this timeout host expects its dfs
+ *                                   status from fw.
+ * @dfs_average_pri:                 Average pri value of the received radar
+ *                                   pulses.
+ * @dfs_average_duration:            Average duration of the received radar
+ *                                   pulses.
+ * @dfs_average_sidx:                Average sidx of the received radar pulses.
+ * @dfs_is_host_wait_running:        Indicates if host dfs status wait timer is
+ *                                   running.
+ * @dfs_average_params_sent:         Indicates if host has sent the average
+ *                                   radar parameters.
+ * @dfs_no_res_from_fw:              Indicates no response from fw.
+ * @dfs_spoof_check_failed:          Indicates if the spoof check has failed.
+ * @dfs_spoof_test_done:             Indicates if the sppof test is done.
+ * @dfs_seg_id:                      Segment ID of the radar hit channel.
+ * @dfs_false_radar_found:           Indicates if false radar is found.
+ * @dfs_status_timeout_override:     Used to change the timeout value of
+ *                                   dfs_host_wait_timer.
  */
 struct wlan_dfs {
 	uint32_t       dfs_debug_mask;
@@ -1020,6 +1066,21 @@ struct wlan_dfs {
 	qdf_spinlock_t dfs_nol_lock;
 	uint16_t tx_leakage_threshold;
 	bool dfs_use_nol_subchannel_marking;
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+	os_timer_t     dfs_host_wait_timer;
+	uint32_t       dfs_average_pri;
+	uint32_t       dfs_average_duration;
+	uint32_t       dfs_average_sidx;
+	uint8_t        dfs_is_host_wait_running:1,
+				   dfs_average_params_sent:1,
+				   dfs_no_res_from_fw:1,
+				   dfs_spoof_check_failed:1,
+				   dfs_spoof_test_done:1;
+	uint8_t        dfs_seg_id;
+	int            dfs_false_radar_found;
+	struct dfs_channel dfs_radar_found_chan;
+	int            dfs_status_timeout_override;
+#endif
 };
 
 /**
@@ -1077,6 +1138,24 @@ enum {
 };
 
 /**
+ * enum host dfs spoof check status.
+ * @HOST_DFS_CHECK_PASSED: Host indicates RADAR detected and the FW
+ *                         confirms it to be spoof radar to host.
+ * @HOST_DFS_CHECK_FAILED: Host doesn't indicate RADAR detected or spoof
+ *                         radar parameters by
+ *                         WMI_HOST_DFS_RADAR_FOUND_CMDID doesn't match.
+ * @HOST_DFS_STATUS_CHECK_HW_RADAR: Host indicates RADAR detected and the
+ *                             FW confirms it to be real HW radar to host.
+ */
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+enum {
+	HOST_DFS_STATUS_CHECK_PASSED = 0,
+	HOST_DFS_STATUS_CHECK_FAILED = 1,
+	HOST_DFS_STATUS_CHECK_HW_RADAR = 2
+};
+#endif
+
+/**
  * struct dfs_phy_err - DFS phy error.
  * @fulltsf:             64-bit TSF as read from MAC.
  * @is_pri:              Detected on primary channel.
@@ -1101,6 +1180,7 @@ enum {
  * @relpwr_db:           Relpower in DB.
  * @pulse_delta_diff:    Pulse delta diff.
  * @pulse_delta_peak:    Pulse delta peak.
+ * @pulse_psidx_diff:    Pulse psidx diff.
  *
  * Chirp notes!
  *
@@ -1170,6 +1250,7 @@ struct dfs_phy_err {
 	int      relpwr_db;
 	uint8_t  pulse_delta_diff;
 	int8_t   pulse_delta_peak;
+	int16_t  pulse_psidx_diff;
 };
 
 /**
@@ -1574,6 +1655,21 @@ void dfs_reset_ar(struct wlan_dfs *dfs);
  * @dfs: pointer to wlan_dfs structure.
  */
 void dfs_reset_arq(struct wlan_dfs *dfs);
+
+/**
+ * dfs_is_radar_enabled() - check if radar detection is enabled.
+ * @dfs: Pointer to wlan_dfs structure.
+ * @ignore_dfs: if 1 then radar detection is disabled..
+ */
+#if defined(WLAN_DFS_DIRECT_ATTACH) || defined(WLAN_DFS_PARTIAL_OFFLOAD)
+void dfs_is_radar_enabled(struct wlan_dfs *dfs,
+			  int *ignore_dfs);
+#else
+static inline void dfs_is_radar_enabled(struct wlan_dfs *dfs,
+					int *ignore_dfs)
+{
+}
+#endif
 
 /**
  * dfs_process_phyerr_bb_tlv() - Parses the PHY error and populates the

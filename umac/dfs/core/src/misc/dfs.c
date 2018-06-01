@@ -29,7 +29,7 @@
 #include "../dfs_internal.h"
 #include "../dfs_filter_init.h"
 #include "../dfs_full_offload.h"
-
+#include "wlan_dfs_utils_api.h"
 
 /**
  * dfs_testtimer_task() - Sends CSA in the current channel.
@@ -121,7 +121,7 @@ int dfs_attach(struct wlan_dfs *dfs)
 
 	/*
 	 * Init of timer ,dfs_testtimer_task is required by both partial
-	 * and full offload, indicating test mode timer initilization for both.
+	 * and full offload, indicating test mode timer initialization for both.
 	 */
 	dfs_main_task_testtimer_init(dfs);
 	return 0;
@@ -143,8 +143,10 @@ void dfs_reset(struct wlan_dfs *dfs)
 
 	dfs_cac_timer_reset(dfs);
 	dfs_zero_cac_reset(dfs);
-	if (!dfs->dfs_is_offload_enabled)
+	if (!dfs->dfs_is_offload_enabled) {
 		dfs_main_timer_reset(dfs);
+		dfs->dfs_event_log_count = 0;
+	}
 }
 
 void dfs_detach(struct wlan_dfs *dfs)
@@ -288,6 +290,10 @@ int dfs_control(struct wlan_dfs *dfs,
 		if (dfs->dfs_debug_mask & WLAN_DEBUG_DFS3) {
 			/* Enable debug Radar Event */
 			dfs->dfs_event_log_on = 1;
+		} else if ((utils_get_dfsdomain(dfs->dfs_pdev_obj) ==
+		    DFS_FCC_DOMAIN) &&
+		    lmac_is_host_dfs_check_support_enabled(dfs->dfs_pdev_obj)) {
+			dfs->dfs_event_log_on = 1;
 		} else {
 			dfs->dfs_event_log_on = 0;
 		}
@@ -393,7 +399,7 @@ int dfs_control(struct wlan_dfs *dfs,
 #define FREQ_OFFSET1 ((int)dfs->radar_log[i].freq_offset_khz / 1000)
 #define FREQ_OFFSET2 ((int)abs(dfs->radar_log[i].freq_offset_khz) % 1000)
 			dfs_debug(dfs, WLAN_DEBUG_DFS,
-					"ts=%llu diff_ts=%u rssi=%u dur=%u, is_chirp=%d, seg_id=%d, sidx=%d, freq_offset=%d.%dMHz, peak_mag=%d, total_gain=%d, mb_gain=%d, relpwr_db=%d, delta_diff=%d, delta_peak=%d\n",
+					"ts=%llu diff_ts=%u rssi=%u dur=%u, is_chirp=%d, seg_id=%d, sidx=%d, freq_offset=%d.%dMHz, peak_mag=%d, total_gain=%d, mb_gain=%d, relpwr_db=%d, delta_diff=%d, delta_peak=%d, psidx_diff=%d\n",
 					dfs->radar_log[i].ts,
 					dfs->radar_log[i].diff_ts,
 					dfs->radar_log[i].rssi,
@@ -408,7 +414,8 @@ int dfs_control(struct wlan_dfs *dfs,
 					dfs->radar_log[i].mb_gain,
 					dfs->radar_log[i].relpwr_db,
 					dfs->radar_log[i].delta_diff,
-					dfs->radar_log[i].delta_peak);
+					dfs->radar_log[i].delta_peak,
+					dfs->radar_log[i].psidx_diff);
 		}
 		dfs->dfs_event_log_count = 0;
 		dfs->dfs_phyerr_count = 0;

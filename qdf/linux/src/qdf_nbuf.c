@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -2866,7 +2857,7 @@ uint32_t __qdf_nbuf_get_tso_info(qdf_device_t osdev, struct sk_buff *skb,
 	struct qdf_tso_num_seg_elem_t *total_num_seg;
 	struct skb_frag_struct *frag = NULL;
 	uint32_t tso_frag_len = 0; /* tso segment's fragment length*/
-	uint32_t skb_frag_len = 0; /* skb's fragment length (continous memory)*/
+	uint32_t skb_frag_len = 0; /* skb's fragment length (contiguous memory)*/
 	uint32_t skb_proc = skb->len; /* bytes of skb pending processing */
 	uint32_t tso_seg_size = skb_shinfo(skb)->gso_size;
 	int j = 0; /* skb fragment index */
@@ -3793,7 +3784,11 @@ qdf_nbuf_update_radiotap_he_flags(struct mon_rx_status *rx_status,
 
 	put_unaligned_le16(rx_status->he_data6, &rtap_buf[rtap_len]);
 	rtap_len += 2;
-
+	qdf_info("he data %x %x %x %x %x %x",
+		  rx_status->he_data1,
+		  rx_status->he_data2, rx_status->he_data3,
+		  rx_status->he_data4, rx_status->he_data5,
+		  rx_status->he_data6);
 	return rtap_len;
 }
 
@@ -3833,6 +3828,11 @@ qdf_nbuf_update_radiotap_he_mu_flags(struct mon_rx_status *rx_status,
 
 	rtap_buf[rtap_len] = rx_status->he_RU[3];
 	rtap_len += 1;
+	qdf_info("he_flags %x %x he-RU %x %x %x %x",
+		  rx_status->he_flags1,
+		  rx_status->he_flags2, rx_status->he_RU[0],
+		  rx_status->he_RU[1], rx_status->he_RU[2],
+		  rx_status->he_RU[3]);
 
 	return rtap_len;
 }
@@ -3866,7 +3866,10 @@ qdf_nbuf_update_radiotap_he_mu_other_flags(struct mon_rx_status *rx_status,
 
 	rtap_buf[rtap_len] = rx_status->he_per_user_known;
 	rtap_len += 1;
-
+	qdf_info("he_per_user %x %x pos %x knwn %x",
+		  rx_status->he_per_user_1,
+		  rx_status->he_per_user_2, rx_status->he_per_user_position,
+		  rx_status->he_per_user_known);
 	return rtap_len;
 }
 

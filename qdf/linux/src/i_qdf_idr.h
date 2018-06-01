@@ -17,28 +17,26 @@
  */
 
 /**
- * DOC: wlan_cp_stats_ic_ucfg_defs.h
- *
- * This header file provide definitions and declarations required for northbound
- * specific to WIN
+ * DOC: i_qdf_idr.h (ID Allocation)
+ * Linux-specific definitions for QDF ID Allocation API's
  */
 
-#ifndef __WLAN_CP_STATS_IC_UCFG_DEFS_H__
-#define __WLAN_CP_STATS_IC_UCFG_DEFS_H__
+#if !defined(__I_QDF_IDR_H)
+#define __I_QDF_IDR_H
 
-#ifdef QCA_SUPPORT_CP_STATS
+#include <linux/idr.h>
+#include <qdf_lock.h>
 
 /**
- * enum wlan_ucfg_cp_stats_vendorcmd_handler_idx - cp stats commands
- * @CP_STATS_GET_ATF_HANDLER_IDX: get ATF stats id
- * @CP_STATS_GET_VOW_STATS_HANDLER_IDX: get vow ext stats id
- * @CP_STATS_VENDOR_CMD_HANDLER_MAX: max command id
+ * struct __qdf_idr_s
+ * @lock: qdf spinlock
+ * @idr:  idr handler
  */
-enum wlan_ucfg_cp_stats_vendorcmd_handler_idx {
-	CP_STATS_GET_ATF_HANDLER_IDX,
-	CP_STATS_GET_VOW_STATS_HANDLER_IDX,
-	CP_STATS_VENDOR_CMD_HANDLER_MAX,
+struct __qdf_idr_s {
+	qdf_spinlock_t lock;
+	struct idr idr;
 };
 
-#endif /* QCA_SUPPORT_CP_STATS */
-#endif /* __WLAN_CP_STATS_IC_UCFG_DEFS_H__ */
+typedef struct __qdf_idr_s __qdf_idr;
+
+#endif /* __I_QDF_IDR_H */

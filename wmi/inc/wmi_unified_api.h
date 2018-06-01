@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -2002,7 +1993,7 @@ QDF_STATUS wmi_extract_wds_entry(void *wmi_hdl, uint8_t *evt_buf,
 #ifdef WLAN_FEATURE_NAN_CONVERGENCE
 /**
  * wmi_unified_ndp_initiator_req_cmd_send - api to send initiator request to FW
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @req: pointer to request buffer
  *
  * Return: status of operation
@@ -2012,7 +2003,7 @@ QDF_STATUS wmi_unified_ndp_initiator_req_cmd_send(void *wmi_hdl,
 
 /**
  * wmi_unified_ndp_responder_req_cmd_send - api to send responder request to FW
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @req: pointer to request buffer
  *
  * Return: status of operation
@@ -2022,7 +2013,7 @@ QDF_STATUS wmi_unified_ndp_responder_req_cmd_send(void *wmi_hdl,
 
 /**
  * wmi_unified_ndp_end_req_cmd_send - api to send end request to FW
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @req: pointer to request buffer
  *
  * Return: status of operation
@@ -2032,7 +2023,7 @@ QDF_STATUS wmi_unified_ndp_end_req_cmd_send(void *wmi_hdl,
 
 /**
  * wmi_extract_ndp_initiator_rsp - api to extract initiator rsp from even buffer
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @data: event buffer
  * @rsp: buffer to populate
  *
@@ -2043,7 +2034,7 @@ QDF_STATUS wmi_extract_ndp_initiator_rsp(wmi_unified_t wmi_handle,
 
 /**
  * wmi_extract_ndp_ind - api to extract ndp indication struct from even buffer
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @data: event buffer
  * @ind: buffer to populate
  *
@@ -2054,7 +2045,7 @@ QDF_STATUS wmi_extract_ndp_ind(wmi_unified_t wmi_handle, uint8_t *data,
 
 /**
  * wmi_extract_ndp_confirm - api to extract ndp confim struct from even buffer
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @data: event buffer
  * @ev: buffer to populate
  *
@@ -2065,7 +2056,7 @@ QDF_STATUS wmi_extract_ndp_confirm(wmi_unified_t wmi_handle, uint8_t *data,
 
 /**
  * wmi_extract_ndp_responder_rsp - api to extract responder rsp from even buffer
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @data: event buffer
  * @rsp: buffer to populate
  *
@@ -2076,7 +2067,7 @@ QDF_STATUS wmi_extract_ndp_responder_rsp(wmi_unified_t wmi_handle,
 
 /**
  * wmi_extract_ndp_end_rsp - api to extract ndp end rsp from even buffer
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @data: event buffer
  * @rsp: buffer to populate
  *
@@ -2087,7 +2078,7 @@ QDF_STATUS wmi_extract_ndp_end_rsp(wmi_unified_t wmi_handle, uint8_t *data,
 
 /**
  * wmi_extract_ndp_end_ind - api to extract ndp end indication from even buffer
- * @wmi_hdl: wma handle
+ * @wmi_hdl: wmi handle
  * @data: event buffer
  * @ind: buffer to populate
  *
@@ -2095,6 +2086,17 @@ QDF_STATUS wmi_extract_ndp_end_rsp(wmi_unified_t wmi_handle, uint8_t *data,
  */
 QDF_STATUS wmi_extract_ndp_end_ind(wmi_unified_t wmi_handle, uint8_t *data,
 			struct nan_datapath_end_indication_event **ind);
+
+/**
+ * wmi_extract_ndp_sch_update - api to extract ndp sch update from event buffer
+ * @wmi_hdl: wmi handle
+ * @data: event buffer
+ * @ind: buffer to populate
+ *
+ * Return: status of operation
+ */
+QDF_STATUS wmi_extract_ndp_sch_update(wmi_unified_t wmi_handle, uint8_t *data,
+				struct nan_datapath_sch_update_event *ind);
 #endif
 
 /**
@@ -2269,4 +2271,31 @@ QDF_STATUS wmi_extract_cca_stats(wmi_unified_t wmi_handle, void *evt_buf,
 				 struct wmi_host_congestion_stats *stats);
 #endif /* QCA_SUPPORT_CP_STATS */
 
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+/**
+ * wmi_unified_dfs_send_avg_params_cmd() - send average radar parameters cmd.
+ * @wmi_hdl: wmi handle
+ * @params: radar found params
+ *
+ * This function passes the average radar parameters to fw
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_dfs_send_avg_params_cmd(void *wmi_hdl,
+				    struct dfs_radar_found_params *params);
+
+/**
+ * wmi_extract_dfs_status_from_fw() - extract host dfs status from fw.
+ * @wmi_hdl: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @dfs_status_check: pointer to the host dfs status
+ *
+ * This function extracts the result of host dfs from fw
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_extract_dfs_status_from_fw(void *wmi_hdl, void *evt_buf,
+					  uint32_t  *dfs_status_check);
+#endif
 #endif /* _WMI_UNIFIED_API_H_ */

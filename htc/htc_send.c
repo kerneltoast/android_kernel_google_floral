@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #include "htc_debug.h"
@@ -669,7 +660,7 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 
 #ifdef FEATURE_RUNTIME_PM
 /**
- * extract_htc_pm_packtes(): move pm packets from endpoint into queue
+ * extract_htc_pm_packets(): move pm packets from endpoint into queue
  * @endpoint: which enpoint to extract packets from
  * @queue: a queue to store extracted packets in.
  *
@@ -2009,7 +2000,7 @@ void htc_tx_resource_avail_handler(void *context, uint8_t pipeID)
  * htc_kick_queues(): resumes tx transactions of suspended endpoints
  * @context: pointer to the htc target context
  *
- * Iterates throught the enpoints and provides a context to empty queues
+ * Iterates through the enpoints and provides a context to empty queues
  * int the hif layer when they are stalled due to runtime suspend.
  *
  * Return: none

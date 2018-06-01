@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /**
@@ -112,7 +103,10 @@ static t_qdf_trace_data g_qdf_trace_data;
 static tp_qdf_trace_cb qdf_trace_cb_table[QDF_MODULE_ID_MAX];
 static tp_qdf_trace_cb qdf_trace_restore_cb_table[QDF_MODULE_ID_MAX];
 #endif
+
+#ifdef WLAN_FEATURE_MEMDUMP_ENABLE
 static tp_qdf_state_info_cb qdf_state_info_table[QDF_MODULE_ID_MAX];
+#endif
 
 #ifdef CONFIG_DP_TRACE
 /* Static and Global variables */
@@ -672,6 +666,7 @@ void qdf_trace_dump_all(void *p_mac, uint8_t code, uint8_t session,
 qdf_export_symbol(qdf_trace_dump_all);
 #endif
 
+#ifdef WLAN_FEATURE_MEMDUMP_ENABLE
 /**
  * qdf_register_debugcb_init() - initializes debug callbacks
  * to NULL
@@ -735,6 +730,7 @@ QDF_STATUS qdf_state_info_dump_all(char *buf, uint16_t size,
 	return ret;
 }
 qdf_export_symbol(qdf_state_info_dump_all);
+#endif
 
 #ifdef CONFIG_DP_TRACE
 #define QDF_DP_TRACE_PREPEND_STR_SIZE 100
@@ -2216,9 +2212,14 @@ static void qdf_dpt_display_record_debugfs(qdf_debugfs_file_t file,
 {
 	int loc;
 	char prepend_str[QDF_DP_TRACE_PREPEND_STR_SIZE];
+	struct qdf_dp_trace_data_buf *buf =
+		(struct qdf_dp_trace_data_buf *)record->data;
 
 	loc = qdf_dp_trace_fill_meta_str(prepend_str, sizeof(prepend_str),
 					 index, 0, record);
+	if (loc < sizeof(prepend_str))
+		loc += snprintf(&prepend_str[loc], sizeof(prepend_str) - loc,
+				"[%d]", buf->msdu_id);
 	qdf_dpt_dump_hex_trace_debugfs(file, prepend_str,
 				       record->data, record->size);
 }
@@ -2492,6 +2493,52 @@ void qdf_dp_trace_dump_all(uint32_t count, uint8_t pdev_id)
 }
 qdf_export_symbol(qdf_dp_trace_dump_all);
 
+/**
+ * qdf_dp_trace_throttle_live_mode() - Throttle DP Trace live mode
+ * @high_bw_request: whether this is a high BW req or not
+ *
+ * The function tries to prevent excessive logging into the live buffer by
+ * having an upper limit on number of packets that can be logged per second.
+ *
+ * The intention is to allow occasional pings and data packets and really low
+ * throughput levels while suppressing bursts and higher throughput levels so
+ * that we donot hog the live buffer.
+ *
+ * If the number of packets printed in a particular second exceeds the thresh,
+ * disable printing in the next second.
+ *
+ * Return: None
+ */
+void qdf_dp_trace_throttle_live_mode(bool high_bw_request)
+{
+	static int bw_interval_counter;
+
+	if (g_qdf_dp_trace_data.enable == false ||
+		g_qdf_dp_trace_data.live_mode_config == false)
+		return;
+
+	if (high_bw_request) {
+		g_qdf_dp_trace_data.live_mode = 0;
+		bw_interval_counter = 0;
+		return;
+	}
+
+	bw_interval_counter++;
+
+	if (0 == (bw_interval_counter %
+			g_qdf_dp_trace_data.thresh_time_limit)) {
+
+		spin_lock_bh(&l_dp_trace_lock);
+			if (g_qdf_dp_trace_data.print_pkt_cnt <=
+				g_qdf_dp_trace_data.high_tput_thresh)
+				g_qdf_dp_trace_data.live_mode = 1;
+
+		g_qdf_dp_trace_data.print_pkt_cnt = 0;
+		spin_unlock_bh(&l_dp_trace_lock);
+	}
+
+}
+qdf_export_symbol(qdf_dp_trace_throttle_live_mode);
 #endif
 
 struct qdf_print_ctrl print_ctrl_obj[MAX_PRINT_CONFIG_SUPPORTED];
@@ -2723,53 +2770,6 @@ void qdf_trace_msg_cmn(unsigned int idx,
 	}
 }
 qdf_export_symbol(qdf_trace_msg_cmn);
-
-/**
- * qdf_dp_trace_throttle_live_mode() - Throttle DP Trace live mode
- * @high_bw_request: whether this is a high BW req or not
- *
- * The function tries to prevent excessive logging into the live buffer by
- * having an upper limit on number of packets that can be logged per second.
- *
- * The intention is to allow occasional pings and data packets and really low
- * throughput levels while suppressing bursts and higher throughput levels so
- * that we donot hog the live buffer.
- *
- * If the number of packets printed in a particular second exceeds the thresh,
- * disable printing in the next second.
- *
- * Return: None
- */
-void qdf_dp_trace_throttle_live_mode(bool high_bw_request)
-{
-	static int bw_interval_counter;
-
-	if (g_qdf_dp_trace_data.enable == false ||
-		g_qdf_dp_trace_data.live_mode_config == false)
-		return;
-
-	if (high_bw_request) {
-		g_qdf_dp_trace_data.live_mode = 0;
-		bw_interval_counter = 0;
-		return;
-	}
-
-	bw_interval_counter++;
-
-	if (0 == (bw_interval_counter %
-			g_qdf_dp_trace_data.thresh_time_limit)) {
-
-		spin_lock_bh(&l_dp_trace_lock);
-			if (g_qdf_dp_trace_data.print_pkt_cnt <=
-				g_qdf_dp_trace_data.high_tput_thresh)
-				g_qdf_dp_trace_data.live_mode = 1;
-
-		g_qdf_dp_trace_data.print_pkt_cnt = 0;
-		spin_unlock_bh(&l_dp_trace_lock);
-	}
-
-}
-qdf_export_symbol(qdf_dp_trace_throttle_live_mode);
 
 QDF_STATUS qdf_print_setup(void)
 {

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,11 +16,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
 #ifndef __ATH_USB_H__
 #define __ATH_USB_H__
 
@@ -32,7 +24,7 @@
 /*
  * There may be some pending tx frames during platform suspend.
  * Suspend operation should be delayed until those tx frames are
- * transfered from the host to target. This macro specifies how
+ * transferred from the host to target. This macro specifies how
  * long suspend thread has to sleep before checking pending tx
  * frame count.
  */

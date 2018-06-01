@@ -670,11 +670,7 @@ random_chan_error:
 }
 qdf_export_symbol(utils_dfs_get_random_channel);
 
-#ifndef QCA_DFS_NOL_PLATFORM_DRV_SUPPORT
-void utils_dfs_init_nol(struct wlan_objmgr_pdev *pdev)
-{
-}
-#else
+#ifdef QCA_DFS_NOL_PLATFORM_DRV_SUPPORT
 void utils_dfs_init_nol(struct wlan_objmgr_pdev *pdev)
 {
 	struct wlan_dfs *dfs;
@@ -797,12 +793,6 @@ void utils_dfs_clear_nol_channels(struct wlan_objmgr_pdev *pdev)
 }
 qdf_export_symbol(utils_dfs_clear_nol_channels);
 
-bool utils_is_dfs_ch(struct wlan_objmgr_pdev *pdev, uint32_t chan)
-{
-	return wlan_reg_is_dfs_ch(pdev, chan);
-}
-qdf_export_symbol(utils_is_dfs_ch);
-
 void utils_dfs_reg_update_nol_ch(struct wlan_objmgr_pdev *pdev,
 		uint8_t *ch_list,
 		uint8_t num_ch,
@@ -889,3 +879,23 @@ uint16_t utils_dfs_get_cur_rd(struct wlan_objmgr_pdev *pdev)
 
 	return cur_regdmn.regdmn_pair_id;
 }
+
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+QDF_STATUS utils_dfs_is_spoof_check_failed(struct wlan_objmgr_pdev *pdev,
+					   bool *is_spoof_check_failed)
+{
+	struct wlan_dfs *dfs;
+
+	dfs = global_dfs_to_mlme.pdev_get_comp_private_obj(pdev);
+	if (!dfs) {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,  "null dfs");
+		return  QDF_STATUS_E_FAILURE;
+	}
+
+	*is_spoof_check_failed = dfs->dfs_spoof_check_failed;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+qdf_export_symbol(utils_dfs_is_spoof_check_failed);
+#endif

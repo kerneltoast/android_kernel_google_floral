@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 /*
@@ -441,6 +432,7 @@ typedef enum {
 typedef enum {
 	WMI_HOST_VDEV_START_OK = 0,
 	WMI_HOST_VDEV_START_CHAN_INVALID,
+	WMI_HOST_VDEV_START_CHAN_BLOCKED,
 } WMI_HOST_VDEV_START_STATUS;
 
 /*
@@ -723,7 +715,7 @@ enum wmi_bcn_tx_rate_code {
  * @intr_update: flag to check if need to update
  *               required wma interface params
  * @intr_ssid: pointer to wma interface ssid
- * @intr_flags: poiter to wma interface flags
+ * @intr_flags: pointer to wma interface flags
  * @requestor_id: to update requestor id
  * @disable_hw_ack: to update disable hw ack flag
  * @info: to update channel info
@@ -1146,7 +1138,7 @@ typedef struct {
  * @tx_mcs_set: tx mcs
  * @vht_capable: VHT capabalities
  * @tx_max_mcs_nss: max tx MCS and NSS
- * @peer_bw_rxnss_override: Peer BW RX NSS overriden or not.
+ * @peer_bw_rxnss_override: Peer BW RX NSS overridden or not.
  * @is_pmf_enabled: PMF enabled
  * @is_wme_set: WME enabled
  * @qos_flag: QoS Flags
@@ -1399,7 +1391,7 @@ struct dbglog_params {
 /**
  * struct seg_hdr_info - header info
  * @len: length
- * @msgref: message refrence
+ * @msgref: message reference
  * @segmentInfo: segment info
  * @pad: padding
  */
@@ -1481,7 +1473,7 @@ struct tx_send_params {
  * @tx_params_valid: Flag that indicates if TX params are valid
  * @use_6mbps: specify whether management frame to transmit should
  *  use 6 Mbps rather than 1 Mbps min rate(for 5GHz band or P2P)
- * @tx_type: type of managment frame (determines what callback to use)
+ * @tx_type: type of management frame (determines what callback to use)
  */
 struct wmi_mgmt_params {
 	void *tx_frame;
@@ -3151,7 +3143,7 @@ struct nan_req_params {
  * @rc4_key: rc4 key
  * @rc4_key_len: rc4 key length
  * @ip_id: NC id
- * @ip_device_ip: NC IP addres
+ * @ip_device_ip: NC IP address
  * @ip_server_ip: Push server IP address
  * @tcp_src_port: NC TCP port
  * @tcp_dst_port: Push server TCP port
@@ -5292,7 +5284,7 @@ struct wmi_host_per_chain_rssi_stats {
  * @peer_tx_rate: last tx data rate used for peer
  * @peer_rx_rate: last rx data rate used for peer
  * @currentper: Current PER
- * @retries: Retries happend during transmission
+ * @retries: Retries happened during transmission
  * @txratecount: Maximum Aggregation Size
  * @max4msframelen: Max4msframelen of tx rates used
  * @totalsubframes: Total no of subframes
@@ -5504,6 +5496,7 @@ typedef enum {
 	wmi_ndp_responder_rsp_event_id,
 	wmi_ndp_end_indication_event_id,
 	wmi_ndp_end_rsp_event_id,
+	wmi_ndl_schedule_update_event_id,
 	wmi_oem_response_event_id,
 	wmi_peer_stats_info_event_id,
 	wmi_pdev_chip_power_stats_event_id,
@@ -5528,6 +5521,10 @@ typedef enum {
 	wmi_host_swfda_event_id,
 	wmi_sar_get_limits_event_id,
 	wmi_pdev_div_rssi_antid_event_id,
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD) && defined(HOST_DFS_SPOOF_TEST)
+	wmi_host_dfs_status_check_event_id,
+#endif
+	wmi_twt_enable_complete_event_id,
 
 	wmi_events_max,
 } wmi_conv_event_id;
@@ -5953,6 +5950,7 @@ typedef enum {
 	wmi_service_ap_obss_detection_offload,
 	wmi_service_bss_color_offload,
 	wmi_service_gmac_offload_support,
+	wmi_service_host_dfs_check_support,
 
 	wmi_services_max,
 } wmi_conv_service_ids;

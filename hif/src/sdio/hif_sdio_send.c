@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2013-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -17,12 +14,6 @@
  * PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
  * TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
  */
 
 #define ATH_MODULE_NAME hif
@@ -127,7 +118,7 @@ QDF_STATUS hif_dev_send_buffer(struct hif_sdio_device *pdev,
 	frag_count = qdf_nbuf_get_num_frags(buf);
 
 	if (frag_count > 1) {
-		/* header data length should be total sending length substract
+		/* header data length should be total sending length subtract
 		 * internal data length of netbuf
 		 */
 		head_data_len = sizeof(struct hif_sendContext) +

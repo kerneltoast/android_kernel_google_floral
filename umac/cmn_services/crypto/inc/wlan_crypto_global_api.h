@@ -200,15 +200,17 @@ QDF_STATUS wlan_crypto_enmic(struct wlan_objmgr_vdev *vdev,
  * @wbuf: wbuf
  * @macaddr: macaddr
  * @tid: tid of the frame
+ * @keyid: keyid in the received frame
  *
  * This function gets called from mgmt txrx to decap frame.
  *
  * Return: QDF_STATUS_SUCCESS - in case of success
  */
 QDF_STATUS wlan_crypto_demic(struct wlan_objmgr_vdev *vdev,
-					qdf_nbuf_t wbuf,
-					uint8_t *macaddr,
-					uint8_t tid);
+			     qdf_nbuf_t wbuf,
+			     uint8_t *macaddr,
+			     uint8_t tid,
+			     uint8_t keyid);
 
 /**
  * wlan_crypto_vdev_is_pmf_enabled - called to check is pmf enabled in vdev
@@ -535,4 +537,55 @@ uint8_t wlan_crypto_get_peer_fils_aead(struct wlan_objmgr_peer *peer);
  */
 void wlan_crypto_set_peer_fils_aead(
 			struct wlan_objmgr_peer *peer, uint8_t value);
+
+/**
+ * wlan_crypto_get_key_header - get header length
+ * @key: key
+ *
+ * This function gets header length based on keytype
+ *
+ * Return: header length
+ */
+uint8_t wlan_crypto_get_key_header(struct wlan_crypto_key *key);
+
+/**
+ * wlan_crypto_get_key_trailer - get cipher trailer length
+ * @key: key
+ *
+ * This function gets cipher trailer length based on keytype
+ *
+ * Return: cipher trailer length
+ */
+uint8_t wlan_crypto_get_key_trailer(struct wlan_crypto_key *key);
+
+/**
+ * wlan_crypto_get_key_miclen - get cipher miclen length
+ * @key: key
+ *
+ * This function gets cipher miclen length based on keytype
+ *
+ * Return: cipher miclen length
+ */
+uint8_t wlan_crypto_get_key_miclen(struct wlan_crypto_key *key);
+
+/**
+ * wlan_crypto_get_keyid - get keyid from frame
+ * @data: frame
+ * @hdrlen: 802.11 header length
+ *
+ * This function parse frame and returns keyid
+ *
+ * Return: keyid
+ */
+uint16_t wlan_crypto_get_keyid(uint8_t *data, int hdrlen);
+
+/**
+ * wlan_crypto_restore_keys - restore crypto keys in hw keycache
+ * @vdev: vdev
+ *
+ * This function restores keys in hw keycache
+ *
+ * Return: void
+ */
+void wlan_crypto_restore_keys(struct wlan_objmgr_vdev *vdev);
 #endif /* end of _WLAN_CRYPTO_GLOBAL_API_H_ */

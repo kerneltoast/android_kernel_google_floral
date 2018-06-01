@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
  *
- * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
- *
- *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
  * above copyright notice and this permission notice appear in all
@@ -19,11 +16,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/*
- * This file was originally distributed by Qualcomm Atheros, Inc.
- * under proprietary terms before Copyright ownership was assigned
- * to the Linux Foundation.
- */
 /**
  * @file cdp_txrx_peer.h
  * @brief Define the host data path peer API functions
@@ -392,12 +384,12 @@ cdp_peer_get_local_peer_id(ol_txrx_soc_handle soc, void *peer)
 }
 
 /**
- * cdp_peer_get_vdevid() - Get virtaul interface id which peer registered
+ * cdp_peer_get_vdevid() - Get virtual interface id which peer registered
  * @soc - data path soc handle
  * @peer - peer instance
- * @vdev_id - virtaul interface id which peer registered
+ * @vdev_id - virtual interface id which peer registered
  *
- * Get virtaul interface id which peer registered
+ * Get virtual interface id which peer registered
  *
  * Return: QDF_STATUS_SUCCESS registration success
  *         QDF_STATUS_E_NOSUPPORT not support this feature
@@ -423,7 +415,7 @@ cdp_peer_get_vdevid(ol_txrx_soc_handle soc, void *peer, uint8_t *vdev_id)
  * @pdev - data path device instance
  * @sta_id - local peer id
  *
- * Get virtaul interface id by local peer id
+ * Get virtual interface id by local peer id
  *
  * Return: Virtual interface instance
  *         NULL in case cannot find
