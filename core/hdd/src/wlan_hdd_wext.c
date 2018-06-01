@@ -599,25 +599,6 @@
 #define  WE_PPS_RSSI_CHECK              53
 /*
  * <ioctl>
- * setAutoChannel - set ACS enable/disable
- *
- * @INPUT: None
- *
- * @OUTPUT:  None
- *
- * This IOCTL is used to set SAP ACS eanble/disable
- *
- * @E.g: iwpriv wlan0 setAutoChannel 0
- *
- * Supported Feature: SAP
- *
- * Usage: Internal/External
- *
- * </ioctl>
- */
-#define WE_SET_SAP_AUTO_CHANNEL_SELECTION     54
-/*
- * <ioctl>
  * htsmps - Sets the htsmps
  *
  * @INPUT: Atleast one int argument
@@ -640,44 +621,6 @@
 #define WE_SET_QPOWER_MAX_TX_BEFORE_WAKE          57
 #define WE_SET_QPOWER_SPEC_PSPOLL_WAKE_INTERVAL   58
 #define WE_SET_QPOWER_SPEC_MAX_SPEC_NODATA_PSPOLL 59
-/*
- * <ioctl>
- * burst_enable - Enables or disables the burst feature
- *
- * @INPUT: 0-Disable, 1-Enable
- *
- * @OUTPUT: None
- *
- * This IOCTL enables or disables the burst feature.
- *
- * @E.g: iwpriv wlan0 burst_enable 0
- *
- * Supported Feature: STA
- *
- * Usage: Internal/External
- *
- * </ioctl>
- */
-#define WE_SET_BURST_ENABLE             60
-/*
- * <ioctl>
- * burst_dur - Enables or disables the burst feature
- *
- * @INPUT: int 1…..int 8191 in microseconds
- *
- * @OUTPUT: None
- *
- * This IOCTL sets the burst duration.
- *
- * @E.g: iwpriv wlan0 burst_dur <value>
- *
- * Supported Feature: STA
- *
- * Usage: Internal/External
- *
- * </ioctl>
- */
-#define WE_SET_BURST_DUR                61
 /* GTX Commands */
 /*
  * <ioctl>
@@ -1166,7 +1109,6 @@
 /* Private ioctls and their sub-ioctls */
 #define WLAN_PRIV_SET_NONE_GET_INT    (SIOCIWFIRSTPRIV + 1)
 #define WE_GET_11D_STATE     1
-#define WE_SET_SAP_CHANNELS  3
 #define WE_GET_WLAN_DBG      4
 #define WE_GET_MAX_ASSOC     6
 /* 7 is unused */
@@ -1618,47 +1560,6 @@
 #define WE_GET_QPOWER_MAX_TX_BEFORE_WAKE          42
 #define WE_GET_QPOWER_SPEC_PSPOLL_WAKE_INTERVAL   43
 #define WE_GET_QPOWER_SPEC_MAX_SPEC_NODATA_PSPOLL 44
-/*
- * <ioctl>
- * get_burst_en - Enables or disables the burst feature
- *
- * @INPUT: None
- *
- * @OUTPUT: Enable/disable of burst feature
- *  wlan0     get_burst_en:1
- *
- * This IOCTL enables or disables the burst feature
- *
- * @E.g: iwpriv wlan0 get_burst_en
- *
- * Supported Feature:STA
- *
- * Usage: Internal/External
- *
- * </ioctl>
- */
-#define WE_GET_BURST_ENABLE             45
-/*
- * <ioctl>
- * get_burst_dur - Get the burst duration
- *
- * @INPUT: None
- *
- * @OUTPUT: Duration in microseconds
- *  wlan0     get_burst_dur:8160
- *
- * This IOCTL gets the burst duration
- * This command is useful if setting burst enable
- *
- * @E.g: iwpriv wlan0 get_burst_dur
- *
- * Supported Feature: STA
- *
- * Usage: Internal/External
- *
- * </ioctl>
- */
-#define WE_GET_BURST_DUR                46
 /* GTX Commands */
 /*
  * <ioctl>
@@ -1913,7 +1814,6 @@
 #define WLAN_PRIV_SET_THREE_INT_GET_NONE   (SIOCIWFIRSTPRIV + 4)
 #define WE_SET_WLAN_DBG      1
 #define WE_SET_DP_TRACE      2
-#define WE_SET_SAP_CHANNELS  3
 #define WE_SET_FW_TEST       4
 
 /* Private ioctls and their sub-ioctls */
@@ -3310,60 +3210,6 @@ int hdd_wlan_dump_stats(struct hdd_adapter *adapter, int value)
 }
 
 /**
- * hdd_wlan_get_version() - Get driver version information
- * @hdd_ctx: Global HDD context
- * @wrqu: Pointer to IOCTL REQUEST Data.
- * @extra: Pointer to destination buffer
- *
- * This function is used to get Wlan Driver, Firmware, & Hardware
- * Version information.  If @wrqu and @extra are specified, then the
- * version string is returned.  Otherwise it is simply printed to the
- * kernel log.
- *
- * Return: none
- */
-void hdd_wlan_get_version(struct hdd_context *hdd_ctx, union iwreq_data *wrqu,
-			  char *extra)
-{
-	tSirVersionString wcnss_sw_version;
-	const char *swversion;
-	const char *hwversion;
-	uint32_t msp_id = 0, mspid = 0, siid = 0, crmid = 0, sub_id = 0;
-
-	if (!hdd_ctx) {
-		hdd_err("Invalid context, HDD context is null");
-		goto error;
-	}
-
-	snprintf(wcnss_sw_version, sizeof(wcnss_sw_version), "%08x",
-		 hdd_ctx->target_fw_version);
-
-	swversion = wcnss_sw_version;
-	msp_id = (hdd_ctx->target_fw_version & 0xf0000000) >> 28;
-	mspid = (hdd_ctx->target_fw_version & 0xf000000) >> 24;
-	siid = (hdd_ctx->target_fw_version & 0xf00000) >> 20;
-	crmid = hdd_ctx->target_fw_version & 0x7fff;
-	sub_id = (hdd_ctx->target_fw_vers_ext & 0xf0000000) >> 28;
-
-	hwversion = hdd_ctx->target_hw_name;
-
-	if (wrqu && extra) {
-		wrqu->data.length =
-			scnprintf(extra, WE_MAX_STR_LEN,
-				  "Host SW:%s, FW:%d.%d.%d.%d.%d, HW:%s",
-				  QWLAN_VERSIONSTR,
-				  msp_id, mspid, siid, crmid,
-				  sub_id, hwversion);
-	} else {
-		pr_info("Host SW:%s, FW:%d.%d.%d.%d.%d, HW:%s\n",
-			QWLAN_VERSIONSTR,
-			msp_id, mspid, siid, crmid, sub_id, hwversion);
-	}
-error:
-	return;
-}
-
-/**
  * hdd_wlan_get_ibss_peer_info() - Print IBSS peer information
  * @adapter: Adapter upon which the IBSS client is active
  * @staIdx: Station index of the IBSS peer
@@ -4254,7 +4100,7 @@ static int hdd_we_set_11d_state(struct hdd_context *hdd_ctx, int state_11d)
 
 	qdf_mem_free(sme_config);
 
-	hdd_debug("11D state=%d", sme_config->csrConfig.Is11dSupportEnabled);
+	hdd_debug("11D state=%d", enable_11d);
 
 	return 0;
 }
@@ -4345,14 +4191,6 @@ static int __iw_setint_getnone(struct net_device *dev,
 		}
 		break;
 	}
-
-	case WE_SET_SAP_AUTO_CHANNEL_SELECTION:
-		if (set_value == 0 || set_value == 1)
-			(WLAN_HDD_GET_CTX(adapter))->config->force_sap_acs =
-								set_value;
-		else
-			ret = -EINVAL;
-		break;
 
 	case WE_SET_DATA_INACTIVITY_TO:
 		if (!hHal)
@@ -4812,29 +4650,6 @@ static int __iw_setint_getnone(struct net_device *dev,
 		/* Update the stored ini value */
 		if (!ret)
 			hdd_ctx->config->max_amsdu_num = set_value;
-		break;
-	}
-
-	case WE_SET_BURST_ENABLE:
-	{
-		hdd_debug("SET Burst enable val %d", set_value);
-		if ((set_value == 0) || (set_value == 1) || (set_value == 3)) {
-			ret = wma_cli_set_command(adapter->session_id,
-						  WMI_PDEV_PARAM_BURST_ENABLE,
-						  set_value, PDEV_CMD);
-		} else
-			ret = -EINVAL;
-		break;
-	}
-	case WE_SET_BURST_DUR:
-	{
-		hdd_debug("SET Burst duration val %d", set_value);
-		if ((set_value > 0) && (set_value <= 102400))
-			ret = wma_cli_set_command(adapter->session_id,
-						  WMI_PDEV_PARAM_BURST_DUR,
-						  set_value,  PDEV_CMD);
-		else
-			ret = -EINVAL;
 		break;
 	}
 
@@ -5710,10 +5525,6 @@ static int __iw_setnone_getint(struct net_device *dev,
 		}
 		break;
 	}
-	case WE_GET_SAP_AUTO_CHANNEL_SELECTION:
-		*value = (WLAN_HDD_GET_CTX(
-				adapter))->config->force_sap_acs;
-		break;
 
 	case WE_GET_CONCURRENCY_MODE:
 	{
@@ -5937,23 +5748,6 @@ static int __iw_setnone_getint(struct net_device *dev,
 		*value = wma_cli_get_command(adapter->session_id,
 					     GEN_VDEV_ROAM_SYNCH_DELAY,
 					     GEN_CMD);
-		break;
-	}
-
-	case WE_GET_BURST_ENABLE:
-	{
-		hdd_debug("GET Burst enable value");
-		*value = wma_cli_get_command(adapter->session_id,
-					     WMI_PDEV_PARAM_BURST_ENABLE,
-					     PDEV_CMD);
-		break;
-	}
-	case WE_GET_BURST_DUR:
-	{
-		hdd_debug("GET Burst Duration value");
-		*value = wma_cli_get_command(adapter->session_id,
-					     WMI_PDEV_PARAM_BURST_DUR,
-					     PDEV_CMD);
 		break;
 	}
 
@@ -6259,21 +6053,6 @@ static int __iw_set_three_ints_getnone(struct net_device *dev,
 		qdf_dp_trace_set_value(value[1], value[2], value[3]);
 		break;
 
-	/* value[3] the acs band is not required as start and end channels are
-	 * enough but this cmd is maintained under set three ints for historic
-	 * reasons.
-	 */
-	case WE_SET_SAP_CHANNELS:
-		if (wlan_hdd_validate_operation_channel(adapter, value[1]) !=
-			QDF_STATUS_SUCCESS ||
-			wlan_hdd_validate_operation_channel(adapter,
-					value[2]) != QDF_STATUS_SUCCESS) {
-			ret = -EINVAL;
-		} else {
-			hdd_ctx->config->force_sap_acs_st_ch = value[1];
-			hdd_ctx->config->force_sap_acs_end_ch = value[2];
-		}
-		break;
 	case WE_SET_DUAL_MAC_SCAN_CONFIG:
 		hdd_debug("Ioctl to set dual mac scan config");
 		if (hdd_ctx->config->dual_mac_feature_disable ==
@@ -6406,7 +6185,8 @@ static int __iw_get_char_setnone(struct net_device *dev,
 	switch (sub_cmd) {
 	case WE_WLAN_VERSION:
 	{
-		hdd_wlan_get_version(hdd_ctx, wrqu, extra);
+		wrqu->data.length = hdd_wlan_get_version(hdd_ctx,
+							 WE_MAX_STR_LEN, extra);
 		break;
 	}
 
@@ -7077,6 +6857,13 @@ static int iw_get_policy_manager_ut_ops(struct hdd_context *hdd_ctx,
 	case WE_POLICY_MANAGER_CLIST_CMD:
 	{
 		hdd_debug("<iwpriv wlan0 pm_clist> is called");
+		if ((apps_args[0] < 0) || (apps_args[1] < 0) ||
+			(apps_args[2] < 0) || (apps_args[3] < 0) ||
+			(apps_args[4] < 0) || (apps_args[5] < 0) ||
+			(apps_args[6] < 0) || (apps_args[7] < 0)) {
+			hdd_err("Invalid input params recieved for the IOCTL");
+			return 0;
+		}
 		policy_mgr_incr_connection_count_utfw(hdd_ctx->hdd_psoc,
 			apps_args[0], apps_args[1], apps_args[2], apps_args[3],
 			apps_args[4], apps_args[5], apps_args[6], apps_args[7]);
@@ -7086,6 +6873,10 @@ static int iw_get_policy_manager_ut_ops(struct hdd_context *hdd_ctx,
 	case WE_POLICY_MANAGER_DLIST_CMD:
 	{
 		hdd_debug("<iwpriv wlan0 pm_dlist> is called");
+		if ((apps_args[0] < 0) || (apps_args[1] < 0)) {
+			hdd_err("Invalid input param recieved for the IOCTL");
+			return 0;
+		}
 		policy_mgr_decr_connection_count_utfw(hdd_ctx->hdd_psoc,
 			apps_args[0], apps_args[1]);
 	}
@@ -7094,6 +6885,13 @@ static int iw_get_policy_manager_ut_ops(struct hdd_context *hdd_ctx,
 	case WE_POLICY_MANAGER_ULIST_CMD:
 	{
 		hdd_debug("<iwpriv wlan0 pm_ulist> is called");
+		if ((apps_args[0] < 0) || (apps_args[1] < 0) ||
+			(apps_args[2] < 0) || (apps_args[3] < 0) ||
+			(apps_args[4] < 0) || (apps_args[5] < 0) ||
+			(apps_args[6] < 0) || (apps_args[7] < 0)) {
+			hdd_err("Invalid input params recieved for the IOCTL");
+			return 0;
+		}
 		policy_mgr_update_connection_info_utfw(hdd_ctx->hdd_psoc,
 			apps_args[0], apps_args[1], apps_args[2], apps_args[3],
 			apps_args[4], apps_args[5], apps_args[6], apps_args[7]);
@@ -7124,6 +6922,10 @@ static int iw_get_policy_manager_ut_ops(struct hdd_context *hdd_ctx,
 
 		hdd_debug("<iwpriv wlan0 pm_pcl> is called");
 
+		if (apps_args[0] < 0) {
+			hdd_err("Invalid input param recieved for the IOCTL");
+			return 0;
+		}
 		policy_mgr_get_pcl(hdd_ctx->hdd_psoc, apps_args[0],
 				pcl, &pcl_len,
 				weight_list, QDF_ARRAY_SIZE(weight_list));
@@ -7165,6 +6967,10 @@ static int iw_get_policy_manager_ut_ops(struct hdd_context *hdd_ctx,
 	case WE_POLICY_MANAGER_QUERY_ACTION_CMD:
 	{
 		hdd_debug("<iwpriv wlan0 pm_query_action> is called");
+		if (apps_args[0] < 0) {
+			hdd_err("Invalid input params recieved for the IOCTL");
+			return 0;
+		}
 		policy_mgr_current_connections_update(
 			hdd_ctx->hdd_psoc,
 			adapter->session_id, apps_args[0],
@@ -7177,6 +6983,11 @@ static int iw_get_policy_manager_ut_ops(struct hdd_context *hdd_ctx,
 		bool allow;
 
 		hdd_debug("<iwpriv wlan0 pm_query_allow> is called");
+		if ((apps_args[0] < 0) || (apps_args[1] < 0) ||
+			(apps_args[2] < 0)) {
+			hdd_err("Invalid input params recieved for the IOCTL");
+			return 0;
+		}
 		allow = policy_mgr_allow_concurrency(hdd_ctx->hdd_psoc,
 				apps_args[0], apps_args[1], apps_args[2]);
 		pr_info("allow %d {0 = don't allow, 1 = allow}", allow);
@@ -8313,6 +8124,12 @@ static int iw_set_packet_filter_params(struct net_device *dev,
 }
 #endif
 
+#ifdef QCA_SUPPORT_CP_STATS
+static int hdd_get_wlan_stats(struct hdd_adapter *adapter)
+{
+	return wlan_hdd_get_station_stats(adapter);
+}
+#else /* QCA_SUPPORT_CP_STATS */
 struct hdd_statistics_priv {
 	tCsrSummaryStatsInfo summary_stats;
 	tCsrGlobalClassAStatsInfo class_a_stats;
@@ -8356,56 +8173,28 @@ static void hdd_statistics_cb(void *stats, void *context)
 	hdd_request_put(request);
 }
 
-static int __iw_get_statistics(struct net_device *dev,
-			       struct iw_request_info *info,
-			       union iwreq_data *wrqu, char *extra)
+static int hdd_get_wlan_stats(struct hdd_adapter *adapter)
 {
-
-	QDF_STATUS status;
-	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
-	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	struct hdd_station_ctx *sta_ctx;
-	char *p;
-	int tlen;
-	tCsrSummaryStatsInfo *summary_stats =
-		&(adapter->hdd_stats.summary_stat);
-	tCsrGlobalClassAStatsInfo *class_a_stats =
-		&(adapter->hdd_stats.class_a_stat);
-	tCsrGlobalClassDStatsInfo *class_d_stats =
-		&(adapter->hdd_stats.class_d_stat);
-	int ret;
+	int ret = 0;
 	void *cookie;
+	QDF_STATUS status;
 	struct hdd_request *request;
+	struct hdd_station_ctx *sta_ctx;
 	struct hdd_statistics_priv *priv;
+	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	static const struct hdd_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
 
-	hdd_enter_dev(dev);
-
-	ret = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != ret)
-		return ret;
-
-	ret = hdd_check_private_wext_control(hdd_ctx, info);
-	if (0 != ret)
-		return ret;
-
 	sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
-	if (eConnectionState_Associated != sta_ctx->conn_info.connState) {
-		wrqu->data.length = 0;
-		return 0;
-	}
-
 	request = hdd_request_alloc(&params);
 	if (!request) {
 		hdd_warn("request allocation failed");
-		goto return_cached_stats;
+		return -EINVAL;
 	}
 
 	cookie = hdd_request_cookie(request);
-
 	status = sme_get_statistics(hdd_ctx->hHal, eCSR_HDD,
 				    SME_SUMMARY_STATS |
 				    SME_GLOBAL_CLASSA_STATS |
@@ -8428,9 +8217,9 @@ static int __iw_get_statistics(struct net_device *dev,
 
 	/* update the adapter cache with the fresh results */
 	priv = hdd_request_priv(request);
-	*summary_stats = priv->summary_stats;
-	*class_a_stats = priv->class_a_stats;
-	*class_d_stats = priv->class_d_stats;
+	adapter->hdd_stats.summary_stat = priv->summary_stats;
+	adapter->hdd_stats.class_a_stat = priv->class_a_stats;
+	adapter->hdd_stats.class_d_stat = priv->class_d_stats;
 
 put_request:
 	/*
@@ -8439,8 +8228,46 @@ put_request:
 	 * regardless we are done with the request.
 	 */
 	hdd_request_put(request);
+	return ret;
+}
+#endif /* QCA_SUPPORT_CP_STATS */
 
-return_cached_stats:
+static int __iw_get_statistics(struct net_device *dev,
+			       struct iw_request_info *info,
+			       union iwreq_data *wrqu, char *extra)
+{
+	int ret;
+	char *p;
+	int tlen;
+	struct hdd_station_ctx *sta_ctx;
+	tCsrSummaryStatsInfo *summary_stats;
+	tCsrGlobalClassAStatsInfo *class_a_stats;
+	tCsrGlobalClassDStatsInfo *class_d_stats;
+	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
+	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+
+	hdd_enter_dev(dev);
+
+	ret = wlan_hdd_validate_context(hdd_ctx);
+	if (0 != ret)
+		return ret;
+
+	ret = hdd_check_private_wext_control(hdd_ctx, info);
+	if (0 != ret)
+		return ret;
+
+	sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	if (eConnectionState_Associated != sta_ctx->conn_info.connState) {
+		wrqu->data.length = 0;
+		return 0;
+	}
+
+	hdd_get_wlan_stats(adapter);
+
+	summary_stats = &(adapter->hdd_stats.summary_stat);
+	class_a_stats = &(adapter->hdd_stats.class_a_stat);
+	class_d_stats = &(adapter->hdd_stats.class_d_stat);
+
 	p = extra;
 	tlen = 0;
 
@@ -9002,6 +8829,22 @@ int hdd_crash_inject(struct hdd_adapter *adapter, uint32_t v1, uint32_t v2)
 }
 #endif
 
+#ifdef CONFIG_DP_TRACE
+void hdd_set_dump_dp_trace(uint16_t cmd_type, uint16_t count)
+{
+	hdd_debug("WE_DUMP_DP_TRACE_LEVEL: %d %d",
+		  cmd_type, count);
+	if (cmd_type == DUMP_DP_TRACE)
+		qdf_dp_trace_dump_all(count, QDF_TRACE_DEFAULT_PDEV_ID);
+	else if (cmd_type == ENABLE_DP_TRACE_LIVE_MODE)
+		qdf_dp_trace_enable_live_mode();
+	else if (cmd_type == CLEAR_DP_TRACE_BUFFER)
+		qdf_dp_trace_clear_buffer();
+	else if (cmd_type == DISABLE_DP_TRACE_LIVE_MODE)
+		qdf_dp_trace_disable_live_mode();
+}
+#endif
+
 static int __iw_set_two_ints_getnone(struct net_device *dev,
 				     struct iw_request_info *info,
 				     union iwreq_data *wrqu, char *extra)
@@ -9081,17 +8924,7 @@ static int __iw_set_two_ints_getnone(struct net_device *dev,
 			value[1], value[2]);
 		break;
 	case WE_DUMP_DP_TRACE_LEVEL:
-		hdd_debug("WE_DUMP_DP_TRACE_LEVEL: %d %d",
-		       value[1], value[2]);
-		if (value[1] == DUMP_DP_TRACE)
-			qdf_dp_trace_dump_all(value[2],
-					QDF_TRACE_DEFAULT_PDEV_ID);
-		else if (value[1] == ENABLE_DP_TRACE_LIVE_MODE)
-			qdf_dp_trace_enable_live_mode();
-		else if (value[1] == CLEAR_DP_TRACE_BUFFER)
-			qdf_dp_trace_clear_buffer();
-		else if (value[1] == DISABLE_DP_TRACE_LIVE_MODE)
-			qdf_dp_trace_disable_live_mode();
+		hdd_set_dump_dp_trace(value[1], value[2]);
 		break;
 	case WE_SET_MON_MODE_CHAN:
 		ret = wlan_hdd_set_mon_chan(adapter, value[1], value[2]);
@@ -9204,10 +9037,6 @@ static const struct iw_priv_args we_private_args[] = {
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
 	 0,
 	 "setMaxAssoc"},
-
-	{WE_SET_SAP_AUTO_CHANNEL_SELECTION,
-		IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1, 0,
-		"setAutoChannel" },
 
 	{WE_SET_SCAN_DISABLE,
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
@@ -9413,16 +9242,6 @@ static const struct iw_priv_args we_private_args[] = {
 	 0,
 	 "amsdu"},
 
-	{WE_SET_BURST_ENABLE,
-	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
-	 0,
-	 "burst_enable"},
-
-	{WE_SET_BURST_DUR,
-	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
-	 0,
-	 "burst_dur"},
-
 	{WE_SET_TXPOW_2G,
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
 	 0,
@@ -9433,6 +9252,7 @@ static const struct iw_priv_args we_private_args[] = {
 	 0,
 	 "txpow5g"},
 
+#ifdef FEATURE_FW_LOG_PARSING
 	/* Sub-cmds DBGLOG specific commands */
 	{WE_DBGLOG_LOG_LEVEL,
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
@@ -9472,6 +9292,7 @@ static const struct iw_priv_args we_private_args[] = {
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
 	 0,
 	 "dl_report"},
+#endif /* FEATURE_FW_LOG_PARSING */
 
 	{WE_SET_TXRX_FWSTATS,
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
@@ -9782,16 +9603,6 @@ static const struct iw_priv_args we_private_args[] = {
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
 	 "get_amsdu"},
 
-	{WE_GET_BURST_ENABLE,
-	 0,
-	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
-	 "get_burst_en"},
-
-	{WE_GET_BURST_DUR,
-	 0,
-	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
-	 "get_burst_dur"},
-
 	{WE_GET_TXPOW_2G,
 	 0,
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 1,
@@ -9929,16 +9740,13 @@ static const struct iw_priv_args we_private_args[] = {
 	 0,
 	 "setwlandbg"},
 
+#ifdef CONFIG_DP_TRACE
 	/* handlers for sub-ioctl */
 	{WE_SET_DP_TRACE,
 	IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 3,
 	0,
 	"set_dp_trace"},
-
-	{WE_SET_SAP_CHANNELS,
-	IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 3,
-	0,
-	"setsapchannels"},
+#endif
 
 	{WE_SET_FW_TEST,
 	IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 3,
@@ -10312,10 +10120,12 @@ static const struct iw_priv_args we_private_args[] = {
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 2,
 	 0, "set_fw_mode_cfg"}
 	,
+#ifdef CONFIG_DP_TRACE
 	{WE_DUMP_DP_TRACE_LEVEL,
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 2,
 	 0, "dump_dp_trace"}
 	,
+#endif
 	{WE_SET_MON_MODE_CHAN,
 	 IW_PRIV_TYPE_INT | IW_PRIV_SIZE_FIXED | 2,
 	 0, "setMonChan"}
@@ -10363,7 +10173,7 @@ void hdd_register_wext(struct net_device *dev)
 {
 	hdd_enter_dev(dev);
 
-	dev->wireless_handlers = (struct iw_handler_def *)&we_handler_def;
+	dev->wireless_handlers = &we_handler_def;
 
 	hdd_exit();
 }

@@ -506,12 +506,6 @@ QDF_STATUS sme_ser_handle_active_cmd(struct wlan_serialization_command *cmd)
 		csr_roam_process_wm_status_change_command(mac_ctx,
 					sme_cmd);
 		break;
-	/*
-	 * Treat standby differently here because caller may not be able
-	 * to handle the failure so we do our best here
-	 */
-	case eSmeCommandEnterStandby:
-		break;
 	case eSmeCommandAddTs:
 	case eSmeCommandDelTs:
 #ifndef WLAN_MDM_CODE_REDUCTION_OPT
@@ -4265,6 +4259,7 @@ QDF_STATUS sme_get_snr(tHalHandle hHal,
 	return status;
 }
 
+#ifndef QCA_SUPPORT_CP_STATS
 /*
  * sme_get_statistics() -
  * A wrapper function that client calls to register a callback to get
@@ -4302,6 +4297,7 @@ QDF_STATUS sme_get_statistics(tHalHandle hHal,
 	return status;
 
 }
+#endif
 
 QDF_STATUS sme_get_link_status(tHalHandle hHal,
 			       tCsrLinkStatusCallback callback,
@@ -5112,7 +5108,7 @@ QDF_STATUS sme_register_mgmt_frame_ind_callback(tHalHandle hal,
 
 /*
  * sme_RegisterMgtFrame() -
- * To register managment frame of specified type and subtype.
+ * To register management frame of specified type and subtype.
  *
  * frameType - type of the frame that needs to be passed to HDD.
  * matchData - data which needs to be matched before passing frame
@@ -5170,7 +5166,7 @@ QDF_STATUS sme_register_mgmt_frame(tHalHandle hHal, uint8_t sessionId,
 
 /*
  * sme_DeregisterMgtFrame() -
- * To De-register managment frame of specified type and subtype.
+ * To De-register management frame of specified type and subtype.
  *
  * frameType - type of the frame that needs to be passed to HDD.
  * matchData - data which needs to be matched before passing frame
@@ -8439,7 +8435,7 @@ void sme_update_enable_ssr(tHalHandle hHal, bool enableSSR)
 	status = sme_acquire_global_lock(&pMac->sme);
 	if (QDF_IS_STATUS_SUCCESS(status)) {
 		sme_debug("SSR level is changed %d", enableSSR);
-		/* not serializing this messsage, as this is only going
+		/* not serializing this message, as this is only going
 		 * to set a variable in WMA/WDI
 		 */
 		WMA_SetEnableSSR(enableSSR);
@@ -9560,7 +9556,7 @@ QDF_STATUS sme_notify_ht2040_mode(tHalHandle hHal, uint16_t staId,
 	}
 
 	QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,
-		  "%s: Notifed FW about OP mode: %d for staId=%d",
+		  "%s: Notified FW about OP mode: %d for staId=%d",
 		  __func__, pHtOpMode->opMode, staId);
 
 	return QDF_STATUS_SUCCESS;
@@ -9947,11 +9943,11 @@ QDF_STATUS sme_send_rate_update_ind(tHalHandle hHal,
 
 	if (rate_upd->mcastDataRate24GHz == HT20_SHORT_GI_MCS7_RATE)
 		rate_upd->mcastDataRate24GHzTxFlag =
-			eHAL_TX_RATE_HT20 | eHAL_TX_RATE_SGI;
+			TX_RATE_HT20 | TX_RATE_SGI;
 	else if (rate_upd->reliableMcastDataRate ==
 		 HT20_SHORT_GI_MCS7_RATE)
 		rate_upd->reliableMcastDataRateTxFlag =
-			eHAL_TX_RATE_HT20 | eHAL_TX_RATE_SGI;
+			TX_RATE_HT20 | TX_RATE_SGI;
 
 	status = sme_acquire_global_lock(&pMac->sme);
 	if (QDF_STATUS_SUCCESS == status) {
@@ -11380,39 +11376,6 @@ QDF_STATUS sme_reset_bss_hotlist(tHalHandle hHal,
 	return status;
 }
 
-/**
- * sme_send_wisa_params(): Pass WISA mode to WMA
- * @hal: HAL context
- * @wisa_params: pointer to WISA params struct
- * @sessionId: SME session id
- *
- * Pass WISA params to WMA
- *
- * Return: QDF_STATUS
- */
-QDF_STATUS sme_set_wisa_params(tHalHandle hal,
-				struct sir_wisa_params *wisa_params)
-{
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal mac = PMAC_STRUCT(hal);
-	struct scheduler_msg message = {0};
-	struct sir_wisa_params *cds_msg_wisa_params;
-
-	cds_msg_wisa_params = qdf_mem_malloc(sizeof(struct sir_wisa_params));
-	if (!cds_msg_wisa_params)
-		return QDF_STATUS_E_NOMEM;
-
-	*cds_msg_wisa_params = *wisa_params;
-	status = sme_acquire_global_lock(&mac->sme);
-	if (QDF_IS_STATUS_SUCCESS(status)) {
-		message.bodyptr = cds_msg_wisa_params;
-		message.type = WMA_SET_WISA_PARAMS;
-		status = scheduler_post_msg(QDF_MODULE_ID_WMA, &message);
-		sme_release_global_lock(&mac->sme);
-	}
-	return status;
-}
-
 /*
  * sme_set_significant_change() -
  * SME API to set significant change
@@ -11723,6 +11686,39 @@ QDF_STATUS sme_ext_scan_register_callback(tHalHandle hHal,
 	return status;
 }
 #endif /* FEATURE_WLAN_EXTSCAN */
+
+/**
+ * sme_send_wisa_params(): Pass WISA mode to WMA
+ * @hal: HAL context
+ * @wisa_params: pointer to WISA params struct
+ * @sessionId: SME session id
+ *
+ * Pass WISA params to WMA
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS sme_set_wisa_params(tHalHandle hal,
+				struct sir_wisa_params *wisa_params)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	tpAniSirGlobal mac = PMAC_STRUCT(hal);
+	struct scheduler_msg message = {0};
+	struct sir_wisa_params *cds_msg_wisa_params;
+
+	cds_msg_wisa_params = qdf_mem_malloc(sizeof(struct sir_wisa_params));
+	if (!cds_msg_wisa_params)
+		return QDF_STATUS_E_NOMEM;
+
+	*cds_msg_wisa_params = *wisa_params;
+	status = sme_acquire_global_lock(&mac->sme);
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		message.bodyptr = cds_msg_wisa_params;
+		message.type = WMA_SET_WISA_PARAMS;
+		status = scheduler_post_msg(QDF_MODULE_ID_WMA, &message);
+		sme_release_global_lock(&mac->sme);
+	}
+	return status;
+}
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
 
@@ -12932,6 +12928,20 @@ void sme_update_user_configured_nss(tHalHandle hal, uint8_t nss)
 	mac_ctx->user_configured_nss = nss;
 }
 
+int sme_update_tx_bfee_supp(tHalHandle hal, uint8_t session_id,
+			    uint8_t cfg_val)
+{
+	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	status = sme_cfg_set_int(mac_ctx, WNI_CFG_VHT_SU_BEAMFORMEE_CAP,
+				 cfg_val);
+	if (status != QDF_STATUS_SUCCESS) {
+		sme_err("Failed to set SU BFEE CFG");
+		return -EFAULT;
+	}
+
+	return sme_update_he_tx_bfee_supp(hal, session_id, cfg_val);
+}
 #ifdef WLAN_FEATURE_11AX
 void sme_update_he_cap_nss(tHalHandle hal, uint8_t session_id,
 		uint8_t nss)
@@ -13039,6 +13049,13 @@ static int sme_update_he_cap(tHalHandle hal, uint8_t session_id,
 	csr_update_session_he_cap(mac_ctx, session);
 
 	return 0;
+}
+
+int sme_update_he_tx_bfee_supp(tHalHandle hal, uint8_t session_id,
+			       uint8_t cfg_val)
+{
+	return sme_update_he_cap(hal, session_id, WNI_CFG_HE_SU_BEAMFORMEE,
+				 cfg_val);
 }
 
 int sme_update_he_tx_stbc_cap(tHalHandle hal, uint8_t session_id, int value)
@@ -13892,7 +13909,7 @@ QDF_STATUS sme_ht40_stop_obss_scan(tHalHandle hal, uint32_t vdev_id)
  * to FW
  *
  * Return: QDF_STATUS if SME update mimo power save
- * configuration sucsess else failue status
+ * configuration success else failure status
  */
 QDF_STATUS sme_update_mimo_power_save(tHalHandle hal,
 				      uint8_t is_ht_smps_enabled,
@@ -14242,7 +14259,7 @@ void sme_set_chan_info_callback(tHalHandle hal_handle,
  * @params: adaptive_dwelltime_params config
  *
  * Return: QDF_STATUS if adaptive dwell time update
- * configuration sucsess else failure status
+ * configuration success else failure status
  */
 QDF_STATUS sme_set_adaptive_dwelltime_config(tHalHandle hal,
 			struct adaptive_dwelltime_params *params)
@@ -16116,4 +16133,10 @@ void sme_set_amsdu(tHalHandle hal, bool enable)
 {
 	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
 	mac_ctx->is_usr_cfg_amsdu_enabled = enable;
+}
+
+uint8_t sme_get_mcs_idx(uint16_t max_rate, uint8_t rate_flags,
+			uint8_t nss, uint8_t *mcs_rate_flags)
+{
+	return wma_get_mcs_idx(max_rate, rate_flags, nss, mcs_rate_flags);
 }

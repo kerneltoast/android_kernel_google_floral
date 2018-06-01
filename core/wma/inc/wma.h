@@ -351,7 +351,7 @@ enum ds_mode {
 #define WMA_P2P_WFA_VER 0x09    /* ver 1.0 */
 #define WMA_WSC_OUI { 0x00, 0x50, 0xF2 } /* Microsoft WSC OUI byte */
 
-/* P2P Sub element defintions (according to table 5 of Wifi's P2P spec) */
+/* P2P Sub element definitions (according to table 5 of Wifi's P2P spec) */
 #define WMA_P2P_SUB_ELEMENT_STATUS                    0
 #define WMA_P2P_SUB_ELEMENT_MINOR_REASON              1
 #define WMA_P2P_SUB_ELEMENT_CAPABILITY                2
@@ -393,7 +393,6 @@ enum ds_mode {
 
 #define WMA_DEFAULT_QPOWER_MAX_PSPOLL_BEFORE_WAKE 1
 #define WMA_DEFAULT_QPOWER_TX_WAKE_THRESHOLD 2
-#define WMA_DEFAULT_SIFS_BURST_DURATION      8160
 
 #define WMA_VHT_PPS_PAID_MATCH 1
 #define WMA_VHT_PPS_GID_MATCH 2
@@ -791,8 +790,6 @@ typedef struct {
  * @rxchainmask: rx chain mask
  * @txpow2g: tx power limit for 2GHz
  * @txpow5g: tx power limit for 5GHz
- * @burst_enable: is burst enable/disable
- * @burst_dur: burst duration
  *
  * This structure stores pdev parameters.
  * Some of these parameters are set in fw and some
@@ -810,8 +807,6 @@ typedef struct {
 	uint32_t rxchainmask;
 	uint32_t txpow2g;
 	uint32_t txpow5g;
-	uint32_t burst_enable;
-	uint32_t burst_dur;
 } pdev_cli_config_t;
 
 /**
@@ -1761,7 +1756,7 @@ enum wma_cfg_cmd_id {
 
 /**
  * struct wma_trigger_uapsd_params - trigger uapsd parameters
- * @wmm_ac: wmm access catagory
+ * @wmm_ac: wmm access category
  * @user_priority: user priority
  * @service_interval: service interval
  * @suspend_interval: suspend interval

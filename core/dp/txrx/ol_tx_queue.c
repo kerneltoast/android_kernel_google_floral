@@ -1754,7 +1754,7 @@ void ol_txrx_vdev_unpause(struct cdp_vdev *pvdev, uint32_t reason)
 			vdev->ll_pause.is_q_paused = false;
 			vdev->ll_pause.q_unpause_cnt++;
 			qdf_spin_unlock_bh(&vdev->ll_pause.mutex);
-			ol_tx_vdev_ll_pause_queue_send(vdev);
+			ol_tx_vdev_ll_pause_queue_send((unsigned long) vdev);
 		} else {
 			qdf_spin_unlock_bh(&vdev->ll_pause.mutex);
 		}
@@ -1788,7 +1788,8 @@ void ol_txrx_vdev_flush(struct cdp_vdev *pvdev)
 		qdf_nbuf_t next =
 			qdf_nbuf_next(vdev->ll_pause.txq.head);
 		qdf_nbuf_set_next(vdev->ll_pause.txq.head, NULL);
-		if (QDF_NBUF_CB_PADDR(vdev->ll_pause.txq.head)) {
+		if (QDF_NBUF_CB_PADDR(vdev->ll_pause.txq.head) &&
+			!qdf_nbuf_ipa_owned_get(vdev->ll_pause.txq.head)) {
 			qdf_nbuf_unmap(vdev->pdev->osdev,
 				       vdev->ll_pause.txq.head,
 				       QDF_DMA_TO_DEVICE);
@@ -2034,7 +2035,7 @@ static void ol_tx_pdev_throttle_phase_timer(void *context)
 }
 
 #ifdef QCA_LL_LEGACY_TX_FLOW_CONTROL
-static void ol_tx_pdev_throttle_tx_timer(void *context)
+static void ol_tx_pdev_throttle_tx_timer(unsigned long context)
 {
 	struct ol_txrx_pdev_t *pdev = (struct ol_txrx_pdev_t *)context;
 

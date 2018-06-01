@@ -3256,11 +3256,6 @@ struct wma_target_req *wma_fill_hold_req(tp_wma_handle wma,
 	struct wma_target_req *req;
 	QDF_STATUS status;
 
-	if (!cds_is_target_ready()) {
-		WMA_LOGE("target not ready, drop the request");
-		return NULL;
-	}
-
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
 		WMA_LOGE(FL("Failed to allocate memory for msg %d vdev %d"),
@@ -3587,11 +3582,6 @@ struct wma_target_req *wma_fill_vdev_req(tp_wma_handle wma,
 	struct wma_target_req *req;
 	QDF_STATUS status;
 
-	if (!cds_is_target_ready()) {
-		WMA_LOGE("target not ready, drop the request");
-		return NULL;
-	}
-
 	req = qdf_mem_malloc(sizeof(*req));
 	if (!req) {
 		WMA_LOGE("%s: Failed to allocate memory for msg %d vdev %d",
@@ -3775,7 +3765,7 @@ static void wma_add_bss_ap_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 	if (SAP_WPS_DISABLED == add_bss->wps_state)
 		pmo_ucfg_disable_wakeup_event(wma->psoc, vdev_id,
 			(1 << WOW_PROBE_REQ_WPS_IE_EVENT));
-	wma_set_bss_rate_flags(&wma->interfaces[vdev_id], add_bss);
+	wma_set_bss_rate_flags(wma, vdev_id, add_bss);
 	status = wma_create_peer(wma, pdev, vdev, add_bss->bssId,
 				 WMI_PEER_TYPE_DEFAULT, vdev_id, false);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -3903,7 +3893,7 @@ static void wma_add_bss_ibss_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 		WMA_LOGE("%s: Failed to get pdev", __func__);
 		goto send_fail_resp;
 	}
-	wma_set_bss_rate_flags(&wma->interfaces[vdev_id], add_bss);
+	wma_set_bss_rate_flags(wma, vdev_id, add_bss);
 
 	/* create ibss bss peer */
 	status = wma_create_peer(wma, pdev, vdev, add_bss->selfMacAddr,
@@ -4063,7 +4053,7 @@ static void wma_add_bss_sta_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 	vdev_id = add_bss->staContext.smesessionId;
 	iface = &wma->interfaces[vdev_id];
 
-	wma_set_bss_rate_flags(iface, add_bss);
+	wma_set_bss_rate_flags(wma, vdev_id, add_bss);
 	if (add_bss->operMode) {
 		/* Save parameters later needed by WMA_ADD_STA_REQ */
 		if (iface->addBssStaContext)
@@ -4760,7 +4750,7 @@ send_rsp:
 #endif
 
 /**
- * wma_send_bss_color_change_enable() - send bss color chnage enable cmd.
+ * wma_send_bss_color_change_enable() - send bss color change enable cmd.
  * @wma: wma handle
  * @params: add sta params
  *
@@ -5076,7 +5066,7 @@ out:
 }
 
 /**
- * wma_delete_sta_req_ap_mode() - proces delete sta request from UMAC in AP mode
+ * wma_delete_sta_req_ap_mode() - process delete sta request from UMAC in AP mode
  * @wma: wma handle
  * @del_sta: delete sta params
  *
@@ -5145,7 +5135,7 @@ send_del_rsp:
 
 #ifdef FEATURE_WLAN_TDLS
 /**
- * wma_del_tdls_sta() - proces delete sta request from UMAC in TDLS
+ * wma_del_tdls_sta() - process delete sta request from UMAC in TDLS
  * @wma: wma handle
  * @del_sta: delete sta params
  *
@@ -5225,7 +5215,7 @@ send_del_rsp:
 #endif
 
 /**
- * wma_delete_sta_req_sta_mode() - proces delete sta request from UMAC
+ * wma_delete_sta_req_sta_mode() - process delete sta request from UMAC
  * @wma: wma handle
  * @params: delete sta params
  *
@@ -5403,7 +5393,7 @@ void wma_delete_sta(tp_wma_handle wma, tpDeleteStaParams del_sta)
  * Delete BSS in case of ROAM_HO_FAIL processing is handled separately in
  * this routine. It needs to be done without sending any commands to firmware
  * because firmware has already stopped and deleted peer and vdev is down.
- * Relevent logic is aggregated from other routines. It changes the host
+ * Relevant logic is aggregated from other routines. It changes the host
  * data structures without sending VDEV_STOP, PEER_FLUSH_TIDS, PEER_DELETE
  * and VDEV_DOWN commands to firmware.
  *

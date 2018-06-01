@@ -197,9 +197,6 @@ void hdd_unregister_wext(struct net_device *dev);
  */
 void hdd_register_wext(struct net_device *dev);
 
-void hdd_wlan_get_version(struct hdd_context *hdd_ctx,
-			 union iwreq_data *wrqu, char *extra);
-
 void hdd_wlan_get_stats(struct hdd_adapter *adapter, uint16_t *length,
 		       char *buffer, uint16_t buf_len);
 void hdd_wlan_list_fw_profile(uint16_t *length,
@@ -293,6 +290,13 @@ int hdd_crash_inject(struct hdd_adapter *adapter, uint32_t v1, uint32_t v2)
 {
 	return -ENOTSUPP;
 }
+#endif
+
+#ifdef CONFIG_DP_TRACE
+void hdd_set_dump_dp_trace(uint16_t cmd_type, uint16_t count);
+#else
+static inline
+void hdd_set_dump_dp_trace(uint16_t cmd_type, uint16_t count) {}
 #endif
 
 #endif /* __WEXT_IW_H__ */

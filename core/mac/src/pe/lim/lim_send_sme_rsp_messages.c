@@ -188,29 +188,29 @@ uint32_t lim_get_max_rate_flags(tpAniSirGlobal mac_ctx, tpDphHashNode sta_ds)
 
 	if (!sta_ds->mlmStaContext.htCapability &&
 	    !sta_ds->mlmStaContext.vhtCapability) {
-		rate_flags |= eHAL_TX_RATE_LEGACY;
+		rate_flags |= TX_RATE_LEGACY;
 	} else {
 		if (sta_ds->mlmStaContext.vhtCapability) {
 			if (WNI_CFG_VHT_CHANNEL_WIDTH_80MHZ ==
 				sta_ds->vhtSupportedChannelWidthSet) {
-				rate_flags |= eHAL_TX_RATE_VHT80;
+				rate_flags |= TX_RATE_VHT80;
 			} else if (WNI_CFG_VHT_CHANNEL_WIDTH_20_40MHZ ==
 					sta_ds->vhtSupportedChannelWidthSet) {
 				if (sta_ds->htSupportedChannelWidthSet)
-					rate_flags |= eHAL_TX_RATE_VHT40;
+					rate_flags |= TX_RATE_VHT40;
 				else
-					rate_flags |= eHAL_TX_RATE_VHT20;
+					rate_flags |= TX_RATE_VHT20;
 			}
 		} else if (sta_ds->mlmStaContext.htCapability) {
 			if (sta_ds->htSupportedChannelWidthSet)
-				rate_flags |= eHAL_TX_RATE_HT40;
+				rate_flags |= TX_RATE_HT40;
 			else
-				rate_flags |= eHAL_TX_RATE_HT20;
+				rate_flags |= TX_RATE_HT20;
 		}
 	}
 
 	if (sta_ds->htShortGI20Mhz || sta_ds->htShortGI40Mhz)
-		rate_flags |= eHAL_TX_RATE_SGI;
+		rate_flags |= TX_RATE_SGI;
 
 	return rate_flags;
 }
@@ -1489,7 +1489,7 @@ lim_send_sme_set_context_rsp(tpAniSirGlobal pMac,
 			      psessionEntry, (uint16_t) resultCode, 0);
 #endif /* FEATURE_WLAN_DIAG_SUPPORT */
 
-	lim_sys_process_mmh_msg_api(pMac, &mmhMsg, ePROT);
+	pMac->lim.sme_msg_callback(pMac, &mmhMsg);
 } /*** end lim_send_sme_set_context_rsp() ***/
 
 /** -----------------------------------------------------------------
@@ -1640,6 +1640,7 @@ lim_send_sme_delts_ind(tpAniSirGlobal pMac, tpSirDeltsReqInfo delts, uint16_t ai
 	lim_sys_process_mmh_msg_api(pMac, &mmhMsg, ePROT);
 }
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * lim_send_sme_pe_statistics_rsp()
  *
@@ -1697,6 +1698,7 @@ lim_send_sme_pe_statistics_rsp(tpAniSirGlobal pMac, uint16_t msgType, void *stat
 	return;
 
 } /*** end lim_send_sme_pe_statistics_rsp() ***/
+#endif
 
 #ifdef FEATURE_WLAN_ESE
 /**

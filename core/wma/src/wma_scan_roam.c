@@ -1038,7 +1038,7 @@ void wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
 		    && roam_req->ChannelCacheType != CHANNEL_LIST_STATIC) {
 			/* Roaming on DFS channels is supported and it is not
 			 * app channel list. It is ok to override homeAwayTime
-			 * to accomodate DFS dwell time in burst
+			 * to accommodate DFS dwell time in burst
 			 * duration.
 			 */
 			scan_params->burst_duration =
@@ -3290,7 +3290,6 @@ int wma_extscan_wow_event_callback(void *handle, void *event, uint32_t len)
 		return 0;
 	}
 }
-#endif
 
 /**
  * wma_register_extscan_event_handler() - register extscan event handler
@@ -3345,8 +3344,6 @@ void wma_register_extscan_event_handler(tp_wma_handle wma_handle)
 			wma_passpoint_match_event_handler,
 			WMA_RX_SERIALIZER_CTX);
 }
-
-#ifdef FEATURE_WLAN_EXTSCAN
 
 /**
  * wma_extscan_start_stop_event_handler() -  extscan start/stop event handler

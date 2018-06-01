@@ -416,10 +416,12 @@ QDF_STATUS sme_roam_get_pmkid_cache(tHalHandle hHal, uint8_t sessionId,
 		uint32_t *pNum,
 		tPmkidCacheInfo *pPmkidCache);
 QDF_STATUS sme_get_config_param(tHalHandle hHal, tSmeConfigParams *pParam);
+#ifndef QCA_SUPPORT_CP_STATS
 QDF_STATUS sme_get_statistics(tHalHandle hHal,
 		eCsrStatsRequesterType requesterId,
 		uint32_t statsMask, tCsrStatsCallback callback,
 		uint8_t staId, void *pContext, uint8_t sessionId);
+#endif
 QDF_STATUS sme_get_rssi(tHalHandle hHal,
 		tCsrRssiCallback callback,
 		uint8_t staId, struct qdf_mac_addr bssId, int8_t lastRSSI,
@@ -979,9 +981,9 @@ bool sme_neighbor_middle_of_roaming(tHalHandle hHal,
 						uint8_t sessionId);
 
 /**
- * sme_enable_uapsd_for_ac() - enable uapsd for access catagory request to WMA
+ * sme_enable_uapsd_for_ac() - enable uapsd for access category request to WMA
  * @sta_id: station id
- * @ac: access catagory
+ * @ac: access category
  * @tid: tid value
  * @pri: user priority
  * @srvc_int: service interval
@@ -1002,9 +1004,9 @@ QDF_STATUS sme_enable_uapsd_for_ac(uint8_t sta_id,
 				      uint32_t delay_interval);
 
 /**
- * sme_disable_uapsd_for_ac() - disable uapsd access catagory request to WMA
+ * sme_disable_uapsd_for_ac() - disable uapsd access category request to WMA
  * @sta_id: station id
- * @ac: access catagory
+ * @ac: access category
  * @sessionId: session id
  *
  * Return: QDF status
@@ -1055,6 +1057,17 @@ QDF_STATUS sme_update_roam_scan_hi_rssi_scan_params(tHalHandle hal_handle,
 	uint8_t session_id,
 	uint32_t notify_id,
 	int32_t val);
+
+/**
+ * sme_update_tx_bfee_supp() - sets the Tx Bfee support
+ * @hal: Pointer to HAL
+ * @session_id: SME session id
+ * @cfg_val: Tx Bfee config value
+ *
+ * Return: 0 on success else err code
+ */
+int sme_update_tx_bfee_supp(tHalHandle hal, uint8_t session_id,
+		uint8_t cfg_val);
 
 void wlan_sap_enable_phy_error_logs(tHalHandle hal, uint32_t enable_log);
 #ifdef WLAN_FEATURE_DSRC
@@ -2117,6 +2130,16 @@ void sme_update_he_cap_nss(tHalHandle hal, uint8_t session_id,
 		uint8_t nss);
 
 /**
+ * sme_update_he_tx_bfee_supp() - sets the HE Tx Bfee support
+ * @hal: Pointer to HAL
+ * @session_id: SME session id
+ * @cfg_val: Tx Bfee config value
+ *
+ * Return: 0 on success else err code
+ */
+int sme_update_he_tx_bfee_supp(tHalHandle hal, uint8_t session_id,
+		uint8_t cfg_val);
+/**
  * sme_update_he_mcs() - sets the HE MCS based on user request
  * @hal: Pointer to HAL
  * @session_id: SME session id
@@ -2192,8 +2215,15 @@ static inline int sme_update_he_frag_supp(tHalHandle hal, uint8_t session_id,
 {
 	return 0;
 }
+
 static inline int sme_update_he_ldpc_supp(tHalHandle hal, uint8_t session_id,
 					  uint16_t he_ldpc)
+{
+	return 0;
+}
+
+static inline int sme_update_he_tx_bfee_supp(tHalHandle hal, uint8_t session_id,
+		uint8_t cfg_val)
 {
 	return 0;
 }
@@ -2232,5 +2262,17 @@ bool sme_validate_channel_list(tHalHandle hal,
  * Return: None
  */
 void sme_set_amsdu(tHalHandle hal, bool enable);
+
+/**
+ * sme_get_mcs_idx() - gets mcs index
+ * @max_rate: max rate
+ * @rate_flags: rate flags
+ * @nss: number of nss
+ * @mcs_rate_flags: mcs rate flag
+ *
+ * Return: return mcs index
+ */
+uint8_t sme_get_mcs_idx(uint16_t max_rate, uint8_t rate_flags,
+			uint8_t nss, uint8_t *mcs_rate_flags);
 
 #endif /* #if !defined( __SME_API_H ) */

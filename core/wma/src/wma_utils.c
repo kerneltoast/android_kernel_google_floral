@@ -183,17 +183,8 @@ static inline uint16_t wma_mcs_rate_match(uint16_t match_rate, bool *is_sgi,
 		return 0;
 }
 
-/**
- * wma_get_mcs_idx() - get mcs index
- * @maxRate: max rate
- * @rate_flags: rate flags
- * @nss: number of nss
- * @mcsRateFlag: mcs rate flag
- *
- * Return: return mcs index
- */
-static uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
-			       uint8_t nss, uint8_t *mcsRateFlag)
+uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
+			uint8_t nss, uint8_t *mcsRateFlag)
 {
 	uint8_t  index = 0;
 	uint16_t match_rate = 0;
@@ -203,9 +194,9 @@ static uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
 		 __func__, maxRate, rate_flags, nss);
 
 	*mcsRateFlag = rate_flags;
-	*mcsRateFlag &= ~eHAL_TX_RATE_SGI;
+	*mcsRateFlag &= ~TX_RATE_SGI;
 	for (index = 0; index < MAX_VHT_MCS_IDX; index++) {
-		if (rate_flags & eHAL_TX_RATE_VHT80) {
+		if (rate_flags & TX_RATE_VHT80) {
 			/* check for vht80 nss1/2 rate set */
 			match_rate = wma_mcs_rate_match(maxRate, &is_sgi, nss,
 					vht_mcs_nss1[index].ht80_rate[0],
@@ -215,8 +206,8 @@ static uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
 			if (match_rate)
 				goto rate_found;
 		}
-		if ((rate_flags & eHAL_TX_RATE_VHT40) |
-		    (rate_flags & eHAL_TX_RATE_VHT80)) {
+		if ((rate_flags & TX_RATE_VHT40) |
+		    (rate_flags & TX_RATE_VHT80)) {
 			/* check for vht40 nss1/2 rate set */
 			match_rate = wma_mcs_rate_match(maxRate, &is_sgi, nss,
 					vht_mcs_nss1[index].ht40_rate[0],
@@ -224,13 +215,13 @@ static uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
 					vht_mcs_nss2[index].ht40_rate[0],
 					vht_mcs_nss2[index].ht40_rate[1]);
 			if (match_rate) {
-				*mcsRateFlag &= ~eHAL_TX_RATE_VHT80;
+				*mcsRateFlag &= ~TX_RATE_VHT80;
 				goto rate_found;
 			}
 		}
-		if ((rate_flags & eHAL_TX_RATE_VHT20) |
-		    (rate_flags & eHAL_TX_RATE_VHT40) |
-		    (rate_flags & eHAL_TX_RATE_VHT80)) {
+		if ((rate_flags & TX_RATE_VHT20) |
+		    (rate_flags & TX_RATE_VHT40) |
+		    (rate_flags & TX_RATE_VHT80)) {
 			/* check for vht20 nss1/2 rate set */
 			match_rate = wma_mcs_rate_match(maxRate, &is_sgi, nss,
 					vht_mcs_nss1[index].ht20_rate[0],
@@ -238,14 +229,14 @@ static uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
 					vht_mcs_nss2[index].ht20_rate[0],
 					vht_mcs_nss2[index].ht20_rate[1]);
 			if (match_rate) {
-				*mcsRateFlag &= ~(eHAL_TX_RATE_VHT80 |
-						eHAL_TX_RATE_VHT40);
+				*mcsRateFlag &= ~(TX_RATE_VHT80 |
+						TX_RATE_VHT40);
 				goto rate_found;
 			}
 		}
 	}
 	for (index = 0; index < MAX_HT_MCS_IDX; index++) {
-		if (rate_flags & eHAL_TX_RATE_HT40) {
+		if (rate_flags & TX_RATE_HT40) {
 			/* check for ht40 nss1/2 rate set */
 			match_rate = wma_mcs_rate_match(maxRate, &is_sgi, nss,
 					mcs_nss1[index].ht40_rate[0],
@@ -253,14 +244,14 @@ static uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
 					mcs_nss2[index].ht40_rate[0],
 					mcs_nss2[index].ht40_rate[1]);
 			if (match_rate) {
-				*mcsRateFlag = eHAL_TX_RATE_HT40;
+				*mcsRateFlag = TX_RATE_HT40;
 				if (nss == 2)
 					index += MAX_HT_MCS_IDX;
 				goto rate_found;
 			}
 		}
-		if ((rate_flags & eHAL_TX_RATE_HT20) ||
-			(rate_flags & eHAL_TX_RATE_HT40)) {
+		if ((rate_flags & TX_RATE_HT20) ||
+			(rate_flags & TX_RATE_HT40)) {
 			/* check for ht20 nss1/2 rate set */
 			match_rate = wma_mcs_rate_match(maxRate, &is_sgi, nss,
 					mcs_nss1[index].ht20_rate[0],
@@ -268,7 +259,7 @@ static uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
 					mcs_nss2[index].ht20_rate[0],
 					mcs_nss2[index].ht20_rate[1]);
 			if (match_rate) {
-				*mcsRateFlag = eHAL_TX_RATE_HT20;
+				*mcsRateFlag = TX_RATE_HT20;
 				if (nss == 2)
 					index += MAX_HT_MCS_IDX;
 				goto rate_found;
@@ -279,7 +270,7 @@ static uint8_t wma_get_mcs_idx(uint16_t maxRate, uint8_t rate_flags,
 rate_found:
 	/* set SGI flag only if this is SGI rate */
 	if (match_rate && is_sgi == true)
-		*mcsRateFlag |= eHAL_TX_RATE_SGI;
+		*mcsRateFlag |= TX_RATE_SGI;
 
 	WMA_LOGD("%s - match_rate: %d index: %d rate_flag: 0x%x is_sgi: %d",
 		 __func__, match_rate, index, *mcsRateFlag, is_sgi);
@@ -287,6 +278,7 @@ rate_found:
 	return match_rate ? index : INVALID_MCS_IDX;
 }
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * wma_peek_vdev_req() - peek what request message is queued for response.
  *			 the function does not delete the node after found
@@ -332,6 +324,7 @@ static struct wma_target_req *wma_peek_vdev_req(tp_wma_handle wma,
 		 vdev_id, type, req_msg->msg_type);
 	return req_msg;
 }
+#endif /* QCA_SUPPORT_CP_STATS */
 
 void wma_lost_link_info_handler(tp_wma_handle wma, uint32_t vdev_id,
 					int32_t rssi)
@@ -2377,6 +2370,7 @@ void wma_config_stats_ext_threshold(tp_wma_handle wma,
 
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * wma_update_pdev_stats() - update pdev stats
  * @wma: wma handle
@@ -2661,7 +2655,7 @@ static void wma_update_peer_stats(tp_wma_handle wma,
 			}
 
 			classa_stats->tx_rate_flags = node->rate_flags;
-			if (!(node->rate_flags & eHAL_TX_RATE_LEGACY)) {
+			if (!(node->rate_flags & TX_RATE_LEGACY)) {
 				classa_stats->mcs_index =
 					wma_get_mcs_idx(
 						(peer_stats->peer_tx_rate /
@@ -2678,6 +2672,7 @@ static void wma_update_peer_stats(tp_wma_handle wma,
 		}
 	}
 }
+#endif /* WMA_GET_STATISTICS_RSP */
 
 /**
  * wma_post_link_status() - post link status to SME
@@ -2704,6 +2699,7 @@ void wma_post_link_status(tAniGetLinkStatus *pGetLinkStatus,
 	}
 }
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * wma_update_per_chain_rssi_stats() - to store per chain rssi stats
  * @wma: wma handle
@@ -2803,7 +2799,7 @@ static void wma_update_rssi_stats(tp_wma_handle wma,
 		}
 	}
 }
-
+#endif /* QCA_SUPPORT_CP_STATS */
 
 /**
  * wma_link_status_event_handler() - link status event handler
@@ -2863,8 +2859,8 @@ int wma_link_status_event_handler(void *handle, uint8_t *cmd_param_info,
 				link_status |= LINK_SUPPORT_MIMO;
 
 			if (intr[ht_info->vdevid].rate_flags &
-				(eHAL_TX_RATE_VHT20 | eHAL_TX_RATE_VHT40 |
-				eHAL_TX_RATE_VHT80))
+				(TX_RATE_VHT20 | TX_RATE_VHT40 |
+				TX_RATE_VHT80))
 				link_status |= LINK_SUPPORT_VHT;
 
 			wma_post_link_status(
@@ -2910,6 +2906,7 @@ int wma_rso_cmd_status_event_handler(wmi_roam_event_fixed_param *wmi_event)
 	return 0;
 }
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * wma_handle_sta_peer_info() - handle peer information in
  * peer stats
@@ -3199,6 +3196,7 @@ int wma_stats_event_handler(void *handle, uint8_t *cmd_param_info,
 
 	return 0;
 }
+#endif /* QCA_SUPPORT_CP_STATS */
 
 /**
  * wma_fill_peer_info() - fill SIR peer info from WMI peer info struct
@@ -3836,6 +3834,7 @@ int32_t wma_set_txrx_fw_stats_level(tp_wma_handle wma_handle,
 	return 0;
 }
 
+#ifndef QCA_SUPPORT_CP_STATS
 /**
  * wma_get_stats_rsp_buf() - fill get stats response buffer
  * @get_stats_param: get stats parameters
@@ -3957,6 +3956,7 @@ end:
 	qdf_mem_free(get_stats_param);
 	WMA_LOGD("%s: Exit", __func__);
 }
+#endif /* QCA_SUPPORT_CP_STATS */
 
 /**
  * wma_get_cca_stats() - send request to fw to get CCA
@@ -4257,6 +4257,7 @@ bool wma_is_csa_offload_enabled(void)
 	return wmi_service_enabled(wma->wmi_handle,
 				   wmi_service_csa_offload);
 }
+#ifdef FEATURE_FW_LOG_PARSING
 /**
  * wma_config_debug_module_cmd - set debug log config
  * @wmi_handle: wmi layer handle
@@ -4281,6 +4282,7 @@ wma_config_debug_module_cmd(wmi_unified_t wmi_handle, A_UINT32 param,
 
 	return wmi_unified_dbglog_cmd_send(wmi_handle, &dbg_param);
 }
+#endif
 
 /**
  * wma_is_p2p_lo_capable() - if driver is capable of p2p listen offload

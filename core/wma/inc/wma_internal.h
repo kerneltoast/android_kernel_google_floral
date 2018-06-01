@@ -138,6 +138,7 @@ struct index_vht_data_rate_type {
 	uint16_t ht80_rate[2];
 };
 
+struct tSirWifiScanCmdReqParams;
 /*
  * wma_main.c functions declarations
  */
@@ -348,9 +349,11 @@ int wma_passpoint_match_event_handler(void *handle,
 
 #endif
 
+#ifdef FEATURE_WLAN_EXTSCAN
+int wma_extscan_wow_event_callback(void *handle, void *event, uint32_t len);
+
 void wma_register_extscan_event_handler(tp_wma_handle wma_handle);
 
-#ifdef FEATURE_WLAN_EXTSCAN
 QDF_STATUS wma_get_buf_extscan_start_cmd(tp_wma_handle wma_handle,
 					 tSirWifiScanCmdReqParams *pstart,
 					 wmi_buf_t *buf, int *buf_len);
@@ -562,8 +565,6 @@ int wma_beacon_swba_handler(void *handle, uint8_t *event, uint32_t len);
 
 int wma_peer_sta_kickout_event_handler(void *handle, u8 *event, u32 len);
 
-int wma_extscan_wow_event_callback(void *handle, void *event, uint32_t len);
-
 int wma_unified_bcntx_status_event_handler(void *handle,
 					   uint8_t *cmd_param_info,
 					   uint32_t len);
@@ -705,9 +706,8 @@ void wma_set_resume_dtim(tp_wma_handle wma);
  * wma_data.c functions declarations
  */
 
-
-void wma_set_bss_rate_flags(struct wma_txrx_node *iface,
-				   tpAddBssParams add_bss);
+void wma_set_bss_rate_flags(tp_wma_handle wma, uint8_t vdev_id,
+			    tpAddBssParams add_bss);
 
 int32_t wmi_unified_send_txbf(tp_wma_handle wma, tpAddStaParams params);
 
@@ -861,9 +861,13 @@ int32_t wma_txrx_fw_stats_reset(tp_wma_handle wma_handle,
 int32_t wma_set_txrx_fw_stats_level(tp_wma_handle wma_handle,
 				    uint8_t vdev_id, uint32_t value);
 
+#ifdef QCA_SUPPORT_CP_STATS
+static inline void wma_get_stats_req(WMA_HANDLE handle,
+				struct sAniGetPEStatsReq *get_stats_param) {}
+#else
 void wma_get_stats_req(WMA_HANDLE handle,
-		       tAniGetPEStatsReq *get_stats_param);
-
+		       struct sAniGetPEStatsReq *get_stats_param);
+#endif
 /*
  * wma_features.c functions declarations
  */

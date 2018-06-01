@@ -73,9 +73,7 @@
 #include <wlan_cfg80211_scan.h>
 #include <wlan_cfg80211_ftm.h>
 
-#ifdef FEATURE_WLAN_EXTSCAN
 #include "wlan_hdd_ext_scan.h"
-#endif
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
 #include "wlan_hdd_stats.h"
@@ -1596,117 +1594,6 @@ int wlan_hdd_sap_cfg_dfs_override(struct hdd_adapter *adapter)
 }
 
 /**
- * wlan_hdd_reset_force_acs_chan_range: Set acs channel ranges as per force ACS
- * configuration.
- * @hdd_ctx: pointer to hdd context
- * @sap_config: pointer to SAP config struct
- *
- * Return: 0 if success else error code
- */
-static int wlan_hdd_reset_force_acs_chan_range(struct hdd_context *hdd_ctx,
-						tsap_config_t *sap_config)
-{
-	bool is_dfs_mode_enabled = false;
-	uint32_t i, num_channels = 0;
-	uint8_t channels[WNI_CFG_VALID_CHANNEL_LIST_LEN] = {0};
-	eCsrPhyMode hw_mode;
-	tSirMacHTChannelWidth ch_width;
-
-	if (hdd_ctx->config->force_sap_acs_st_ch >
-			hdd_ctx->config->force_sap_acs_end_ch) {
-		hdd_err("invalid configuration for start and end channel");
-		return -EINVAL;
-	}
-	if (hdd_ctx->config->enableDFSMasterCap)
-		is_dfs_mode_enabled = true;
-
-	sap_config->acs_cfg.start_ch =
-			hdd_ctx->config->force_sap_acs_st_ch;
-	sap_config->acs_cfg.end_ch =
-			hdd_ctx->config->force_sap_acs_end_ch;
-
-	for (i = sap_config->acs_cfg.start_ch;
-			i <= sap_config->acs_cfg.end_ch; i++) {
-		if ((CHANNEL_STATE_ENABLE ==
-		     wlan_reg_get_channel_state(hdd_ctx->hdd_pdev, i)) ||
-		    (is_dfs_mode_enabled &&
-		     CHANNEL_STATE_DFS ==
-		     wlan_reg_get_channel_state(hdd_ctx->hdd_pdev, i))) {
-			channels[num_channels] = i;
-			num_channels++;
-		}
-	}
-	if (sap_config->acs_cfg.ch_list)
-		qdf_mem_free(sap_config->acs_cfg.ch_list);
-
-	sap_config->acs_cfg.ch_list = qdf_mem_malloc(num_channels);
-	if (!sap_config->acs_cfg.ch_list) {
-		hdd_err("ACS config alloc fail");
-		return -ENOMEM;
-	}
-	qdf_mem_copy(sap_config->acs_cfg.ch_list, channels, num_channels);
-	sap_config->acs_cfg.ch_list_count = num_channels;
-
-	/* Derive ACS HW mode */
-	hw_mode = hdd_cfg_xlate_to_csr_phy_mode(hdd_ctx->config->dot11Mode);
-	if (hw_mode == eCSR_DOT11_MODE_AUTO) {
-		if (sme_is_feature_supported_by_fw(DOT11AX))
-			hw_mode = eCSR_DOT11_MODE_11ax;
-		else
-			hw_mode = eCSR_DOT11_MODE_11ac;
-	}
-
-	if (hdd_ctx->config->sap_force_11n_for_11ac) {
-		if (hw_mode == eCSR_DOT11_MODE_11ac ||
-		    hw_mode == eCSR_DOT11_MODE_11ac_ONLY)
-			hw_mode = eCSR_DOT11_MODE_11n;
-	}
-
-	if ((hw_mode == eCSR_DOT11_MODE_11b ||
-	     hw_mode == eCSR_DOT11_MODE_11g ||
-	     hw_mode == eCSR_DOT11_MODE_11g_ONLY) &&
-			sap_config->acs_cfg.start_ch > 14) {
-		hdd_err("Invalid ACS HW Mode %d + CH range <%d - %d>",
-			hw_mode, sap_config->acs_cfg.start_ch,
-			sap_config->acs_cfg.end_ch);
-		return -EINVAL;
-	}
-	sap_config->acs_cfg.hw_mode = hw_mode;
-
-	/* Derive ACS BW */
-	ch_width = eHT_CHANNEL_WIDTH_20MHZ;
-	if (hw_mode == eCSR_DOT11_MODE_11ac ||
-	    hw_mode == eCSR_DOT11_MODE_11ac_ONLY ||
-	    hw_mode == eCSR_DOT11_MODE_11ax ||
-	    hw_mode == eCSR_DOT11_MODE_11ax_ONLY) {
-		ch_width = hdd_ctx->config->vhtChannelWidth;
-		/* VHT in 2.4G depends on gChannelBondingMode24GHz INI param */
-		if (sap_config->acs_cfg.end_ch <= 14)
-			ch_width =
-				hdd_ctx->config->nChannelBondingMode24GHz ?
-				eHT_CHANNEL_WIDTH_40MHZ :
-				eHT_CHANNEL_WIDTH_20MHZ;
-	}
-
-	if (hw_mode == eCSR_DOT11_MODE_11n ||
-	    hw_mode == eCSR_DOT11_MODE_11n_ONLY) {
-		if (sap_config->acs_cfg.end_ch <= 14)
-			ch_width =
-				hdd_ctx->config->nChannelBondingMode24GHz ?
-				eHT_CHANNEL_WIDTH_40MHZ :
-				eHT_CHANNEL_WIDTH_20MHZ;
-		else
-			ch_width =
-				hdd_ctx->config->nChannelBondingMode5GHz ?
-				eHT_CHANNEL_WIDTH_40MHZ :
-				eHT_CHANNEL_WIDTH_20MHZ;
-	}
-	sap_config->acs_cfg.ch_width = ch_width;
-
-	return 0;
-}
-
-/**
  * wlan_hdd_set_acs_ch_range : Populate ACS hw mode and channel range values
  * @sap_cfg: pointer to SAP config struct
  * @hw_mode: hw mode retrieved from vendor command buffer
@@ -2482,12 +2369,6 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 		return -EPERM;
 	}
 
-	if (hdd_ctx->config->force_sap_acs &&
-	    !hdd_ctx->config->vendor_acs_support) {
-		hdd_err("Hostapd ACS rejected as Driver ACS enabled");
-		return -EPERM;
-	}
-
 	ret = wlan_hdd_validate_context(hdd_ctx);
 	if (ret)
 		return ret;
@@ -2669,16 +2550,6 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 		policy_mgr_trim_acs_channel_list(hdd_ctx->hdd_psoc,
 			sap_config->acs_cfg.ch_list,
 			&sap_config->acs_cfg.ch_list_count);
-
-	if (hdd_ctx->config->force_sap_acs) {
-		hdd_debug("forcing SAP acs start and end channel");
-		ret = wlan_hdd_reset_force_acs_chan_range(hdd_ctx,
-						sap_config);
-		if (ret) {
-			hdd_err("reset force acs channel range failed");
-			goto out;
-		}
-	}
 
 	sap_config->acs_cfg.band = hw_mode;
 	ret = wlan_hdd_set_acs_ch_range(sap_config, hw_mode,
@@ -5805,6 +5676,12 @@ __wlan_hdd_cfg80211_get_wifi_info(struct wiphy *wiphy,
 		count++;
 	}
 
+	if (tb_vendor[QCA_WLAN_VENDOR_ATTR_WIFI_INFO_RADIO_INDEX]) {
+		hdd_debug("Rcvd req for Radio index");
+		skb_len += sizeof(uint32_t);
+		count++;
+	}
+
 	if (count == 0) {
 		hdd_err("unknown attribute in get_wifi_info request");
 		return -EINVAL;
@@ -6328,6 +6205,8 @@ wlan_hdd_wifi_test_config_policy[
 		[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_NO_ACK_AC] = {
 			.type = NLA_U8},
 		[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_LTF] = {
+			.type = NLA_U8},
+		[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_ENABLE_TX_BEAMFORMEE] = {
 			.type = NLA_U8},
 };
 
@@ -7475,6 +7354,7 @@ __wlan_hdd_cfg80211_set_wifi_test_config(struct wiphy *wiphy,
 	}
 
 	if (tb[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_ENABLE_NO_ACK]) {
+		int he_mcs_val;
 		if (tb[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_NO_ACK_AC]) {
 			ac = nla_get_u8(tb[
 			     QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_NO_ACK_AC]);
@@ -7488,6 +7368,21 @@ __wlan_hdd_cfg80211_set_wifi_test_config(struct wiphy *wiphy,
 		hdd_debug("Set NO_ACK to %d for ac %d", cfg_val, ac);
 		ret_val = sme_set_no_ack_policy(hdd_ctx->hHal,
 				adapter->session_id, cfg_val, ac);
+		if (cfg_val) {
+			if (sme_config->csrConfig.enable2x2)
+				/*2x2 MCS 5 value*/
+				he_mcs_val = 0x45;
+			else
+				/*1x1 MCS 5 value*/
+				he_mcs_val = 0x25;
+
+			if (hdd_set_11ax_rate(adapter, he_mcs_val, NULL))
+				hdd_err("HE MCS set failed, MCS val %0x",
+						he_mcs_val);
+		} else {
+			if (hdd_set_11ax_rate(adapter, 0xFF, NULL))
+				hdd_err("disable fixed rate failed");
+		}
 	}
 
 	if (tb[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_HE_LTF]) {
@@ -7505,6 +7400,18 @@ __wlan_hdd_cfg80211_set_wifi_test_config(struct wiphy *wiphy,
 					      cfg_val, VDEV_CMD);
 		if (ret_val)
 			goto send_err;
+	}
+
+	if (tb[QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_ENABLE_TX_BEAMFORMEE]) {
+		cfg_val = nla_get_u8(tb[
+			QCA_WLAN_VENDOR_ATTR_WIFI_TEST_CONFIG_ENABLE_TX_BEAMFORMEE]);
+		hdd_debug("Set Tx beamformee to %d", cfg_val);
+		ret_val = sme_update_tx_bfee_supp(hdd_ctx->hHal,
+						  adapter->session_id,
+						  cfg_val);
+		if (ret_val)
+			sme_err("Failed to set Tx beamformee cap");
+
 	}
 
 	if (update_sme_cfg)
@@ -8837,30 +8744,30 @@ static int __wlan_hdd_cfg80211_get_link_properties(struct wiphy *wiphy,
 		return -EINVAL;
 	}
 
-	if (!(rate_flags & eHAL_TX_RATE_LEGACY)) {
-		if (rate_flags & eHAL_TX_RATE_VHT80) {
+	if (!(rate_flags & TX_RATE_LEGACY)) {
+		if (rate_flags & TX_RATE_VHT80) {
 			final_rate_flags |= RATE_INFO_FLAGS_VHT_MCS;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
 			final_rate_flags |= RATE_INFO_FLAGS_80_MHZ_WIDTH;
 #endif
-		} else if (rate_flags & eHAL_TX_RATE_VHT40) {
+		} else if (rate_flags & TX_RATE_VHT40) {
 			final_rate_flags |= RATE_INFO_FLAGS_VHT_MCS;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
 			final_rate_flags |= RATE_INFO_FLAGS_40_MHZ_WIDTH;
 #endif
-		} else if (rate_flags & eHAL_TX_RATE_VHT20) {
+		} else if (rate_flags & TX_RATE_VHT20) {
 			final_rate_flags |= RATE_INFO_FLAGS_VHT_MCS;
 		} else if (rate_flags &
-				(eHAL_TX_RATE_HT20 | eHAL_TX_RATE_HT40)) {
+				(TX_RATE_HT20 | TX_RATE_HT40)) {
 			final_rate_flags |= RATE_INFO_FLAGS_MCS;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
-			if (rate_flags & eHAL_TX_RATE_HT40)
+			if (rate_flags & TX_RATE_HT40)
 				final_rate_flags |=
 					RATE_INFO_FLAGS_40_MHZ_WIDTH;
 #endif
 		}
 
-		if (rate_flags & eHAL_TX_RATE_SGI) {
+		if (rate_flags & TX_RATE_SGI) {
 			if (!(final_rate_flags & RATE_INFO_FLAGS_VHT_MCS))
 				final_rate_flags |= RATE_INFO_FLAGS_MCS;
 			final_rate_flags |= RATE_INFO_FLAGS_SHORT_GI;
@@ -10739,7 +10646,7 @@ __wlan_hdd_cfg80211_avoid_freq(struct wiphy *wiphy,
 	uint16_t *local_unsafe_list;
 	uint16_t unsafe_channel_index, local_unsafe_list_count;
 	struct ch_avoid_ind_type *channel_list;
-	enum tQDF_GLOBAL_CON_MODE curr_mode;
+	enum QDF_GLOBAL_MODE curr_mode;
 
 	hdd_enter_dev(wdev->netdev);
 
@@ -16143,7 +16050,7 @@ static int __wlan_hdd_cfg80211_change_iface(struct wiphy *wiphy,
 	hdd_debug("Device_mode = %d, IFTYPE = 0x%x",
 	       adapter->device_mode, type);
 
-	status = hdd_wlan_start_modules(hdd_ctx, adapter, false);
+	status = hdd_wlan_start_modules(hdd_ctx, false);
 	if (status) {
 		hdd_err("Failed to start modules");
 		return -EINVAL;
@@ -18730,9 +18637,9 @@ static int wlan_hdd_cfg80211_set_ie(struct hdd_adapter *adapter,
 	uint16_t remLen = ie_len;
 #ifdef FEATURE_WLAN_WAPI
 	uint32_t akmsuite[MAX_NUM_AKM_SUITES];
-	u16 *tmp;
+	uint8_t *tmp;
 	uint16_t akmsuiteCount;
-	int *akmlist;
+	uint32_t *akmlist;
 #endif
 	int status;
 	uint8_t *security_ie;
@@ -18930,16 +18837,16 @@ static int wlan_hdd_cfg80211_set_ie(struct hdd_adapter *adapter,
 			}
 			break;
 		case DOT11F_EID_RSN:
-			hdd_debug("Set RSN IE(len %d)", eLen + 2);
-			if (eLen > (MAX_WPA_RSN_IE_LEN - 2)) {
+			if  (eLen  > DOT11F_IE_RSN_MAX_LEN) {
 				hdd_err("%s: Invalid WPA RSN IE length[%d]",
-					__func__, eLen);
+						__func__, eLen);
 				return -EINVAL;
 			}
 			memset(security_ie, 0, MAX_WPA_RSN_IE_LEN);
 			memcpy(security_ie, genie - 2, (eLen + 2));
 			roam_profile->pRSNReqIE = security_ie;
 			roam_profile->nRSNReqIELength = eLen + 2;     /* ie_len; */
+			hdd_debug("Set RSN IE(len %d)", eLen + 2);
 			break;
 		/*
 		 * Appending Extended Capabilities with Interworking bit set
@@ -18974,15 +18881,18 @@ static int wlan_hdd_cfg80211_set_ie(struct hdd_adapter *adapter,
 #ifdef FEATURE_WLAN_WAPI
 		case WLAN_EID_WAPI:
 			/* Setting WAPI Mode to ON=1 */
-			adapter->wapi_info.wapi_mode = true;
+			adapter->wapi_info.wapi_mode = 1;
 			hdd_debug("WAPI MODE IS %u", adapter->wapi_info.wapi_mode);
-			tmp = (u16 *) ie;
-			tmp = tmp + 2;  /* Skip element Id and Len, Version */
+			tmp = (uint8_t *)ie;
+			tmp = tmp + 4;  /* Skip element Id and Len, Version */
+			/* Get the number of AKM suite */
 			akmsuiteCount = WPA_GET_LE16(tmp);
-			tmp = tmp + 1;
-			akmlist = (int *)(tmp);
+			/* Skip the number of AKM suite */
+			tmp = tmp + 2;
+			/* AKM suite list, each OUI contains 4 bytes */
+			akmlist = (uint32_t *)(tmp);
 			if (akmsuiteCount <= MAX_NUM_AKM_SUITES) {
-				memcpy(akmsuite, akmlist, (4 * akmsuiteCount));
+				memcpy(akmsuite, akmlist, akmsuiteCount);
 			} else {
 				hdd_err("Invalid akmSuite count: %u",
 					akmsuiteCount);

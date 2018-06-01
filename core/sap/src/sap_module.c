@@ -720,7 +720,7 @@ QDF_STATUS wlansap_start_bss(struct sap_context *sap_ctx,
 	pmac->sap.SapDfsInfo.sap_ch_switch_mode =
 			pConfig->sap_chanswitch_mode;
 
-	pmac->sap.sapCtxList[sap_ctx->sessionId].pSapContext = sap_ctx;
+	pmac->sap.sapCtxList[sap_ctx->sessionId].sap_context = sap_ctx;
 	pmac->sap.sapCtxList[sap_ctx->sessionId].sapPersona =
 		sap_ctx->csr_roamProfile.csrPersona;
 	pmac->sap.sapCtxList[sap_ctx->sessionId].sessionID =
@@ -1171,7 +1171,7 @@ QDF_STATUS wlansap_deauth_sta(struct sap_context *sap_ctx,
 }
 
 /**
- * wlansap_update_csa_channel_params() - fucntion to populate channel width and
+ * wlansap_update_csa_channel_params() - function to populate channel width and
  *                                        bonding modes.
  * @sap_context: sap adapter context
  * @channel: target channel
@@ -1580,7 +1580,7 @@ bool wlan_sap_is_pre_cac_active(tHalHandle handle)
 
 	for (i = 0; i < SAP_MAX_NUM_SESSION; i++) {
 		struct sap_context *context =
-			mac->sap.sapCtxList[i].pSapContext;
+			mac->sap.sapCtxList[i].sap_context;
 		if (context && context->is_pre_cac_on)
 			return true;
 	}
@@ -1610,7 +1610,7 @@ QDF_STATUS wlan_sap_get_pre_cac_vdev_id(tHalHandle handle, uint8_t *vdev_id)
 
 	for (i = 0; i < SAP_MAX_NUM_SESSION; i++) {
 		struct sap_context *context =
-			mac->sap.sapCtxList[i].pSapContext;
+			mac->sap.sapCtxList[i].sap_context;
 		if (context && context->is_pre_cac_on) {
 			*vdev_id = i;
 			return QDF_STATUS_SUCCESS;
@@ -2490,7 +2490,7 @@ QDF_STATUS wlansap_acs_chselect(struct sap_context *sap_context,
 	 *
 	 * 2. Set third parameter to TRUE to indicate the
 	 * channel selection function to register a
-	 * different scan callback fucntion to process
+	 * different scan callback function to process
 	 * the results pre start BSS.
 	 */
 	qdf_status = sap_goto_channel_sel(sap_context, &sapEvent, true, false);

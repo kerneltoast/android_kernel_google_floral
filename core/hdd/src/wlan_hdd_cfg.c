@@ -606,30 +606,6 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_VC_MODE_BITMAP_MIN,
 		CFG_VC_MODE_BITMAP_MAX),
 
-	REG_VARIABLE(CFG_FORCE_SAP_ACS, WLAN_PARAM_Integer,
-		     struct hdd_config, force_sap_acs,
-		     VAR_FLAGS_DYNAMIC_CFG |
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_FORCE_SAP_ACS_DEFAULT,
-		     CFG_FORCE_SAP_ACS_MIN,
-		     CFG_FORCE_SAP_ACS_MAX),
-
-	REG_VARIABLE(CFG_FORCE_SAP_ACS_START_CH, WLAN_PARAM_Integer,
-		     struct hdd_config, force_sap_acs_st_ch,
-		     VAR_FLAGS_DYNAMIC_CFG |
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_FORCE_SAP_ACS_START_CH_DEFAULT,
-		     CFG_FORCE_SAP_ACS_START_CH_MIN,
-		     CFG_FORCE_SAP_ACS_START_CH_MAX),
-
-	REG_VARIABLE(CFG_FORCE_SAP_ACS_END_CH, WLAN_PARAM_Integer,
-		     struct hdd_config, force_sap_acs_end_ch,
-		     VAR_FLAGS_DYNAMIC_CFG |
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_FORCE_SAP_ACS_END_CH_DEFAULT,
-		     CFG_FORCE_SAP_ACS_END_CH_MIN,
-		     CFG_FORCE_SAP_ACS_END_CH_MAX),
-
 	REG_VARIABLE(CFG_ENABLE_SAP_MANDATORY_CHAN_LIST, WLAN_PARAM_Integer,
 		     struct hdd_config, enable_sap_mandatory_chan_list,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -3131,13 +3107,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_IGNORE_CAC_MIN,
 		     CFG_IGNORE_CAC_MAX),
 
-	REG_VARIABLE(CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, IsSapDfsChSifsBurstEnabled,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_DEFAULT,
-		     CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MIN,
-		     CFG_ENABLE_SAP_DFS_CH_SIFS_BURST_MAX),
-
 	REG_VARIABLE(CFG_DFS_RADAR_PRI_MULTIPLIER_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, dfsRadarPriMultiplier,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -3195,13 +3164,6 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_WLAN_LOGGING_CONSOLE_SUPPORT_DISABLE,
 		     CFG_WLAN_LOGGING_CONSOLE_SUPPORT_ENABLE),
 #endif /* WLAN_LOGGING_SOCK_SVC_ENABLE */
-
-	REG_VARIABLE(CFG_ENABLE_SIFS_BURST, WLAN_PARAM_Integer,
-		     struct hdd_config, enableSifsBurst,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_ENABLE_SIFS_BURST_DEFAULT,
-		     CFG_ENABLE_SIFS_BURST_MIN,
-		     CFG_ENABLE_SIFS_BURST_MAX),
 
 #ifdef WLAN_FEATURE_LPSS
 	REG_VARIABLE(CFG_ENABLE_LPASS_SUPPORT, WLAN_PARAM_Integer,
@@ -4047,6 +4009,7 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_USER_ACS_DFS_LTE_DISABLE,
 		CFG_USER_ACS_DFS_LTE_ENABLE),
 
+#ifdef CONFIG_DP_TRACE
 	REG_VARIABLE(CFG_ENABLE_DP_TRACE, WLAN_PARAM_Integer,
 		struct hdd_config, enable_dp_trace,
 		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -4059,6 +4022,7 @@ struct reg_table_entry g_registry_table[] = {
 			struct hdd_config, dp_trace_config,
 			VAR_FLAGS_OPTIONAL,
 			(void *) CFG_ENABLE_DP_TRACE_CONFIG_DEFAULT),
+#endif
 
 	REG_VARIABLE(CFG_ADAPTIVE_SCAN_DWELL_MODE_NAME, WLAN_PARAM_Integer,
 		struct hdd_config, scan_adaptive_dwell_mode,
@@ -4224,13 +4188,6 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_FILTER_MULTICAST_REPLAY_DEFAULT,
 		CFG_FILTER_MULTICAST_REPLAY_MIN,
 		CFG_FILTER_MULTICAST_REPLAY_MAX),
-
-	REG_VARIABLE(CFG_SIFS_BURST_DURATION_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, sifs_burst_duration,
-		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_SIFS_BURST_DURATION_DEFAULT,
-		     CFG_SIFS_BURST_DURATION_MIN,
-		     CFG_SIFS_BURST_DURATION_MAX),
 
 	REG_VARIABLE(CFG_ENABLE_PHY_REG, WLAN_PARAM_HexInteger,
 		     struct hdd_config, enable_phy_reg_retention,
@@ -6340,6 +6297,23 @@ static void hdd_cfg_print_sae(struct hdd_context *hdd_ctx)
 }
 #endif
 
+
+#ifdef CONFIG_DP_TRACE
+static void hdd_cfg_print_dp_trace_params(struct hdd_context *hdd_ctx)
+{
+	hdd_info("Name = [%s] Value = [%u]",
+		 CFG_ENABLE_DP_TRACE,
+		 hdd_ctx->config->enable_dp_trace);
+	hdd_debug("Name = [%s] Value = [%s]",
+		  CFG_ENABLE_DP_TRACE_CONFIG,
+		  hdd_ctx->config->dp_trace_config);
+}
+#else
+static void hdd_cfg_print_dp_trace_params(struct hdd_context *hdd_ctx)
+{
+}
+#endif
+
 /**
  * hdd_cgf_print_11k_offload_params() - Print 11k offload related parameters
  * @hdd_ctx: Pointer to HDD context
@@ -6422,12 +6396,6 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 		  hdd_ctx->config->apProtection);
 	hdd_debug("Name = [gEnableApOBSSProt] value = [%u]",
 		  hdd_ctx->config->apOBSSProtEnabled);
-	hdd_debug("Name = [%s] value = [%u]", CFG_FORCE_SAP_ACS,
-		hdd_ctx->config->force_sap_acs);
-	hdd_debug("Name = [%s] value = [%u]", CFG_FORCE_SAP_ACS_START_CH,
-		hdd_ctx->config->force_sap_acs_st_ch);
-	hdd_debug("Name = [%s] value = [%u]", CFG_FORCE_SAP_ACS_END_CH,
-		hdd_ctx->config->force_sap_acs_end_ch);
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
 	hdd_debug("Name = [sap_channel_avoidance] value = [%u]",
 		  hdd_ctx->config->sap_channel_avoidance);
@@ -6774,8 +6742,6 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [isRoamOffloadEnabled] Value = [%u]",
 		  hdd_ctx->config->isRoamOffloadEnabled);
 #endif
-	hdd_debug("Name = [gEnableSifsBurst] Value = [%u]",
-		  hdd_ctx->config->enableSifsBurst);
 
 #ifdef WLAN_FEATURE_LPSS
 	hdd_debug("Name = [gEnableLpassSupport] Value = [%u] ",
@@ -7023,12 +6989,9 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] Value = [%s]",
 		CFG_ENABLE_TX_SCHED_WRR_BE_NAME,
 		hdd_ctx->config->tx_sched_wrr_be);
-	hdd_info("Name = [%s] Value = [%u]",
-		CFG_ENABLE_DP_TRACE,
-		hdd_ctx->config->enable_dp_trace);
-	hdd_debug("Name = [%s] Value = [%s]",
-		CFG_ENABLE_DP_TRACE_CONFIG,
-		hdd_ctx->config->dp_trace_config);
+
+	hdd_cfg_print_dp_trace_params(hdd_ctx);
+
 	hdd_debug("Name = [%s] Value = [%u]",
 		CFG_ADAPTIVE_SCAN_DWELL_MODE_NAME,
 		hdd_ctx->config->scan_adaptive_dwell_mode);

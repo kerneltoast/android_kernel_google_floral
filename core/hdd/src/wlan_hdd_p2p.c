@@ -144,7 +144,8 @@ static int __wlan_hdd_cfg80211_remain_on_channel(struct wiphy *wiphy,
 
 	status = wlan_cfg80211_roc(adapter->hdd_vdev, chan,
 				duration, cookie);
-	hdd_debug("remain on channel request, status:%d", status);
+	hdd_debug("remain on channel request, status:%d, cookie:0x%llx",
+			status, *cookie);
 
 	return qdf_status_to_os_return(status);
 }
@@ -264,7 +265,7 @@ static int __wlan_hdd_mgmt_tx(struct wiphy *wiphy, struct wireless_dev *wdev,
 	status = wlan_cfg80211_mgmt_tx(adapter->hdd_vdev, chan,
 			offchan, wait, buf, len, no_cck,
 			dont_wait_for_ack, cookie);
-	hdd_debug("mgmt tx, status:%d", status);
+	hdd_debug("mgmt tx, status:%d, cookie:0x%llx", status, *cookie);
 
 	return 0;
 }
@@ -582,6 +583,7 @@ wlan_hdd_allow_sap_add(struct hdd_context *hdd_ctx, const char *name,
 	hdd_for_each_adapter(hdd_ctx, adapter) {
 		if (adapter->device_mode == QDF_SAP_MODE &&
 		    test_bit(NET_DEVICE_REGISTERED, &adapter->event_flags) &&
+		    adapter->dev &&
 		    !strncmp(adapter->dev->name, name, IFNAMSIZ)) {
 			struct hdd_beacon_data *beacon =
 						adapter->session.ap.beacon;
@@ -591,7 +593,7 @@ wlan_hdd_allow_sap_add(struct hdd_context *hdd_ctx, const char *name,
 				adapter->session.ap.beacon = NULL;
 				qdf_mem_free(beacon);
 			}
-			if (adapter->dev && adapter->dev->ieee80211_ptr) {
+			if (adapter->dev->ieee80211_ptr) {
 				*sap_dev = adapter->dev->ieee80211_ptr;
 				return false;
 			}
@@ -715,7 +717,7 @@ struct wireless_dev *__wlan_hdd_add_virtual_intf(struct wiphy *wiphy,
 	 * check the statemachine for modules state and if they are closed
 	 * open the modules.
 	 */
-	ret = hdd_wlan_start_modules(hdd_ctx, adapter, false);
+	ret = hdd_wlan_start_modules(hdd_ctx, false);
 	if (ret) {
 		hdd_err("Failed to start the wlan_modules");
 		goto close_adapter;
@@ -867,7 +869,7 @@ int __wlan_hdd_del_virtual_intf(struct wiphy *wiphy, struct wireless_dev *wdev)
 		return status;
 
 	/* check state machine state and kickstart modules if they are closed */
-	status = hdd_wlan_start_modules(hdd_ctx, pVirtAdapter, false);
+	status = hdd_wlan_start_modules(hdd_ctx, false);
 	if (status)
 		return status;
 

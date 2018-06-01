@@ -1375,19 +1375,18 @@ QDF_STATUS hdd_wlan_re_init(void)
 	if (!adapter)
 		hdd_err("Failed to get adapter");
 
-	if (hdd_ctx->config->enable_dp_trace)
-		hdd_dp_trace_init(hdd_ctx->config);
+	hdd_dp_trace_init(hdd_ctx->config);
 
 	hdd_bus_bandwidth_init(hdd_ctx);
 
 
-	ret = hdd_wlan_start_modules(hdd_ctx, adapter, true);
+	ret = hdd_wlan_start_modules(hdd_ctx, true);
 	if (ret) {
 		hdd_err("Failed to start wlan after error");
 		goto err_re_init;
 	}
 
-	hdd_wlan_get_version(hdd_ctx, NULL, NULL);
+	hdd_update_hw_sw_info(hdd_ctx);
 
 	wlan_hdd_send_svc_nlink_msg(hdd_ctx->radio_index,
 				WLAN_SVC_FW_CRASHED_IND, NULL, 0);

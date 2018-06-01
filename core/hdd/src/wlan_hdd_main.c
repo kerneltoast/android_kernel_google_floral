@@ -126,6 +126,7 @@
 #include <cdp_txrx_cmn_struct.h>
 #include "wlan_hdd_sysfs.h"
 #include "wlan_disa_ucfg_api.h"
+#include "wlan_disa_obj_mgmt_api.h"
 #include "wlan_ipa_ucfg_api.h"
 #include <target_if.h>
 #include "wlan_hdd_nud_tracking.h"
@@ -1952,6 +1953,10 @@ void hdd_update_tgt_cfg(void *context, void *param)
 	hdd_ctx->target_fw_version = cfg->target_fw_version;
 	hdd_ctx->target_fw_vers_ext = cfg->target_fw_vers_ext;
 
+	hdd_ctx->hw_bd_id = cfg->hw_bd_id;
+	qdf_mem_copy(&hdd_ctx->hw_bd_info, &cfg->hw_bd_info,
+		     sizeof(cfg->hw_bd_info));
+
 	hdd_ctx->max_intf_count = cfg->max_intf_count;
 
 	hdd_lpass_target_config(hdd_ctx, cfg);
@@ -2148,7 +2153,7 @@ static int __hdd_mon_open(struct net_device *dev)
 	hdd_mon_mode_ether_setup(dev);
 
 	if (con_mode == QDF_GLOBAL_MONITOR_MODE) {
-		ret = hdd_wlan_start_modules(hdd_ctx, adapter, false);
+		ret = hdd_wlan_start_modules(hdd_ctx, false);
 		if (ret) {
 			hdd_err("Failed to start WLAN modules return");
 			return ret;
@@ -2297,15 +2302,14 @@ int hdd_start_adapter(struct hdd_adapter *adapter)
 	if (hdd_set_fw_params(adapter))
 		hdd_err("Failed to set the FW params for the adapter!");
 
-	/*
-	 * Action frame registered in one adapter which will
-	 * applicable to all interfaces
-	 */
-	ret = wlan_hdd_cfg80211_register_frames(adapter);
-	if (ret < 0) {
-		hdd_err("Failed to register frames - ret %d", ret);
-		goto err_start_adapter;
+	if (adapter->session_id != HDD_SESSION_ID_INVALID) {
+		ret = wlan_hdd_cfg80211_register_frames(adapter);
+		if (ret < 0) {
+			hdd_err("Failed to register frames - ret %d", ret);
+			goto err_start_adapter;
+		}
 	}
+
 	wlan_hdd_update_dbs_scan_and_fw_mode_config();
 
 exit_with_success:
@@ -2355,18 +2359,13 @@ static void hdd_disable_power_management(void)
 	hif_disable_power_management(hif_ctx);
 }
 
-/**
- * hdd_update_hw_sw_info() - API to update the HW/SW information
- *
- * API to update the HW and SW information in the driver
- *
- * Return: None
- */
-static void hdd_update_hw_sw_info(struct hdd_context *hdd_ctx)
+void hdd_update_hw_sw_info(struct hdd_context *hdd_ctx)
 {
 	void *hif_sc;
 	size_t target_hw_name_len;
 	const char *target_hw_name;
+	uint8_t *buf;
+	uint32_t buf_len;
 
 	hif_sc = cds_get_context(QDF_MODULE_ID_HIF);
 	if (!hif_sc) {
@@ -2374,12 +2373,7 @@ static void hdd_update_hw_sw_info(struct hdd_context *hdd_ctx)
 		return;
 	}
 
-	/*
-	 * target hw version/revision would only be retrieved after firmware
-	 * download
-	 */
-	hif_get_hw_info(hif_sc,
-			&hdd_ctx->target_hw_version,
+	hif_get_hw_info(hif_sc, &hdd_ctx->target_hw_version,
 			&hdd_ctx->target_hw_revision,
 			&target_hw_name);
 
@@ -2392,8 +2386,12 @@ static void hdd_update_hw_sw_info(struct hdd_context *hdd_ctx)
 		qdf_mem_copy(hdd_ctx->target_hw_name, target_hw_name,
 			     target_hw_name_len);
 
-	/* Get the wlan hw/fw version */
-	hdd_wlan_get_version(hdd_ctx, NULL, NULL);
+	buf = qdf_mem_malloc(WE_MAX_STR_LEN);
+	if (buf) {
+		buf_len = hdd_wlan_get_version(hdd_ctx, WE_MAX_STR_LEN, buf);
+		hdd_info("%s", buf);
+		qdf_mem_free(buf);
+	}
 }
 
 /**
@@ -2466,6 +2464,42 @@ hdd_update_cds_ac_specs_params(struct hdd_context *hdd_ctx)
 
 		num_entries = 0;
 	}
+}
+
+uint32_t hdd_wlan_get_version(struct hdd_context *hdd_ctx,
+			      const size_t version_len, uint8_t *version)
+{
+	uint32_t size;
+	uint32_t msp_id = 0, mspid = 0, siid = 0, crmid = 0, sub_id = 0;
+
+	if (!hdd_ctx) {
+		hdd_err("Invalid context, HDD context is null");
+		return 0;
+	}
+
+	if (!version && version_len == 0) {
+		hdd_err("Invalid buffer pointr or buffer len\n");
+		return 0;
+	}
+
+	msp_id = (hdd_ctx->target_fw_version & 0xf0000000) >> 28;
+	mspid = (hdd_ctx->target_fw_version & 0xf000000) >> 24;
+	siid = (hdd_ctx->target_fw_version & 0xf00000) >> 20;
+	crmid = hdd_ctx->target_fw_version & 0x7fff;
+	sub_id = (hdd_ctx->target_fw_vers_ext & 0xf0000000) >> 28;
+
+	size = scnprintf(version, version_len,
+			 "Host SW:%s, FW:%d.%d.%d.%d.%d, HW:%s, Board ver: %x Ref design id: %x, Customer id: %x, Project id: %x, Board Data Rev: %x",
+			 QWLAN_VERSIONSTR,
+			 msp_id, mspid, siid, crmid, sub_id,
+			 hdd_ctx->target_hw_name,
+			 hdd_ctx->hw_bd_info.bdf_version,
+			 hdd_ctx->hw_bd_info.ref_design_id,
+			 hdd_ctx->hw_bd_info.customer_id,
+			 hdd_ctx->hw_bd_info.project_id,
+			 hdd_ctx->hw_bd_info.board_data_rev);
+
+	return size;
 }
 
 #ifdef IPA_OFFLOAD
@@ -2607,7 +2641,6 @@ static int hdd_update_country_code(struct hdd_context *hdd_ctx)
 /**
  * hdd_wlan_start_modules() - Single driver state machine for starting modules
  * @hdd_ctx: HDD context
- * @adapter: HDD adapter
  * @reinit: flag to indicate from SSR or normal path
  *
  * This function maintains the driver state machine it will be invoked from
@@ -2616,9 +2649,7 @@ static int hdd_update_country_code(struct hdd_context *hdd_ctx)
  *
  * Return: 0 for success; non-zero for failure
  */
-int hdd_wlan_start_modules(struct hdd_context *hdd_ctx,
-			   struct hdd_adapter *adapter,
-			   bool reinit)
+int hdd_wlan_start_modules(struct hdd_context *hdd_ctx, bool reinit)
 {
 	int ret = 0;
 	qdf_device_t qdf_dev;
@@ -2759,18 +2790,13 @@ int hdd_wlan_start_modules(struct hdd_context *hdd_ctx,
 	case DRIVER_MODULES_OPENED:
 		hdd_info("Wlan transitioning (OPENED -> ENABLED)");
 
-		if (!adapter) {
-			hdd_alert("adapter is Null");
-			ret = -EINVAL;
-			goto post_disable;
-		}
 		if (QDF_GLOBAL_FTM_MODE == hdd_get_conparam()) {
 			hdd_err("in ftm mode, no need to configure cds modules");
 			ret = -EINVAL;
 			break;
 		}
 
-		ret = hdd_configure_cds(hdd_ctx, adapter);
+		ret = hdd_configure_cds(hdd_ctx);
 		if (ret) {
 			hdd_err("Failed to Enable cds modules; errno: %d", ret);
 			goto post_disable;
@@ -2955,7 +2981,7 @@ static int __hdd_open(struct net_device *dev)
 	}
 
 
-	ret = hdd_wlan_start_modules(hdd_ctx, adapter, false);
+	ret = hdd_wlan_start_modules(hdd_ctx, false);
 	if (ret) {
 		hdd_err("Failed to start WLAN modules return");
 		goto err_hdd_hdd_init_deinit_lock;
@@ -3998,7 +4024,7 @@ QDF_STATUS hdd_init_station_mode(struct hdd_adapter *adapter)
 
 	ret_val = sme_cli_set_command(adapter->session_id,
 				      WMI_PDEV_PARAM_BURST_ENABLE,
-				      hdd_ctx->config->enableSifsBurst,
+				      HDD_ENABLE_SIFS_BURST_DEFAULT,
 				      PDEV_CMD);
 	if (ret_val)
 		hdd_err("WMI_PDEV_PARAM_BURST_ENABLE set failed %d", ret_val);
@@ -4904,6 +4930,9 @@ QDF_STATUS hdd_stop_adapter(struct hdd_context *hdd_ctx,
 
 	hdd_enter();
 
+	if (adapter->session_id != HDD_SESSION_ID_INVALID)
+		wlan_hdd_cfg80211_deregister_frames(adapter);
+
 	hdd_nud_ignore_tracking(adapter, true);
 	hdd_nud_reset_tracking(adapter);
 
@@ -5101,8 +5130,10 @@ QDF_STATUS hdd_stop_adapter(struct hdd_context *hdd_ctx,
 			/* Reset WNI_CFG_PROBE_RSP Flags */
 			wlan_hdd_reset_prob_rspies(adapter);
 		}
+		clear_bit(SOFTAP_INIT_DONE, &adapter->event_flags);
 		qdf_mem_free(adapter->session.ap.beacon);
 		adapter->session.ap.beacon = NULL;
+
 		/*
 		 * If Do_Not_Break_Stream was enabled clear avoid channel list.
 		 */
@@ -6206,7 +6237,7 @@ struct hdd_adapter *hdd_get_adapter(struct hdd_context *hdd_ctx,
 	return NULL;
 }
 
-enum tQDF_ADAPTER_MODE hdd_get_device_mode(uint32_t session_id)
+enum QDF_OPMODE hdd_get_device_mode(uint32_t session_id)
 {
 	struct hdd_context *hdd_ctx;
 	struct hdd_adapter *adapter;
@@ -6297,7 +6328,6 @@ static inline QDF_STATUS hdd_unregister_wext_all_adapters(struct hdd_context *
 		    adapter->device_mode == QDF_P2P_DEVICE_MODE ||
 		    adapter->device_mode == QDF_SAP_MODE ||
 		    adapter->device_mode == QDF_P2P_GO_MODE) {
-			wlan_hdd_cfg80211_deregister_frames(adapter);
 			hdd_unregister_wext(adapter->dev);
 		}
 	}
@@ -8289,10 +8319,8 @@ void hdd_indicate_mgmt_frame(tSirSmeMgmtFrameInd *frame_ind)
 	struct hdd_adapter *adapter = NULL;
 	int i;
 
-	/* Get the HDD context.*/
-	hdd_ctx = (struct hdd_context *)cds_get_context(QDF_MODULE_ID_HDD);
-
-	if (0 != wlan_hdd_validate_context(hdd_ctx))
+	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
+	if (wlan_hdd_validate_context(hdd_ctx))
 		return;
 
 	if (SME_SESSION_ID_ANY == frame_ind->sessionId) {
@@ -9978,13 +10006,12 @@ static int hdd_set_auto_shutdown_cb(struct hdd_context *hdd_ctx)
 /**
  * hdd_features_init() - Init features
  * @hdd_ctx:	HDD context
- * @adapter:	Primary adapter context
  *
  * Initialize features and their feature context after WLAN firmware is up.
  *
  * Return: 0 on success and errno on failure.
  */
-static int hdd_features_init(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter)
+static int hdd_features_init(struct hdd_context *hdd_ctx)
 {
 	tSirTxPowerLimit hddtxlimit;
 	QDF_STATUS status;
@@ -10026,7 +10053,7 @@ static int hdd_features_init(struct hdd_context *hdd_ctx, struct hdd_adapter *ad
 	ret = hdd_init_thermal_info(hdd_ctx);
 	if (ret) {
 		hdd_err("Error while initializing thermal information");
-		goto deregister_frames;
+		return ret;
 	}
 
 	/**
@@ -10050,7 +10077,7 @@ static int hdd_features_init(struct hdd_context *hdd_ctx, struct hdd_adapter *ad
 	ret = hdd_register_cb(hdd_ctx);
 	if (ret) {
 		hdd_err("Failed to register HDD callbacks!");
-		goto deregister_frames;
+		return ret;
 	}
 
 	if (hdd_ctx->config->goptimize_chan_avoid_event) {
@@ -10095,8 +10122,7 @@ static int hdd_features_init(struct hdd_context *hdd_ctx, struct hdd_adapter *ad
 
 deregister_cb:
 	hdd_deregister_cb(hdd_ctx);
-deregister_frames:
-	wlan_hdd_cfg80211_deregister_frames(adapter);
+
 	return -EINVAL;
 }
 
@@ -10145,7 +10171,7 @@ static inline QDF_STATUS hdd_register_bcn_cb(struct hdd_context *hdd_ctx)
  *
  * Return: 0 on success and errno on failure.
  */
-int hdd_configure_cds(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter)
+int hdd_configure_cds(struct hdd_context *hdd_ctx)
 {
 	int ret;
 	QDF_STATUS status;
@@ -10154,15 +10180,6 @@ int hdd_configure_cds(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter)
 	uint32_t num_11b_tx_chains = 0;
 	uint32_t num_11ag_tx_chains = 0;
 	struct policy_mgr_dp_cbacks dp_cbs = {0};
-
-	if (hdd_ctx->config->sifs_burst_duration) {
-		set_value = (SIFS_BURST_DUR_MULTIPLIER) *
-			hdd_ctx->config->sifs_burst_duration;
-
-		if ((set_value > 0) && (set_value <= SIFS_BURST_DUR_MAX))
-			sme_cli_set_command(0, (int)WMI_PDEV_PARAM_BURST_DUR,
-					    set_value, PDEV_CMD);
-	}
 
 	if (hdd_ctx->config->is_force_1x1)
 		sme_cli_set_command(0, (int)WMI_PDEV_PARAM_SET_IOT_PATTERN,
@@ -10244,7 +10261,7 @@ int hdd_configure_cds(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter)
 		goto cds_disable;
 	}
 
-	ret = hdd_features_init(hdd_ctx, adapter);
+	ret = hdd_features_init(hdd_ctx);
 	if (ret)
 		goto cds_disable;
 
@@ -10626,6 +10643,7 @@ static void wlan_init_bug_report_lock(void)
 	qdf_spinlock_create(&p_cds_context->bug_report_lock);
 }
 
+#ifdef CONFIG_DP_TRACE
 void hdd_dp_trace_init(struct hdd_config *config)
 {
 
@@ -10637,6 +10655,11 @@ void hdd_dp_trace_init(struct hdd_config *config)
 	uint8_t config_params[DP_TRACE_CONFIG_NUM_PARAMS];
 	uint8_t num_entries = 0;
 	uint32_t bw_compute_interval;
+
+	if (!config->enable_dp_trace) {
+		hdd_err("dp trace is disabled from ini");
+		return;
+	}
 
 	hdd_string_to_u8_array(config->dp_trace_config, config_params,
 				&num_entries, sizeof(config_params));
@@ -10674,6 +10697,8 @@ void hdd_dp_trace_init(struct hdd_config *config)
 			verbosity, proto_bitmap);
 
 }
+#endif
+
 /**
  * hdd_wlan_startup() - HDD init function
  * @dev:	Pointer to the underlying device
@@ -10715,7 +10740,7 @@ int hdd_wlan_startup(struct device *dev)
 
 	hdd_driver_memdump_init();
 
-	ret = hdd_wlan_start_modules(hdd_ctx, NULL, false);
+	ret = hdd_wlan_start_modules(hdd_ctx, false);
 	if (ret) {
 		hdd_err("Failed to start modules: %d", ret);
 		goto err_memdump_deinit;
@@ -10736,8 +10761,7 @@ int hdd_wlan_startup(struct device *dev)
 		goto err_stop_modules;
 	}
 
-	if (hdd_ctx->config->enable_dp_trace)
-		hdd_dp_trace_init(hdd_ctx->config);
+	hdd_dp_trace_init(hdd_ctx->config);
 
 	hdd_initialize_mac_address(hdd_ctx);
 
@@ -12507,7 +12531,6 @@ static int __con_mode_handler(const char *kmessage,
 			      struct hdd_context *hdd_ctx)
 {
 	int ret;
-	struct hdd_adapter *adapter;
 	enum QDF_GLOBAL_MODE curr_mode;
 	enum QDF_OPMODE adapter_mode;
 	int new_con_mode;
@@ -12545,23 +12568,17 @@ static int __con_mode_handler(const char *kmessage,
 	/* ensure adapters are stopped */
 	hdd_stop_present_mode(hdd_ctx, curr_mode);
 
-	/* Cleanup present mode before switching to new mode */
-	hdd_cleanup_present_mode(hdd_ctx, curr_mode);
-
 	ret = hdd_wlan_stop_modules(hdd_ctx, true);
 	if (ret) {
 		hdd_err("Stop wlan modules failed");
 		goto reset_flags;
 	}
 
+	/* Cleanup present mode before switching to new mode */
+	hdd_cleanup_present_mode(hdd_ctx, curr_mode);
 
 	hdd_set_conparam(new_con_mode);
 
-	/*
-	 * Set ACTIVE domain before adapters created, otherwise check domain
-	 * match will fail when cleanup adapters.
-	 */
-	hdd_debug_domain_set(QDF_DEBUG_DOMAIN_ACTIVE);
 	/* Register for new con_mode & then kick_start modules again */
 	ret = hdd_register_req_mode(hdd_ctx, new_con_mode);
 	if (ret) {
@@ -12576,19 +12593,21 @@ static int __con_mode_handler(const char *kmessage,
 		goto reset_flags;
 	}
 
-	adapter = hdd_get_adapter(hdd_ctx, adapter_mode);
-	if (!adapter) {
-		hdd_err("Failed to get adapter:%d", adapter_mode);
-		goto reset_flags;
-	}
-
-	ret = hdd_wlan_start_modules(hdd_ctx, adapter, false);
+	ret = hdd_wlan_start_modules(hdd_ctx, false);
 	if (ret) {
 		hdd_err("Start wlan modules failed: %d", ret);
 		goto reset_flags;
 	}
 
 	if (new_con_mode == QDF_GLOBAL_MONITOR_MODE) {
+		struct hdd_adapter *adapter =
+			hdd_get_adapter(hdd_ctx, adapter_mode);
+
+		if (!adapter) {
+			hdd_err("Failed to get adapter:%d", adapter_mode);
+			goto reset_flags;
+		}
+
 		if (hdd_start_adapter(adapter)) {
 			hdd_err("Failed to start %s adapter", kmessage);
 			ret = -EINVAL;
@@ -12622,6 +12641,11 @@ static int con_mode_handler(const char *kmessage, const struct kernel_param *kp)
 	ret = wlan_hdd_validate_context(hdd_ctx);
 	if (ret)
 		return ret;
+
+	if (!cds_wait_for_external_threads_completion(__func__)) {
+		hdd_warn("External threads are still active, can not change mode");
+		return -EAGAIN;
+	}
 
 	cds_ssr_protect(__func__);
 	ret = __con_mode_handler(kmessage, kp, hdd_ctx);

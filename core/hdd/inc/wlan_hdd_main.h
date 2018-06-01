@@ -354,9 +354,7 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
 #define HDD_MIN_TX_POWER (-100) /* minimum tx power */
 #define HDD_MAX_TX_POWER (+100) /* maximum tx power */
 
-/* FW expects burst duration in 1020*ms */
-#define SIFS_BURST_DUR_MULTIPLIER 1020
-#define SIFS_BURST_DUR_MAX        12240
+#define HDD_ENABLE_SIFS_BURST_DEFAULT	(0)
 
 /* If IPA UC data path is enabled, target should reserve extra tx descriptors
  * for IPA data path.
@@ -1899,6 +1897,10 @@ struct hdd_context {
 	bool lte_coex_ant_share;
 	int sscan_pid;
 	uint32_t track_arp_ip;
+
+	/* defining the board related information */
+	uint32_t hw_bd_id;
+	struct board_info hw_bd_info;
 };
 
 /**
@@ -2059,7 +2061,7 @@ struct hdd_adapter *hdd_get_adapter(struct hdd_context *hdd_ctx,
  *
  * Return: Device mode
  */
-enum tQDF_ADAPTER_MODE hdd_get_device_mode(uint32_t session_id);
+enum QDF_OPMODE hdd_get_device_mode(uint32_t session_id);
 void hdd_deinit_adapter(struct hdd_context *hdd_ctx,
 			struct hdd_adapter *adapter,
 			bool rtnl_held);
@@ -2611,11 +2613,9 @@ int hdd_register_cb(struct hdd_context *hdd_ctx);
 void hdd_deregister_cb(struct hdd_context *hdd_ctx);
 int hdd_start_station_adapter(struct hdd_adapter *adapter);
 int hdd_start_ap_adapter(struct hdd_adapter *adapter);
-int hdd_configure_cds(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter);
+int hdd_configure_cds(struct hdd_context *hdd_ctx);
 int hdd_set_fw_params(struct hdd_adapter *adapter);
-int hdd_wlan_start_modules(struct hdd_context *hdd_ctx,
-			   struct hdd_adapter *adapter,
-			   bool reinit);
+int hdd_wlan_start_modules(struct hdd_context *hdd_ctx, bool reinit);
 int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode);
 int hdd_start_adapter(struct hdd_adapter *adapter);
 void hdd_populate_random_mac_addr(struct hdd_context *hdd_ctx, uint32_t num);
@@ -3070,7 +3070,13 @@ static inline void hdd_dev_setup_destructor(struct net_device *dev)
  *
  * Return: NONE
  */
+#ifdef CONFIG_DP_TRACE
 void hdd_dp_trace_init(struct hdd_config *config);
+#else
+static inline
+void hdd_dp_trace_init(struct hdd_config *config) {}
+#endif
+
 void hdd_set_rx_mode_rps(bool enable);
 
 /**
@@ -3192,5 +3198,33 @@ void hdd_set_disconnect_status(struct hdd_adapter *adapter, bool disconnecting);
  */
 int wlan_hdd_set_mon_chan(struct hdd_adapter *adapter, uint32_t chan,
 			  uint32_t bandwidth);
+
+/**
+ * hdd_wlan_get_version() - Get version information
+ * @hdd_ctx: Global HDD context
+ * @version_len: length of the version buffer size
+ * @version: the buffer to the version string
+ *
+ * This function is used to get Wlan Driver, Firmware, Hardware Version
+ * & the Board related information.
+ *
+ * Return: the length of the version string
+ */
+uint32_t hdd_wlan_get_version(struct hdd_context *hdd_ctx,
+			      const size_t version_len, uint8_t *version);
+
+/**
+ * hdd_update_hw_sw_info() - API to update the HW/SW information
+ * @hdd_ctx: Global HDD context
+ *
+ * API to update the HW and SW information in the driver
+ *
+ * Note:
+ * All the version/revision information would only be retrieved after
+ * firmware download
+ *
+ * Return: None
+ */
+void hdd_update_hw_sw_info(struct hdd_context *hdd_ctx);
 
 #endif /* end #if !defined(WLAN_HDD_MAIN_H) */

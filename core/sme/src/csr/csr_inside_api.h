@@ -301,14 +301,21 @@ QDF_STATUS csr_roam_issue_set_context_req(tpAniSirGlobal pMac,
 QDF_STATUS csr_roam_process_disassoc_deauth(tpAniSirGlobal pMac,
 						tSmeCmd *pCommand,
 					    bool fDisassoc, bool fMICFailure);
-QDF_STATUS csr_roam_save_connected_infomation(tpAniSirGlobal pMac,
+QDF_STATUS csr_roam_save_connected_information(tpAniSirGlobal pMac,
 					      uint32_t sessionId,
 					      struct csr_roam_profile *pProfile,
 					      tSirBssDescription *pSirBssDesc,
 					      tDot11fBeaconIEs *pIes);
 void csr_roam_check_for_link_status_change(tpAniSirGlobal pMac,
 					tSirSmeRsp *pSirMsg);
+
+#ifndef QCA_SUPPORT_CP_STATS
 void csr_roam_stats_rsp_processor(tpAniSirGlobal pMac, tSirSmeRsp *pSirMsg);
+#else
+static inline void csr_roam_stats_rsp_processor(tpAniSirGlobal pMac,
+						tSirSmeRsp *pSirMsg) {}
+#endif /* QCA_SUPPORT_CP_STATS */
+
 QDF_STATUS csr_roam_issue_start_bss(tpAniSirGlobal pMac, uint32_t sessionId,
 				    struct csr_roamstart_bssparams *pParam,
 				    struct csr_roam_profile *pProfile,
