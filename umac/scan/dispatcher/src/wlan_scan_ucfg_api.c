@@ -33,7 +33,7 @@
 #include "../../core/src/wlan_scan_main.h"
 #include "../../core/src/wlan_scan_manager.h"
 #include "../../core/src/wlan_scan_cache_db.h"
-#ifdef WLAN_PMO_ENABLE
+#ifdef WLAN_POWER_MANAGEMENT_OFFLOAD
 #include <wlan_pmo_obj_mgmt_api.h>
 #endif
 #ifdef WLAN_POLICY_MGR_ENABLE
@@ -330,7 +330,7 @@ ucfg_scan_get_pno_def_params(struct wlan_objmgr_vdev *vdev,
 	 */
 	ucfg_scan_update_pno_dwell_time(vdev, req, scan_def);
 	req->adaptive_dwell_mode = pno_def->adaptive_dwell_mode;
-	req->pno_channel_prediction = pno_def->adaptive_dwell_mode;
+	req->pno_channel_prediction = pno_def->channel_prediction;
 	req->top_k_num_of_channels = pno_def->top_k_num_of_channels;
 	req->stationary_thresh = pno_def->stationary_thresh;
 	req->channel_prediction_full_scan =
@@ -806,6 +806,8 @@ ucfg_scan_req_update_params(struct wlan_objmgr_vdev *vdev,
 			req->scan_req.repeat_probe_time = 0;
 		} else {
 			req->scan_req.scan_f_filter_prb_req = true;
+			if (!req->scan_req.num_ssids)
+				req->scan_req.scan_f_bcast_probe = true;
 
 			req->scan_req.dwell_time_active +=
 					P2P_SEARCH_DWELL_TIME_INC;
@@ -1889,6 +1891,7 @@ QDF_STATUS ucfg_scan_update_roam_params(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_POWER_MANAGEMENT_OFFLOAD
 static QDF_STATUS
 ucfg_scan_cancel_pdev_scan(struct wlan_objmgr_pdev *pdev)
 {
@@ -1919,8 +1922,6 @@ ucfg_scan_cancel_pdev_scan(struct wlan_objmgr_pdev *pdev)
 
 	return status;
 }
-
-#ifdef WLAN_PMO_ENABLE
 
 static QDF_STATUS
 ucfg_scan_suspend_handler(struct wlan_objmgr_psoc *psoc, void *arg)

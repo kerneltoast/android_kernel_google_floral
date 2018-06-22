@@ -142,8 +142,6 @@ static void scm_scan_post_event(struct wlan_objmgr_vdev *vdev,
 		scm_err("invalid requester id");
 		QDF_ASSERT(0);
 	}
-	scm_info("vdev: 0x%pK, event: 0x%pK", vdev, event);
-
 	scan = wlan_vdev_get_scan_obj(vdev);
 	pdev_ev_handler = wlan_vdev_get_pdev_scan_ev_handlers(vdev);
 	cb_handlers = &(pdev_ev_handler->cb_handlers[0]);
@@ -818,6 +816,7 @@ QDF_STATUS scm_scan_start_flush_callback(struct scheduler_msg *msg)
 	}
 
 	req = msg->bodyptr;
+	scm_post_internal_scan_complete_event(req, SCAN_REASON_CANCELLED);
 	wlan_objmgr_vdev_release_ref(req->vdev, WLAN_SCAN_ID);
 	scm_scan_free_scan_request_mem(req);
 

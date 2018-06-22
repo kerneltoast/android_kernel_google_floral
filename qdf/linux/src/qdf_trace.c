@@ -555,10 +555,10 @@ qdf_export_symbol(qdf_trace_spin_lock_init);
  *
  * Return: None
  */
-void qdf_trace_register(QDF_MODULE_ID module_iD,
+void qdf_trace_register(QDF_MODULE_ID module_id,
 			tp_qdf_trace_cb qdf_trace_callback)
 {
-	qdf_trace_cb_table[module_iD] = qdf_trace_callback;
+	qdf_trace_cb_table[module_id] = qdf_trace_callback;
 }
 qdf_export_symbol(qdf_trace_register);
 
@@ -1890,7 +1890,8 @@ void qdf_dp_trace_data_pkt(qdf_nbuf_t nbuf, uint8_t pdev_id,
 		return;
 
 	qdf_dp_add_record(code, pdev_id,
-			  qdf_nbuf_data(nbuf), nbuf->len - nbuf->data_len,
+			  nbuf ? qdf_nbuf_data(nbuf) : NULL,
+			  nbuf ? nbuf->len - nbuf->data_len : 0,
 			  (uint8_t *)&buf, sizeof(struct qdf_dp_trace_data_buf),
 			  (nbuf) ? QDF_NBUF_CB_DP_TRACE_PRINT(nbuf) : false);
 }
@@ -1970,7 +1971,8 @@ void qdf_dp_trace(qdf_nbuf_t nbuf, enum QDF_DP_TRACE_ID code, uint8_t pdev_id,
 	if (qdf_dp_enable_check(nbuf, code, dir) == false)
 		return;
 
-	qdf_dp_add_record(code, pdev_id, qdf_nbuf_data(nbuf), size, NULL, 0,
+	qdf_dp_add_record(code, pdev_id, nbuf ? qdf_nbuf_data(nbuf) : NULL,
+			  size, NULL, 0,
 			  (nbuf) ? QDF_NBUF_CB_DP_TRACE_PRINT(nbuf) : false);
 }
 qdf_export_symbol(qdf_dp_trace);

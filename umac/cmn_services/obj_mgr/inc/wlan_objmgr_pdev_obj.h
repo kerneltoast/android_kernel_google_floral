@@ -80,6 +80,8 @@
 #define WLAN_PDEV_F_STRICT_PSCAN_EN         0x02000000
   /* dupie (ANA,pre ANA ) */
 /*#define WLAN_PDEV_F_DUPIE                 0x00200000*/
+ /* QWRAP enable flag */
+#define WLAN_PDEV_F_WRAP_EN                 0x04000000
 
 /* PDEV op flags */
    /* Enable htrate for wep and tkip */
@@ -277,9 +279,7 @@ typedef void (*wlan_objmgr_pdev_op_handler)(struct wlan_objmgr_pdev *pdev,
  * @handler: the handler will be called for each object of requested type
  *           the handler should be implemented to perform required operation
  * @arg: agruments passed by caller
- * @lock_free_op: This gives provision to run this API with out lock protected
- *                It would be useful, for operations like Obj Delete, where
- *                lock should not be taken by caller.
+ * @lock_free_op: its obsolete
  * @dbg_id: id of the caller
  *
  * API to be used for performing the operations on all VDEV/PEER objects

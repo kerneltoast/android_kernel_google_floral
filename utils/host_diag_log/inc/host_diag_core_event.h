@@ -45,6 +45,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 #define WAKE_LOCK_NAME_LEN 80
+#define RSN_OUI_SIZE 4
 
 /**
  * enum wifi_frm_type: type of frame
@@ -78,18 +79,18 @@ enum wifi_frm_type {
  */
 enum mgmt_frm_subtype {
 	ASSOC_REQ = 0x00,
-	ASSOC_RESP = 0x10,
-	REASSOC_REQ = 0x20,
-	REASSOC_RESP = 0x30,
-	PROBE_REQ = 0x40,
-	PROBE_RESP = 0x50,
-	BEACON = 0x80,
-	ATIM = 0x90,
-	DISASSOC = 0xa0,
-	AUTH = 0xb0,
-	DEAUTH = 0xc0,
-	ACTION = 0xd0,
-	ACTION_NO_ACK = 0xe0,
+	ASSOC_RESP = 0x01,
+	REASSOC_REQ = 0x02,
+	REASSOC_RESP = 0x03,
+	PROBE_REQ = 0x04,
+	PROBE_RESP = 0x05,
+	BEACON = 0x08,
+	ATIM = 0x09,
+	DISASSOC = 0x0a,
+	AUTH = 0x0b,
+	DEAUTH = 0x0c,
+	ACTION = 0x0d,
+	ACTION_NO_ACK = 0x0e,
 };
 
 /**
@@ -561,6 +562,27 @@ enum resource_failure_type {
 };
 
 /*-------------------------------------------------------------------------
+  Event ID: EVENT_WLAN_RSN_INFO
+  -------------------------------------------------------------------------
+ */
+/**
+ * struct event_wlan_csr_rsn_info - Structure holding the
+ * RSN information for assoc request
+ * @akm_suite: Gives information about akm suites used in assoc request
+ * @ucast_cipher: Unicast cipher used in assoc request
+ * @mcast_cipher: Multi cast cipher used in assoc request
+ * @group_mgmt: Requested group mgmt cipher suite
+ *
+ * This structure will hold the RSN information for assoc request
+ */
+struct event_wlan_csr_rsn_info {
+	uint8_t   akm_suite[RSN_OUI_SIZE];
+	uint8_t   ucast_cipher[RSN_OUI_SIZE];
+	uint8_t   mcast_cipher[RSN_OUI_SIZE];
+	uint8_t   group_mgmt[RSN_OUI_SIZE];
+};
+
+/*-------------------------------------------------------------------------
   Event ID: EVENT_WLAN_WAKE_LOCK
   ------------------------------------------------------------------------*/
 /**
@@ -879,6 +901,92 @@ enum wake_lock_reason {
 	WIFI_POWER_EVENT_WAKELOCK_CONNECT,
 	WIFI_POWER_EVENT_WAKELOCK_IFACE_CHANGE_TIMER,
 	WIFI_POWER_EVENT_WAKELOCK_MONITOR_MODE,
+};
+
+/* The length of interface name should >= IFNAMSIZ */
+#define HOST_EVENT_INTF_STR_LEN 16
+#define HOST_EVENT_HW_MODE_STR_LEN 12
+
+/**
+ * struct host_event_wlan_acs_req - payload for ACS diag event
+ * @intf: network interface name for WLAN
+ * @hw_mode: hw mode configured by hostapd
+ * @bw: channel bandwidth(MHz)
+ * @ht: a flag indicating whether HT phy mode is enabled
+ * @vht: a flag indicating whether VHT phy mode is enabled
+ * @chan_start: starting channel number for ACS scan
+ * @chan_end: ending channel number for ACS scan
+ *
+ * This structure includes all the payload related to ACS request parameters
+ */
+struct host_event_wlan_acs_req {
+	uint8_t intf[HOST_EVENT_INTF_STR_LEN];
+	uint8_t hw_mode[HOST_EVENT_HW_MODE_STR_LEN];
+	uint16_t bw;
+	uint8_t ht;
+	uint8_t vht;
+	uint16_t chan_start;
+	uint16_t chan_end;
+};
+
+/**
+ * struct host_event_wlan_acs_scan_start - payload for ACS scan request
+ * @scan_id: scan request ID
+ * @vdev_id: vdev/session ID
+ *
+ * This structure includes all the payload related to ACS scan request
+ * parameters
+ */
+struct host_event_wlan_acs_scan_start {
+	uint32_t scan_id;
+	uint8_t vdev_id;
+};
+
+#define HOST_EVENT_STATUS_STR_LEN 24
+
+/**
+ * struct host_event_wlan_acs_scan_done - payload for ACS scan done event
+ * @status: indicating whether ACS scan is successful
+ * @vdev_id: vdev/session ID
+ * @scan_id: scan request ID
+ *
+ * This structure includes all the payload related to ACS scan done event
+ */
+struct host_event_wlan_acs_scan_done {
+	uint8_t status[HOST_EVENT_STATUS_STR_LEN];
+	uint32_t scan_id;
+	uint8_t vdev_id;
+};
+
+/**
+ * struct host_event_wlan_acs_chan_spectral_weight - payload for spectral
+ * weight event indication
+ * @chan: channel number
+ * @weight: channel weight
+ * @rssi: RSSI value obtained after scanning
+ * @bss_count: number of BSS detected on this channel
+ *
+ * This structure includes all the payload related to a channel's weight
+ * evaluation result
+ */
+struct host_event_wlan_acs_chan_spectral_weight {
+	uint16_t chan;
+	uint16_t weight;
+	int32_t rssi;
+	uint16_t bss_count;
+};
+
+/**
+ * struct host_event_wlan_acs_best_chan - payload for ACS best channel event
+ * @chan: channel number
+ * @weight: channel weight
+ *
+ * This structure includes all the payload related to the best channel
+ * selected after ACS procedure
+ */
+struct host_event_wlan_acs_best_chan {
+	uint16_t chan;
+	uint16_t weight;
 };
 
 #ifdef __cplusplus

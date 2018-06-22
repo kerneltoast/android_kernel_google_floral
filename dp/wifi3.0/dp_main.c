@@ -2253,6 +2253,7 @@ static int dp_soc_cmn_setup(struct dp_soc *soc)
 		wlan_cfg_get_rx_defrag_min_timeout(soc->wlan_cfg_ctx);
 	soc->rx.flags.defrag_timeout_check =
 		wlan_cfg_get_defrag_timeout_check(soc->wlan_cfg_ctx);
+	qdf_spinlock_create(&soc->rx.defrag.defrag_lock);
 
 out:
 	/*
@@ -3047,6 +3048,8 @@ static void dp_soc_detach_wifi3(void *txrx_soc)
 	qdf_spinlock_destroy(&soc->htt_stats.lock);
 
 	htt_soc_detach(soc->htt_handle);
+
+	qdf_spinlock_destroy(&soc->rx.defrag.defrag_lock);
 
 	dp_reo_cmdlist_destroy(soc);
 	qdf_spinlock_destroy(&soc->rx.reo_cmd_lock);
@@ -5112,8 +5115,8 @@ dp_print_pdev_tx_stats(struct dp_pdev *pdev)
 	DP_PRINT_STATS("Reinjected:");
 	DP_PRINT_STATS("	Packets = %d",
 			pdev->stats.tx_i.reinject_pkts.num);
-	DP_PRINT_STATS("Bytes = %llu\n",
-				pdev->stats.tx_i.reinject_pkts.bytes);
+	DP_PRINT_STATS("	Bytes = %llu\n",
+			pdev->stats.tx_i.reinject_pkts.bytes);
 	DP_PRINT_STATS("Inspected:");
 	DP_PRINT_STATS("	Packets = %d",
 			pdev->stats.tx_i.inspect_pkts.num);
@@ -5193,9 +5196,9 @@ dp_print_pdev_rx_stats(struct dp_pdev *pdev)
 			pdev->stats.replenish.rxdma_err);
 	DP_PRINT_STATS("	Desc Alloc Failed: = %d",
 			pdev->stats.err.desc_alloc_fail);
-	DP_PRINT_STATS("IP checksum error = %d",
+	DP_PRINT_STATS("	IP checksum error = %d",
 		       pdev->stats.err.ip_csum_err);
-	DP_PRINT_STATS("TCP/UDP checksum error = %d",
+	DP_PRINT_STATS("	TCP/UDP checksum error = %d",
 		       pdev->stats.err.tcp_udp_csum_err);
 
 	/* Get bar_recv_cnt */

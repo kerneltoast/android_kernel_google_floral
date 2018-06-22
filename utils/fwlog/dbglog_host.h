@@ -69,6 +69,7 @@ extern "C" {
 #define DIAG_GET_PAYLEN16(arg) \
 	((arg & DIAG_PAYLEN_MASK16) >> DIAG_PAYLEN_OFFSET16)
 
+#ifdef FEATURE_FW_LOG_PARSING
 /*
  * set the dbglog parser type
  */int
@@ -163,9 +164,89 @@ int
 dbglog_parse_debug_logs(ol_scn_t scn, u_int8_t *datap,
 					u_int32_t len);
 
-
-/** Register the cnss_diag activate with the wlan driver */
+/**
+ * cnss_diag_activate_service() - API to register CNSS diag cmd handler
+ *
+ * API to register the handler for the NL message received from cnss_diag
+ * application.
+ *
+ * Return: 0
+ */
 int cnss_diag_activate_service(void);
+
+/**
+ * cnss_diag_deactivate_service() - API to deregister CNSS diag cmd handler
+ *
+ * API to deregister the handler for the NL message received from cnss_diag
+ * application.
+ *
+ * Return: 0
+ */
+int cnss_diag_deactivate_service(void);
+
+#else
+static inline int
+dbglog_parser_type_init(wmi_unified_t wmi_handle, int type)
+{
+	return A_OK;
+}
+
+static inline int
+dbglog_init(wmi_unified_t wmi_handle)
+{
+	return A_OK;
+}
+
+static inline int
+dbglog_deinit(wmi_unified_t wmi_handle)
+{
+	return A_OK;
+}
+
+static inline int
+dbglog_report_enable(wmi_unified_t wmi_handle, A_BOOL isenable)
+{
+	return A_OK;
+}
+
+#ifdef CONFIG_MCL
+static inline int
+dbglog_set_log_lvl(wmi_unified_t wmi_handle, DBGLOG_LOG_LVL log_lvl)
+{
+	return A_OK;
+}
+#endif
+
+static inline int cnss_diag_activate_service(void)
+{
+	return A_OK;
+}
+
+static inline int cnss_diag_deactivate_service(void)
+{
+	return A_OK;
+}
+
+static inline int
+dbglog_module_log_enable(wmi_unified_t wmi_handle, uint32_t mod_id,
+			 A_BOOL isenable)
+{
+	return A_OK;
+}
+
+static inline int
+dbglog_vap_log_enable(wmi_unified_t wmi_handle, uint16_t vap_id,
+		      A_BOOL isenable)
+{
+	return A_OK;
+}
+
+static inline int
+dbglog_set_mod_log_lvl(wmi_unified_t wmi_handle, uint32_t mod_id_lvl)
+{
+	return A_OK;
+}
+#endif /* FEATURE_FW_LOG_PARSING */
 
 #ifdef __cplusplus
 }

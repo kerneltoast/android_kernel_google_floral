@@ -362,7 +362,7 @@ static bool policy_mgr_is_dbs_allowed_for_concurrency(
 {
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
 	uint32_t count, dbs_for_sta_sta, dbs_for_sta_p2p;
-	enum tQDF_ADAPTER_MODE new_conn_mode = QDF_MAX_NO_OF_MODE;
+	enum QDF_OPMODE new_conn_mode = QDF_MAX_NO_OF_MODE;
 	bool ret = true;
 
 	pm_ctx = policy_mgr_get_context(psoc);
@@ -701,8 +701,10 @@ static bool policy_mgr_is_restart_sap_allowed(
 		!policy_mgr_concurrent_open_sessions_running(psoc) ||
 		!(((policy_mgr_get_concurrency_mode(psoc) & sta_ap_bit_mask)
 			== sta_ap_bit_mask) ||
+		((mcc_to_scc_switch ==
+		QDF_MCC_TO_SCC_SWITCH_FORCE_PREFERRED_WITHOUT_DISCONNECTION) &&
 		((policy_mgr_get_concurrency_mode(psoc) & sta_go_bit_mask)
-			== sta_go_bit_mask))) {
+			== sta_go_bit_mask)))) {
 		policy_mgr_err("MCC switch disabled or not concurrent STA/SAP, STA/GO");
 		return false;
 	}

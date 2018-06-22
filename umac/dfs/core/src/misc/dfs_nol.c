@@ -39,6 +39,16 @@
 #include "../dfs_partial_offload_radar.h"
 #endif
 
+void dfs_set_update_nol_flag(struct wlan_dfs *dfs, bool val)
+{
+	dfs->update_nol = val;
+}
+
+bool dfs_get_update_nol_flag(struct wlan_dfs *dfs)
+{
+	return dfs->update_nol;
+}
+
 /**
  * dfs_nol_timeout() - NOL timeout function.
  *
@@ -613,5 +623,8 @@ void dfs_remove_spoof_channel_from_nol(struct wlan_dfs *dfs)
 		}
 	}
 	WLAN_DFSNOL_UNLOCK(dfs);
+
+	utils_dfs_reg_update_nol_ch(dfs->dfs_pdev_obj,
+				    channels, nchans, DFS_NOL_RESET);
 }
 #endif

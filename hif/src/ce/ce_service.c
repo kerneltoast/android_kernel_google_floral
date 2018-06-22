@@ -736,9 +736,10 @@ int ce_send_fast(struct CE_handle *copyeng, qdf_nbuf_t msdu,
 
 	if (qdf_unlikely(CE_RING_DELTA(nentries_mask, write_index, sw_index - 1)
 			 < SLOTS_PER_DATAPATH_TX)) {
-		HIF_ERROR("Source ring full, required %d, available %d",
-		      SLOTS_PER_DATAPATH_TX,
-		      CE_RING_DELTA(nentries_mask, write_index, sw_index - 1));
+		hif_err_rl("Source ring full, required %d, available %d",
+			   SLOTS_PER_DATAPATH_TX,
+			   CE_RING_DELTA(nentries_mask, write_index,
+					 sw_index - 1));
 		OL_ATH_CE_PKT_ERROR_COUNT_INCR(scn, CE_RING_DELTA_FAIL);
 		if (ok_to_send)
 			Q_TARGET_ACCESS_END(scn);
@@ -1979,8 +1980,7 @@ more_data:
 		goto more_data;
 	}
 
-	hif_update_napi_max_poll_time(ce_state, scn->napi_data.napis[ce_id],
-				      qdf_get_cpu());
+	hif_update_napi_max_poll_time(ce_state, ce_id, qdf_get_cpu());
 
 	qdf_atomic_set(&ce_state->rx_pending, 0);
 	if (TARGET_REGISTER_ACCESS_ALLOWED(scn)) {
@@ -2889,7 +2889,7 @@ ssize_t hif_dump_desc_event(struct hif_softc *scn, char *buf)
 	qdf_log_timestamp_to_secs(event->time, &secs, &usecs);
 
 	len += snprintf(buf, PAGE_SIZE - len,
-			"\nTime:%lld.%06lld, CE:%d, EventType: %s, EventIndex: %d\nDataAddr=%p",
+			"\nTime:%lld.%06lld, CE:%d, EventType: %s, EventIndex: %d\nDataAddr=%pK",
 			secs, usecs, ce_hist->hist_id,
 			ce_event_type_to_str(event->type),
 			event->index, event->memory);

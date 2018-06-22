@@ -540,7 +540,7 @@ QDF_STATUS (*send_snr_cmd)(wmi_unified_t wmi_handle, uint8_t vdev_id);
 
 QDF_STATUS (*send_link_status_req_cmd)(wmi_unified_t wmi_handle,
 				 struct link_status_params *link_status);
-#ifdef WLAN_PMO_ENABLE
+#ifdef WLAN_POWER_MANAGEMENT_OFFLOAD
 QDF_STATUS (*send_add_wow_wakeup_event_cmd)(wmi_unified_t wmi_handle,
 					uint32_t vdev_id,
 					uint32_t *bitmap,
@@ -615,7 +615,7 @@ QDF_STATUS (*send_enable_disable_packet_filter_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_config_packet_filter_cmd)(wmi_unified_t wmi_handle,
 		uint8_t vdev_id, struct pmo_rcv_pkt_fltr_cfg *rcv_filter_param,
 		uint8_t filter_id, bool enable);
-#endif /* end of WLAN_PMO_ENABLE */
+#endif /* end of WLAN_POWER_MANAGEMENT_OFFLOAD */
 #ifdef CONFIG_MCL
 QDF_STATUS (*send_process_dhcp_ind_cmd)(wmi_unified_t wmi_handle,
 				wmi_peer_set_param_cmd_fixed_param *ta_dhcp_ind);
@@ -1752,6 +1752,14 @@ void wmi_non_tlv_init(void);
 void wmi_tlv_attach(wmi_unified_t wmi_handle);
 #endif
 void wmi_non_tlv_attach(wmi_unified_t wmi_handle);
+
+#ifdef FEATURE_WLAN_EXTSCAN
+void wmi_extscan_attach_tlv(struct wmi_unified *wmi_handle);
+#else
+static inline void wmi_extscan_attach_tlv(struct wmi_unified *wmi_handle)
+{
+}
+#endif
 
 /**
  * wmi_align() - provides word aligned parameter

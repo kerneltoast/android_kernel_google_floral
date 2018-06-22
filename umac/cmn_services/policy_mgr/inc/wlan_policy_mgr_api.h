@@ -792,7 +792,7 @@ struct policy_mgr_sme_cbacks {
 	QDF_STATUS (*sme_soc_set_dual_mac_config)(
 		struct policy_mgr_dual_mac_config msg);
 	QDF_STATUS (*sme_pdev_set_hw_mode)(struct policy_mgr_hw_mode msg);
-	QDF_STATUS (*sme_pdev_set_pcl)(struct policy_mgr_pcl_list msg);
+	QDF_STATUS (*sme_pdev_set_pcl)(struct policy_mgr_pcl_list *msg);
 	QDF_STATUS (*sme_nss_update_request)(uint32_t vdev_id,
 		uint8_t  new_nss, policy_mgr_nss_update_cback cback,
 		uint8_t next_action, struct wlan_objmgr_psoc *psoc,
@@ -827,7 +827,7 @@ struct policy_mgr_hdd_cbacks {
 	enum policy_mgr_con_mode (*get_mode_for_non_connected_vdev)(
 				struct wlan_objmgr_psoc *psoc,
 				uint8_t vdev_id);
-	enum tQDF_ADAPTER_MODE (*hdd_get_device_mode)(uint32_t session_id);
+	enum QDF_OPMODE (*hdd_get_device_mode)(uint32_t session_id);
 };
 
 
@@ -858,11 +858,15 @@ struct policy_mgr_cdp_cbacks {
  * @hdd_disable_rx_ol_in_concurrency: Callback to disable LRO/GRO offloads
  * @hdd_set_rx_mode_rps_cb: Callback to set RPS
  * @hdd_ipa_set_mcc_mode_cb: Callback to set mcc mode for ipa module
+ * @hdd_v2_flow_pool_map: Callback to create vdev flow pool
+ * @hdd_v2_flow_pool_unmap: Callback to delete vdev flow pool
  */
 struct policy_mgr_dp_cbacks {
 	void (*hdd_disable_rx_ol_in_concurrency)(bool);
 	void (*hdd_set_rx_mode_rps_cb)(bool);
 	void (*hdd_ipa_set_mcc_mode_cb)(bool);
+	void (*hdd_v2_flow_pool_map)(int);
+	void (*hdd_v2_flow_pool_unmap)(int);
 };
 
 /**
@@ -2296,5 +2300,40 @@ QDF_STATUS policy_mgr_register_mode_change_cb(struct wlan_objmgr_psoc *psoc,
  * Return: QDF_STATUS
  */
 QDF_STATUS policy_mgr_deregister_mode_change_cb(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_allow_sap_go_concurrency() - check whether multiple SAP/GO
+ * interfaces are allowed
+ * @psoc: pointer to soc
+ * @policy_mgr_con_mode: operating mode of the new interface
+ * @channel: operating channel of the new interface
+ * This function checks whether second SAP/GO interface is allowed on the same
+ * MAC.
+ *
+ * Return: true or false
+ */
+bool policy_mgr_allow_sap_go_concurrency(struct wlan_objmgr_psoc *psoc,
+					 enum policy_mgr_con_mode mode,
+					 uint8_t channel);
+
+/**
+ * policy_mgr_dual_beacon_on_single_mac_scc_capable() - get capability that
+ * whether support dual beacon on same channel on single MAC
+ * @psoc: pointer to soc
+ *
+ *  Return: bool: capable
+ */
+bool policy_mgr_dual_beacon_on_single_mac_scc_capable(
+	struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_dual_beacon_on_single_mac_mcc_capable() - get capability that
+ * whether support dual beacon on different channel on single MAC
+ * @psoc: pointer to soc
+ *
+ *  Return: bool: capable
+ */
+bool policy_mgr_dual_beacon_on_single_mac_mcc_capable(
+	struct wlan_objmgr_psoc *psoc);
 
 #endif /* __WLAN_POLICY_MGR_API_H */
