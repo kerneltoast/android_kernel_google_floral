@@ -1435,8 +1435,8 @@ wma_mgmt_tx_dload_comp_hldr(void *wma_context, qdf_nbuf_t netbuf,
 QDF_STATUS wma_tx_attach(tp_wma_handle wma_handle)
 {
 	/* Get the Vos Context */
-	p_cds_contextType cds_handle =
-		(p_cds_contextType) (wma_handle->cds_context);
+	struct cds_context *cds_handle =
+		(struct cds_context *) (wma_handle->cds_context);
 
 	/* Get the txRx Pdev handle */
 	struct cdp_pdev *txrx_pdev = cds_handle->pdev_txrx_ctx;
@@ -1448,7 +1448,7 @@ QDF_STATUS wma_tx_attach(tp_wma_handle wma_handle)
 			wma_mgmt_tx_ack_comp_hdlr, wma_handle);
 
 	/* Store the Mac Context */
-	wma_handle->mac_context = cds_handle->pMACContext;
+	wma_handle->mac_context = cds_handle->mac_context;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1466,8 +1466,8 @@ QDF_STATUS wma_tx_detach(tp_wma_handle wma_handle)
 	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 
 	/* Get the Vos Context */
-	p_cds_contextType cds_handle =
-		(p_cds_contextType) (wma_handle->cds_context);
+	struct cds_context *cds_handle =
+		(struct cds_context *) (wma_handle->cds_context);
 
 	/* Get the txRx Pdev handle */
 	struct cdp_pdev *txrx_pdev = cds_handle->pdev_txrx_ctx;
@@ -2686,12 +2686,8 @@ QDF_STATUS wma_tx_packet(void *wma_context, void *tx_frame, uint16_t frmLen,
 				tx_frm_index = GENERIC_NODOWLOAD_ACK_COMP_INDEX;
 
 		} else {
-			if (downld_comp_required)
-				tx_frm_index =
-					GENERIC_DOWNLD_COMP_NOACK_COMP_INDEX;
-			else
-				tx_frm_index =
-					GENERIC_NODOWNLD_NOACK_COMP_INDEX;
+			tx_frm_index =
+				GENERIC_NODOWNLD_NOACK_COMP_INDEX;
 		}
 	}
 

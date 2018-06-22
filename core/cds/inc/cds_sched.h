@@ -94,8 +94,6 @@ struct cds_ol_rx_pkt {
 **
 */
 typedef struct _cds_sched_context {
-	/* Place holder to the CDS Context */
-	void *pVContext;
 #ifdef QCA_CONFIG_SMP
 	spinlock_t ol_rx_thread_lock;
 
@@ -168,27 +166,25 @@ struct cds_log_complete {
 
 /* forward-declare hdd_context_s as it is used ina function type */
 struct hdd_context_s;
-typedef struct _cds_context_type {
+struct cds_context {
 	/* Scheduler Context */
 	cds_sched_context qdf_sched;
 
 	/* HDD Module Context  */
-	void *pHDDContext;
+	void *hdd_context;
 
 	/* MAC Module Context  */
-	void *pMACContext;
-
-	qdf_event_t ProbeEvent;
+	void *mac_context;
 
 	uint32_t driver_state;
 	unsigned long fw_state;
 
-	qdf_event_t wmaCompleteEvent;
+	qdf_event_t wma_complete_event;
 
 	/* WMA Context */
-	void *pWMAContext;
+	void *wma_context;
 
-	void *pHIFContext;
+	void *hif_context;
 
 	void *htc_ctx;
 
@@ -225,7 +221,7 @@ typedef struct _cds_context_type {
 	qdf_work_t cds_recovery_work;
 	qdf_workqueue_t *cds_recovery_wq;
 	enum qdf_hang_reason recovery_reason;
-} cds_context_type, *p_cds_contextType;
+};
 
 /*---------------------------------------------------------------------------
    Function declarations and documenation

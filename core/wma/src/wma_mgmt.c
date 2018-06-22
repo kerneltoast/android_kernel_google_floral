@@ -47,6 +47,8 @@
 
 #if !defined(REMOVE_PKT_LOG)
 #include "pktlog_ac.h"
+#else
+#include "pktlog_ac_fmt.h"
 #endif /* REMOVE_PKT_LOG */
 
 #include "dbglog_host.h"
@@ -2598,6 +2600,14 @@ static QDF_STATUS wma_unified_bcn_tmpl_send(tp_wma_handle wma,
 	params.tmpl_len = tmpl_len;
 	params.frm = frm;
 	params.tmpl_len_aligned = tmpl_len_aligned;
+	if (bcn_info->csa_count_offset &&
+	    (bcn_info->csa_count_offset > bytes_to_strip))
+		params.csa_switch_count_offset =
+			bcn_info->csa_count_offset - bytes_to_strip;
+	if (bcn_info->ecsa_count_offset &&
+	    (bcn_info->ecsa_count_offset > bytes_to_strip))
+		params.ext_csa_switch_count_offset =
+			bcn_info->ecsa_count_offset - bytes_to_strip;
 
 	ret = wmi_unified_beacon_tmpl_send_cmd(wma->wmi_handle,
 				 &params);
@@ -3734,46 +3744,37 @@ static bool wma_is_pkt_drop_candidate(tp_wma_handle wma_handle,
 	switch (subtype) {
 	case IEEE80211_FC0_SUBTYPE_ASSOC_REQ:
 		ptr = cdp_peer_last_assoc_received(soc, peer);
-		if (ptr == NULL) {
+		if (!ptr) {
 			WMA_LOGE(FL("cdp_peer_last_assoc_received Failed"));
 			should_drop = true;
 			goto end;
-		} else if (*ptr > 0) {
-			if ((qdf_get_system_timestamp() - *ptr) <
-				WMA_MGMT_FRAME_DETECT_DOS_TIMER) {
-				    WMA_LOGI(FL("Dropping Assoc Req received"));
-				    should_drop = true;
-			}
+		} else if (*ptr > 0 &&
+			   qdf_system_time_before(qdf_get_system_timestamp(),
+				    *ptr + WMA_MGMT_FRAME_DETECT_DOS_TIMER)) {
+			WMA_LOGD(FL("Dropping Assoc Req as it is received after %d ms of last frame. Allow it only after %d ms"),
+				 (int)(qdf_get_system_timestamp() - *ptr),
+				  WMA_MGMT_FRAME_DETECT_DOS_TIMER);
+			should_drop = true;
+			break;
 		}
 		*ptr = qdf_get_system_timestamp();
 		break;
 	case IEEE80211_FC0_SUBTYPE_DISASSOC:
+	case IEEE80211_FC0_SUBTYPE_DEAUTH:
 		ptr = cdp_peer_last_disassoc_received(soc, peer);
-		if (ptr == NULL) {
+		if (!ptr) {
 			WMA_LOGE(FL("cdp_peer_last_disassoc_received Failed"));
 			should_drop = true;
 			goto end;
-		} else if (*ptr > 0) {
-			if ((qdf_get_system_timestamp() - *ptr) <
-				WMA_MGMT_FRAME_DETECT_DOS_TIMER) {
-				    WMA_LOGI(FL("Dropping DisAssoc received"));
-				    should_drop = true;
-			}
-		}
-		*ptr = qdf_get_system_timestamp();
-		break;
-	case IEEE80211_FC0_SUBTYPE_DEAUTH:
-		ptr = cdp_peer_last_deauth_received(soc, peer);
-		if (ptr == NULL) {
-			WMA_LOGE(FL("cdp_peer_last_deauth_received Failed"));
+		} else if (*ptr > 0  &&
+			   qdf_system_time_before(qdf_get_system_timestamp(),
+				    *ptr + WMA_MGMT_FRAME_DETECT_DOS_TIMER)) {
+			WMA_LOGD(FL("Dropping subtype %x frame as it is received after %d ms of last frame. Allow it only after %d ms"),
+				 subtype, (int)
+				 (qdf_get_system_timestamp() - *ptr),
+				 WMA_MGMT_FRAME_DETECT_DOS_TIMER);
 			should_drop = true;
-			goto end;
-		} else if (*ptr > 0) {
-			if ((qdf_get_system_timestamp() - *ptr) <
-				WMA_MGMT_FRAME_DETECT_DOS_TIMER) {
-				    WMA_LOGI(FL("Dropping Deauth received"));
-				    should_drop = true;
-			}
+			break;
 		}
 		*ptr = qdf_get_system_timestamp();
 		break;
@@ -4109,6 +4110,10 @@ static int wma_mgmt_rx_process(void *handle, uint8_t *data,
 
 	qdf_nbuf_put_tail(wbuf, mgmt_rx_params->buf_len);
 	qdf_nbuf_set_protocol(wbuf, ETH_P_CONTROL);
+
+	qdf_mem_zero(((uint8_t *)qdf_nbuf_data(wbuf) + mgmt_rx_params->buf_len),
+		     (roundup(mgmt_rx_params->buf_len + RESERVE_BYTES, 4) -
+		     mgmt_rx_params->buf_len));
 
 	wma_mem_endianness_based_copy(qdf_nbuf_data(wbuf),
 			bufp, mgmt_rx_params->buf_len);

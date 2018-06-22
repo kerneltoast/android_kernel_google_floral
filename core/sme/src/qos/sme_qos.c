@@ -4408,7 +4408,7 @@ static QDF_STATUS sme_qos_process_assoc_complete_ev(tpAniSirGlobal pMac, uint8_t
 		}
 		if ((pSession->assocInfo.pBssDesc) &&
 		    (csr_is_bssid_match
-			     (pMac, (struct qdf_mac_addr *)
+			     ((struct qdf_mac_addr *)
 					&pSession->assocInfo.pBssDesc->bssId,
 			     (struct qdf_mac_addr *) &(((sme_QosAssocInfo *)
 					pEvent_info)->pBssDesc->bssId)))) {
@@ -5697,9 +5697,6 @@ static QDF_STATUS sme_qos_process_add_ts_success_rsp(tpAniSirGlobal pMac,
 		log_ptr->peak_data_rate =
 			pACInfo->curr_QoSInfo[tspec_pending - 1].peak_data_rate;
 		log_ptr->surplus_bw_allowance =
-			pACInfo->curr_QoSInfo[tspec_pending -
-					      1].surplus_bw_allowance;
-		log_ptr->suspension_interval =
 			pACInfo->curr_QoSInfo[tspec_pending -
 					      1].surplus_bw_allowance;
 		log_ptr->suspension_interval =

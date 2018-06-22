@@ -25,10 +25,6 @@
 #include <qdf_atomic.h>         /* qdf_atomic_read */
 #include <qdf_debugfs.h>
 
-#if defined(HIF_PCI) || defined(HIF_SNOC) || defined(HIF_AHB)
-/* Required for WLAN_FEATURE_FASTPATH */
-#include <ce_api.h>
-#endif
 /* header files for utilities */
 #include <cds_queue.h>          /* TAILQ */
 
@@ -349,12 +345,6 @@ static struct cdp_vdev *ol_txrx_get_vdev_by_sta_id(struct cdp_pdev *ppdev,
 	struct ol_txrx_pdev_t *pdev = (struct ol_txrx_pdev_t *)ppdev;
 	struct ol_txrx_peer_t *peer = NULL;
 	ol_txrx_vdev_handle vdev;
-
-	if (sta_id >= WLAN_MAX_STA_COUNT) {
-		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO_HIGH,
-			  "Invalid sta id passed");
-		return NULL;
-	}
 
 	if (!pdev) {
 		QDF_TRACE(QDF_MODULE_ID_TXRX, QDF_TRACE_LEVEL_INFO_HIGH,
@@ -716,34 +706,6 @@ credit_update:
 	qdf_spin_unlock_bh(&pdev->tx_queue_spinlock);
 }
 #endif
-
-#ifdef WLAN_FEATURE_FASTPATH
-/**
- * setup_fastpath_ce_handles() Update pdev with ce_handle for fastpath use.
- *
- * @osc: pointer to HIF context
- * @pdev: pointer to ol pdev
- *
- * Return: void
- */
-static inline void setup_fastpath_ce_handles(struct hif_opaque_softc *osc,
-						struct ol_txrx_pdev_t *pdev)
-{
-	/*
-	 * Before the HTT attach, set up the CE handles
-	 * CE handles are (struct CE_state *)
-	 * This is only required in the fast path
-	 */
-	pdev->ce_tx_hdl = hif_get_ce_handle(osc, CE_HTT_H2T_MSG);
-
-}
-
-#else  /* not WLAN_FEATURE_FASTPATH */
-static inline void setup_fastpath_ce_handles(struct hif_opaque_softc *osc,
-						struct ol_txrx_pdev_t *pdev)
-{
-}
-#endif /* WLAN_FEATURE_FASTPATH */
 
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
 /**
@@ -1560,7 +1522,7 @@ ol_txrx_pdev_post_attach(struct cdp_pdev *ppdev)
 
 	ol_tx_desc_dup_detect_init(pdev, desc_pool_size);
 
-	setup_fastpath_ce_handles(osc, pdev);
+	ol_tx_setup_fastpath_ce_handles(osc, pdev);
 
 	ret = htt_attach(pdev->htt_pdev, desc_pool_size);
 	if (ret)
@@ -2447,7 +2409,7 @@ void ol_txrx_set_drop_unenc(ol_txrx_vdev_handle vdev, uint32_t val)
 	vdev->drop_unenc = val;
 }
 
-#if defined(CONFIG_HL_SUPPORT)
+#if defined(CONFIG_HL_SUPPORT) || defined(QCA_LL_LEGACY_TX_FLOW_CONTROL)
 
 static void
 ol_txrx_tx_desc_reset_vdev(ol_txrx_vdev_handle vdev)
@@ -2466,14 +2428,37 @@ ol_txrx_tx_desc_reset_vdev(ol_txrx_vdev_handle vdev)
 }
 
 #else
+#ifdef QCA_LL_TX_FLOW_CONTROL_V2
+static void ol_txrx_tx_desc_reset_vdev(ol_txrx_vdev_handle vdev)
+{
+	struct ol_txrx_pdev_t *pdev = vdev->pdev;
+	struct ol_tx_flow_pool_t *pool;
+	int i;
+	struct ol_tx_desc_t *tx_desc;
 
+	qdf_spin_lock_bh(&pdev->tx_desc.flow_pool_list_lock);
+	for (i = 0; i < pdev->tx_desc.pool_size; i++) {
+		tx_desc = ol_tx_desc_find(pdev, i);
+		if (!qdf_atomic_read(&tx_desc->ref_cnt))
+			/* not in use */
+			continue;
+
+		pool = tx_desc->pool;
+		qdf_spin_lock_bh(&pool->flow_pool_lock);
+		if (tx_desc->vdev == vdev)
+			tx_desc->vdev = NULL;
+		qdf_spin_unlock_bh(&pool->flow_pool_lock);
+	}
+	qdf_spin_unlock_bh(&pdev->tx_desc.flow_pool_list_lock);
+}
+
+#else
 static void
 ol_txrx_tx_desc_reset_vdev(ol_txrx_vdev_handle vdev)
 {
-
 }
-
-#endif
+#endif /* QCA_LL_TX_FLOW_CONTROL_V2 */
+#endif /* CONFIG_HL_SUPPORT */
 
 /**
  * ol_txrx_vdev_detach - Deallocate the specified data virtual
@@ -3743,10 +3728,10 @@ static QDF_STATUS ol_txrx_clear_peer(struct cdp_pdev *ppdev, uint8_t sta_id)
 {
 	struct ol_txrx_peer_t *peer;
 	struct ol_txrx_pdev_t *pdev = (struct ol_txrx_pdev_t *)ppdev;
+	QDF_STATUS status;
 
 	if (!pdev) {
-		ol_txrx_err("%s: Unable to find pdev!",
-			   __func__);
+		ol_txrx_err("Unable to find pdev!");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -3755,7 +3740,8 @@ static QDF_STATUS ol_txrx_clear_peer(struct cdp_pdev *ppdev, uint8_t sta_id)
 		return QDF_STATUS_E_INVAL;
 	}
 
-	peer = ol_txrx_peer_find_by_local_id((struct cdp_pdev *)pdev, sta_id);
+	peer = ol_txrx_peer_get_ref_by_local_id(ppdev, sta_id,
+						PEER_DEBUG_ID_OL_INTERNAL);
 
 	/* Return success, if the peer is already cleared by
 	 * data path via peer detach function.
@@ -3763,8 +3749,12 @@ static QDF_STATUS ol_txrx_clear_peer(struct cdp_pdev *ppdev, uint8_t sta_id)
 	if (!peer)
 		return QDF_STATUS_SUCCESS;
 
-	return ol_txrx_clear_peer_internal(peer);
+	ol_txrx_dbg("Clear peer rx frames: " QDF_MAC_ADDR_STR,
+		    QDF_MAC_ADDR_ARRAY(peer->mac_addr.raw));
+	ol_txrx_clear_peer_internal(peer);
+	status = ol_txrx_peer_release_ref(peer, PEER_DEBUG_ID_OL_INTERNAL);
 
+	return status;
 }
 
 void peer_unmap_timer_work_function(void *param)
@@ -5878,6 +5868,11 @@ static void ol_txrx_soc_detach(void *soc)
  *
  * Return: noe
  */
+#ifdef REMOVE_PKT_LOG
+static void ol_txrx_pkt_log_con_service(struct cdp_pdev *ppdev, void *scn)
+{
+}
+#else
 static void ol_txrx_pkt_log_con_service(struct cdp_pdev *ppdev, void *scn)
 {
 	struct ol_txrx_pdev_t *pdev = (struct ol_txrx_pdev_t *)ppdev;
@@ -5885,6 +5880,7 @@ static void ol_txrx_pkt_log_con_service(struct cdp_pdev *ppdev, void *scn)
 	htt_pkt_log_init((struct cdp_pdev *)pdev, scn);
 	pktlog_htc_attach();
 }
+#endif
 
 /* OL wrapper functions for CDP abstraction */
 /**

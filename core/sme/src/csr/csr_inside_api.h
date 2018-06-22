@@ -741,6 +741,20 @@ QDF_STATUS csr_roam_set_pmkid_cache(tpAniSirGlobal pMac, uint32_t sessionId,
 				    tPmkidCacheInfo *pPMKIDCache,
 				   uint32_t numItems, bool update_entire_cache);
 
+/*
+ * csr_get_pmk_info(): store PMK in pmk_cache
+ * @mac_ctx: pointer to global structure for MAC
+ * @session_id: Sme session id
+ * @pmk_cache: pointer to a structure of Pmk
+ *
+ * This API gets the PMK from the session and
+ * stores it in the pmk_cache
+ *
+ * Return: none
+ */
+void csr_get_pmk_info(tpAniSirGlobal mac_ctx, uint8_t session_id,
+		      tPmkidCacheInfo *pmk_cache);
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /*
  * csr_roam_set_psk_pmk() -
@@ -939,12 +953,20 @@ QDF_STATUS csr_send_mb_get_associated_stas_req_msg(tpAniSirGlobal pMac,
 QDF_STATUS
 csr_send_chng_mcc_beacon_interval(tpAniSirGlobal pMac, uint32_t sessionId);
 
+/**
+ * csr_roam_ft_pre_auth_rsp_processor() - Handle the preauth response
+ * @mac_ctx: Global MAC context
+ * @preauth_rsp: Received preauthentication response
+ *
+ * Return: None
+ */
 #ifdef WLAN_FEATURE_HOST_ROAM
-void csr_roam_ft_pre_auth_rsp_processor(tHalHandle hHal,
-		tpSirFTPreAuthRsp pFTPreAuthRsp);
+void csr_roam_ft_pre_auth_rsp_processor(tpAniSirGlobal mac_ctx,
+					tpSirFTPreAuthRsp pFTPreAuthRsp);
 #else
-static inline void csr_roam_ft_pre_auth_rsp_processor(tHalHandle hHal,
-		tpSirFTPreAuthRsp pFTPreAuthRsp)
+static inline
+void csr_roam_ft_pre_auth_rsp_processor(tpAniSirGlobal mac_ctx,
+					tpSirFTPreAuthRsp pFTPreAuthRsp)
 {}
 #endif
 

@@ -42,7 +42,7 @@ void pmo_register_wow_wakeup_events(struct wlan_objmgr_vdev *vdev)
 
 	vdev_opmode = pmo_get_vdev_opmode(vdev);
 	vdev_id = pmo_vdev_get_id(vdev);
-	pmo_info("vdev_opmode %d vdev_id %d", vdev_opmode, vdev_id);
+	pmo_debug("vdev_opmode %d vdev_id %d", vdev_opmode, vdev_id);
 
 	switch (vdev_opmode) {
 	case QDF_STA_MODE:
@@ -101,10 +101,6 @@ void pmo_register_wow_wakeup_events(struct wlan_objmgr_vdev *vdev)
 			vdev_opmode);
 		return;
 	}
-
-	pmo_info("Selected %s wake event mask 0x%x%x%x%x, vdev %d",
-		 iface_type, event_bitmap[0], event_bitmap[1],
-		 event_bitmap[2], event_bitmap[3], vdev_id);
 
 	pmo_tgt_enable_wow_wakeup_event(vdev, event_bitmap);
 }
@@ -290,7 +286,7 @@ static QDF_STATUS pmo_configure_wow_sta(struct wlan_objmgr_vdev *vdev)
 	 */
 	if (!vdev_ctx->pmo_psoc_ctx->psoc_cfg.arp_offload_enable) {
 		/* Setup all ARP pkt pattern */
-		pmo_info("ARP offload is disabled in INI enable WoW for ARP");
+		pmo_debug("ARP offload is disabled in INI enable WoW for ARP");
 		ret = pmo_tgt_send_wow_patterns_to_fw(vdev,
 				pmo_get_and_increment_wow_default_ptrn(
 					vdev_ctx),
@@ -304,7 +300,7 @@ static QDF_STATUS pmo_configure_wow_sta(struct wlan_objmgr_vdev *vdev)
 	/* for NS or NDP offload packets */
 	if (!vdev_ctx->pmo_psoc_ctx->psoc_cfg.ns_offload_enable_static) {
 		/* Setup all NS pkt pattern */
-		pmo_info("NS offload is disabled in INI enable WoW for NS");
+		pmo_debug("NS offload is disabled in INI enable WoW for NS");
 		ret = pmo_tgt_send_wow_patterns_to_fw(vdev,
 				pmo_get_and_increment_wow_default_ptrn(
 					vdev_ctx),
@@ -347,18 +343,18 @@ void pmo_register_wow_default_patterns(struct wlan_objmgr_vdev *vdev)
 
 	if (pmo_is_vdev_in_beaconning_mode(vdev_opmode)) {
 		/* Configure SAP/GO/IBSS mode default wow patterns */
-		pmo_info("Config SAP default wow patterns vdev_id %d",
-			 vdev_id);
+		pmo_debug("Config SAP default wow patterns vdev_id %d",
+			  vdev_id);
 		pmo_configure_wow_ap(vdev);
 	} else {
 		/* Configure STA/P2P CLI mode default wow patterns */
-		pmo_info("Config STA default wow patterns vdev_id %d",
-			vdev_id);
+		pmo_debug("Config STA default wow patterns vdev_id %d",
+			  vdev_id);
 		pmo_configure_wow_sta(vdev);
 		psoc_ctx = vdev_ctx->pmo_psoc_ctx;
 		if (psoc_ctx && psoc_ctx->psoc_cfg.ra_ratelimit_enable) {
-			pmo_info("Config STA RA wow pattern vdev_id %d",
-				vdev_id);
+			pmo_debug("Config STA RA wow pattern vdev_id %d",
+				  vdev_id);
 			pmo_tgt_send_ra_filter_req(vdev);
 		}
 	}

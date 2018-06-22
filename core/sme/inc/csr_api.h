@@ -904,6 +904,7 @@ struct csr_roam_profile {
 	uint32_t cac_duration_ms;
 	uint32_t dfs_regdomain;
 	bool supplicant_disabled_roaming;
+	bool driver_disabled_roaming;
 #ifdef WLAN_FEATURE_FILS_SK
 	bool fils_connection;
 	uint8_t *hlp_ie;
@@ -1308,6 +1309,7 @@ typedef struct tagCsrConfigParam {
 	bool wep_tkip_in_he;
 	struct csr_neighbor_report_offload_params neighbor_report_offload;
 	bool enable_ftopen;
+	bool roam_force_rssi_trigger;
 } tCsrConfigParam;
 
 /* Tush */
@@ -1709,6 +1711,7 @@ QDF_STATUS csr_set_channels(tHalHandle hHal, tCsrConfigParam *pParam);
 /* enum to string conversion for debug output */
 const char *get_e_roam_cmd_status_str(eRoamCmdStatus val);
 const char *get_e_csr_roam_result_str(eCsrRoamResult val);
+const char *csr_phy_mode_str(eCsrPhyMode phy_mode);
 QDF_STATUS csr_set_phy_mode(tHalHandle hHal, uint32_t phyMode,
 			    enum band_info eBand, bool *pfRestartNeeded);
 typedef void (*csr_roamLinkQualityIndCallback)
@@ -1721,12 +1724,24 @@ typedef void (*tCsrTsmStatsCallback)(tAniTrafStrmMetrics tsmMetrics,
 				     uint32_t staId, void *pContext);
 #endif /* FEATURE_WLAN_ESE */
 typedef void (*tCsrSnrCallback)(int8_t snr, uint32_t staId, void *pContext);
+
+/**
+ * csr_roam_issue_ft_preauth_req() - Initiate Preauthentication request
+ * @max_ctx: Global MAC context
+ * @session_id: SME Session ID
+ * @bss_desc: BSS descriptor
+ *
+ * Return: Success or Failure
+ */
 #ifdef WLAN_FEATURE_HOST_ROAM
-QDF_STATUS csr_roam_issue_ft_preauth_req(tHalHandle hHal, uint32_t sessionId,
-		tpSirBssDescription pBssDescription);
+QDF_STATUS csr_roam_issue_ft_preauth_req(tpAniSirGlobal mac_ctx,
+					 uint32_t session_id,
+					 tpSirBssDescription bss_desc);
 #else
-static inline QDF_STATUS csr_roam_issue_ft_preauth_req(tHalHandle hHal,
-		uint32_t sessionId, tpSirBssDescription pBssDescription)
+static inline
+QDF_STATUS csr_roam_issue_ft_preauth_req(tpAniSirGlobal mac_ctx,
+					 uint32_t session_id,
+					 tpSirBssDescription bss_desc)
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }

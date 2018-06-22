@@ -2245,7 +2245,7 @@ put_attr_fail:
  *
  * Return: None
  */
-void wlan_hdd_cfg80211_link_layer_stats_ext_callback(tHddHandle ctx,
+void wlan_hdd_cfg80211_link_layer_stats_ext_callback(hdd_handle_t ctx,
 						     tSirLLStatsResults *rsp)
 {
 	struct hdd_context *hdd_ctx;
@@ -4274,6 +4274,8 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 				hdd_set_rate_bw(&sinfo->txrate, HDD_RATE_BW_80);
 			else if (rate_flags & TX_RATE_VHT40)
 				hdd_set_rate_bw(&sinfo->txrate, HDD_RATE_BW_40);
+			else if (rate_flags & TX_RATE_VHT20)
+				hdd_set_rate_bw(&sinfo->txrate, HDD_RATE_BW_20);
 
 			if (rate_flags &
 			    (TX_RATE_HT20 | TX_RATE_HT40)) {
@@ -4281,6 +4283,9 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 				if (rate_flags & TX_RATE_HT40)
 					hdd_set_rate_bw(&sinfo->txrate,
 							HDD_RATE_BW_40);
+				else if (rate_flags & TX_RATE_HT20)
+					hdd_set_rate_bw(&sinfo->txrate,
+							HDD_RATE_BW_20);
 			} else {
 				sinfo->txrate.flags |= RATE_INFO_FLAGS_VHT_MCS;
 			}
@@ -4655,7 +4660,7 @@ static int __wlan_hdd_cfg80211_dump_survey(struct wiphy *wiphy,
 		return status;
 
 	if (hdd_ctx->chan_info == NULL) {
-		hdd_err("chan_info is NULL");
+		hdd_debug("chan_info is NULL");
 		return -EINVAL;
 	}
 

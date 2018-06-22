@@ -360,9 +360,17 @@ static inline void htt_ipa_uc_detach(struct htt_pdev_t *pdev)
 }
 #endif /* IPA_OFFLOAD */
 
+#ifdef FEATURE_MONITOR_MODE_SUPPORT
 void htt_rx_mon_note_capture_channel(htt_pdev_handle pdev, int mon_ch);
 
 void ol_htt_mon_note_chan(struct cdp_pdev *ppdev, int mon_ch);
+#else
+static inline
+void htt_rx_mon_note_capture_channel(htt_pdev_handle pdev, int mon_ch) {}
+
+static inline
+void ol_htt_mon_note_chan(struct cdp_pdev *ppdev, int mon_ch) {}
+#endif
 
 #if defined(DEBUG_HL_LOGGING) && defined(CONFIG_HL_SUPPORT)
 
@@ -380,11 +388,30 @@ static inline void htt_clear_bundle_stats(struct htt_pdev_t *pdev)
 #endif
 
 void htt_mark_first_wakeup_packet(htt_pdev_handle pdev, uint8_t value);
+
 typedef void (*tp_rx_pkt_dump_cb)(qdf_nbuf_t msdu, uint8_t peer_id,
 			uint8_t status);
+#ifdef REMOVE_PKT_LOG
+static inline
 void htt_register_rx_pkt_dump_callback(struct htt_pdev_t *pdev,
-		tp_rx_pkt_dump_cb ol_rx_pkt_dump_call);
+				       tp_rx_pkt_dump_cb ol_rx_pkt_dump_call)
+{
+}
+
+static inline
+void htt_deregister_rx_pkt_dump_callback(struct htt_pdev_t *pdev)
+{
+}
+
+static inline
+void ol_rx_pkt_dump_call(qdf_nbuf_t msdu, uint8_t peer_id, uint8_t status)
+{
+}
+#else
+void htt_register_rx_pkt_dump_callback(struct htt_pdev_t *pdev,
+				       tp_rx_pkt_dump_cb ol_rx_pkt_dump_call);
 void htt_deregister_rx_pkt_dump_callback(struct htt_pdev_t *pdev);
 void ol_rx_pkt_dump_call(qdf_nbuf_t msdu, uint8_t peer_id, uint8_t status);
+#endif
 
 #endif /* _OL_HTT_API__H_ */

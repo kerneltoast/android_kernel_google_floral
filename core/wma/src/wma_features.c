@@ -1847,6 +1847,7 @@ static void wma_inc_wow_stats(t_wma_handle *wma,
 		break;
 	case WOW_REASON_OEM_RESPONSE_EVENT:
 		stats->oem_response++;
+		break;
 	case WOW_REASON_11D_SCAN:
 		stats->scan_11d++;
 		break;
@@ -5317,7 +5318,8 @@ int wma_get_arp_stats_handler(void *handle, uint8_t *data,
 			connect_stats_event->icmpv4_rsp_recvd);
 	}
 
-	mac->sme.get_arp_stats_cb(mac->hHdd, &rsp);
+	mac->sme.get_arp_stats_cb(mac->hHdd, &rsp,
+				  mac->sme.get_arp_stats_context);
 
 	return 0;
 }

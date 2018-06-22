@@ -25,16 +25,16 @@
 
    BRIEF DESCRIPTION:
    WLAN Host Version file.
-   Build number automatically updated by build scripts.
+    Build number automatically updated by build scripts.
 
    ===========================================================================*/
 
 #define QWLAN_VERSION_MAJOR            5
 #define QWLAN_VERSION_MINOR            2
 #define QWLAN_VERSION_PATCH            0
-#define QWLAN_VERSION_EXTRA            "B"
-#define QWLAN_VERSION_BUILD            80
+#define QWLAN_VERSION_EXTRA            "E"
+#define QWLAN_VERSION_BUILD            83
 
-#define QWLAN_VERSIONSTR               "5.2.0.80B"
+#define QWLAN_VERSIONSTR               "5.2.0.83E"
 
 #endif /* QWLAN_VERSION_H */

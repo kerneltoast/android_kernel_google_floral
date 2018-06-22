@@ -228,6 +228,11 @@ void wlansap_context_put(struct sap_context *ctx)
 	for (i = 0; i < SAP_MAX_NUM_SESSION; i++) {
 		if (gp_sap_ctx[i] == ctx) {
 			if (qdf_atomic_dec_and_test(&sap_ctx_ref_count[i])) {
+				if (ctx->channelList) {
+					qdf_mem_free(ctx->channelList);
+					ctx->channelList = NULL;
+					ctx->num_of_channel = 0;
+				}
 				qdf_mem_free(ctx);
 				gp_sap_ctx[i] = NULL;
 				QDF_TRACE(QDF_MODULE_ID_SAP,
@@ -620,6 +625,20 @@ static inline bool wlan_sap_validate_channel_switch(tHalHandle hal,
 	return true;
 }
 #endif
+
+void wlan_sap_set_sap_ctx_acs_cfg(struct sap_context *sap_ctx,
+				  tsap_config_t *sap_config)
+{
+	if (!sap_ctx) {
+		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH,
+			  "%s: Invalid SAP pointer",
+			  __func__);
+		return;
+	}
+
+	sap_ctx->acs_cfg = &sap_config->acs_cfg;
+}
+
 QDF_STATUS wlansap_start_bss(struct sap_context *sap_ctx,
 			     tpWLAN_SAPEventCB pSapEventCallback,
 			     tsap_config_t *pConfig, void *pUsrContext)
@@ -1204,13 +1223,13 @@ wlansap_update_csa_channel_params(struct sap_context *sap_context,
 		mac_ctx->sap.SapDfsInfo.new_chanWidth = 0;
 
 	} else {
-
-		if (sap_context->ch_width_orig >= CH_WIDTH_80MHZ)
+		if (sap_context->csr_roamProfile.phyMode ==
+		    eCSR_DOT11_MODE_11ac ||
+		    sap_context->csr_roamProfile.phyMode ==
+		    eCSR_DOT11_MODE_11ac_ONLY)
 			bw = BW80;
-		else if (sap_context->ch_width_orig == CH_WIDTH_40MHZ)
-			bw = BW40_HIGH_PRIMARY;
 		else
-			bw = BW20;
+			bw = BW40_HIGH_PRIMARY;
 
 		for (; bw >= BW20; bw--) {
 			uint16_t op_class;

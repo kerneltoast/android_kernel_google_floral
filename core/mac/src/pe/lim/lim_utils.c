@@ -4872,11 +4872,6 @@ lim_get_b_dfrom_rx_packet(tpAniSirGlobal pMac, void *body, uint32_t **pRxPacketI
 	*pRxPacketInfo = (uint32_t *) body;
 } /*** end lim_get_b_dfrom_rx_packet() ***/
 
-void lim_resset_scan_channel_info(tpAniSirGlobal pMac)
-{
-	qdf_mem_set(&pMac->lim.scanChnInfo, sizeof(tLimScanChnInfo), 0);
-}
-
 void lim_add_channel_status_info(tpAniSirGlobal p_mac,
 				 struct lim_channel_status *channel_stat,
 				 uint8_t channel_id)
@@ -7352,7 +7347,7 @@ void lim_update_usr_he_cap(tpAniSirGlobal mac_ctx, tpPESession session)
 	tDot11fIEhe_cap *he_cap = &session->he_config;
 	struct he_cap_network_endian *he_cap_from_ie;
 	uint8_t extracted_buff[DOT11F_IE_HE_CAP_MAX_LEN + 2];
-	enum eSirRetStatus status;
+	tSirRetStatus status;
 	qdf_mem_zero(extracted_buff, sizeof(extracted_buff));
 	status = lim_strip_ie(mac_ctx, add_ie->probeRespBCNData_buff,
 			&add_ie->probeRespBCNDataLen,
@@ -7390,7 +7385,7 @@ void lim_decide_he_op(tpAniSirGlobal mac_ctx, tpAddBssParams add_bss,
 	tDot11fIEhe_op *he_ops = &add_bss->he_op;
 	tSirAddIeParams *add_ie = &session->addIeParams;
 	uint8_t extracted_buff[DOT11F_IE_HE_OP_MAX_LEN + 2];
-	enum eSirRetStatus status;
+	tSirRetStatus status;
 
 	qdf_mem_zero(extracted_buff, sizeof(extracted_buff));
 	status = lim_strip_ie(mac_ctx, add_ie->probeRespBCNData_buff,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -38,8 +38,22 @@
 /**
  * typedef for vdev notifying the vdev pause bitmap new value to mlme
  */
-typedef void (*pmo_notify_pause_bitmap)(
-			uint8_t vdev_id, uint16_t value);
+typedef void (*pmo_notify_pause_bitmap)(uint8_t vdev_id, uint16_t value);
+
+/**
+ * typedef for function that gets cfg integer from mlme
+ */
+typedef QDF_STATUS (*pmo_get_cfg_int)(int cfg_id, int *value);
+
+/**
+ * typedef for function that gets dtim period from mlme
+ */
+typedef QDF_STATUS (*pmo_get_dtim_period)(uint8_t vdev_id, uint8_t *value);
+
+/**
+ * typedef for function that gets  beacon interval from mlme
+ */
+typedef QDF_STATUS (*pmo_get_beacon_interval)(uint8_t vdev_id, uint16_t *value);
 
 /**
  * typedef for getting vdev pause bitmap
@@ -54,14 +68,12 @@ typedef  bool (*pmo_is_device_in_low_pwr_mode)(uint8_t vdev_id);
 /*
  * typedef for pld auto suspend callback during runtime suspend
  */
-typedef
-int (*pmo_pld_auto_suspend_cb)(void);
+typedef int (*pmo_pld_auto_suspend_cb)(void);
 
 /*
  * typedef for pld auto resume callback during runtime resume
  */
-typedef
-int (*pmo_pld_auto_resume_cb)(void);
+typedef int (*pmo_pld_auto_resume_cb)(void);
 
 /**
  * struct wlan_pmo_tx_ops - structure of tx function

@@ -346,6 +346,9 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
 #define HDD_MOD_EXIT_SSR_MAX_RETRIES 75
 #endif
 
+#define HDD_CFG_REQUEST_FIRMWARE_RETRIES (3)
+#define HDD_CFG_REQUEST_FIRMWARE_DELAY (20)
+
 #define MAX_USER_COMMAND_SIZE 4096
 #define DNS_DOMAIN_NAME_MAX_LEN 255
 #define ICMPv6_ADDR_LEN 16
@@ -354,8 +357,7 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
 #define HDD_MIN_TX_POWER (-100) /* minimum tx power */
 #define HDD_MAX_TX_POWER (+100) /* maximum tx power */
 
-#define HDD_ENABLE_SIFS_BURST_DEFAULT	(0)
-
+#define HDD_ENABLE_SIFS_BURST_DEFAULT	(1)
 /* If IPA UC data path is enabled, target should reserve extra tx descriptors
  * for IPA data path.
  * Then host data path should allow less TX packet pumping in case
@@ -435,7 +437,10 @@ extern struct mutex hdd_init_deinit_lock;
 #define WLAN_SAP_HDD_TX_FLOW_CONTROL_OS_Q_BLOCK_TIME 100
 #define WLAN_HDD_TX_FLOW_CONTROL_MAX_24BAND_CH   14
 
+#ifndef NUM_TX_RX_HISTOGRAM
 #define NUM_TX_RX_HISTOGRAM 128
+#endif
+
 #define NUM_TX_RX_HISTOGRAM_MASK (NUM_TX_RX_HISTOGRAM - 1)
 
 /**
@@ -1583,14 +1588,6 @@ enum hdd_sta_smps_param {
 };
 
 /**
- * struct hdd_nud_stats_context - hdd NUD stats context
- * @response_event: NUD stats request wait event
- */
-struct hdd_nud_stats_context {
-	struct completion response_event;
-};
-
-/**
  * tos - Type of service requested by the application
  * TOS_BK: Back ground traffic
  * TOS_BE: Best effort traffic
@@ -1881,7 +1878,6 @@ struct hdd_context {
 #endif
 	uint8_t bt_a2dp_active:1;
 	uint8_t bt_vo_active:1;
-	struct hdd_nud_stats_context nud_stats_context;
 	enum band_info curr_band;
 	bool imps_enabled;
 	int user_configured_pkt_filter_rules;
@@ -2067,6 +2063,15 @@ void hdd_deinit_adapter(struct hdd_context *hdd_ctx,
 			bool rtnl_held);
 QDF_STATUS hdd_stop_adapter(struct hdd_context *hdd_ctx,
 			    struct hdd_adapter *adapter);
+
+enum hdd_adapter_stop_flag_t {
+	HDD_IN_CAC_WORK_TH_CONTEXT = 0x00000001,
+};
+
+QDF_STATUS hdd_stop_adapter_ext(struct hdd_context *hdd_ctx,
+				struct hdd_adapter *adapter,
+				enum hdd_adapter_stop_flag_t flag);
+
 void hdd_set_station_ops(struct net_device *dev);
 uint8_t *wlan_hdd_get_intf_addr(struct hdd_context *hdd_ctx);
 void wlan_hdd_release_intf_addr(struct hdd_context *hdd_ctx,
@@ -2408,8 +2413,28 @@ void hdd_ch_avoid_ind(struct hdd_context *hdd_ctxt,
 
 void hdd_update_macaddr(struct hdd_config *config,
 			struct qdf_mac_addr hw_macaddr);
-void wlan_hdd_disable_roaming(struct hdd_adapter *adapter);
-void wlan_hdd_enable_roaming(struct hdd_adapter *adapter);
+
+/**
+ * wlan_hdd_disable_roaming() - disable roaming on all STAs except the input one
+ * @cur_adapter: Current HDD adapter passed from caller
+ *
+ * This function loops through all adapters and disables roaming on each STA
+ * mode adapter except the current adapter passed from the caller
+ *
+ * Return: None
+ */
+void wlan_hdd_disable_roaming(struct hdd_adapter *cur_adapter);
+
+/**
+ * wlan_hdd_enable_roaming() - enable roaming on all STAs except the input one
+ * @cur_adapter: Current HDD adapter passed from caller
+ *
+ * This function loops through all adapters and enables roaming on each STA
+ * mode adapter except the current adapter passed from the caller
+ *
+ * Return: None
+ */
+void wlan_hdd_enable_roaming(struct hdd_adapter *cur_adapter);
 
 QDF_STATUS hdd_post_cds_enable_config(struct hdd_context *hdd_ctx);
 
@@ -2424,17 +2449,6 @@ wlan_hdd_check_custom_con_channel_rules(struct hdd_adapter *sta_adapter,
 
 void wlan_hdd_stop_sap(struct hdd_adapter *ap_adapter);
 void wlan_hdd_start_sap(struct hdd_adapter *ap_adapter, bool reinit);
-
-/**
- * hdd_init_nud_stats_ctx() - initialize NUD stats context
- * @hdd_ctx: Pointer to hdd context
- *
- * Return: none
- */
-static inline void hdd_init_nud_stats_ctx(struct hdd_context *hdd_ctx)
-{
-	init_completion(&hdd_ctx->nud_stats_context.response_event);
-}
 
 void wlan_hdd_soc_set_antenna_mode_cb(enum set_antenna_mode_status status);
 
@@ -2791,7 +2805,15 @@ tSirAddie *hdd_assoc_additional_ie(struct hdd_adapter *adapter)
 	return &sta_ctx->assoc_additional_ie;
 }
 
-bool hdd_is_roaming_in_progress(struct hdd_adapter *adapter);
+/**
+ * hdd_is_roaming_in_progress() - check if roaming is in progress
+ * @hdd_ctx - Global HDD context
+ *
+ * Checks if roaming is in progress on any of the adapters
+ *
+ * Return: true if roaming is in progress else false
+ */
+bool hdd_is_roaming_in_progress(struct hdd_context *hdd_ctx);
 void hdd_set_roaming_in_progress(bool value);
 bool hdd_is_connection_in_progress(uint8_t *session_id,
 	enum scan_reject_states *reason);
@@ -3188,6 +3210,7 @@ bool hdd_is_cli_iface_up(struct hdd_context *hdd_ctx);
  */
 void hdd_set_disconnect_status(struct hdd_adapter *adapter, bool disconnecting);
 
+#ifdef FEATURE_MONITOR_MODE_SUPPORT
 /**
  * wlan_hdd_set_mon_chan() - Set capture channel on the monitor mode interface.
  * @adapter: Handle to adapter
@@ -3198,6 +3221,14 @@ void hdd_set_disconnect_status(struct hdd_adapter *adapter, bool disconnecting);
  */
 int wlan_hdd_set_mon_chan(struct hdd_adapter *adapter, uint32_t chan,
 			  uint32_t bandwidth);
+#else
+static inline
+int wlan_hdd_set_mon_chan(struct hdd_adapter *adapter, uint32_t chan,
+			  uint32_t bandwidth)
+{
+	return 0;
+}
+#endif
 
 /**
  * hdd_wlan_get_version() - Get version information
@@ -3226,5 +3257,18 @@ uint32_t hdd_wlan_get_version(struct hdd_context *hdd_ctx,
  * Return: None
  */
 void hdd_update_hw_sw_info(struct hdd_context *hdd_ctx);
+
+/**
+ * hdd_get_nud_stats_cb() - callback api to update the stats received from FW
+ * @data: pointer to hdd context.
+ * @rsp: pointer to data received from FW.
+ * @context: callback context
+ *
+ * This is called when wlan driver received response event for
+ * get arp stats to firmware.
+ *
+ * Return: None
+ */
+void hdd_get_nud_stats_cb(void *data, struct rsp_stats *rsp, void *context);
 
 #endif /* end #if !defined(WLAN_HDD_MAIN_H) */

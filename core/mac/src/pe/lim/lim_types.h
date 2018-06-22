@@ -638,11 +638,28 @@ tSirRetStatus lim_send_neighbor_report_request_frame(tpAniSirGlobal,
 						     tSirMacAddr, tpPESession);
 tSirRetStatus lim_send_link_report_action_frame(tpAniSirGlobal, tpSirMacLinkReport,
 						tSirMacAddr, tpPESession);
-tSirRetStatus lim_send_radio_measure_report_action_frame(tpAniSirGlobal, uint8_t,
-							 uint8_t,
-							 tpSirMacRadioMeasureReport,
-							 tSirMacAddr, tpPESession);
 
+/**
+ * lim_send_radio_measure_report_action_frame - Send RRM report action frame
+ * @pMac: pointer to global MAC context
+ * @dialog_token: Dialog token to be used in the action frame
+ * @num_report: number of reports in pRRMReport
+ * @last_beacon_report_params: Last Beacon Report indication params
+ * @pRRMReport: Pointer to the RRM report structure
+ * @peer: MAC address of the peer
+ * @psessionEntry: Pointer to the PE session entry
+ *
+ * Return: Ret Status
+ */
+tSirRetStatus
+lim_send_radio_measure_report_action_frame(tpAniSirGlobal pMac,
+				uint8_t dialog_token,
+				uint8_t num_report,
+				struct rrm_beacon_report_last_beacon_params
+				*last_beacon_report_params,
+				tpSirMacRadioMeasureReport pRRMReport,
+				tSirMacAddr peer,
+				tpPESession psessionEntry);
 
 #ifdef FEATURE_WLAN_TDLS
 void lim_init_tdls_data(tpAniSirGlobal, tpPESession);
@@ -743,9 +760,6 @@ void lim_covert_channel_scan_type(tpAniSirGlobal pMac, uint8_t channelNum,
 void lim_set_dfs_channel_list(tpAniSirGlobal pMac, uint8_t channelNum,
 			      tSirDFSChannelList *dfsChannelList);
 void limContinueChannelLearn(tpAniSirGlobal);
-/* WLAN_SUSPEND_LINK Related */
-uint8_t lim_is_link_suspended(tpAniSirGlobal pMac);
-/* end WLAN_SUSPEND_LINK Related */
 
 #ifdef WLAN_FEATURE_11W
 /* 11w send SA query request action frame */

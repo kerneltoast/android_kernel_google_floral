@@ -37,6 +37,63 @@
 #include "wlan_pmo_static_config.h"
 
 /**
+ * pmo_core_get_vdev_dtim_period() - Get vdev dtim period
+ * @vdev: objmgr vdev handle
+ *
+ * Return: Vdev dtim period
+ */
+static uint8_t pmo_core_get_vdev_dtim_period(struct wlan_objmgr_vdev *vdev)
+{
+	uint8_t dtim_period = 0;
+	struct pmo_psoc_priv_obj *psoc_ctx;
+	struct wlan_objmgr_psoc *psoc;
+	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
+
+	psoc = pmo_vdev_get_psoc(vdev);
+
+	pmo_psoc_with_ctx(psoc, psoc_ctx) {
+		if (psoc_ctx->get_dtim_period)
+			ret = psoc_ctx->get_dtim_period(pmo_vdev_get_id(vdev),
+							&dtim_period);
+	}
+
+	if (QDF_IS_STATUS_ERROR(ret))
+		pmo_err("Failed to get to dtim period for vdevId %d",
+				pmo_vdev_get_id(vdev));
+
+	return dtim_period;
+}
+
+/**
+ * pmo_core_get_vdev_beacon_interval() - Get vdev beacon interval
+ * @vdev: objmgr vdev handle
+ *
+ * Return: Vdev beacon interval
+ */
+static uint16_t pmo_core_get_vdev_beacon_interval(struct wlan_objmgr_vdev *vdev)
+{
+	uint16_t beacon_interval = 0;
+	struct pmo_psoc_priv_obj *psoc_ctx;
+	struct wlan_objmgr_psoc *psoc;
+	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
+
+	psoc = pmo_vdev_get_psoc(vdev);
+
+	pmo_psoc_with_ctx(psoc, psoc_ctx) {
+		if (psoc_ctx->get_beacon_interval)
+			ret = psoc_ctx->get_beacon_interval(
+							pmo_vdev_get_id(vdev),
+							&beacon_interval);
+	}
+
+	if (QDF_IS_STATUS_ERROR(ret))
+		pmo_err("Failed to get beacon interval for vdev id %d",
+			pmo_vdev_get_id(vdev));
+
+	return beacon_interval;
+}
+
+/**
  * pmo_core_calculate_listen_interval() - Calculate vdev listen interval
  * @vdev: objmgr vdev handle
  * @vdev_ctx: pmo vdev priv ctx
@@ -107,7 +164,7 @@ static void pmo_core_set_vdev_suspend_dtim(struct wlan_objmgr_psoc *psoc,
 		struct wlan_objmgr_vdev *vdev,
 		struct pmo_vdev_priv_obj *vdev_ctx)
 {
-	uint32_t listen_interval;
+	uint32_t listen_interval = PMO_DEFAULT_LISTEN_INTERVAL;
 	QDF_STATUS ret;
 	uint8_t vdev_id;
 	enum pmo_power_save_qpower_mode qpower_config;
@@ -250,7 +307,7 @@ void pmo_core_configure_dynamic_wake_events(struct wlan_objmgr_psoc *psoc)
 							 BM_LEN,
 							 disable_mask);
 				disable_configured = true;
-		}
+			}
 		}
 
 		adapter_type = pmo_get_vdev_opmode(vdev);
@@ -258,26 +315,22 @@ void pmo_core_configure_dynamic_wake_events(struct wlan_objmgr_psoc *psoc)
 		psoc_ctx = pmo_psoc_get_priv(psoc);
 
 		if (psoc_ctx->psoc_cfg.auto_power_save_fail_mode ==
-		     PMO_FW_TO_SEND_WOW_IND_ON_PWR_FAILURE &&
+		    PMO_FW_TO_SEND_WOW_IND_ON_PWR_FAILURE &&
 		    (adapter_type == QDF_STA_MODE ||
-		     adapter_type == QDF_P2P_CLIENT_MODE)
-		   ) {
+		     adapter_type == QDF_P2P_CLIENT_MODE)) {
 			if (psoc_ctx->is_device_in_low_pwr_mode &&
-				psoc_ctx->is_device_in_low_pwr_mode(vdev_id))
+			    psoc_ctx->is_device_in_low_pwr_mode(vdev_id)) {
 				pmo_set_wow_event_bitmap(EV_PWR,
-						 BM_LEN,
-						 enable_mask);
-			pmo_core_enable_wakeup_event(psoc, vdev_id,
-				enable_mask);
+							 BM_LEN,
+							 enable_mask);
 				enable_configured = true;
+			}
 		}
-		if (enable_configured)
-			pmo_core_enable_wakeup_event(psoc, vdev_id,
-				enable_mask);
 
+		if (enable_configured)
+			pmo_tgt_enable_wow_wakeup_event(vdev, enable_mask);
 		if (disable_configured)
-			pmo_core_disable_wakeup_event(psoc, vdev_id,
-					disable_mask);
+			pmo_tgt_disable_wow_wakeup_event(vdev, disable_mask);
 	}
 
 }
@@ -299,7 +352,7 @@ static QDF_STATUS pmo_core_psoc_configure_suspend(struct wlan_objmgr_psoc *psoc)
 	psoc_ctx = pmo_psoc_get_priv(psoc);
 
 	if (pmo_core_is_wow_applicable(psoc)) {
-		pmo_info("WOW Suspend");
+		pmo_debug("WOW Suspend");
 		pmo_core_apply_lphb(psoc);
 
 		pmo_core_configure_dynamic_wake_events(psoc);
@@ -613,13 +666,24 @@ pmo_core_enable_wow_in_fw(struct wlan_objmgr_psoc *psoc,
 		break;
 	}
 
+	if (psoc_ctx->psoc_cfg.d0_wow_supported &&
+	    !psoc_ctx->caps.unified_wow &&
+	    !param.can_suspend_link) {
+		psoc_ctx->wow.wow_state = pmo_wow_state_legacy_d0;
+	} else if (param.can_suspend_link) {
+		psoc_ctx->wow.wow_state = pmo_wow_state_unified_d3;
+	} else {
+		psoc_ctx->wow.wow_state = pmo_wow_state_unified_d0;
+	}
+
 	status = pmo_tgt_psoc_send_wow_enable_req(psoc, &param);
 	if (status != QDF_STATUS_SUCCESS) {
 		pmo_err("Failed to enable wow in fw");
 		goto out;
 	}
 
-	pmo_tgt_update_target_suspend_flag(psoc, true);
+	if (psoc_ctx->wow.wow_state != pmo_wow_state_legacy_d0)
+		pmo_tgt_update_target_suspend_flag(psoc, true);
 
 	status = qdf_wait_for_event_completion(&psoc_ctx->wow.target_suspend,
 					       PMO_TARGET_SUSPEND_TIMEOUT);
@@ -723,7 +787,7 @@ QDF_STATUS pmo_core_psoc_bus_suspend_req(struct wlan_objmgr_psoc *psoc,
 	psoc_ctx = pmo_psoc_get_priv(psoc);
 
 	wow_mode_selected = pmo_core_is_wow_enabled(psoc_ctx);
-	pmo_info("wow mode selected %d", wow_mode_selected);
+	pmo_debug("wow mode selected %d", wow_mode_selected);
 
 	if (wow_mode_selected)
 		status = pmo_core_enable_wow_in_fw(psoc, psoc_ctx, wow_params);
@@ -1051,7 +1115,7 @@ QDF_STATUS pmo_core_psoc_bus_resume_req(struct wlan_objmgr_psoc *psoc,
 
 	psoc_ctx = pmo_psoc_get_priv(psoc);
 	wow_mode = pmo_core_is_wow_enabled(psoc_ctx);
-	pmo_info("wow mode %d", wow_mode);
+	pmo_debug("wow mode %d", wow_mode);
 
 	pmo_core_update_wow_initial_wake_up(psoc_ctx, false);
 

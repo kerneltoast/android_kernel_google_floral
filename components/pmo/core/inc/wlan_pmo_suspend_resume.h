@@ -22,6 +22,8 @@
 #ifndef _WLAN_PMO_SUSPEND_RESUME_H_
 #define _WLAN_PMO_SUSPEND_RESUME_H_
 
+#ifdef WLAN_POWER_MANAGEMENT_OFFLOAD
+
 #include "wlan_pmo_common_public_struct.h"
 #include "wlan_pmo_wow.h"
 
@@ -137,50 +139,6 @@ QDF_STATUS pmo_core_psoc_suspend_target(struct wlan_objmgr_psoc *psoc,
  */
 QDF_STATUS pmo_core_psoc_bus_resume_req(struct wlan_objmgr_psoc *psoc,
 		enum qdf_suspend_type type);
-
-/**
- * pmo_core_get_vdev_dtim_period() - Get vdev dtim period
- * @vdev: objmgr vdev handle
- *
- * Return: Vdev dtim period
- */
-static inline
-uint8_t pmo_core_get_vdev_dtim_period(struct wlan_objmgr_vdev *vdev)
-{
-	uint8_t dtim_period = 0;
-
-	if (!vdev) {
-		pmo_err("vdev is null");
-		QDF_ASSERT(0);
-		return 0;
-	}
-	/* TODO */
-	/* dtim_period = wlan_vdev_mlme_get_dtim_period(vdev); */
-
-	return dtim_period;
-}
-
-/**
- * pmo_core_get_vdev_beacon_interval() - Get vdev beacon interval
- * @vdev: objmgr vdev handle
- *
- * Return: Vdev beacon interval
- */
-static inline
-uint16_t pmo_core_get_vdev_beacon_interval(struct wlan_objmgr_vdev *vdev)
-{
-	uint16_t beacon_interval = 0;
-
-	if (!vdev) {
-		pmo_err("vdev is null");
-		QDF_ASSERT(0);
-		return 0;
-	}
-	/* TODO */
-	/* beacon_interval = wlan_vdev_mlme_get_beacon_interval(vdev); */
-
-	return beacon_interval;
-}
 
 /**
  * pmo_core_update_alt_modulated_dtim_enable() - update alt modulatate dtim
@@ -429,5 +387,7 @@ void pmo_core_psoc_target_suspend_acknowledge(void *context, bool wow_nack);
  * Return: None
  */
 void pmo_core_psoc_wakeup_host_event_received(struct wlan_objmgr_psoc *psoc);
+
+#endif /* WLAN_POWER_MANAGEMENT_OFFLOAD */
 
 #endif /* end  of _WLAN_PMO_SUSPEND_RESUME_H_ */

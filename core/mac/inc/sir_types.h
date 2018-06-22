@@ -30,30 +30,44 @@
 #include <qdf_types.h>
 
 
-/** ------------------------------------------------------------------------ *
+/**
+ * typedef mac_handle_t - MAC Handle
+ *
+ * Handle to the MAC.  The MAC handle is returned to the HDD from the
+ * UMAC on Open.  The MAC handle is an input to all UMAC function
+ * calls and represents an opaque handle to the UMAC instance that is
+ * tied to the HDD instance
+ *
+ * The UMAC must be able to derive it's internal instance structure
+ * pointer through this handle.
+ */
+/*
+ * NOTE WELL: an upcoming change will replace the void * with an
+ * opaque pointer just as is currently done with hdd_handle_t
+ */
+typedef void *mac_handle_t;
 
-    \typedef tHalHandle
+/* retain legacy name until all instances have been replaced */
+typedef mac_handle_t tHalHandle;
 
-    \brief Handle to the HAL.  The HAL handle is returned by the HAL after it
-    is opened (by calling halOpen).
-
-    ------------------------------------------------------------------------- */
-typedef void *tHalHandle;
-
-/** ------------------------------------------------------------------------ *
-
-    \typedef tHddHandle
-
-    \brief Handle to the HDD.  The HDD handle is given to the HAL from
-    the HDD on halOpen.  The HDD handle is an input to all HDD/PAL function
-    calls and represents an opaque handle to the HDD instance that is tied
-    to the HAL instance, opened through halOpen.
-
-    The HDD must be able to derive it's internal instance structure pointer
-    through this handle.  hint hint...
-
-    ------------------------------------------------------------------------- */
-typedef void *tHddHandle;
+/**
+ * typedef hdd_handle_t - HDD Handle
+ *
+ * Handle to the HDD.  The HDD handle is given to the UMAC from the
+ * HDD on Open.  The HDD handle is an input to all HDD/PAL function
+ * calls and represents an opaque handle to the HDD instance that is
+ * tied to the UMAC instance
+ *
+ * The HDD must be able to derive it's internal instance structure
+ * pointer through this handle.
+ */
+/*
+ * NOTE WELL: struct opaque_hdd_handle is not defined anywhere. This
+ * reference is used to help ensure that a hdd_handle_t is never used
+ * where a different handle type is expected
+ */
+struct opaque_hdd_handle;
+typedef struct opaque_hdd_handle *hdd_handle_t;
 
 /* ********************************************** *
 *                                                *

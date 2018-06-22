@@ -2567,6 +2567,8 @@ static int wma_flush_complete_evt_handler(void *handle,
 			WLAN_LOG_INDICATOR_FIRMWARE, reason_code);
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
 /**
  * wma_extract_single_phyerr_spectral() - extract single phy error from event
  * @handle: wma handle
@@ -2783,7 +2785,8 @@ static QDF_STATUS wma_extract_single_phyerr_spectral(void *handle,
  * Return:  QDF_STATUS
  */
 static QDF_STATUS spectral_phyerr_event_handler(void *handle,
-					uint8_t *data, uint32_t datalen)
+						uint8_t *data,
+						uint32_t datalen)
 {
 	tp_wma_handle wma = (tp_wma_handle) handle;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
@@ -2844,6 +2847,13 @@ static QDF_STATUS spectral_phyerr_event_handler(void *handle,
 
 	return status;
 }
+#else
+static QDF_STATUS spectral_phyerr_event_handler(void *handle,
+					uint8_t *data, uint32_t datalen)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 /**
  * dfs_phyerr_event_handler() - dfs phyerr event handler
@@ -3114,7 +3124,7 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 	qdf_status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_LEGACY_WMA_ID);
 	if (QDF_IS_STATUS_ERROR(qdf_status)) {
 		WMA_LOGE("%s: PSOC get_ref fails", __func__);
-		goto err_wma_handle;
+		goto err_get_psoc_ref;
 	}
 	wma_handle->psoc = psoc;
 
@@ -3541,6 +3551,12 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 		wma_vdev_get_pause_bitmap);
 	pmo_register_is_device_in_low_pwr_mode(wma_handle->psoc,
 		wma_vdev_is_device_in_low_pwr_mode);
+	pmo_register_get_cfg_int_callback(wma_handle->psoc,
+					  wma_vdev_get_cfg_int);
+	pmo_register_get_dtim_period_callback(wma_handle->psoc,
+					      wma_vdev_get_dtim_period);
+	pmo_register_get_beacon_interval_callback(wma_handle->psoc,
+						  wma_vdev_get_beacon_interval);
 	wma_cbacks.wma_get_connection_info = wma_get_connection_info;
 	qdf_status = policy_mgr_register_wma_cb(wma_handle->psoc, &wma_cbacks);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
@@ -3580,10 +3596,13 @@ err_event_init:
 	qdf_mem_free(wma_handle->interfaces);
 
 err_scn_context:
-	qdf_mem_free(((p_cds_contextType) cds_context)->cfg_ctx);
+	qdf_mem_free(((struct cds_context *) cds_context)->cfg_ctx);
 	OS_FREE(wmi_handle);
 
 err_wma_handle:
+	target_if_close();
+	wlan_objmgr_psoc_release_ref(psoc, WLAN_LEGACY_WMA_ID);
+err_get_psoc_ref:
 	target_if_free_psoc_tgt_info(psoc);
 	if (cds_get_conparam() != QDF_GLOBAL_FTM_MODE) {
 #ifdef FEATURE_WLAN_EXTSCAN
@@ -3835,6 +3854,12 @@ static int wma_pdev_set_hw_mode_resp_evt_handler(void *handle,
 			QDF_BUG(0);
 			goto fail;
 		}
+		if (vdev_id >= wma->max_bssid) {
+			WMA_LOGE("%s: vdev_id: %d is invalid, max_bssid: %d",
+				 __func__, vdev_id, wma->max_bssid);
+			goto fail;
+		}
+
 		mac_id = WMA_PDEV_TO_MAC_MAP(vdev_mac_entry[i].pdev_id);
 
 		WMA_LOGD("%s: vdev_id:%d mac_id:%d",
@@ -3923,6 +3948,11 @@ void wma_process_pdev_hw_mode_trans_ind(void *handle,
 			WMA_LOGE("%s: soc level id received for mac id)",
 					__func__);
 			QDF_BUG(0);
+			return;
+		}
+		if (vdev_id >= wma->max_bssid) {
+			WMA_LOGE("%s: vdev_id: %d is invalid, max_bssid: %d",
+				 __func__, vdev_id, wma->max_bssid);
 			return;
 		}
 
@@ -4110,6 +4140,22 @@ static void wma_send_time_stamp_sync_cmd(void *data)
 		WMA_LOGE("Failed to start the firmware time sync timer");
 }
 
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
+static void wma_register_spectral_cmds(tp_wma_handle wma_handle)
+{
+	struct wmi_spectral_cmd_ops cmd_ops;
+
+	cmd_ops.wmi_spectral_configure_cmd_send =
+			wmi_unified_vdev_spectral_configure_cmd_send;
+	cmd_ops.wmi_spectral_enable_cmd_send =
+			wmi_unified_vdev_spectral_enable_cmd_send;
+	wlan_register_wmi_spectral_cmd_ops(wma_handle->pdev, &cmd_ops);
+}
+#else
+static void wma_register_spectral_cmds(tp_wma_handle wma_handle)
+{
+}
+#endif
 /**
  * wma_start() - wma start function.
  *               Initialize event handlers and timers.
@@ -4121,7 +4167,6 @@ QDF_STATUS wma_start(void)
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
 	tp_wma_handle wma_handle;
 	int status;
-	struct wmi_spectral_cmd_ops cmd_ops;
 	struct wmi_unified *wmi_handle;
 
 	WMA_LOGD("%s: Enter", __func__);
@@ -4369,12 +4414,7 @@ QDF_STATUS wma_start(void)
 		qdf_status = QDF_STATUS_E_FAILURE;
 		goto end;
 	}
-
-	cmd_ops.wmi_spectral_configure_cmd_send =
-			wmi_unified_vdev_spectral_configure_cmd_send;
-	cmd_ops.wmi_spectral_enable_cmd_send =
-			wmi_unified_vdev_spectral_enable_cmd_send;
-	wlan_register_wmi_spectral_cmd_ops(wma_handle->pdev, &cmd_ops);
+	wma_register_spectral_cmds(wma_handle);
 
 end:
 	WMA_LOGD("%s: Exit", __func__);
@@ -4569,7 +4609,7 @@ QDF_STATUS wma_wmi_service_close(void)
 	/* free the wma_handle */
 	cds_free_context(QDF_MODULE_ID_WMA, wma_handle);
 
-	qdf_mem_free(((p_cds_contextType) cds_ctx)->cfg_ctx);
+	qdf_mem_free(((struct cds_context *) cds_ctx)->cfg_ctx);
 	WMA_LOGD("%s: Exit", __func__);
 	return QDF_STATUS_SUCCESS;
 }
@@ -4694,12 +4734,12 @@ QDF_STATUS wma_close(void)
 		wma_handle->pdev = NULL;
 	}
 
-	pmo_unregister_pause_bitmap_notifier(wma_handle->psoc,
-		wma_vdev_update_pause_bitmap);
-	pmo_unregister_get_pause_bitmap(wma_handle->psoc,
-		wma_vdev_get_pause_bitmap);
-	pmo_unregister_is_device_in_low_pwr_mode(wma_handle->psoc,
-		wma_vdev_is_device_in_low_pwr_mode);
+	pmo_unregister_get_beacon_interval_callback(wma_handle->psoc);
+	pmo_unregister_get_dtim_period_callback(wma_handle->psoc);
+	pmo_unregister_get_cfg_int_callback(wma_handle->psoc);
+	pmo_unregister_is_device_in_low_pwr_mode(wma_handle->psoc);
+	pmo_unregister_get_pause_bitmap(wma_handle->psoc);
+	pmo_unregister_pause_bitmap_notifier(wma_handle->psoc);
 
 	target_if_free_psoc_tgt_info(wma_handle->psoc);
 
@@ -4799,8 +4839,10 @@ static inline void wma_update_target_services(struct wmi_unified *wmi_handle,
 					       wmi_service_early_rx);
 #ifdef FEATURE_WLAN_SCAN_PNO
 	/* PNO offload */
-	if (wmi_service_enabled(wmi_handle, wmi_service_nlo))
+	if (wmi_service_enabled(wmi_handle, wmi_service_nlo)) {
 		cfg->pno_offload = true;
+		g_fw_wlan_feat_caps |= (1 << PNO);
+	}
 #endif /* FEATURE_WLAN_SCAN_PNO */
 
 #ifdef FEATURE_WLAN_EXTSCAN
@@ -5603,6 +5645,33 @@ static void wma_set_component_caps(struct wlan_objmgr_psoc *psoc)
 	wma_set_pmo_caps(psoc);
 }
 
+#if defined(WLAN_FEATURE_GTK_OFFLOAD) && defined(WLAN_POWER_MANAGEMENT_OFFLOAD)
+static QDF_STATUS wma_register_gtk_offload_event(tp_wma_handle wma_handle)
+{
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	if (!wma_handle) {
+		WMA_LOGE("%s: wma_handle passed is NULL", __func__);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (wmi_service_enabled(wma_handle->wmi_handle,
+				wmi_service_gtk_offload)) {
+		status = wmi_unified_register_event_handler(
+					wma_handle->wmi_handle,
+					wmi_gtk_offload_status_event_id,
+					target_if_pmo_gtk_offload_status_event,
+					WMA_RX_WORK_CTX);
+	}
+	return status;
+}
+#else
+static QDF_STATUS wma_register_gtk_offload_event(tp_wma_handle wma_handle)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif /* WLAN_FEATURE_GTK_OFFLOAD && WLAN_POWER_MANAGEMENT_OFFLOAD */
+
 /**
  * wma_rx_service_ready_event() - event handler to process
  *                                wmi rx sevice ready event.
@@ -5811,19 +5880,11 @@ int wma_rx_service_ready_event(void *handle, uint8_t *cmd_param_info,
 		WMA_LOGE("FW doesnot support WMI_SERVICE_MGMT_TX_WMI, Use HTT interface for Management Tx");
 	}
 
-#ifdef WLAN_FEATURE_GTK_OFFLOAD
-	if (wmi_service_enabled(wmi_handle, wmi_service_gtk_offload)) {
-		status = wmi_unified_register_event_handler(
-					wma_handle->wmi_handle,
-					wmi_gtk_offload_status_event_id,
-					target_if_pmo_gtk_offload_status_event,
-					WMA_RX_WORK_CTX);
-		if (QDF_IS_STATUS_ERROR(status)) {
-			WMA_LOGE("Failed to register GTK offload event cb");
-			goto free_hw_mode_list;
-		}
+	status = wma_register_gtk_offload_event(wma_handle);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		WMA_LOGE("Failed to register GTK offload event cb");
+		goto free_hw_mode_list;
 	}
-#endif /* WLAN_FEATURE_GTK_OFFLOAD */
 
 	status = wmi_unified_register_event_handler(wmi_handle,
 				wmi_tbttoffset_update_event_id,
@@ -5894,11 +5955,13 @@ int wma_rx_service_ready_event(void *handle, uint8_t *cmd_param_info,
 		goto free_hw_mode_list;
 	}
 
-	status = qdf_mc_timer_start(&wma_handle->service_ready_ext_timer,
-				    WMA_SERVICE_READY_EXT_TIMEOUT);
-	if (QDF_IS_STATUS_ERROR(status))
-		WMA_LOGE("Failed to start the service ready ext timer");
-
+	if (wmi_service_enabled(wmi_handle, wmi_service_ext_msg)) {
+		status = qdf_mc_timer_start(
+				&wma_handle->service_ready_ext_timer,
+				WMA_SERVICE_READY_EXT_TIMEOUT);
+		if (QDF_IS_STATUS_ERROR(status))
+			WMA_LOGE("Failed to start the service ready ext timer");
+	}
 	wma_handle->tx_bfee_8ss_enabled =
 		wmi_service_enabled(wmi_handle, wmi_service_8ss_tx_bfee);
 

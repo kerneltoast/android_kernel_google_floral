@@ -1678,8 +1678,11 @@ static void sap_compute_spect_weight(tSapChSelSpectInfo *pSpectInfoParams,
 		 */
 
 		rssi = (int8_t) pSpectCh->rssiAgr;
-		if (ch_in_pcl(sap_ctx, chn_num))
+		if (ch_in_pcl(sap_ctx, pSpectCh->chNum))
 			rssi -= PCL_RSSI_DISCOUNT;
+
+		if (rssi < SOFTAP_MIN_RSSI)
+			rssi = SOFTAP_MIN_RSSI;
 
 		if (pSpectCh->weight == SAP_ACS_WEIGHT_MAX)
 			goto debug_info;
@@ -1697,9 +1700,13 @@ static void sap_compute_spect_weight(tSapChSelSpectInfo *pSpectInfoParams,
 debug_info:
 		/* ------ Debug Info ------ */
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH,
-			  "In %s, Chan=%d Weight= %d rssiAgr=%d bssCount=%d",
+			  "In %s, Chan=%d Weight= %d rssiAgr=%d rssi_pcl_discount: %d bssCount=%d",
 			  __func__, pSpectCh->chNum, pSpectCh->weight,
-			  pSpectCh->rssiAgr, pSpectCh->bssCount);
+			  pSpectCh->rssiAgr, rssi, pSpectCh->bssCount);
+		host_log_acs_chan_spect_weight(pSpectCh->chNum,
+					  (uint16_t)pSpectCh->weight,
+					  pSpectCh->rssiAgr,
+					  pSpectCh->bssCount);
 		/* ------ Debug Info ------ */
 		pSpectCh++;
 	}
@@ -2837,6 +2844,8 @@ sap_ch_sel_end:
 
 	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH,
 		  FL("Running SAP Ch select Completed, Ch=%d"), best_ch_num);
+	host_log_acs_best_chan(best_ch_num, sap_ctx->acsBestChannelInfo.weight);
+
 	if (best_ch_num > 0 && best_ch_num <= 252)
 		return best_ch_num;
 	else

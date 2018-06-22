@@ -1458,12 +1458,12 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_HOST_ARPOFFLOAD_MIN,
 		     CFG_ENABLE_HOST_ARPOFFLOAD_MAX),
 
-	REG_VARIABLE(CFG_HW_FILTER_MODE_NAME, WLAN_PARAM_Integer,
-		     struct hdd_config, hw_filter_mode,
+	REG_VARIABLE(CFG_HW_FILTER_MODE_BITMAP_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, hw_filter_mode_bitmap,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-		     CFG_HW_FILTER_MODE_DEFAULT,
-		     CFG_HW_FILTER_MODE_MIN,
-		     CFG_HW_FILTER_MODE_MAX),
+		     CFG_HW_FILTER_MODE_BITMAP_DEFAULT,
+		     CFG_HW_FILTER_MODE_BITMAP_MIN,
+		     CFG_HW_FILTER_MODE_BITMAP_MAX),
 
 #ifdef FEATURE_WLAN_RA_FILTERING
 	REG_VARIABLE(CFG_RA_FILTER_ENABLE_NAME, WLAN_PARAM_Integer,
@@ -2940,12 +2940,14 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_DEBUG_P2P_REMAIN_ON_CHANNEL_MIN,
 		     CFG_DEBUG_P2P_REMAIN_ON_CHANNEL_MAX),
 
+#ifndef REMOVE_PKT_LOG
 	REG_VARIABLE(CFG_ENABLE_PACKET_LOG, WLAN_PARAM_Integer,
 		     struct hdd_config, enablePacketLog,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
 		     CFG_ENABLE_PACKET_LOG_DEFAULT,
 		     CFG_ENABLE_PACKET_LOG_MIN,
 		     CFG_ENABLE_PACKET_LOG_MAX),
+#endif
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	REG_VARIABLE(CFG_ROAMING_OFFLOAD_NAME, WLAN_PARAM_Integer,
@@ -3354,13 +3356,21 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_SAP_MCC_CHANNEL_AVOIDANCE_MAX),
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
 
-	REG_VARIABLE(CFG_SAP_P2P_11AC_OVERRIDE_NAME, WLAN_PARAM_Integer,
-			struct hdd_config, sap_p2p_11ac_override,
-			VAR_FLAGS_OPTIONAL |
-					VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
-			CFG_SAP_P2P_11AC_OVERRIDE_DEFAULT,
-			CFG_SAP_P2P_11AC_OVERRIDE_MIN,
-			CFG_SAP_P2P_11AC_OVERRIDE_MAX),
+	REG_VARIABLE(CFG_SAP_11AC_OVERRIDE_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, sap_11ac_override,
+		     VAR_FLAGS_OPTIONAL |
+				VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SAP_11AC_OVERRIDE_DEFAULT,
+		     CFG_SAP_11AC_OVERRIDE_MIN,
+		     CFG_SAP_11AC_OVERRIDE_MAX),
+
+	REG_VARIABLE(CFG_GO_11AC_OVERRIDE_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, go_11ac_override,
+		     VAR_FLAGS_OPTIONAL |
+				VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_GO_11AC_OVERRIDE_DEFAULT,
+		     CFG_GO_11AC_OVERRIDE_MIN,
+		     CFG_GO_11AC_OVERRIDE_MAX),
 
 	REG_VARIABLE(CFG_ENABLE_RAMDUMP_COLLECTION, WLAN_PARAM_Integer,
 		     struct hdd_config, is_ramdump_enabled,
@@ -5386,6 +5396,15 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_SECONDARY_RATE_DEFAULT,
 		     CFG_ENABLE_SECONDARY_RATE_MIN,
 		     CFG_ENABLE_SECONDARY_RATE_MAX),
+
+	REG_VARIABLE(CFG_ROAM_FORCE_RSSI_TRIGGER_NAME,
+		     WLAN_PARAM_Integer, struct hdd_config,
+		     roam_force_rssi_trigger,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ROAM_FORCE_RSSI_TRIGGER_DEFAULT,
+		     CFG_ROAM_FORCE_RSSI_TRIGGER_MIN,
+		     CFG_ROAM_FORCE_RSSI_TRIGGER_MAX),
+
 };
 
 
@@ -5705,11 +5724,7 @@ static QDF_STATUS hdd_apply_cfg_ini(struct hdd_context *hdd_ctx,
 	int i;
 	int rv;
 
-	if (MAX_CFG_INI_ITEMS < cRegTableEntries) {
-		hdd_err("MAX_CFG_INI_ITEMS too small, must be at least %ld",
-		       cRegTableEntries);
-		WARN_ON(1);
-	}
+	BUILD_BUG_ON(MAX_CFG_INI_ITEMS < cRegTableEntries);
 
 	for (idx = 0; idx < cRegTableEntries; idx++, pRegEntry++) {
 		/* Calculate the address of the destination field in the structure. */
@@ -6400,8 +6415,10 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [sap_channel_avoidance] value = [%u]",
 		  hdd_ctx->config->sap_channel_avoidance);
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
-	hdd_debug("Name = [%s] value = [%u]", CFG_SAP_P2P_11AC_OVERRIDE_NAME,
-				hdd_ctx->config->sap_p2p_11ac_override);
+	hdd_debug("Name = [%s] value = [%u]", CFG_SAP_11AC_OVERRIDE_NAME,
+		  hdd_ctx->config->sap_11ac_override);
+	hdd_debug("Name = [%s] value = [%u]", CFG_GO_11AC_OVERRIDE_NAME,
+		  hdd_ctx->config->go_11ac_override);
 	hdd_debug("Name = [ChannelBondingMode] Value = [%u]",
 		  hdd_ctx->config->nChannelBondingMode24GHz);
 	hdd_debug("Name = [%s] Value = [%u] ",
@@ -6532,7 +6549,8 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [fhostArpOffload] Value = [%u] ",
 		  hdd_ctx->config->fhostArpOffload);
 	hdd_debug("Name = [%s] Value = [%u]",
-		  CFG_HW_FILTER_MODE_NAME, hdd_ctx->config->hw_filter_mode);
+		  CFG_HW_FILTER_MODE_BITMAP_NAME,
+		  hdd_ctx->config->hw_filter_mode_bitmap);
 	hdd_debug("Name = [%s] Value = [%u]",
 		CFG_MAWC_NLO_ENABLED_NAME,
 		hdd_ctx->config->mawc_nlo_enabled);
@@ -7285,6 +7303,10 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] value = [0x%x]",
 		  CFG_ENABLE_SECONDARY_RATE_NAME,
 		  hdd_ctx->config->enable_secondary_rate);
+	hdd_debug("Name = [%s] Value = [%u]",
+		  CFG_ROAM_FORCE_RSSI_TRIGGER_NAME,
+		  hdd_ctx->config->roam_force_rssi_trigger);
+
 }
 
 
@@ -7499,7 +7521,9 @@ static void hdd_set_rx_mode_value(struct hdd_context *hdd_ctx)
  */
 QDF_STATUS hdd_parse_config_ini(struct hdd_context *hdd_ctx)
 {
-	int status, i = 0;
+	int status = 0;
+	int i = 0;
+	int retry = 0;
 	/** Pointer for firmware image data */
 	const struct firmware *fw = NULL;
 	char *buffer, *line, *pTemp = NULL;
@@ -7511,7 +7535,16 @@ QDF_STATUS hdd_parse_config_ini(struct hdd_context *hdd_ctx)
 
 	memset(cfgIniTable, 0, sizeof(cfgIniTable));
 
-	status = request_firmware(&fw, WLAN_INI_FILE, hdd_ctx->parent_dev);
+	do {
+		if (status == -EAGAIN)
+			msleep(HDD_CFG_REQUEST_FIRMWARE_DELAY);
+
+		status = request_firmware(&fw, WLAN_INI_FILE,
+					  hdd_ctx->parent_dev);
+
+		retry++;
+	} while ((retry < HDD_CFG_REQUEST_FIRMWARE_RETRIES) &&
+		 (status == -EAGAIN));
 
 	if (status) {
 		hdd_alert("request_firmware failed %d", status);
@@ -8894,6 +8927,8 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 			hdd_ctx->config->roamscan_adaptive_dwell_mode;
 	smeConfig->csrConfig.enable_ftopen =
 			hdd_ctx->config->enable_ftopen;
+	smeConfig->csrConfig.roam_force_rssi_trigger =
+			hdd_ctx->config->roam_force_rssi_trigger;
 
 	hdd_update_per_config_to_sme(hdd_ctx, smeConfig);
 

@@ -26,6 +26,7 @@
 #if !defined(WLAN_HDD_SPECTRALSCAN_H)
 #define WLAN_HDD_SPECTRALSCAN_H
 
+#ifdef WLAN_CONV_SPECTRAL_ENABLE
 /*
  * enum spectral_scan_msg_type - spectral scan registration
  * @SPECTRAL_SCAN_REGISTER_REQ: spectral scan app register request
@@ -185,15 +186,37 @@ int wlan_hdd_cfg80211_spectral_scan_get_status(struct wiphy *wiphy,
 						struct wireless_dev *wdev,
 						const void *data,
 						int data_len);
+#else
+#define FEATURE_SPECTRAL_SCAN_VENDOR_COMMANDS
+#endif
 
+#if defined(CNSS_GENL) && defined(WLAN_CONV_SPECTRAL_ENABLE)
 /**
  * spectral_scan_activate_service() - Activate spectral scan  message handler
  *
- *  This function registers a handler to receive netlink message from
- *  the spectral scan application process.
+ * This function registers a handler to receive netlink message from
+ * the spectral scan application process.
  *
- * Return - 0 for success, non zero for failure
+ * Return: None
  */
-int spectral_scan_activate_service(void);
+void spectral_scan_activate_service(void);
 
+/**
+ * spectral_scan_deactivate_service() - Deactivate spectral scan message handler
+ *
+ * This function deregisters a handler to receive netlink message from
+ * the spectral scan application process.
+ *
+ * Return: None
+ */
+void spectral_scan_deactivate_service(void);
+#else
+static inline void spectral_scan_activate_service(void)
+{
+}
+
+static inline void spectral_scan_deactivate_service(void)
+{
+}
+#endif
 #endif

@@ -22,6 +22,8 @@
 #ifndef _WLAN_PMO_WOW_H_
 #define _WLAN_PMO_WOW_H_
 
+#ifdef WLAN_POWER_MANAGEMENT_OFFLOAD
+
 #include "wlan_pmo_main.h"
 #include "wlan_pmo_wow_public_struct.h"
 #include "wlan_pmo_tgt_api.h"
@@ -107,7 +109,8 @@
 
 #define PMO_WOW_FILTERS_ARP_NS		2
 #define PMO_WOW_FILTERS_PKT_OR_APF	5
-#define PMO_WOW_FILTERS_MAX		22
+/* Default Listen Interval */
+#define PMO_DEFAULT_LISTEN_INTERVAL 1
 
 /**
  * pmo_get_and_increment_wow_default_ptrn() -Get and increment wow default ptrn
@@ -324,23 +327,25 @@ QDF_STATUS pmo_core_del_wow_user_pattern(struct wlan_objmgr_vdev *vdev,
  * pmo_core_enable_wakeup_event() -  enable wow wakeup events
  * @psoc: objmgr psoc
  * @vdev_id: vdev id
- * @bitmap: Event bitmap
+ * @wow_event: wow event to enable
  *
  * Return: none
  */
 void pmo_core_enable_wakeup_event(struct wlan_objmgr_psoc *psoc,
-	uint32_t vdev_id, uint32_t *bitmap);
+				  uint32_t vdev_id,
+				  WOW_WAKE_EVENT_TYPE wow_event);
 
 /**
  * pmo_core_disable_wakeup_event() -  disable wow wakeup events
  * @psoc: objmgr psoc
  * @vdev_id: vdev id
- * @bitmap: Event bitmap
+ * @wow_event: wow event to disable
  *
  * Return: none
  */
 void pmo_core_disable_wakeup_event(struct wlan_objmgr_psoc *psoc,
-	uint32_t vdev_id, uint32_t *bitmap);
+				   uint32_t vdev_id,
+				   WOW_WAKE_EVENT_TYPE wow_event);
 
 /**
  * pmo_is_wow_applicable(): should enable wow
@@ -696,4 +701,7 @@ static inline void pmo_get_event_bitmap_idx(WOW_WAKE_EVENT_TYPE event,
  * Return: number of WoW filters supported
  */
 uint8_t pmo_get_num_wow_filters(struct wlan_objmgr_psoc *psoc);
+
+#endif /* WLAN_POWER_MANAGEMENT_OFFLOAD */
+
 #endif /* end  of _WLAN_PMO_WOW_H_ */

@@ -370,6 +370,10 @@ QDF_STATUS wma_roam_scan_offload_mode(tp_wma_handle wma_handle,
 		params->roam_offload_params.qos_enabled,
 		params->roam_offload_params.ho_delay_for_rx, params->mode);
 
+	WMA_LOGD(FL("min_delay_btw_roam_scans:%d, roam_tri_reason_bitmask:%d"),
+		 params->min_delay_btw_roam_scans,
+		 params->roam_trigger_reason_bitmask);
+
 	status = wmi_unified_roam_scan_offload_mode_cmd(wma_handle->wmi_handle,
 				scan_cmd_fp, params);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -1342,8 +1346,13 @@ static QDF_STATUS wma_roam_scan_btm_offload(tp_wma_handle wma_handle,
 	params->btm_solicited_timeout = roam_req->btm_solicited_timeout;
 	params->btm_max_attempt_cnt = roam_req->btm_max_attempt_cnt;
 	params->btm_sticky_time = roam_req->btm_sticky_time;
+
+	WMA_LOGD("%s: Sending BTM offload to FW for vdev %u btm_offload_config %u",
+		 __func__, params->vdev_id, params->btm_offload_config);
+
 	status = wmi_unified_send_btm_config(wma_handle->wmi_handle, params);
 	qdf_mem_free(params);
+
 
 	return status;
 }
@@ -1368,11 +1377,9 @@ QDF_STATUS wma_send_offload_11k_params(WMA_HANDLE handle,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (!WMI_SERVICE_EXT_IS_ENABLED(wma_handle->wmi_service_bitmap,
-				wma_handle->wmi_service_ext_bitmap,
-				WMI_SERVICE_11K_NEIGHBOUR_REPORT_SUPPORT)) {
-		WMA_LOGE("%s: FW doesn't support 11k offload",
-			 __func__);
+	if (!wmi_service_enabled(wma_handle->wmi_handle,
+	    wmi_service_11k_neighbour_report_support)) {
+		WMA_LOGE(FL("FW doesn't support 11k offload"));
 		return QDF_STATUS_E_NOSUPPORT;
 	}
 
@@ -1470,7 +1477,8 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 			/* Don't use rssi triggered roam scans if external app
 			 * is in control of channel list.
 			 */
-			if (roam_req->ChannelCacheType != CHANNEL_LIST_STATIC)
+			if (roam_req->ChannelCacheType != CHANNEL_LIST_STATIC ||
+			    roam_req->roam_force_rssi_trigger)
 				mode |= WMI_ROAM_SCAN_MODE_RSSI_CHANGE;
 
 		} else {
@@ -1590,6 +1598,13 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 					 qdf_status);
 				break;
 			}
+		}
+
+		/* Send BTM config as disabled during RSO Stop */
+		qdf_status = wma_roam_scan_btm_offload(wma_handle, roam_req);
+		if (qdf_status != QDF_STATUS_SUCCESS) {
+			WMA_LOGE(FL("Sending BTM config to fw failed"));
+			break;
 		}
 
 		wma_handle->suitable_ap_hb_failure = false;
@@ -1759,7 +1774,8 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 			/* Don't use rssi triggered roam scans if external app
 			 * is in control of channel list.
 			 */
-			if (roam_req->ChannelCacheType != CHANNEL_LIST_STATIC)
+			if (roam_req->ChannelCacheType != CHANNEL_LIST_STATIC ||
+			    roam_req->roam_force_rssi_trigger)
 				mode |= WMI_ROAM_SCAN_MODE_RSSI_CHANGE;
 
 		} else {

@@ -2772,6 +2772,14 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 		hdd_err("config is NULL");
 		return QDF_STATUS_E_NULL_VALUE;
 	}
+
+	/*
+	 * Enable roaming on other STA iface except this one.
+	 * Firmware dosent support connection on one STA iface while
+	 * roaming on other STA iface
+	 */
+	wlan_hdd_enable_roaming(adapter);
+
 	/* HDD has initiated disconnect, do not send connect result indication
 	 * to kernel as it will be handled by __cfg80211_disconnect.
 	 */
@@ -3151,13 +3159,13 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 				 * wpa supplicant expecting WPA/RSN IE in
 				 * connect result.
 				 */
-				csr_roam_get_wpa_rsn_req_ie(WLAN_HDD_GET_HAL_CTX
+				sme_roam_get_wpa_rsn_req_ie(WLAN_HDD_GET_HAL_CTX
 								    (adapter),
 							    adapter->session_id,
 							    &reqRsnLength,
 							    reqRsnIe);
 
-				csr_roam_get_wpa_rsn_rsp_ie(WLAN_HDD_GET_HAL_CTX
+				sme_roam_get_wpa_rsn_rsp_ie(WLAN_HDD_GET_HAL_CTX
 								    (adapter),
 							    adapter->session_id,
 							    &rspRsnLength,
@@ -3220,7 +3228,7 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 			 * in case of reassociation also need to indicate it to
 			 * supplicant.
 			 */
-			csr_roam_get_wpa_rsn_req_ie(
+			sme_roam_get_wpa_rsn_req_ie(
 						WLAN_HDD_GET_HAL_CTX(adapter),
 						adapter->session_id,
 						&reqRsnLength, reqRsnIe);
@@ -3423,6 +3431,15 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 		wlan_hdd_netif_queue_control(adapter,
 					   WLAN_STOP_ALL_NETIF_QUEUE_N_CARRIER,
 					   WLAN_CONTROL_PATH);
+		/*
+		 * if hddDisconInProgress is set and roamResult is
+		 * eCSR_ROAM_RESULT_SCAN_FOR_SSID_FAILURE that mean HDD is
+		 * waiting on disconnect_comp_var so unblock anyone waiting for
+		 * disconnect to complete.
+		 */
+		if ((roamResult == eCSR_ROAM_RESULT_SCAN_FOR_SSID_FAILURE) &&
+		    hddDisconInProgress)
+			complete(&adapter->disconnect_comp_var);
 	}
 
 	return QDF_STATUS_SUCCESS;

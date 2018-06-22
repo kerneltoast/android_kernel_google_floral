@@ -344,7 +344,6 @@ QDF_STATUS sme_ser_cmd_callback(void *buf,
 				enum wlan_serialization_cb_reason reason);
 QDF_STATUS sme_process_msg(tHalHandle hHal, struct scheduler_msg *pMsg);
 QDF_STATUS sme_mc_process_handler(struct scheduler_msg *msg);
-void sme_free_msg(tHalHandle hHal, struct scheduler_msg *pMsg);
 QDF_STATUS sme_scan_get_result(tHalHandle hHal, uint8_t sessionId,
 		tCsrScanResultFilter *pFilter,
 		tScanResultHandle *phResult);
@@ -401,16 +400,61 @@ QDF_STATUS sme_roam_set_pmkid_cache(tHalHandle hHal, uint8_t sessionId,
 		tPmkidCacheInfo *pPMKIDCache,
 		uint32_t numItems,
 		bool update_entire_cache);
+
+/**
+ * sme_get_pmk_info(): A wrapper function to request CSR to save PMK
+ * @hal: Global structure
+ * @session_id: SME session_id
+ * @pmk_cache: pointer to a structure of pmk
+ *
+ * Return: none
+ */
+void sme_get_pmk_info(tHalHandle hal, uint8_t session_id,
+		      tPmkidCacheInfo *pmk_cache);
+
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 QDF_STATUS sme_roam_set_psk_pmk(tHalHandle hHal, uint8_t sessionId,
 		uint8_t *pPSK_PMK, size_t pmk_len);
 #endif
-QDF_STATUS sme_roam_get_security_req_ie(tHalHandle hHal, uint8_t sessionId,
-		uint32_t *pLen, uint8_t *pBuf,
-		eCsrSecurityType secType);
-QDF_STATUS sme_roam_get_security_rsp_ie(tHalHandle hHal, uint8_t sessionId,
-		uint32_t *pLen, uint8_t *pBuf,
-		eCsrSecurityType secType);
+
+/**
+ * sme_roam_get_wpa_rsn_req_ie() - Retrieve WPA/RSN Request IE
+ * @hal: HAL handle
+ * @session_id: ID of the specific session
+ * @len: Caller allocated memory that has the length of @buf as input.
+ *	Upon returned, @len has the length of the IE store in @buf
+ * @buf: Caller allocated memory that contain the IE field, if any,
+ *	upon return
+ *
+ * A wrapper function to request CSR to return the WPA or RSN IE CSR
+ * passes to PE to JOIN request or START_BSS request
+ * This is a synchronous call.
+ *
+ * Return: QDF_STATUS - when fail, it usually means the buffer allocated is not
+ *			 big enough
+ */
+QDF_STATUS sme_roam_get_wpa_rsn_req_ie(tHalHandle hal, uint8_t session_id,
+				       uint32_t *len, uint8_t *buf);
+
+/**
+ * sme_roam_get_wpa_rsn_rsp_ie() - Retrieve WPA/RSN Response IE
+ * @hal: HAL handle
+ * @session_id: ID of the specific session
+ * @len: Caller allocated memory that has the length of @buf as input.
+ *	Upon returned, @len has the length of the IE store in @buf
+ * @buf: Caller allocated memory that contain the IE field, if any,
+ *	upon return
+ *
+ * A wrapper function to request CSR to return the WPA or RSN IE CSR
+ * passes to PE to JOIN request or START_BSS request
+ * This is a synchronous call.
+ *
+ * Return: QDF_STATUS - when fail, it usually means the buffer allocated is not
+ *			 big enough
+ */
+QDF_STATUS sme_roam_get_wpa_rsn_rsp_ie(tHalHandle hal, uint8_t session_id,
+				       uint32_t *len, uint8_t *buf);
+
 uint32_t sme_roam_get_num_pmkid_cache(tHalHandle hHal, uint8_t sessionId);
 QDF_STATUS sme_roam_get_pmkid_cache(tHalHandle hHal, uint8_t sessionId,
 		uint32_t *pNum,
@@ -490,7 +534,15 @@ QDF_STATUS sme_generic_change_country_code(tHalHandle hHal,
 					   uint8_t *pCountry);
 
 
-QDF_STATUS sme_update_channel_list(tpAniSirGlobal mac_ctx);
+/**
+ * sme_update_channel_list() - Update configured channel list to fwr
+ * This is a synchronous API.
+ * @hal: HAL handle returned by mac_open.
+ *
+ * Return: QDF_STATUS  SUCCESS.
+ * FAILURE or RESOURCES  The API finished and failed.
+ */
+QDF_STATUS sme_update_channel_list(tHalHandle hal);
 
 QDF_STATUS sme_tx_fail_monitor_start_stop_ind(tHalHandle hHal,
 		uint8_t tx_fail_count,
@@ -917,7 +969,7 @@ QDF_STATUS sme_set_link_layer_stats_ind_cb(tHalHandle hHal,
 		void (*callbackRoutine)(void *callbackCtx,
 				int indType, void *pRsp));
 QDF_STATUS sme_set_link_layer_ext_cb(tHalHandle hal,
-		     void (*ll_stats_ext_cb)(tHddHandle callback_ctx,
+		     void (*ll_stats_ext_cb)(hdd_handle_t callback_ctx,
 					     tSirLLStatsResults * rsp));
 QDF_STATUS sme_reset_link_layer_stats_ind_cb(tHalHandle hhal);
 QDF_STATUS sme_ll_stats_set_thresh(tHalHandle hal,
@@ -980,6 +1032,16 @@ QDF_STATUS sme_wifi_start_logger(tHalHandle hal,
 bool sme_neighbor_middle_of_roaming(tHalHandle hHal,
 						uint8_t sessionId);
 
+/*
+ * sme_is_any_session_in_middle_of_roaming() - check if roaming is in progress
+ * @hal: MAC Handle
+ *
+ * Checks if any SME session is in middle of roaming
+ *
+ * Return : true if roaming is in progress else false
+ */
+bool sme_is_any_session_in_middle_of_roaming(mac_handle_t hal);
+
 /**
  * sme_enable_uapsd_for_ac() - enable uapsd for access category request to WMA
  * @sta_id: station id
@@ -1029,7 +1091,7 @@ void sme_update_user_configured_nss(tHalHandle hal, uint8_t nss);
 
 bool sme_is_any_session_in_connected_state(tHalHandle h_hal);
 
-QDF_STATUS sme_pdev_set_pcl(struct policy_mgr_pcl_list msg);
+QDF_STATUS sme_pdev_set_pcl(struct policy_mgr_pcl_list *msg);
 QDF_STATUS sme_pdev_set_hw_mode(struct policy_mgr_hw_mode msg);
 void sme_register_hw_mode_trans_cb(tHalHandle hal,
 		hw_mode_transition_cb callback);
@@ -1469,7 +1531,8 @@ QDF_STATUS sme_get_nud_debug_stats(tHalHandle hal,
 				   struct get_arp_stats_params
 				   *get_stats_param);
 QDF_STATUS sme_set_nud_debug_stats_cb(tHalHandle hal,
-				      void (*cb)(void *, struct rsp_stats *));
+			void (*cb)(void *, struct rsp_stats *, void *context),
+			void *context);
 
 /**
  * sme_set_chan_info_callback() - Register chan info callback

@@ -576,6 +576,11 @@ static int __wlan_hdd_cfg80211_scan(struct wiphy *wiphy,
 	params.default_ie.len = 0;
 	/* Store the Scan IE's in Adapter*/
 	if (request->ie_len) {
+		if (request->ie_len > SIR_MAC_MAX_ADD_IE_LENGTH) {
+			hdd_debug("Invalid ie_len: %zu", request->ie_len);
+			return -EINVAL;
+		}
+
 		/* save this for future association (join requires this) */
 		memset(&scan_info->scan_add_ie, 0, sizeof(scan_info->scan_add_ie));
 		memcpy(scan_info->scan_add_ie.addIEdata, request->ie,
@@ -870,6 +875,10 @@ struct nla_policy scan_policy[QCA_WLAN_VENDOR_ATTR_SCAN_MAX + 1] = {
 	[QCA_WLAN_VENDOR_ATTR_SCAN_COOKIE] = {.type = NLA_U64},
 	[QCA_WLAN_VENDOR_ATTR_SCAN_IE] = {.type = NLA_BINARY,
 					  .len = MAX_DEFAULT_SCAN_IE_LEN},
+	[QCA_WLAN_VENDOR_ATTR_SCAN_MAC] = {.type = NLA_UNSPEC,
+					   .len = QDF_MAC_ADDR_SIZE},
+	[QCA_WLAN_VENDOR_ATTR_SCAN_MAC_MASK] = {.type = NLA_UNSPEC,
+						.len = QDF_MAC_ADDR_SIZE},
 };
 
 /**

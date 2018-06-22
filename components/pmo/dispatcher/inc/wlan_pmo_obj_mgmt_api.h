@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -26,6 +26,7 @@
 #include "wlan_pmo_common_public_struct.h"
 #include "wlan_pmo_obj_mgmt_public_struct.h"
 
+#ifdef WLAN_POWER_MANAGEMENT_OFFLOAD
 /**
  * pmo_init() - initialize pmo_ctx context.
  *
@@ -53,8 +54,8 @@ QDF_STATUS pmo_deinit(void);
  *
  * Return QDF_STATUS status in case of success else return error
  */
-QDF_STATUS pmo_psoc_object_created_notification(
-		struct wlan_objmgr_psoc *psoc, void *arg);
+QDF_STATUS pmo_psoc_object_created_notification(struct wlan_objmgr_psoc *psoc,
+						void *arg);
 
 /**
  *  pmo_psoc_object_destroyed_notification(): pmo psoc delete handler
@@ -65,8 +66,8 @@ QDF_STATUS pmo_psoc_object_created_notification(
  *
  * Return QDF_STATUS status in case of success else return error
  */
-QDF_STATUS pmo_psoc_object_destroyed_notification(
-		struct wlan_objmgr_psoc *psoc, void *arg);
+QDF_STATUS pmo_psoc_object_destroyed_notification(struct wlan_objmgr_psoc *psoc,
+						  void *arg);
 
 /**
  * pmo_vdev_object_created_notification(): pmo vdev create handler
@@ -77,8 +78,8 @@ QDF_STATUS pmo_psoc_object_destroyed_notification(
  *
  * Return QDF_STATUS status in case of success else return error
  */
-QDF_STATUS pmo_vdev_object_created_notification(
-		struct wlan_objmgr_vdev *vdev, void *arg);
+QDF_STATUS pmo_vdev_object_created_notification(struct wlan_objmgr_vdev *vdev,
+						void *arg);
 
 /**
  * pmo_vdev_ready() - handles vdev ready in firmware event
@@ -101,8 +102,8 @@ QDF_STATUS pmo_vdev_ready(struct wlan_objmgr_vdev *vdev);
  *
  * Return QDF_STATUS status in case of success else return error
  */
-QDF_STATUS pmo_vdev_object_destroyed_notification(
-		struct wlan_objmgr_vdev *vdev, void *arg);
+QDF_STATUS pmo_vdev_object_destroyed_notification(struct wlan_objmgr_vdev *vdev,
+						  void *arg);
 
 /**
  * pmo_register_suspend_handler(): register suspend handler for components
@@ -112,10 +113,9 @@ QDF_STATUS pmo_vdev_object_destroyed_notification(
  *
  * Return QDF_STATUS status -in case of success else return error
  */
-QDF_STATUS pmo_register_suspend_handler(
-		enum wlan_umac_comp_id id,
-		pmo_psoc_suspend_handler handler,
-		void *arg);
+QDF_STATUS pmo_register_suspend_handler(enum wlan_umac_comp_id id,
+					pmo_psoc_suspend_handler handler,
+					void *arg);
 
 /**
  * pmo_unregister_suspend_handler():unregister suspend handler for components
@@ -124,9 +124,8 @@ QDF_STATUS pmo_register_suspend_handler(
  *
  * Return QDF_STATUS status -in case of success else return error
  */
-QDF_STATUS pmo_unregister_suspend_handler(
-		enum wlan_umac_comp_id id,
-		pmo_psoc_suspend_handler handler);
+QDF_STATUS pmo_unregister_suspend_handler(enum wlan_umac_comp_id id,
+					  pmo_psoc_suspend_handler handler);
 
 /**
  * pmo_register_resume_handler(): API to register resume handler for components
@@ -136,10 +135,9 @@ QDF_STATUS pmo_unregister_suspend_handler(
  *
  * Return QDF_STATUS status - in case of success else return error
  */
-QDF_STATUS pmo_register_resume_handler(
-		enum wlan_umac_comp_id id,
-		pmo_psoc_resume_handler handler,
-		void *arg);
+QDF_STATUS pmo_register_resume_handler(enum wlan_umac_comp_id id,
+				       pmo_psoc_resume_handler handler,
+				       void *arg);
 
 /**
  * pmo_unregister_resume_handler(): unregister resume handler for components
@@ -148,9 +146,8 @@ QDF_STATUS pmo_register_resume_handler(
  *
  * Return QDF_STATUS status - in case of success else return error
  */
-QDF_STATUS pmo_unregister_resume_handler(
-		enum wlan_umac_comp_id id,
-		pmo_psoc_resume_handler handler);
+QDF_STATUS pmo_unregister_resume_handler(enum wlan_umac_comp_id id,
+					 pmo_psoc_resume_handler handler);
 
 /**
  * pmo_suspend_all_components(): API to suspend all component
@@ -160,7 +157,7 @@ QDF_STATUS pmo_unregister_resume_handler(
  * Return QDF_STATUS status - in case of success else return error
  */
 QDF_STATUS pmo_suspend_all_components(struct wlan_objmgr_psoc *psoc,
-		enum qdf_suspend_type suspend_type);
+				      enum qdf_suspend_type suspend_type);
 
 /**
  * pmo_resume_all_components(): API to resume all component
@@ -170,7 +167,7 @@ QDF_STATUS pmo_suspend_all_components(struct wlan_objmgr_psoc *psoc,
  * Return QDF_STATUS status - in case of success else return error
  */
 QDF_STATUS pmo_resume_all_components(struct wlan_objmgr_psoc *psoc,
-		enum qdf_suspend_type suspend_type);
+				     enum qdf_suspend_type suspend_type);
 
 /**
  * pmo_register_pause_bitmap_notifier(): API to register pause bitmap notifier
@@ -179,20 +176,17 @@ QDF_STATUS pmo_resume_all_components(struct wlan_objmgr_psoc *psoc,
  *
  * Return QDF_STATUS status - in case of success else return error
  */
-QDF_STATUS pmo_register_pause_bitmap_notifier(
-		struct wlan_objmgr_psoc *psoc,
-		pmo_notify_pause_bitmap handler);
+QDF_STATUS pmo_register_pause_bitmap_notifier(struct wlan_objmgr_psoc *psoc,
+					      pmo_notify_pause_bitmap handler);
 
 /**
- * pmo_unregister_pause_bitmap_notifier(): API to unregister pause bitmap notifier
+ * pmo_unregister_pause_bitmap_notifier(): API to unregister pause bitmap
+ * notifier
  * @psoc: objmgr psoc handle
- * @handler: pause bitmap updated notifier
  *
  * Return QDF_STATUS status - in case of success else return error
  */
-QDF_STATUS pmo_unregister_pause_bitmap_notifier(
-		struct wlan_objmgr_psoc *psoc,
-		pmo_notify_pause_bitmap handler);
+QDF_STATUS pmo_unregister_pause_bitmap_notifier(struct wlan_objmgr_psoc *psoc);
 
 /**
  * pmo_register_get_pause_bitmap(): API to get register pause bitmap notifier
@@ -202,18 +196,59 @@ QDF_STATUS pmo_unregister_pause_bitmap_notifier(
  * Return QDF_STATUS status - in case of success else return error
  */
 QDF_STATUS pmo_register_get_pause_bitmap(struct wlan_objmgr_psoc *psoc,
-		pmo_get_pause_bitmap handler);
+					 pmo_get_pause_bitmap handler);
 
 /**
- * pmo_unregister_get_pause_bitmap(): API to unregister get pause bitmap callback
+ * pmo_unregister_get_pause_bitmap(): API to unregister get pause bitmap
+ * callback
  * @psoc: objmgr psoc handle
- * @handler: pause bitmap updated notifier
  *
  * Return QDF_STATUS status - in case of success else return error
  */
-QDF_STATUS pmo_unregister_get_pause_bitmap(struct wlan_objmgr_psoc *psoc,
-		pmo_get_pause_bitmap handler);
+QDF_STATUS pmo_unregister_get_pause_bitmap(struct wlan_objmgr_psoc *psoc);
 
+/**
+ * pmo_register_get_dtim_period_callback(): API to register callback that gets
+ * dtim period from mlme
+ * @psoc: objmgr psoc handle
+ * @handler: pointer to the callback function
+ *
+ * Return: QDF_STATUS_SUCCESS in case of success else error
+ */
+QDF_STATUS pmo_register_get_dtim_period_callback(struct wlan_objmgr_psoc *psoc,
+						 pmo_get_dtim_period handler);
+
+/**
+ * pmo_unregister_get_dtim_period_callback(): API to unregister callback that
+ * gets dtim period from mlme
+ * @psoc: objmgr psoc handle
+ *
+ * Return: QDF_STATUS_SUCCESS in case of success else error
+ */
+QDF_STATUS
+pmo_unregister_get_dtim_period_callback(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * pmo_register_get_beacon_interval_callback(): API to register callback that
+ * gets beacon interval from mlme
+ * @psoc: objmgr psoc handle
+ * @handler: pointer to the callback function
+ *
+ * Return: QDF_STATUS_SUCCESS in case of success else error
+ */
+QDF_STATUS
+pmo_register_get_beacon_interval_callback(struct wlan_objmgr_psoc *psoc,
+					  pmo_get_beacon_interval handler);
+
+/**
+ * pmo_unregister_get_beacon_interval_callback(): API to unregister callback
+ * that gets beacon interval from mlme
+ * @psoc: objmgr psoc handle
+ *
+ * Return: QDF_STATUS_SUCCESS in case of success else error
+ */
+QDF_STATUS
+pmo_unregister_get_beacon_interval_callback(struct wlan_objmgr_psoc *psoc);
 
 /**
  * pmo_register_is_device_in_low_pwr_mode(): API to get register device  power
@@ -224,18 +259,202 @@ QDF_STATUS pmo_unregister_get_pause_bitmap(struct wlan_objmgr_psoc *psoc,
  * Return QDF_STATUS status - in case of success else return error
  */
 QDF_STATUS pmo_register_is_device_in_low_pwr_mode(struct wlan_objmgr_psoc *psoc,
-		pmo_is_device_in_low_pwr_mode handler);
+					 pmo_is_device_in_low_pwr_mode handler);
 
 /**
  * pmo_unregister_is_device_in_low_pwr_mode(): API to unregister device  power
  * save check notifier.
  * @psoc: objmgr psoc handle
- * @handler: device power save check notifier
  *
  * Return QDF_STATUS status - in case of success else return error
  */
-QDF_STATUS pmo_unregister_is_device_in_low_pwr_mode(
-			struct wlan_objmgr_psoc *psoc,
-			pmo_is_device_in_low_pwr_mode handler);
+QDF_STATUS
+pmo_unregister_is_device_in_low_pwr_mode(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * pmo_register_get_cfg_int_callback(): API to register callback for getting
+ * cfg integer from mlme
+ * @psoc: objmgr psoc handle
+ * @handler: get cfg integer callback notifier
+ *
+ * Return QDF_STATUS status - in case of success else return error
+ */
+QDF_STATUS pmo_register_get_cfg_int_callback(struct wlan_objmgr_psoc *psoc,
+					     pmo_get_cfg_int handler);
+
+/**
+ * pmo_unregister_get_cfg_int_callback(): API to unregister callback that gets
+ * cfg integer from mlme
+ * @psoc: objmgr psoc handle
+ *
+ * Return QDF_STATUS status - in case of success else return error
+ */
+QDF_STATUS pmo_unregister_get_cfg_int_callback(struct wlan_objmgr_psoc *psoc);
+
+#else /* WLAN_POWER_MANAGEMENT_OFFLOAD */
+
+static inline QDF_STATUS pmo_init(void)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS pmo_deinit(void)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_psoc_object_created_notification(struct wlan_objmgr_psoc *psoc, void *arg)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_psoc_object_destroyed_notification(struct wlan_objmgr_psoc *psoc, void *arg)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_vdev_object_created_notification(struct wlan_objmgr_vdev *vdev, void *arg)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_vdev_ready(struct wlan_objmgr_vdev *vdev)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_vdev_object_destroyed_notification(struct wlan_objmgr_vdev *vdev, void *arg)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_register_suspend_handler(enum wlan_umac_comp_id id,
+			     pmo_psoc_suspend_handler handler,
+			     void *arg)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_unregister_suspend_handler(enum wlan_umac_comp_id id,
+			       pmo_psoc_suspend_handler handler)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_register_resume_handler(enum wlan_umac_comp_id id,
+			    pmo_psoc_resume_handler handler,
+			    void *arg)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_unregister_resume_handler(enum wlan_umac_comp_id id,
+			      pmo_psoc_resume_handler handler)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_suspend_all_components(struct wlan_objmgr_psoc *psoc,
+			   enum qdf_suspend_type suspend_type)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_resume_all_components(struct wlan_objmgr_psoc *psoc,
+			  enum qdf_suspend_type suspend_type)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_register_pause_bitmap_notifier(struct wlan_objmgr_psoc *psoc,
+				   pmo_notify_pause_bitmap handler)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_unregister_pause_bitmap_notifier(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_register_get_pause_bitmap(struct wlan_objmgr_psoc *psoc,
+			      pmo_get_pause_bitmap handler)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_unregister_get_pause_bitmap(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_register_is_device_in_low_pwr_mode(struct wlan_objmgr_psoc *psoc,
+				       pmo_is_device_in_low_pwr_mode handler)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_unregister_is_device_in_low_pwr_mode(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_register_get_cfg_int_callback(struct wlan_objmgr_psoc *psoc,
+				  pmo_get_cfg_int handler)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_unregister_get_cfg_int_callback(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_register_get_dtim_period_callback(struct wlan_objmgr_psoc *psoc,
+				      pmo_get_dtim_period handler)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_unregister_get_dtim_period_callback(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_register_get_beacon_interval_callback(struct wlan_objmgr_psoc *psoc,
+					  pmo_get_beacon_interval handler)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS
+pmo_unregister_get_beacon_interval_callback(struct wlan_objmgr_psoc *psoc)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+#endif /* WLAN_POWER_MANAGEMENT_OFFLOAD */
 
 #endif /* end  of _WLAN_PMO_OBJ_MGMT_API_H_ */

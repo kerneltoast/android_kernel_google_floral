@@ -1473,6 +1473,7 @@ typedef struct sSirSmeDisassocInd {
 typedef struct sSirSmeDisassocCnf {
 	uint16_t messageType;   /* eWNI_SME_DISASSOC_CNF */
 	uint16_t length;
+	uint8_t sme_session_id;
 	tSirResultCodes statusCode;
 	struct qdf_mac_addr bssid;
 	struct qdf_mac_addr peer_macaddr;
@@ -2144,11 +2145,6 @@ typedef struct sSmeGetScanChnRsp {
 	uint8_t numChn;
 	tLimScanChn scanChn[1];
 } tSmeGetScanChnRsp, *tpSmeGetScanChnRsp;
-
-typedef struct sLimScanChnInfo {
-	uint8_t numChnInfo;     /* number of channels in scanChn */
-	tLimScanChn scanChn[SIR_MAX_SUPPORTED_CHANNEL_LIST];
-} tLimScanChnInfo;
 
 typedef struct sSirSmeGetAssocSTAsReq {
 	uint16_t messageType;   /* eWNI_SME_GET_ASSOC_STAS_REQ */
@@ -2913,6 +2909,7 @@ typedef struct sSirRoamOffloadScanReq {
 	uint32_t ho_delay_for_rx;
 	uint32_t min_delay_btw_roam_scans;
 	uint32_t roam_trigger_reason_bitmask;
+	bool roam_force_rssi_trigger;
 } tSirRoamOffloadScanReq, *tpSirRoamOffloadScanReq;
 
 typedef struct sSirRoamOffloadScanRsp {

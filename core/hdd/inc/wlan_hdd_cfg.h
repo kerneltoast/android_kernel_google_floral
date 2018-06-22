@@ -2259,6 +2259,31 @@ enum hdd_dot11_mode {
 
 /*
  * <ini>
+ * roam_force_rssi_trigger - To force RSSI trigger
+ * irrespective of channel list type
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to set roam scan mode
+ * WMI_ROAM_SCAN_MODE_RSSI_CHANGE, irrespective of whether
+ * channel list type is CHANNEL_LIST_STATIC or not
+ *
+ * Related: None
+ *
+ * Supported Feature: Roaming
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ROAM_FORCE_RSSI_TRIGGER_NAME  "roam_force_rssi_trigger"
+#define CFG_ROAM_FORCE_RSSI_TRIGGER_MIN     (0)
+#define CFG_ROAM_FORCE_RSSI_TRIGGER_MAX     (1)
+#define CFG_ROAM_FORCE_RSSI_TRIGGER_DEFAULT (1)
+
+/*
+ * <ini>
  * roamscan_adaptive_dwell_mode - Sets dwell time adaptive mode
  * @Min: 0
  * @Max: 4
@@ -4319,7 +4344,7 @@ enum station_keepalive_method {
  * MAWCEnabled - Enable/Disable Motion Aided Wireless Connectivity Global
  * @Min: 0 - Disabled
  * @Max: 1 - Enabled
- * @Default: 1
+ * @Default: 0
  *
  * This ini is used to controls the MAWC feature globally.
  * MAWC is Motion Aided Wireless Connectivity.
@@ -4335,14 +4360,14 @@ enum station_keepalive_method {
 #define CFG_LFR_MAWC_FEATURE_ENABLED_NAME                   "MAWCEnabled"
 #define CFG_LFR_MAWC_FEATURE_ENABLED_MIN                    (0)
 #define CFG_LFR_MAWC_FEATURE_ENABLED_MAX                    (1)
-#define CFG_LFR_MAWC_FEATURE_ENABLED_DEFAULT                (1)
+#define CFG_LFR_MAWC_FEATURE_ENABLED_DEFAULT                (0)
 
 /*
  * <ini>
  * mawc_roam_enabled - Enable/Disable MAWC during roaming
  * @Min: 0 - Disabled
  * @Max: 1 - Enabled
- * @Default: 1
+ * @Default: 0
  *
  * This ini is used to control MAWC during roaming.
  *
@@ -4357,7 +4382,7 @@ enum station_keepalive_method {
 #define CFG_MAWC_ROAM_ENABLED_NAME            "mawc_roam_enabled"
 #define CFG_MAWC_ROAM_ENABLED_MIN             (0)
 #define CFG_MAWC_ROAM_ENABLED_MAX             (1)
-#define CFG_MAWC_ROAM_ENABLED_DEFAULT         (1)
+#define CFG_MAWC_ROAM_ENABLED_DEFAULT         (0)
 
 /*
  * <ini>
@@ -4671,10 +4696,10 @@ enum station_keepalive_method {
  *
  * </ini>
  */
-#define CFG_HW_FILTER_MODE_NAME		"gHwFilterMode"
-#define CFG_HW_FILTER_MODE_MIN		(0)
-#define CFG_HW_FILTER_MODE_MAX		(3)
-#define CFG_HW_FILTER_MODE_DEFAULT	(1)
+#define CFG_HW_FILTER_MODE_BITMAP_NAME	"gHwFilterMode"
+#define CFG_HW_FILTER_MODE_BITMAP_MIN		(0)
+#define CFG_HW_FILTER_MODE_BITMAP_MAX		(3)
+#define CFG_HW_FILTER_MODE_BITMAP_DEFAULT	(1)
 
 /*
  * <ini>
@@ -5570,6 +5595,7 @@ enum hdd_link_speed_rpt_type {
 #define CFG_ENABLE_CCK_TX_FIR_OVERRIDE_MAX      (1)
 #define CFG_ENABLE_CCK_TX_FIR_OVERRIDE_DEFAULT  (0)
 
+#ifndef REMOVE_PKT_LOG
 #define CFG_ENABLE_PACKET_LOG            "gEnablePacketLog"
 #define CFG_ENABLE_PACKET_LOG_MIN        (0)
 #define CFG_ENABLE_PACKET_LOG_MAX        (1)
@@ -5578,7 +5604,7 @@ enum hdd_link_speed_rpt_type {
 #else
 #define CFG_ENABLE_PACKET_LOG_DEFAULT    (0)
 #endif
-
+#endif
 
 
 /* gFwDebugLogType takes values from enum dbglog_process_t,
@@ -8407,20 +8433,17 @@ enum hdd_link_speed_rpt_type {
 
 /*
  * <ini>
- * gAP11ACOverride - Override 11AC in driver even if supplicant or hostapd
- * configures HT.
+ * gSAP11ACOverride - Override bw to 11ac for SAP in driver even if supplicant
+ *                    or hostapd configures HT.
  * @Min: 0
  * @Max: 1
- * @Default: 1
+ * @Default: 0
  *
- * This ini is used to enable/disable 11AC override.
- * 1. P2P GO or SAP also follows start_bss and since p2p GO or SAP
- *    could not be  configured to setup VHT channel width in
- *    wpa_supplicant, driver can override 11AC.
- * 2. Android UI does not provide advanced configuration options
- *    for SoftAP
- *    Default override enabled for android. MDM shall
- *    disable it in ini
+ * This ini is used to enable/disable 11AC override for SAP.
+ * Android UI does not provide advanced configuration options
+ * for SoftAP for Android O and below.
+ * Default override disabled for android. Can be enabled from
+ * ini for Android O and below.
  *
  *
  * Supported Feature: SAP
@@ -8430,11 +8453,35 @@ enum hdd_link_speed_rpt_type {
  *
  * </ini>
  */
+#define CFG_SAP_11AC_OVERRIDE_NAME             "gSAP11ACOverride"
+#define CFG_SAP_11AC_OVERRIDE_MIN              (0)
+#define CFG_SAP_11AC_OVERRIDE_MAX              (1)
+#define CFG_SAP_11AC_OVERRIDE_DEFAULT          (0)
 
-#define CFG_SAP_P2P_11AC_OVERRIDE_NAME             "gAP11ACOverride"
-#define CFG_SAP_P2P_11AC_OVERRIDE_MIN              (0)
-#define CFG_SAP_P2P_11AC_OVERRIDE_MAX              (1)
-#define CFG_SAP_P2P_11AC_OVERRIDE_DEFAULT          (1)
+/*
+ * <ini>
+ * gGO11ACOverride - Override bw to 11ac for P2P GO
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to enable/disable 11AC override for GO.
+ * P2P GO also follows start_bss and since P2P GO could not be
+ * configured to setup VHT channel width in wpa_supplicant, driver
+ * can override 11AC.
+ *
+ *
+ * Supported Feature: P2P
+ *
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_GO_11AC_OVERRIDE_NAME             "gGO11ACOverride"
+#define CFG_GO_11AC_OVERRIDE_MIN              (0)
+#define CFG_GO_11AC_OVERRIDE_MAX              (1)
+#define CFG_GO_11AC_OVERRIDE_DEFAULT          (1)
 
 #define CFG_SAP_DOT11MC               "gSapDot11mc"
 #define CFG_SAP_DOT11MC_MIN           (0)
@@ -14328,7 +14375,7 @@ struct hdd_config {
 	 */
 	bool bSingleTidRc;
 	bool fhostArpOffload;
-	enum pmo_hw_filter_mode hw_filter_mode;
+	enum pmo_hw_filter_mode hw_filter_mode_bitmap;
 	bool ssdp;
 
 #ifdef FEATURE_RUNTIME_PM
@@ -14591,7 +14638,10 @@ struct hdd_config {
 
 	bool debugP2pRemainOnChannel;
 
+#ifndef REMOVE_PKT_LOG
 	bool enablePacketLog;
+#endif
+
 #ifdef MSM_PLATFORM
 	uint32_t busBandwidthHighThreshold;
 	uint32_t busBandwidthMediumThreshold;
@@ -14688,7 +14738,8 @@ struct hdd_config {
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
 	bool sap_channel_avoidance;
 #endif /* FEATURE_AP_MCC_CH_AVOIDANCE */
-	uint8_t sap_p2p_11ac_override;
+	uint8_t sap_11ac_override;
+	uint8_t go_11ac_override;
 	uint8_t sap_dot11mc;
 	uint8_t prefer_non_dfs_on_radar;
 	bool ignore_peer_erp_info;
@@ -15021,6 +15072,7 @@ struct hdd_config {
 	bool is_unit_test_framework_enabled;
 	bool enable_ftopen;
 	bool enable_rtt_mac_randomization;
+	bool roam_force_rssi_trigger;
 };
 
 #define VAR_OFFSET(_Struct, _Var) (offsetof(_Struct, _Var))
@@ -15181,7 +15233,7 @@ QDF_STATUS hdd_set_idle_ps_config(struct hdd_context *hdd_ctx, bool val);
 void hdd_get_pmkid_modes(struct hdd_context *hdd_ctx,
 			 struct pmkid_mode_bits *pmkid_modes);
 
-void hdd_update_tgt_cfg(void *context, void *param);
+void hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg);
 
 /**
  * hdd_string_to_u8_array() - used to convert decimal string into u8 array

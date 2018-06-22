@@ -420,16 +420,16 @@ QDF_STATUS cds_close(struct wlan_objmgr_psoc *psoc);
  */
 QDF_STATUS cds_dp_close(struct wlan_objmgr_psoc *psoc);
 
-void *cds_get_context(QDF_MODULE_ID moduleId);
+void *cds_get_context(QDF_MODULE_ID module_id);
 
 uint8_t cds_get_datapath_handles(void **soc, struct cdp_pdev **pdev,
 			 struct cdp_vdev **vdev, uint8_t sessionId);
 void *cds_get_global_context(void);
 
-QDF_STATUS cds_alloc_context(QDF_MODULE_ID moduleID, void **ppModuleContext,
+QDF_STATUS cds_alloc_context(QDF_MODULE_ID module_id, void **module_context,
 			     uint32_t size);
 
-QDF_STATUS cds_free_context(QDF_MODULE_ID moduleID, void *pModuleContext);
+QDF_STATUS cds_free_context(QDF_MODULE_ID module_id, void *module_context);
 
 QDF_STATUS cds_set_context(QDF_MODULE_ID module_id, void *context);
 
@@ -439,7 +439,15 @@ QDF_STATUS cds_get_vdev_types(enum QDF_OPMODE mode, uint32_t *type,
 void cds_flush_work(void *work);
 void cds_flush_delayed_work(void *dwork);
 
+#ifdef REMOVE_PKT_LOG
+static inline
+bool cds_is_packet_log_enabled(void)
+{
+	return false;
+}
+#else
 bool cds_is_packet_log_enabled(void);
+#endif
 
 uint64_t cds_get_monotonic_boottime(void);
 

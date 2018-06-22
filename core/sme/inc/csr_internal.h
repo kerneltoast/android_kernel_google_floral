@@ -140,6 +140,8 @@ enum csr_roam_reason {
 	eCsrForcedDisassocSta,
 	eCsrForcedDeauthSta,
 	eCsrPerformPreauth,
+	/* Roaming disabled from driver during connect/start BSS */
+	ecsr_driver_disabled,
 };
 
 enum csr_roam_substate {
@@ -611,6 +613,7 @@ struct csr_config {
 	bool wep_tkip_in_he;
 	struct csr_neighbor_report_offload_params neighbor_report_offload;
 	bool enable_ftopen;
+	bool roam_force_rssi_trigger;
 };
 
 struct csr_channel_powerinfo {
