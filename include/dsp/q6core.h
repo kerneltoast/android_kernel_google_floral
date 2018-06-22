@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -26,6 +26,16 @@ int q6core_get_service_version(uint32_t service_id,
 			       struct avcs_fwk_ver_info *ver_info,
 			       size_t size);
 size_t q6core_get_fwk_version_size(uint32_t service_id);
+
+struct audio_uevent_data {
+	struct kobject kobj;
+	struct kobj_type ktype;
+};
+
+int q6core_init_uevent_data(struct audio_uevent_data *uevent_data, char *name);
+void q6core_destroy_uevent_data(struct audio_uevent_data *uevent_data);
+int q6core_send_uevent(struct audio_uevent_data *uevent_data, char *name);
+int q6core_get_avcs_api_version_per_service(uint32_t service_id);
 
 #define ADSP_CMD_SET_DTS_EAGLE_DATA_ID 0x00012919
 #define DTS_EAGLE_LICENSE_ID           0x00028346

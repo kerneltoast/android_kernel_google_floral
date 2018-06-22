@@ -9002,8 +9002,10 @@ static int tavil_dig_core_power_collapse(struct tavil_priv *tavil,
 		goto unlock_mutex;
 
 	if (tavil->power_active_ref < 0) {
-		dev_dbg(tavil->dev, "%s: power_active_ref is negative\n",
+		dev_dbg(tavil->dev,
+			"%s: power_active_ref is negative, reset it\n",
 			__func__);
+		tavil->power_active_ref = 0;
 		goto unlock_mutex;
 	}
 
@@ -9429,8 +9431,8 @@ static const struct tavil_reg_mask_val tavil_codec_reg_init_common_val[] = {
 	{WCD934X_CDC_CLSH_K2_MSB, 0x0F, 0x00},
 	{WCD934X_CDC_CLSH_K2_LSB, 0xFF, 0x60},
 	{WCD934X_CPE_SS_DMIC_CFG, 0x80, 0x00},
-	{WCD934X_CDC_BOOST0_BOOST_CTL, 0x70, 0x58},
-	{WCD934X_CDC_BOOST1_BOOST_CTL, 0x70, 0x58},
+	{WCD934X_CDC_BOOST0_BOOST_CTL, 0x7C, 0x58},
+	{WCD934X_CDC_BOOST1_BOOST_CTL, 0x7C, 0x58},
 	{WCD934X_CDC_RX7_RX_PATH_CFG1, 0x08, 0x08},
 	{WCD934X_CDC_RX8_RX_PATH_CFG1, 0x08, 0x08},
 	{WCD934X_CDC_TOP_TOP_CFG1, 0x02, 0x02},
@@ -9885,7 +9887,7 @@ static void tavil_cdc_vote_svs(struct snd_soc_codec *codec, bool vote)
 	return tavil_vote_svs(tavil, vote);
 }
 
-struct wcd_dsp_cdc_cb cdc_cb = {
+static struct wcd_dsp_cdc_cb cdc_cb = {
 	.cdc_clk_en = tavil_codec_internal_rco_ctrl,
 	.cdc_vote_svs = tavil_cdc_vote_svs,
 };
@@ -9970,11 +9972,35 @@ static int tavil_device_down(struct wcd9xxx *wcd9xxx)
 	struct snd_soc_codec *codec;
 	struct tavil_priv *priv;
 	int count;
+	int decimator;
+	int ret;
 
 	codec = (struct snd_soc_codec *)(wcd9xxx->ssr_priv);
 	priv = snd_soc_codec_get_drvdata(codec);
 	for (count = 0; count < NUM_CODEC_DAIS; count++)
 		priv->dai[count].bus_down_in_recovery = true;
+
+	if (delayed_work_pending(&priv->spk_anc_dwork.dwork))
+		cancel_delayed_work(&priv->spk_anc_dwork.dwork);
+	for (decimator = 0; decimator < WCD934X_NUM_DECIMATORS; decimator++) {
+		if (delayed_work_pending
+				(&priv->tx_mute_dwork[decimator].dwork))
+			cancel_delayed_work
+				(&priv->tx_mute_dwork[decimator].dwork);
+		if (delayed_work_pending
+				(&priv->tx_hpf_work[decimator].dwork))
+			cancel_delayed_work
+				(&priv->tx_hpf_work[decimator].dwork);
+	}
+	if (delayed_work_pending(&priv->power_gate_work))
+		cancel_delayed_work_sync(&priv->power_gate_work);
+	if (delayed_work_pending(&priv->mbhc->wcd_mbhc.mbhc_btn_dwork)) {
+		ret = cancel_delayed_work(&priv->mbhc->wcd_mbhc.mbhc_btn_dwork);
+		if (ret)
+			priv->mbhc->wcd_mbhc.mbhc_cb->lock_sleep
+					(&priv->mbhc->wcd_mbhc, false);
+	}
+
 	if (priv->swr.ctrl_data)
 		swrm_wcd_notify(priv->swr.ctrl_data[0].swr_pdev,
 				SWR_DEVICE_DOWN, NULL);

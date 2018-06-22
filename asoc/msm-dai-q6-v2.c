@@ -24,6 +24,7 @@
 #include <sound/pcm_params.h>
 #include <dsp/apr_audio-v2.h>
 #include <dsp/q6afe-v2.h>
+#include <dsp/q6core.h>
 #include "msm-dai-q6-v2.h"
 #include "codecs/core.h"
 
@@ -43,6 +44,8 @@
 #define DAI_FORMATS_S16_S24_S32_LE (SNDRV_PCM_FMTBIT_S16_LE | \
 				    SNDRV_PCM_FMTBIT_S24_LE | \
 				    SNDRV_PCM_FMTBIT_S32_LE)
+
+static int msm_mi2s_get_port_id(u32 mi2s_id, int stream, u16 *port_id);
 
 enum {
 	ENC_FMT_NONE,
@@ -202,6 +205,7 @@ struct msm_dai_q6_dai_data {
 	u16 afe_in_bitformat;
 	struct afe_enc_config enc_config;
 	struct afe_dec_config dec_config;
+	u32 island_enable;
 	union afe_port_config port_config;
 	u16 vi_feed_mono;
 };
@@ -220,8 +224,19 @@ struct msm_dai_q6_mi2s_dai_config {
 };
 
 struct msm_dai_q6_mi2s_dai_data {
+	u32 is_island_dai;
 	struct msm_dai_q6_mi2s_dai_config tx_dai;
 	struct msm_dai_q6_mi2s_dai_config rx_dai;
+};
+
+struct msm_dai_q6_cdc_dma_dai_data {
+	DECLARE_BITMAP(status_mask, STATUS_MAX);
+	DECLARE_BITMAP(hwfree_status, STATUS_MAX);
+	u32 rate;
+	u32 channels;
+	u32 bitwidth;
+	u32 is_island_dai;
+	union afe_port_config port_config;
 };
 
 struct msm_dai_q6_auxpcm_dai_data {
@@ -231,6 +246,7 @@ struct msm_dai_q6_auxpcm_dai_data {
 	u16 rx_pid; /* AUXPCM RX AFE port ID */
 	u16 tx_pid; /* AUXPCM TX AFE port ID */
 	u16 afe_clk_ver;
+	u32 is_island_dai;
 	struct afe_clk_cfg clk_cfg; /* hold LPASS clock configuration */
 	struct afe_clk_set clk_set; /* hold LPASS clock configuration */
 	struct msm_dai_q6_dai_data bdai_data; /* incoporate base DAI data */
@@ -242,6 +258,7 @@ struct msm_dai_q6_tdm_dai_data {
 	u32 channels;
 	u32 bitwidth;
 	u32 num_group_ports;
+	u32 is_island_dai;
 	struct afe_clk_set clk_set; /* hold LPASS clock config. */
 	union afe_port_group_config group_cfg; /* hold tdm group config */
 	struct afe_tdm_port_config port_cfg; /* hold tdm config */
@@ -268,6 +285,15 @@ static const char *const mi2s_vi_feed_mono[] = {
 static const struct soc_enum mi2s_config_enum[] = {
 	SOC_ENUM_SINGLE_EXT(4, mi2s_format),
 	SOC_ENUM_SINGLE_EXT(2, mi2s_vi_feed_mono),
+};
+
+static const char *const cdc_dma_format[] = {
+	"UNPACKED",
+	"PACKED_16B",
+};
+
+static const struct soc_enum cdc_dma_config_enum[] = {
+	SOC_ENUM_SINGLE_EXT(2, cdc_dma_format),
 };
 
 static const char *const sb_format[] = {
@@ -1020,6 +1046,17 @@ static int msm_dai_q6_auxpcm_prepare(struct snd_pcm_substream *substream,
 	}
 
 	afe_open(aux_dai_data->rx_pid, &dai_data->port_config, dai_data->rate);
+	if (q6core_get_avcs_api_version_per_service(
+		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V4) {
+		/*
+		 * send island mode config
+		 * This should be the first configuration
+		 */
+		rc = afe_send_port_island_mode(aux_dai_data->tx_pid);
+		if (rc)
+			dev_err(dai->dev, "%s: afe send island mode failed %d\n",
+				__func__, rc);
+	}
 	afe_open(aux_dai_data->tx_pid, &dai_data->port_config, dai_data->rate);
 	goto exit;
 
@@ -1090,9 +1127,78 @@ static int msm_dai_q6_dai_auxpcm_remove(struct snd_soc_dai *dai)
 	return 0;
 }
 
+
+static int msm_dai_q6_island_mode_put(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+	int value = ucontrol->value.integer.value[0];
+	u16 port_id = ((struct soc_enum *) kcontrol->private_value)->reg;
+
+	dai_data->island_enable = value;
+	pr_debug("%s: island mode = %d\n", __func__, value);
+
+	afe_set_island_mode_cfg(port_id, dai_data->island_enable);
+	return 0;
+}
+
+static int msm_dai_q6_island_mode_get(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+
+	ucontrol->value.integer.value[0] = dai_data->island_enable;
+	return 0;
+}
+
+static struct snd_kcontrol_new island_config_controls[] = {
+	{
+	.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
+	.name = "?",
+	.get = msm_dai_q6_island_mode_get,
+	.put = msm_dai_q6_island_mode_put,
+	.private_value = SOC_SINGLE_VALUE(0, 0, 1, 0, 0)
+	},
+};
+
+static int msm_dai_q6_add_island_mx_ctls(struct snd_card *card,
+				      const char *dai_name,
+				      int dai_id, void *dai_data)
+{
+	const char *mx_ctl_name = "TX island";
+	char *mixer_str = NULL;
+	int dai_str_len = 0, ctl_len = 0;
+	int rc = 0;
+
+	dai_str_len = strlen(dai_name) + 1;
+
+	/* Add island related mixer controls */
+	ctl_len = dai_str_len + strlen(mx_ctl_name) + 1;
+	mixer_str = kzalloc(ctl_len, GFP_KERNEL);
+	if (!mixer_str)
+		return -ENOMEM;
+
+	snprintf(mixer_str, ctl_len + strlen(mx_ctl_name) + 1,
+		 "%s %s", dai_name, mx_ctl_name);
+	island_config_controls[0].name = mixer_str;
+	((struct soc_enum *) island_config_controls[0].private_value)->reg
+		= dai_id;
+	rc = snd_ctl_add(card,
+			 snd_ctl_new1(&island_config_controls[0],
+			 dai_data));
+	if (rc < 0)
+		pr_err("%s: err add config ctl, DAI = %s\n",
+			__func__, dai_name);
+	kfree(mixer_str);
+
+	return rc;
+}
+
+
 static int msm_dai_q6_aux_pcm_probe(struct snd_soc_dai *dai)
 {
 	int rc = 0;
+	struct msm_dai_q6_auxpcm_dai_data *dai_data = NULL;
 
 	if (!dai) {
 		pr_err("%s: Invalid params dai\n", __func__);
@@ -1107,6 +1213,14 @@ static int msm_dai_q6_aux_pcm_probe(struct snd_soc_dai *dai)
 		return -EINVAL;
 	}
 	dai->id = dai->driver->id;
+	dai_data = dev_get_drvdata(dai->dev);
+
+	if (dai_data->is_island_dai)
+		rc = msm_dai_q6_add_island_mx_ctls(
+						dai->component->card->snd_card,
+						dai->name, dai_data->tx_pid,
+						(void *)dai_data);
+
 	rc = msm_dai_q6_dai_add_route(dai);
 	return rc;
 }
@@ -1146,6 +1260,7 @@ static struct snd_soc_dai_driver msm_dai_q6_aux_pcm_dai[] = {
 			.rate_min = 8000,
 		},
 		.id = MSM_DAI_PRI_AUXPCM_DT_DEV_ID,
+		.name = "Pri AUX PCM",
 		.ops = &msm_dai_q6_auxpcm_ops,
 		.probe = msm_dai_q6_aux_pcm_probe,
 		.remove = msm_dai_q6_dai_auxpcm_remove,
@@ -1172,6 +1287,7 @@ static struct snd_soc_dai_driver msm_dai_q6_aux_pcm_dai[] = {
 			.rate_min = 8000,
 		},
 		.id = MSM_DAI_SEC_AUXPCM_DT_DEV_ID,
+		.name = "Sec AUX PCM",
 		.ops = &msm_dai_q6_auxpcm_ops,
 		.probe = msm_dai_q6_aux_pcm_probe,
 		.remove = msm_dai_q6_dai_auxpcm_remove,
@@ -1198,6 +1314,7 @@ static struct snd_soc_dai_driver msm_dai_q6_aux_pcm_dai[] = {
 			.rate_min = 8000,
 		},
 		.id = MSM_DAI_TERT_AUXPCM_DT_DEV_ID,
+		.name = "Tert AUX PCM",
 		.ops = &msm_dai_q6_auxpcm_ops,
 		.probe = msm_dai_q6_aux_pcm_probe,
 		.remove = msm_dai_q6_dai_auxpcm_remove,
@@ -1224,6 +1341,7 @@ static struct snd_soc_dai_driver msm_dai_q6_aux_pcm_dai[] = {
 			.rate_min = 8000,
 		},
 		.id = MSM_DAI_QUAT_AUXPCM_DT_DEV_ID,
+		.name = "Quat AUX PCM",
 		.ops = &msm_dai_q6_auxpcm_ops,
 		.probe = msm_dai_q6_aux_pcm_probe,
 		.remove = msm_dai_q6_dai_auxpcm_remove,
@@ -1250,6 +1368,7 @@ static struct snd_soc_dai_driver msm_dai_q6_aux_pcm_dai[] = {
 			.rate_min = 8000,
 		},
 		.id = MSM_DAI_QUIN_AUXPCM_DT_DEV_ID,
+		.name = "Quin AUX PCM",
 		.ops = &msm_dai_q6_auxpcm_ops,
 		.probe = msm_dai_q6_aux_pcm_probe,
 		.remove = msm_dai_q6_dai_auxpcm_remove,
@@ -1774,7 +1893,7 @@ static int msm_dai_q6_usb_audio_hw_params(struct snd_pcm_hw_params *params,
 		return -EINVAL;
 	}
 	dai_data->port_config.usb_audio.cfg_minor_version =
-					AFE_API_MINIOR_VERSION_USB_AUDIO_CONFIG;
+					AFE_API_MINOR_VERSION_USB_AUDIO_CONFIG;
 	dai_data->port_config.usb_audio.num_channels = dai_data->channels;
 	dai_data->port_config.usb_audio.sample_rate = dai_data->rate;
 
@@ -2241,6 +2360,38 @@ static int msm_dai_q6_usb_audio_endian_cfg_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int msm_dai_q6_usb_audio_svc_interval_put(struct snd_kcontrol *kcontrol,
+					 struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+	u32 val = ucontrol->value.integer.value[0];
+
+	if (!dai_data) {
+		pr_err("%s: dai_data is NULL\n", __func__);
+		return -EINVAL;
+	}
+	dai_data->port_config.usb_audio.service_interval = val;
+	pr_debug("%s: new service interval = %u\n",  __func__,
+		dai_data->port_config.usb_audio.service_interval);
+	return 0;
+}
+
+static int msm_dai_q6_usb_audio_svc_interval_get(struct snd_kcontrol *kcontrol,
+					struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+
+	if (!dai_data) {
+		pr_err("%s: dai_data is NULL\n", __func__);
+		return -EINVAL;
+	}
+	ucontrol->value.integer.value[0] =
+		 dai_data->port_config.usb_audio.service_interval;
+	pr_debug("%s: service interval = %d\n",  __func__,
+		     dai_data->port_config.usb_audio.service_interval);
+	return 0;
+}
+
 static int  msm_dai_q6_afe_enc_cfg_info(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_info *uinfo)
 {
@@ -2671,6 +2822,10 @@ static const struct snd_kcontrol_new usb_audio_cfg_controls[] = {
 	SOC_SINGLE_EXT("USB_AUDIO_TX endian", 0, 0, 1, 0,
 			msm_dai_q6_usb_audio_endian_cfg_get,
 			msm_dai_q6_usb_audio_endian_cfg_put),
+	SOC_SINGLE_EXT("USB_AUDIO_RX service_interval", SND_SOC_NOPM, 0,
+			UINT_MAX, 0,
+			msm_dai_q6_usb_audio_svc_interval_get,
+			msm_dai_q6_usb_audio_svc_interval_put),
 };
 
 static const struct snd_kcontrol_new avd_drift_config_controls[] = {
@@ -2771,6 +2926,9 @@ static int msm_dai_q6_dai_probe(struct snd_soc_dai *dai)
 				 dai_data));
 		rc = snd_ctl_add(dai->component->card->snd_card,
 				 snd_ctl_new1(&usb_audio_cfg_controls[1],
+				 dai_data));
+		rc = snd_ctl_add(dai->component->card->snd_card,
+				 snd_ctl_new1(&usb_audio_cfg_controls[4],
 				 dai_data));
 		break;
 	case AFE_PORT_ID_USB_TX:
@@ -3118,6 +3276,12 @@ static int msm_auxpcm_dev_probe(struct platform_device *pdev)
 			   GFP_KERNEL);
 	if (!dai_data)
 		return -ENOMEM;
+
+	rc = of_property_read_u32(pdev->dev.of_node,
+				    "qcom,msm-dai-is-island-supported",
+				    &dai_data->is_island_dai);
+	if (rc)
+		dev_dbg(&pdev->dev, "island supported entry not found\n");
 
 	auxpcm_pdata = kzalloc(sizeof(struct msm_dai_auxpcm_pdata),
 				GFP_KERNEL);
@@ -3813,6 +3977,7 @@ static int msm_dai_q6_dai_mi2s_probe(struct snd_soc_dai *dai)
 	int rc = 0;
 	const struct snd_kcontrol_new *ctrl = NULL;
 	const struct snd_kcontrol_new *vi_feed_ctrl = NULL;
+	u16 dai_id = 0;
 
 	dai->id = mi2s_pdata->intf_id;
 
@@ -3885,6 +4050,15 @@ static int msm_dai_q6_dai_mi2s_probe(struct snd_soc_dai *dai)
 		}
 	}
 
+	if (mi2s_dai_data->is_island_dai) {
+		msm_mi2s_get_port_id(dai->id, SNDRV_PCM_STREAM_CAPTURE,
+				     &dai_id);
+		rc = msm_dai_q6_add_island_mx_ctls(
+						dai->component->card->snd_card,
+						dai->name, dai_id,
+						(void *)mi2s_dai_data);
+	}
+
 	rc = msm_dai_q6_dai_add_route(dai);
 rtn:
 	return rc;
@@ -3923,7 +4097,6 @@ static int msm_dai_q6_mi2s_startup(struct snd_pcm_substream *substream,
 
 	return 0;
 }
-
 
 static int msm_mi2s_get_port_id(u32 mi2s_id, int stream, u16 *port_id)
 {
@@ -4058,6 +4231,18 @@ static int msm_dai_q6_mi2s_prepare(struct snd_pcm_substream *substream,
 		dai->id, port_id, dai_data->channels, dai_data->rate);
 
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
+		if (q6core_get_avcs_api_version_per_service(
+		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V4) {
+			/*
+			 * send island mode config.
+			 * This should be the first configuration
+			 */
+			rc = afe_send_port_island_mode(port_id);
+			if (rc)
+				dev_err(dai->dev, "%s: afe send island mode failed %d\n",
+					__func__, rc);
+		}
+
 		/* PORT START should be set if prepare called
 		 * in active state.
 		 */
@@ -4335,6 +4520,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     192000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "Primary MI2S",
 		.id = MSM_PRIM_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4365,6 +4551,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     192000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "Secondary MI2S",
 		.id = MSM_SEC_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4395,6 +4582,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     192000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "Tertiary MI2S",
 		.id = MSM_TERT_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4425,6 +4613,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     192000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "Quaternary MI2S",
 		.id = MSM_QUAT_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4450,6 +4639,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "Quinary MI2S",
 		.id = MSM_QUIN_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4477,6 +4667,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "Senary MI2S",
 		.id = MSM_SENARY_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4504,6 +4695,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "INT0 MI2S",
 		.id = MSM_INT0_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4530,6 +4722,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "INT1 MI2S",
 		.id = MSM_INT1_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4556,6 +4749,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "INT2 MI2S",
 		.id = MSM_INT2_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4582,6 +4776,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "INT3 MI2S",
 		.id = MSM_INT3_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4609,6 +4804,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "INT4 MI2S",
 		.id = MSM_INT4_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4635,6 +4831,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "INT5 MI2S",
 		.id = MSM_INT5_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4661,6 +4858,7 @@ static struct snd_soc_dai_driver msm_dai_q6_mi2s_dai[] = {
 			.rate_max =     48000,
 		},
 		.ops = &msm_dai_q6_mi2s_ops,
+		.name = "INT6 MI2S",
 		.id = MSM_INT6_MI2S,
 		.probe = msm_dai_q6_dai_mi2s_probe,
 		.remove = msm_dai_q6_dai_mi2s_remove,
@@ -4875,6 +5073,12 @@ static int msm_dai_q6_mi2s_dev_probe(struct platform_device *pdev)
 		goto free_pdata;
 	} else
 		dev_set_drvdata(&pdev->dev, dai_data);
+
+	rc = of_property_read_u32(pdev->dev.of_node,
+				    "qcom,msm-dai-is-island-supported",
+				    &dai_data->is_island_dai);
+	if (rc)
+		dev_dbg(&pdev->dev, "island supported entry not found\n");
 
 	pdev->dev.platform_data = mi2s_pdata;
 
@@ -5184,6 +5388,7 @@ static int msm_dai_q6_probe(struct platform_device *pdev)
 
 static int msm_dai_q6_remove(struct platform_device *pdev)
 {
+	of_platform_depopulate(&pdev->dev);
 	return 0;
 }
 
@@ -6493,6 +6698,12 @@ static int msm_dai_q6_dai_tdm_probe(struct snd_soc_dai *dai)
 		}
 	}
 
+	if (tdm_dai_data->is_island_dai)
+		rc = msm_dai_q6_add_island_mx_ctls(
+						dai->component->card->snd_card,
+						dai->name,
+						dai->id, (void *)tdm_dai_data);
+
 	rc = msm_dai_q6_dai_add_route(dai);
 
 rtn:
@@ -7041,6 +7252,19 @@ static int msm_dai_q6_tdm_prepare(struct snd_pcm_substream *substream,
 	group_ref = &tdm_group_ref[group_idx];
 
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
+		if (q6core_get_avcs_api_version_per_service(
+		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V4) {
+			/*
+			 * send island mode config.
+			 * This should be the first configuration
+			 */
+			rc = afe_send_port_island_mode(dai->id);
+			if (rc)
+				dev_err(dai->dev, "%s: afe send island mode failed %d\n",
+					__func__, rc);
+
+		}
+
 		/* PORT START should be set if prepare called
 		 * in active state.
 		 */
@@ -8808,6 +9032,12 @@ static int msm_dai_q6_tdm_dev_probe(struct platform_device *pdev)
 	}
 	memset(dai_data, 0, sizeof(*dai_data));
 
+	rc = of_property_read_u32(pdev->dev.of_node,
+				    "qcom,msm-dai-is-island-supported",
+				    &dai_data->is_island_dai);
+	if (rc)
+		dev_dbg(&pdev->dev, "island supported entry not found\n");
+
 	/* TDM CFG */
 	tdm_parent_node = of_get_parent(pdev->dev.of_node);
 	rc = of_property_read_u32(tdm_parent_node,
@@ -9009,6 +9239,543 @@ static struct platform_driver msm_dai_q6_tdm_driver = {
 	},
 };
 
+static int msm_dai_q6_cdc_dma_format_put(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+	int value = ucontrol->value.integer.value[0];
+
+	dai_data->port_config.cdc_dma.data_format = value;
+	pr_debug("%s: format = %d\n", __func__, value);
+	return 0;
+}
+
+static int msm_dai_q6_cdc_dma_format_get(struct snd_kcontrol *kcontrol,
+				      struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+
+	ucontrol->value.integer.value[0] =
+		dai_data->port_config.cdc_dma.data_format;
+	return 0;
+}
+static const struct snd_kcontrol_new cdc_dma_config_controls[] = {
+	SOC_ENUM_EXT("WSA_CDC_DMA_0 TX Format", cdc_dma_config_enum[0],
+		     msm_dai_q6_cdc_dma_format_get,
+		     msm_dai_q6_cdc_dma_format_put),
+};
+
+/* SOC probe for codec DMA interface */
+static int msm_dai_q6_dai_cdc_dma_probe(struct snd_soc_dai *dai)
+{
+	struct msm_dai_q6_cdc_dma_dai_data *dai_data = NULL;
+	int rc = 0;
+
+	if (!dai) {
+		pr_err("%s: Invalid params dai\n", __func__);
+		return -EINVAL;
+	}
+	if (!dai->dev) {
+		pr_err("%s: Invalid params dai dev\n", __func__);
+		return -EINVAL;
+	}
+
+	msm_dai_q6_set_dai_id(dai);
+	dai_data = dev_get_drvdata(dai->dev);
+
+	switch (dai->id) {
+	case AFE_PORT_ID_WSA_CODEC_DMA_TX_0:
+		rc = snd_ctl_add(dai->component->card->snd_card,
+				 snd_ctl_new1(&cdc_dma_config_controls[0],
+				 dai_data));
+		break;
+	default:
+		break;
+	}
+
+	if (rc < 0)
+		dev_err(dai->dev, "%s: err add config ctl, DAI = %s\n",
+			__func__, dai->name);
+
+	if (dai_data->is_island_dai)
+		rc = msm_dai_q6_add_island_mx_ctls(
+						dai->component->card->snd_card,
+						dai->name, dai->id,
+						(void *)dai_data);
+
+	rc = msm_dai_q6_dai_add_route(dai);
+	return rc;
+}
+
+static int msm_dai_q6_dai_cdc_dma_remove(struct snd_soc_dai *dai)
+{
+	struct msm_dai_q6_cdc_dma_dai_data *dai_data =
+		dev_get_drvdata(dai->dev);
+	int rc = 0;
+
+	/* If AFE port is still up, close it */
+	if (test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
+		dev_dbg(dai->dev, "%s: stop codec dma port:%d\n", __func__,
+			dai->id);
+		rc = afe_close(dai->id); /* can block */
+		if (rc < 0)
+			dev_err(dai->dev, "fail to close AFE port\n");
+		clear_bit(STATUS_PORT_STARTED, dai_data->status_mask);
+	}
+	return rc;
+}
+
+static int msm_dai_q6_cdc_dma_set_channel_map(struct snd_soc_dai *dai,
+			unsigned int tx_num_ch, unsigned int *tx_ch_mask,
+			unsigned int rx_num_ch, unsigned int *rx_ch_mask)
+
+{
+	int rc = 0;
+	struct msm_dai_q6_cdc_dma_dai_data *dai_data =
+						dev_get_drvdata(dai->dev);
+	unsigned int ch_mask = 0, ch_num = 0;
+
+	dev_dbg(dai->dev, "%s: id = %d\n", __func__, dai->id);
+	switch (dai->id) {
+	case AFE_PORT_ID_WSA_CODEC_DMA_RX_0:
+	case AFE_PORT_ID_WSA_CODEC_DMA_RX_1:
+		if (!rx_ch_mask) {
+			dev_err(dai->dev, "%s: invalid rx ch mask\n", __func__);
+			return -EINVAL;
+		}
+		if (rx_num_ch > AFE_PORT_MAX_AUDIO_CHAN_CNT) {
+			dev_err(dai->dev, "%s: invalid rx_num_ch %d\n",
+				__func__, rx_num_ch);
+			return -EINVAL;
+		}
+		ch_mask = *rx_ch_mask;
+		ch_num = rx_num_ch;
+		break;
+	case AFE_PORT_ID_WSA_CODEC_DMA_TX_0:
+	case AFE_PORT_ID_WSA_CODEC_DMA_TX_1:
+	case AFE_PORT_ID_WSA_CODEC_DMA_TX_2:
+	case AFE_PORT_ID_VA_CODEC_DMA_TX_0:
+	case AFE_PORT_ID_VA_CODEC_DMA_TX_1:
+		if (!tx_ch_mask) {
+			dev_err(dai->dev, "%s: invalid tx ch mask\n", __func__);
+			return -EINVAL;
+		}
+		if (tx_num_ch > AFE_PORT_MAX_AUDIO_CHAN_CNT) {
+			dev_err(dai->dev, "%s: invalid tx_num_ch %d\n",
+				__func__, tx_num_ch);
+			return -EINVAL;
+		}
+		ch_mask = *tx_ch_mask;
+		ch_num = tx_num_ch;
+		break;
+	default:
+		dev_err(dai->dev, "%s: invalid dai id %d\n", __func__, dai->id);
+		return -EINVAL;
+	}
+
+	dai_data->port_config.cdc_dma.active_channels_mask = ch_mask;
+	dev_dbg(dai->dev, "%s: CDC_DMA_%d_ch cnt[%d] ch mask[0x%x]\n", __func__,
+			dai->id, ch_num, ch_mask);
+	return rc;
+}
+
+static int msm_dai_q6_cdc_dma_hw_params(
+		struct snd_pcm_substream *substream,
+		struct snd_pcm_hw_params *params,
+		struct snd_soc_dai *dai)
+{
+	struct msm_dai_q6_cdc_dma_dai_data *dai_data =
+						dev_get_drvdata(dai->dev);
+
+	switch (params_format(params)) {
+	case SNDRV_PCM_FORMAT_S16_LE:
+	case SNDRV_PCM_FORMAT_SPECIAL:
+		dai_data->port_config.cdc_dma.bit_width = 16;
+		break;
+	case SNDRV_PCM_FORMAT_S24_LE:
+	case SNDRV_PCM_FORMAT_S24_3LE:
+		dai_data->port_config.cdc_dma.bit_width = 24;
+		break;
+	case SNDRV_PCM_FORMAT_S32_LE:
+		dai_data->port_config.cdc_dma.bit_width = 32;
+		break;
+	default:
+		dev_err(dai->dev, "%s: format %d\n",
+			__func__, params_format(params));
+		return -EINVAL;
+	}
+
+	dai_data->port_config.cdc_dma.cdc_dma_cfg_minor_version =
+				AFE_API_VERSION_CODEC_DMA_CONFIG;
+	dai_data->port_config.cdc_dma.sample_rate = dai_data->rate;
+	dai_data->port_config.cdc_dma.num_channels = dai_data->channels;
+	dev_dbg(dai->dev, "%s: bit_wd[%hu] format[%hu]\n"
+		"num_channel %hu sample_rate %d\n", __func__,
+		dai_data->port_config.cdc_dma.bit_width,
+		dai_data->port_config.cdc_dma.data_format,
+		dai_data->port_config.cdc_dma.num_channels,
+		dai_data->rate);
+
+	return 0;
+}
+
+static int msm_dai_q6_cdc_dma_prepare(struct snd_pcm_substream *substream,
+		struct snd_soc_dai *dai)
+{
+	struct msm_dai_q6_cdc_dma_dai_data *dai_data =
+						dev_get_drvdata(dai->dev);
+	int rc = 0;
+
+	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
+		if (q6core_get_avcs_api_version_per_service(
+		APRV2_IDS_SERVICE_ID_ADSP_AFE_V) >= AFE_API_VERSION_V4) {
+			/*
+			 * send island mode config.
+			 * This should be the first configuration
+			 */
+			rc = afe_send_port_island_mode(dai->id);
+			if (rc)
+				pr_err("%s: afe send island mode failed %d\n",
+					__func__, rc);
+		}
+		rc = afe_port_start(dai->id, &dai_data->port_config,
+						dai_data->rate);
+		if (rc < 0)
+			dev_err(dai->dev, "fail to open AFE port 0x%x\n",
+				dai->id);
+		else
+			set_bit(STATUS_PORT_STARTED,
+				dai_data->status_mask);
+	}
+	return rc;
+}
+
+
+static void msm_dai_q6_cdc_dma_shutdown(struct snd_pcm_substream *substream,
+				     struct snd_soc_dai *dai)
+{
+	struct msm_dai_q6_dai_data *dai_data = dev_get_drvdata(dai->dev);
+	int rc = 0;
+
+	if (test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
+		dev_dbg(dai->dev, "%s: stop AFE port:%d\n", __func__,
+			dai->id);
+		rc = afe_close(dai->id); /* can block */
+		if (rc < 0)
+			dev_err(dai->dev, "fail to close AFE port\n");
+
+		dev_dbg(dai->dev, "%s: dai_data->status_mask = %ld\n", __func__,
+			*dai_data->status_mask);
+		clear_bit(STATUS_PORT_STARTED, dai_data->status_mask);
+	}
+
+	if (test_bit(STATUS_PORT_STARTED, dai_data->hwfree_status))
+		clear_bit(STATUS_PORT_STARTED, dai_data->hwfree_status);
+}
+
+
+static struct snd_soc_dai_ops msm_dai_q6_cdc_dma_ops = {
+	.prepare          = msm_dai_q6_cdc_dma_prepare,
+	.hw_params        = msm_dai_q6_cdc_dma_hw_params,
+	.shutdown         = msm_dai_q6_cdc_dma_shutdown,
+	.set_channel_map = msm_dai_q6_cdc_dma_set_channel_map,
+};
+
+static struct snd_soc_dai_driver msm_dai_q6_cdc_dma_dai[] = {
+	{
+		.playback = {
+			.stream_name = "WSA CDC DMA0 Playback",
+			.aif_name = "WSA_CDC_DMA_RX_0",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE |
+				   SNDRV_PCM_FMTBIT_S32_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.name = "WSA_CDC_DMA_RX_0",
+		.ops = &msm_dai_q6_cdc_dma_ops,
+		.id = AFE_PORT_ID_WSA_CODEC_DMA_RX_0,
+		.probe = msm_dai_q6_dai_cdc_dma_probe,
+		.remove = msm_dai_q6_dai_cdc_dma_remove,
+	},
+	{
+		.capture = {
+			.stream_name = "WSA CDC DMA0 Capture",
+			.aif_name = "WSA_CDC_DMA_TX_0",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE |
+				   SNDRV_PCM_FMTBIT_S32_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.name = "WSA_CDC_DMA_TX_0",
+		.ops = &msm_dai_q6_cdc_dma_ops,
+		.id = AFE_PORT_ID_WSA_CODEC_DMA_TX_0,
+		.probe = msm_dai_q6_dai_cdc_dma_probe,
+		.remove = msm_dai_q6_dai_cdc_dma_remove,
+		},
+	{
+		.playback = {
+			.stream_name = "WSA CDC DMA1 Playback",
+			.aif_name = "WSA_CDC_DMA_RX_1",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE |
+				   SNDRV_PCM_FMTBIT_S32_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.name = "WSA_CDC_DMA_RX_1",
+		.ops = &msm_dai_q6_cdc_dma_ops,
+		.id = AFE_PORT_ID_WSA_CODEC_DMA_RX_1,
+		.probe = msm_dai_q6_dai_cdc_dma_probe,
+		.remove = msm_dai_q6_dai_cdc_dma_remove,
+	},
+	{
+		.capture = {
+			.stream_name = "WSA CDC DMA1 Capture",
+			.aif_name = "WSA_CDC_DMA_TX_1",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE |
+				   SNDRV_PCM_FMTBIT_S32_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.name = "WSA_CDC_DMA_TX_1",
+		.ops = &msm_dai_q6_cdc_dma_ops,
+		.id = AFE_PORT_ID_WSA_CODEC_DMA_TX_1,
+		.probe = msm_dai_q6_dai_cdc_dma_probe,
+		.remove = msm_dai_q6_dai_cdc_dma_remove,
+	},
+	{
+		.capture = {
+			.stream_name = "WSA CDC DMA2 Capture",
+			.aif_name = "WSA_CDC_DMA_TX_2",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE |
+				   SNDRV_PCM_FMTBIT_S32_LE,
+			.channels_min = 1,
+			.channels_max = 1,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.name = "WSA_CDC_DMA_TX_2",
+		.ops = &msm_dai_q6_cdc_dma_ops,
+		.id = AFE_PORT_ID_WSA_CODEC_DMA_TX_2,
+		.probe = msm_dai_q6_dai_cdc_dma_probe,
+		.remove = msm_dai_q6_dai_cdc_dma_remove,
+	},
+	{
+		.capture = {
+			.stream_name = "VA CDC DMA0 Capture",
+			.aif_name = "VA_CDC_DMA_TX_0",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE,
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.name = "VA_CDC_DMA_TX_0",
+		.ops = &msm_dai_q6_cdc_dma_ops,
+		.id = AFE_PORT_ID_VA_CODEC_DMA_TX_0,
+		.probe = msm_dai_q6_dai_cdc_dma_probe,
+		.remove = msm_dai_q6_dai_cdc_dma_remove,
+	},
+	{
+		.capture = {
+			.stream_name = "VA CDC DMA1 Capture",
+			.aif_name = "VA_CDC_DMA_TX_1",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE,
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.name = "VA_CDC_DMA_TX_1",
+		.ops = &msm_dai_q6_cdc_dma_ops,
+		.id = AFE_PORT_ID_VA_CODEC_DMA_TX_1,
+		.probe = msm_dai_q6_dai_cdc_dma_probe,
+		.remove = msm_dai_q6_dai_cdc_dma_remove,
+	},
+
+};
+
+static const struct snd_soc_component_driver msm_q6_cdc_dma_dai_component = {
+	.name = "msm-dai-cdc-dma-dev",
+};
+
+/* DT related probe for each codec DMA interface device */
+static int msm_dai_q6_cdc_dma_dev_probe(struct platform_device *pdev)
+{
+	const char *q6_cdc_dma_dev_id = "qcom,msm-dai-cdc-dma-dev-id";
+	u16 cdc_dma_id = 0;
+	int i;
+	int rc = 0;
+	struct msm_dai_q6_cdc_dma_dai_data *dai_data = NULL;
+
+	rc = of_property_read_u16(pdev->dev.of_node, q6_cdc_dma_dev_id,
+				  &cdc_dma_id);
+	if (rc) {
+		dev_err(&pdev->dev,
+			"%s: missing 0x%x in dt node\n", __func__, cdc_dma_id);
+		return rc;
+	}
+
+	dev_dbg(&pdev->dev, "%s: dev name %s dev id 0x%x\n", __func__,
+		dev_name(&pdev->dev), cdc_dma_id);
+
+	pdev->id = cdc_dma_id;
+
+	dai_data = devm_kzalloc(&pdev->dev,
+				sizeof(struct msm_dai_q6_cdc_dma_dai_data),
+				GFP_KERNEL);
+
+	if (!dai_data)
+		return -ENOMEM;
+
+	rc = of_property_read_u32(pdev->dev.of_node,
+				    "qcom,msm-dai-is-island-supported",
+				    &dai_data->is_island_dai);
+	if (rc)
+		dev_dbg(&pdev->dev, "island supported entry not found\n");
+
+	dev_set_drvdata(&pdev->dev, dai_data);
+
+	for (i = 0; i < ARRAY_SIZE(msm_dai_q6_cdc_dma_dai); i++) {
+		if (msm_dai_q6_cdc_dma_dai[i].id == cdc_dma_id) {
+			return snd_soc_register_component(&pdev->dev,
+				&msm_q6_cdc_dma_dai_component,
+				&msm_dai_q6_cdc_dma_dai[i], 1);
+		}
+	}
+	return -ENODEV;
+}
+
+static int msm_dai_q6_cdc_dma_dev_remove(struct platform_device *pdev)
+{
+	snd_soc_unregister_component(&pdev->dev);
+	return 0;
+}
+
+static const struct of_device_id msm_dai_q6_cdc_dma_dev_dt_match[] = {
+	{ .compatible = "qcom,msm-dai-cdc-dma-dev", },
+	{ }
+};
+
+MODULE_DEVICE_TABLE(of, msm_dai_q6_cdc_dma_dev_dt_match);
+
+static struct platform_driver msm_dai_q6_cdc_dma_driver = {
+	.probe  = msm_dai_q6_cdc_dma_dev_probe,
+	.remove  = msm_dai_q6_cdc_dma_dev_remove,
+	.driver = {
+		.name = "msm-dai-cdc-dma-dev",
+		.owner = THIS_MODULE,
+		.of_match_table = msm_dai_q6_cdc_dma_dev_dt_match,
+	},
+};
+
+/* DT related probe for codec DMA interface device group */
+static int msm_dai_cdc_dma_q6_probe(struct platform_device *pdev)
+{
+	int rc;
+
+	rc = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
+	if (rc) {
+		dev_err(&pdev->dev, "%s: failed to add child nodes, rc=%d\n",
+			__func__, rc);
+	} else
+		dev_dbg(&pdev->dev, "%s: added child node\n", __func__);
+	return rc;
+}
+
+static int msm_dai_cdc_dma_q6_remove(struct platform_device *pdev)
+{
+	of_platform_depopulate(&pdev->dev);
+	return 0;
+}
+
+static const struct of_device_id msm_dai_cdc_dma_dt_match[] = {
+	{ .compatible = "qcom,msm-dai-cdc-dma", },
+	{ }
+};
+
+MODULE_DEVICE_TABLE(of, msm_dai_cdc_dma_dt_match);
+
+static struct platform_driver msm_dai_cdc_dma_q6 = {
+	.probe  = msm_dai_cdc_dma_q6_probe,
+	.remove = msm_dai_cdc_dma_q6_remove,
+	.driver = {
+		.name = "msm-dai-cdc-dma",
+		.owner = THIS_MODULE,
+		.of_match_table = msm_dai_cdc_dma_dt_match,
+	},
+};
+
 int __init msm_dai_q6_init(void)
 {
 	int rc;
@@ -9060,8 +9827,25 @@ int __init msm_dai_q6_init(void)
 		pr_err("%s: fail to register dai TDM\n", __func__);
 		goto dai_tdm_q6_fail;
 	}
+
+	rc = platform_driver_register(&msm_dai_q6_cdc_dma_driver);
+	if (rc) {
+		pr_err("%s: fail to register dai CDC DMA dev\n", __func__);
+		goto dai_cdc_dma_q6_dev_fail;
+	}
+
+
+	rc = platform_driver_register(&msm_dai_cdc_dma_q6);
+	if (rc) {
+		pr_err("%s: fail to register dai CDC DMA\n", __func__);
+		goto dai_cdc_dma_q6_fail;
+	}
 	return rc;
 
+dai_cdc_dma_q6_fail:
+	platform_driver_unregister(&msm_dai_q6_cdc_dma_driver);
+dai_cdc_dma_q6_dev_fail:
+	platform_driver_unregister(&msm_dai_tdm_q6);
 dai_tdm_q6_fail:
 	platform_driver_unregister(&msm_dai_q6_tdm_driver);
 dai_q6_tdm_drv_fail:
@@ -9082,6 +9866,8 @@ fail:
 
 void msm_dai_q6_exit(void)
 {
+	platform_driver_unregister(&msm_dai_cdc_dma_q6);
+	platform_driver_unregister(&msm_dai_q6_cdc_dma_driver);
 	platform_driver_unregister(&msm_dai_tdm_q6);
 	platform_driver_unregister(&msm_dai_q6_tdm_driver);
 	platform_driver_unregister(&msm_dai_q6_spdif_driver);

@@ -9,7 +9,7 @@ endif
 ifeq ($(KERNEL_BUILD), 1)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
-	AUDIO_BLD_DIR := $(ANDROID_BUILD_TOP)/kernel/msm-4.9
+	AUDIO_BLD_DIR := $(ANDROID_BUILD_TOP)/kernel/msm-4.14
 	AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
 endif
 
@@ -44,6 +44,11 @@ ifeq ($(KERNEL_BUILD), 0)
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
 	endif
+	ifeq ($(CONFIG_ARCH_QCS405), y)
+		include $(AUDIO_ROOT)/config/qcs405auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/qcs405autoconf.h
+	endif
 endif
 
 
@@ -75,6 +80,7 @@ COMMON_INC :=	-I$(AUDIO_ROOT)/$(COMMON_DIR)
 ############ QDSP6V2 ############
 
 ifdef CONFIG_SND_SOC_MSM_QDSP6V2_INTF
+	Q6_OBJS += msm-audio-event-notify.o
 	Q6_OBJS += audio_calibration.o
 	Q6_OBJS += audio_cal_utils.o
 	Q6_OBJS += q6adm.o
@@ -91,21 +97,26 @@ ifdef CONFIG_SND_SOC_MSM_QDSP6V2_INTF
 	Q6_OBJS += msm_audio_ion.o
 	Q6_OBJS += avtimer.o
 	Q6_OBJS += q6_init.o
+
 endif
 ifdef CONFIG_DTS_SRS_TM
 	Q6_OBJS += msm-dts-srs-tm-config.o
+endif
+
+ifdef CONFIG_AFE_HWDEP
+	Q6_OBJS += q6afecal-hwdep.o
 endif
 
 ifdef CONFIG_MSM_ADSP_LOADER
 ADSP_LOADER_OBJS += adsp-loader.o
 endif
 
-ifdef CONFIG_MSM_QDSP6_NOTIFIER
-QDSP6_NOTIFIER_OBJS += audio_notifier.o audio_ssr.o
-endif
-
 ifdef CONFIG_MSM_QDSP6_PDR
 QDSP6_PDR_OBJS += audio_pdr.o
+endif
+
+ifdef CONFIG_MSM_QDSP6_NOTIFIER
+QDSP6_NOTIFIER_OBJS += audio_notifier.o audio_ssr.o
 endif
 
 ifdef CONFIG_MSM_ULTRASOUND
@@ -173,11 +184,11 @@ usf_dlkm-y := $(USF_OBJS)
 obj-$(CONFIG_MSM_ADSP_LOADER) += adsp_loader_dlkm.o
 adsp_loader_dlkm-y := $(ADSP_LOADER_OBJS)
 
-obj-$(CONFIG_MSM_QDSP6_NOTIFIER) += q6_notifier_dlkm.o
-q6_notifier_dlkm-y := $(QDSP6_NOTIFIER_OBJS)
-
 obj-$(CONFIG_MSM_QDSP6_PDR) += q6_pdr_dlkm.o
 q6_pdr_dlkm-y := $(QDSP6_PDR_OBJS)
+
+obj-$(CONFIG_MSM_QDSP6_NOTIFIER) += q6_notifier_dlkm.o
+q6_notifier_dlkm-y := $(QDSP6_NOTIFIER_OBJS)
 
 # inject some build related information
 DEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"

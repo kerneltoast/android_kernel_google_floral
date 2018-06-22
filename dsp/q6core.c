@@ -12,12 +12,17 @@
 
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/platform_device.h>
+#include <linux/of_device.h>
 #include <linux/string.h>
 #include <linux/types.h>
 #include <linux/spinlock.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/sysfs.h>
+#include <linux/kobject.h>
+#include <linux/delay.h>
 #include <dsp/q6core.h>
 #include <dsp/audio_cal_utils.h>
 #include <dsp/apr_audio-v2.h>
@@ -31,6 +36,8 @@
  * is sufficient to make sure the Q6 will be ready.
  */
 #define Q6_READY_TIMEOUT_MS 100
+
+#define ADSP_STATE_READY_TIMEOUT_MS 3000
 
 enum {
 	META_CAL,
@@ -81,6 +88,106 @@ struct generic_get_data_ {
 	int ints[];
 };
 static struct generic_get_data_ *generic_get_data;
+
+static DEFINE_MUTEX(kset_lock);
+static struct kset *audio_uevent_kset;
+
+static int q6core_init_uevent_kset(void)
+{
+	int ret = 0;
+
+	mutex_lock(&kset_lock);
+	if (audio_uevent_kset)
+		goto done;
+
+	/* Create a kset under /sys/kernel/ */
+	audio_uevent_kset = kset_create_and_add("q6audio", NULL, kernel_kobj);
+	if (!audio_uevent_kset) {
+		pr_err("%s: error creating uevent kernel set", __func__);
+		ret = -EINVAL;
+	}
+done:
+	mutex_unlock(&kset_lock);
+	return ret;
+}
+
+static void q6core_destroy_uevent_kset(void)
+{
+	if (audio_uevent_kset) {
+		kset_unregister(audio_uevent_kset);
+		audio_uevent_kset = NULL;
+	}
+}
+
+/**
+ * q6core_init_uevent_data - initialize kernel object required to send uevents.
+ *
+ * @uevent_data: uevent data (dynamically allocated memory).
+ * @name: name of the kernel object.
+ *
+ * Returns 0 on success or error otherwise.
+ */
+int q6core_init_uevent_data(struct audio_uevent_data *uevent_data, char *name)
+{
+	int ret = -EINVAL;
+
+	if (!uevent_data || !name)
+		return ret;
+
+	ret = q6core_init_uevent_kset();
+	if (ret)
+		return ret;
+
+	/* Set kset for kobject before initializing the kobject */
+	uevent_data->kobj.kset = audio_uevent_kset;
+
+	/* Initialize kobject and add it to kernel */
+	ret = kobject_init_and_add(&uevent_data->kobj, &uevent_data->ktype,
+					NULL, "%s", name);
+	if (ret) {
+		pr_err("%s: error initializing uevent kernel object: %d",
+			__func__, ret);
+		kobject_put(&uevent_data->kobj);
+		return ret;
+	}
+
+	/* Send kobject add event to the system */
+	kobject_uevent(&uevent_data->kobj, KOBJ_ADD);
+
+	return ret;
+}
+EXPORT_SYMBOL(q6core_init_uevent_data);
+
+/**
+ * q6core_destroy_uevent_data - destroy kernel object.
+ *
+ * @uevent_data: uevent data.
+ */
+void q6core_destroy_uevent_data(struct audio_uevent_data *uevent_data)
+{
+	if (uevent_data)
+		kobject_put(&uevent_data->kobj);
+}
+EXPORT_SYMBOL(q6core_destroy_uevent_data);
+
+/**
+ * q6core_send_uevent - send uevent to userspace.
+ *
+ * @uevent_data: uevent data.
+ * @event: event to send.
+ *
+ * Returns 0 on success or error otherwise.
+ */
+int q6core_send_uevent(struct audio_uevent_data *uevent_data, char *event)
+{
+	char *env[] = { event, NULL };
+
+	if (!event || !uevent_data)
+		return -EINVAL;
+
+	return kobject_uevent_env(&uevent_data->kobj, KOBJ_CHANGE, env);
+}
+EXPORT_SYMBOL(q6core_send_uevent);
 
 static int parse_fwk_version_info(uint32_t *payload)
 {
@@ -406,10 +513,9 @@ int q6core_get_service_version(uint32_t service_id,
 }
 EXPORT_SYMBOL(q6core_get_service_version);
 
-size_t q6core_get_fwk_version_size(uint32_t service_id)
+static int q6core_get_avcs_fwk_version(void)
 {
 	int ret = 0;
-	uint32_t num_services;
 
 	mutex_lock(&(q6core_lcl.ver_lock));
 	pr_debug("%s: q6core_avcs_ver_info.status(%d)\n", __func__,
@@ -440,7 +546,15 @@ size_t q6core_get_fwk_version_size(uint32_t service_id)
 		break;
 	}
 	mutex_unlock(&(q6core_lcl.ver_lock));
+	return ret;
+}
 
+size_t q6core_get_fwk_version_size(uint32_t service_id)
+{
+	int ret = 0;
+	uint32_t num_services;
+
+	ret = q6core_get_avcs_fwk_version();
 	if (ret)
 		goto done;
 
@@ -462,6 +576,42 @@ done:
 	return ret;
 }
 EXPORT_SYMBOL(q6core_get_fwk_version_size);
+
+/**
+ * q6core_get_avcs_version_per_service -
+ *       to get api version of a particular service
+ *
+ * @service_id: id of the service
+ *
+ * Returns valid version on success or error (negative value) on failure
+ */
+int q6core_get_avcs_api_version_per_service(uint32_t service_id)
+{
+	struct avcs_fwk_ver_info *cached_ver_info = NULL;
+	int i;
+	uint32_t num_services;
+	int ret = 0;
+
+	if (service_id == AVCS_SERVICE_ID_ALL)
+		return -EINVAL;
+
+	ret = q6core_get_avcs_fwk_version();
+	if (ret < 0) {
+		pr_err("%s: failure in getting AVCS version\n", __func__);
+		return ret;
+	}
+
+	cached_ver_info = q6core_lcl.q6core_avcs_ver_info.ver_info;
+	num_services = cached_ver_info->avcs_fwk_version.num_services;
+
+	for (i = 0; i < num_services; i++) {
+		if (cached_ver_info->services[i].service_id == service_id)
+			return cached_ver_info->services[i].api_version;
+	}
+	pr_err("%s: No service matching service ID %d\n", __func__, service_id);
+	return -EINVAL;
+}
+EXPORT_SYMBOL(q6core_get_avcs_api_version_per_service);
 
 /**
  * core_set_license -
@@ -1099,6 +1249,69 @@ err:
 	return ret;
 }
 
+static int q6core_probe(struct platform_device *pdev)
+{
+	unsigned long timeout;
+	int adsp_ready = 0, rc;
+
+	timeout = jiffies +
+		msecs_to_jiffies(ADSP_STATE_READY_TIMEOUT_MS);
+
+	do {
+		if (!adsp_ready) {
+			adsp_ready = q6core_is_adsp_ready();
+			dev_dbg(&pdev->dev, "%s: ADSP Audio is %s\n", __func__,
+				adsp_ready ? "ready" : "not ready");
+		}
+		if (adsp_ready)
+			break;
+
+		/*
+		 * ADSP will be coming up after loading (PD up event) and
+		 * it might not be fully up when the control reaches
+		 * here. So, wait for 50msec before checking ADSP state
+		 */
+		msleep(50);
+	} while (time_after(timeout, jiffies));
+
+	if (!adsp_ready) {
+		dev_err(&pdev->dev, "%s: Timeout. ADSP Audio is %s\n",
+		       __func__,
+		       adsp_ready ? "ready" : "not ready");
+		return -ETIMEDOUT;
+	}
+	rc = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
+	if (rc) {
+		dev_err(&pdev->dev, "%s: failed to add child nodes, rc=%d\n",
+			__func__, rc);
+		return -EINVAL;
+	}
+	dev_dbg(&pdev->dev, "%s: added child node\n", __func__);
+
+	return 0;
+}
+
+static int q6core_remove(struct platform_device *pdev)
+{
+	of_platform_depopulate(&pdev->dev);
+	return 0;
+}
+
+static const struct of_device_id q6core_of_match[]  = {
+	{ .compatible = "qcom,q6core-audio", },
+	{},
+};
+
+static struct platform_driver q6core_driver = {
+	.probe = q6core_probe,
+	.remove = q6core_remove,
+	.driver = {
+		.name = "q6core_audio",
+		.owner = THIS_MODULE,
+		.of_match_table = q6core_of_match,
+	}
+};
+
 int __init core_init(void)
 {
 	memset(&q6core_lcl, 0, sizeof(struct q6core_str));
@@ -1110,8 +1323,9 @@ int __init core_init(void)
 	mutex_init(&q6core_lcl.ver_lock);
 
 	q6core_init_cal_data();
+	q6core_init_uevent_kset();
 
-	return 0;
+	return platform_driver_register(&q6core_driver);
 }
 
 void core_exit(void)
@@ -1119,6 +1333,8 @@ void core_exit(void)
 	mutex_destroy(&q6core_lcl.cmd_lock);
 	mutex_destroy(&q6core_lcl.ver_lock);
 	q6core_delete_cal_data();
+	q6core_destroy_uevent_kset();
+	platform_driver_unregister(&q6core_driver);
 }
 MODULE_DESCRIPTION("ADSP core driver");
 MODULE_LICENSE("GPL v2");

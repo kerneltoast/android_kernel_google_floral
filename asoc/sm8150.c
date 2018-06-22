@@ -167,6 +167,8 @@ struct msm_asoc_mach_data {
 	struct device_node *hph_en1_gpio_p; /* used by pinctrl API */
 	struct device_node *hph_en0_gpio_p; /* used by pinctrl API */
 	struct device_node *fsa_handle;
+	struct snd_soc_codec *codec;
+	struct work_struct adsp_power_up_work;
 };
 
 struct msm_asoc_wcd93xx_codec {
@@ -3878,6 +3880,19 @@ err:
 	return ret;
 }
 
+static void msm_adsp_power_up_config_work(struct work_struct *work)
+{
+	struct msm_asoc_mach_data *pdata;
+	struct snd_soc_codec *codec;
+	struct snd_card *card;
+
+	pdata = container_of(work, struct msm_asoc_mach_data,
+			     adsp_power_up_work);
+	codec = pdata->codec;
+	card = codec->component.card->snd_card;
+	msm_adsp_power_up_config(codec, card);
+}
+
 static int sm8150_notifier_service_cb(struct notifier_block *this,
 					 unsigned long opcode, void *ptr)
 {
@@ -3886,6 +3901,7 @@ static int sm8150_notifier_service_cb(struct notifier_block *this,
 	const char *be_dl_name = LPASS_BE_SLIMBUS_0_RX;
 	struct snd_soc_pcm_runtime *rtd;
 	struct snd_soc_codec *codec;
+	struct msm_asoc_mach_data *pdata;
 
 	pr_debug("%s: Service opcode 0x%lx\n", __func__, opcode);
 
@@ -3920,13 +3936,9 @@ static int sm8150_notifier_service_cb(struct notifier_block *this,
 		}
 		codec = rtd->codec;
 
-		ret = msm_adsp_power_up_config(codec, card->snd_card);
-		if (ret < 0) {
-			dev_err(card->dev,
-				"%s: msm_adsp_power_up_config failed ret = %d!\n",
-				__func__, ret);
-			goto err;
-		}
+		pdata = snd_soc_card_get_drvdata(card);
+		pdata->codec = codec;
+		schedule_work(&pdata->adsp_power_up_work);
 		break;
 	default:
 		break;
@@ -5656,6 +5668,21 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+	{
+		.name = "Compress Capture",
+		.stream_name = "Compress9",
+		.cpu_dai_name = "MultiMedia17",
+		.platform_name = "msm-compress-dsp",
+		.dynamic = 1,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			    SND_SOC_DPCM_TRIGGER_POST},
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.id = MSM_FRONTEND_DAI_MULTIMEDIA17,
+	},
 };
 
 static struct snd_soc_dai_link msm_common_be_dai_links[] = {
@@ -7099,7 +7126,7 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 			__func__, codec->component.name);
 		wsa881x_set_channel_map(codec, &spkleft_ports[0],
 				WSA881X_MAX_SWR_PORTS, &ch_mask[0],
-				&ch_rate[0]);
+				&ch_rate[0], NULL);
 		if (dapm->component) {
 			snd_soc_dapm_ignore_suspend(dapm, "SpkrLeft IN");
 			snd_soc_dapm_ignore_suspend(dapm, "SpkrLeft SPKR");
@@ -7109,7 +7136,7 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 			__func__, codec->component.name);
 		wsa881x_set_channel_map(codec, &spkright_ports[0],
 				WSA881X_MAX_SWR_PORTS, &ch_mask[0],
-				&ch_rate[0]);
+				&ch_rate[0], NULL);
 		if (dapm->component) {
 			snd_soc_dapm_ignore_suspend(dapm, "SpkrRight IN");
 			snd_soc_dapm_ignore_suspend(dapm, "SpkrRight SPKR");
@@ -7413,6 +7440,8 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	}
 	dev_info(&pdev->dev, "Sound card %s registered\n", card->name);
 	spdev = pdev;
+
+	INIT_WORK(&pdata->adsp_power_up_work, msm_adsp_power_up_config_work);
 
 	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
 	if (ret) {

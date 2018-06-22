@@ -1263,6 +1263,27 @@ struct adm_cmd_connect_afe_port_v5 {
 #define AFE_PORT_ID_USB_RX                       0x7000
 #define AFE_PORT_ID_USB_TX                       0x7001
 
+/* AFE WSA Codec DMA Rx port 0 */
+#define AFE_PORT_ID_WSA_CODEC_DMA_RX_0           0xB000
+
+/* AFE WSA Codec DMA Tx port 0 */
+#define AFE_PORT_ID_WSA_CODEC_DMA_TX_0           0xB001
+
+/* AFE WSA Codec DMA Rx port 1 */
+#define AFE_PORT_ID_WSA_CODEC_DMA_RX_1           0xB002
+
+/* AFE WSA Codec DMA Tx port 1 */
+#define AFE_PORT_ID_WSA_CODEC_DMA_TX_1           0xB003
+
+/* AFE WSA Codec DMA Tx port 2 */
+#define AFE_PORT_ID_WSA_CODEC_DMA_TX_2           0xB005
+
+/* AFE VA Codec DMA Tx port 0 */
+#define AFE_PORT_ID_VA_CODEC_DMA_TX_0            0xB021
+
+/* AFE VA Codec DMA Tx port 1 */
+#define AFE_PORT_ID_VA_CODEC_DMA_TX_1            0xB023
+
 /* Generic pseudoport 1. */
 #define AFE_PORT_ID_PSEUDOPORT_01      0x8001
 /* Generic pseudoport 2. */
@@ -1780,6 +1801,99 @@ struct afe_loopback_iir_cfg_v2 {
 	struct param_hdr_v1 st_iir_filter_config_pdata;
 	struct afe_sidetone_iir_filter_config_params st_iir_filter_config_data;
 } __packed;
+
+
+/*
+ * Param ID and related structures for AFE event
+ * registration.
+ */
+#define AFE_PORT_CMD_MOD_EVENT_CFG		0x000100FD
+
+struct afe_port_cmd_event_cfg {
+	struct apr_hdr	hdr;
+	uint32_t version;
+	/* Version number. The current version is 0 */
+
+	uint32_t port_id;
+	/*
+	 * Port ID for the AFE port hosting the modules
+	 * being registered for the events
+	 */
+
+	uint32_t num_events;
+	/*
+	 * Number of events to be registered with the service
+	 * Each event has the structure of
+	 * afe_port_cmd_mod_evt_cfg_payload.
+	 */
+	uint8_t payload[0];
+};
+
+/** Event registration for a module. */
+#define AFE_MODULE_REGISTER_EVENT_FLAG    1
+
+/** Event de-registration for a module. */
+#define AFE_MODULE_DEREGISTER_EVENT_FLAG  0
+
+struct afe_port_cmd_mod_evt_cfg_payload {
+	uint32_t module_id;
+	/* Valid ID of the module. */
+
+	uint16_t instance_id;
+	/*
+	 * Valid ID of the module instance in the current topology.
+	 * If both module_id and instance_id ID are set to 0, the event is
+	 * registered with all modules and instances in the topology.
+	 * If module_id is set to 0 and instance_id is set to a non-zero value,
+	 * the payload is considered to be invalid.
+	 */
+
+	uint16_t reserved;
+	/* Used for alignment; must be set to 0.*/
+
+	uint32_t event_id;
+	/* Unique ID of the event. */
+
+	uint32_t reg_flag;
+	/*
+	 * Bit field for enabling or disabling event registration.
+	 * values
+	 * - #AFE_MODULE_REGISTER_EVENT_FLAG
+	 * - #AFE_MODULE_DEREGISTER_EVENT_FLAG
+	 */
+} __packed;
+
+
+#define AFE_PORT_MOD_EVENT			0x0001010C
+
+struct afe_port_mod_evt_rsp_hdr {
+	uint32_t minor_version;
+	/* This indicates the minor version of the payload */
+
+	uint32_t port_id;
+	/* AFE port hosting this module */
+
+	uint32_t module_id;
+	/* Module ID which is raising the event */
+
+	uint16_t instance_id;
+	/* Instance ID of the module which is raising the event */
+
+	uint16_t reserved;
+	/* For alignment purpose, should be set to 0 */
+
+	uint32_t event_id;
+	/* Valid event ID registered by client */
+
+	uint32_t payload_size;
+	/*
+	 * Size of the event payload
+	 * This is followed by actual payload corresponding to the event
+	 */
+} __packed;
+
+#define AFE_PORT_SP_DC_DETECTION_EVENT		0x0001010D
+
 #define AFE_MODULE_SPEAKER_PROTECTION	0x00010209
 #define AFE_PARAM_ID_SPKR_PROT_CONFIG	0x0001020a
 #define AFE_API_VERSION_SPKR_PROT_CONFIG	0x1
@@ -2586,6 +2700,17 @@ struct afe_param_id_internal_bt_fm_cfg {
  * shared channel approach.
  */
 
+/* ID of the parameter used to set the latency mode of the
+ * USB audio device.
+ */
+#define AFE_PARAM_ID_PORT_LATENCY_MODE_CONFIG  0x000102B3
+
+/* Minor version used for tracking USB audio latency mode */
+#define AFE_API_MINOR_VERSION_USB_AUDIO_LATENCY_MODE 0x1
+
+/* Supported AFE port latency modes */
+#define AFE_PORT_DEFAULT_LATENCY_MODE     0x0
+#define AFE_PORT_LOW_LATENCY_MODE         0x1
 
 #define AFE_PARAM_ID_SLIMBUS_CONFIG    0x00010212
 
@@ -2679,14 +2804,14 @@ struct afe_param_id_slimbus_cfg {
 #define AFE_PARAM_ID_USB_AUDIO_DEV_LPCM_FMT 0x000102AA
 
 /* Minor version used for tracking USB audio  configuration */
-#define AFE_API_MINIOR_VERSION_USB_AUDIO_CONFIG 0x1
+#define AFE_API_MINOR_VERSION_USB_AUDIO_CONFIG 0x1
 
 /* Payload of the AFE_PARAM_ID_USB_AUDIO_DEV_PARAMS parameter used by
  * AFE_MODULE_AUDIO_DEV_INTERFACE.
  */
 struct afe_param_id_usb_audio_dev_params {
 /* Minor version used for tracking USB audio device parameter.
- * Supported values: AFE_API_MINIOR_VERSION_USB_AUDIO_CONFIG
+ * Supported values: AFE_API_MINOR_VERSION_USB_AUDIO_CONFIG
  */
 	u32                  cfg_minor_version;
 /* Token of actual end USB aduio device */
@@ -2695,11 +2820,31 @@ struct afe_param_id_usb_audio_dev_params {
 
 struct afe_param_id_usb_audio_dev_lpcm_fmt {
 /* Minor version used for tracking USB audio device parameter.
- * Supported values: AFE_API_MINIOR_VERSION_USB_AUDIO_CONFIG
+ * Supported values: AFE_API_MINOR_VERSION_USB_AUDIO_CONFIG
  */
 	u32                  cfg_minor_version;
 /* Endianness of actual end USB audio device */
 	u32                  endian;
+} __packed;
+
+struct afe_param_id_usb_audio_dev_latency_mode {
+/* Minor version used for tracking USB audio device parameter.
+ * Supported values: AFE_API_MINOR_VERSION_USB_AUDIO_LATENCY_MODE
+ */
+	u32                  minor_version;
+/* latency mode for the USB audio device */
+	u32                  mode;
+} __packed;
+
+#define AFE_PARAM_ID_USB_AUDIO_SVC_INTERVAL     0x000102B7
+
+struct afe_param_id_usb_audio_svc_interval {
+/* Minor version used for tracking USB audio device parameter.
+ * Supported values: AFE_API_MINOR_VERSION_USB_AUDIO_CONFIG
+ */
+	u32                  cfg_minor_version;
+/* Endianness of actual end USB audio device */
+	u32                  svc_interval;
 } __packed;
 
 /* ID of the parameter used by AFE_PARAM_ID_USB_AUDIO_CONFIG to configure
@@ -2712,7 +2857,7 @@ struct afe_param_id_usb_audio_dev_lpcm_fmt {
  */
 struct afe_param_id_usb_audio_cfg {
 /* Minor version used for tracking USB audio device configuration.
- * Supported values: AFE_API_MINIOR_VERSION_USB_AUDIO_CONFIG
+ * Supported values: AFE_API_MINOR_VERSION_USB_AUDIO_CONFIG
  */
 	u32                  cfg_minor_version;
 /* Sampling rate of the port.
@@ -2748,6 +2893,8 @@ struct afe_param_id_usb_audio_cfg {
 	u32                  dev_token;
 /* endianness of this interface */
 	u32                   endian;
+/* service interval */
+	u32                  service_interval;
 } __packed;
 
 /* This param id is used to configure Real Time Proxy interface. */
@@ -3794,6 +3941,99 @@ struct avs_dec_depacketizer_id_param_t {
 	uint32_t dec_depacketizer_id;
 };
 
+/* ID of the parameter used by #AFE_MODULE_AUDIO_DEV_INTERFACE to configure
+ * the island mode for a given AFE port.
+ */
+#define AFE_PARAM_ID_ISLAND_CONFIG	0x000102B4
+
+/* Version information used to handle future additions to codec DMA
+ * configuration (for backward compatibility).
+ */
+#define AFE_API_VERSION_ISLAND_CONFIG                                   0x1
+
+/* Payload of the AFE_PARAM_ID_ISLAND_CONFIG parameter used by
+ * AFE_MODULE_AUDIO_DEV_INTERFACE.
+ */
+struct afe_param_id_island_cfg_t {
+	uint32_t	island_cfg_minor_version;
+	/* Tracks the configuration of this parameter.
+	 * Supported values: #AFE_API_VERSION_ISLAND_CONFIG
+	 */
+
+	uint32_t	island_enable;
+	/* Specifies whether island mode should be enabled or disabled for the
+	 * use-case being setup.
+	 * Supported values: 0 - Disable, 1 - Enable
+	 */
+} __packed;
+
+/* ID of the parameter used by #AFE_MODULE_AUDIO_DEV_INTERFACE to configure
+ * the Codec DMA interface.
+ */
+
+#define AFE_PARAM_ID_CODEC_DMA_CONFIG	0x000102B8
+
+/* Version information used to handle future additions to codec DMA
+ * configuration (for backward compatibility).
+ */
+#define AFE_API_VERSION_CODEC_DMA_CONFIG                                   0x1
+
+/* Payload of the AFE_PARAM_ID_CODEC_DMA_CONFIG parameter used by
+ * AFE_MODULE_AUDIO_DEV_INTERFACE.
+ */
+struct afe_param_id_cdc_dma_cfg_t {
+	uint32_t	cdc_dma_cfg_minor_version;
+	/* Tracks the configuration of this parameter.
+	 * Supported values: #AFE_API_VERSION_CODEC_DMA_CONFIG
+	 */
+
+	uint32_t	sample_rate;
+	/* Sampling rate of the port.
+	 * Supported values:
+	 * - #AFE_PORT_SAMPLE_RATE_8K
+	 * - #AFE_PORT_SAMPLE_RATE_11_025K
+	 * - #AFE_PORT_SAMPLE_RATE_12K
+	 * - #AFE_PORT_SAMPLE_RATE_16K
+	 * - #AFE_PORT_SAMPLE_RATE_22_05K
+	 * - #AFE_PORT_SAMPLE_RATE_24K
+	 * - #AFE_PORT_SAMPLE_RATE_32K
+	 * - #AFE_PORT_SAMPLE_RATE_44_1K
+	 * - #AFE_PORT_SAMPLE_RATE_48K
+	 * - #AFE_PORT_SAMPLE_RATE_88_2K
+	 * - #AFE_PORT_SAMPLE_RATE_96K
+	 * - #AFE_PORT_SAMPLE_RATE_176_4K
+	 * - #AFE_PORT_SAMPLE_RATE_192K
+	 * - #AFE_PORT_SAMPLE_RATE_352_8K
+	 * - #AFE_PORT_SAMPLE_RATE_384K
+	 */
+
+	uint16_t	bit_width;
+	/* Bit width of the sample.
+	 * Supported values: 16, 24, 32
+	 */
+
+	uint16_t	data_format;
+	/* Data format supported by the codec DMA interface.
+	 * Supported values:
+	 * - #AFE_LINEAR_PCM_DATA
+	 * - #AFE_LINEAR_PCM_DATA_PACKED_16BIT
+	 */
+
+	uint16_t	num_channels;
+	/* Number of channels.
+	 * Supported values: 1 to Maximum number of channels supported
+	 * for each interface
+	 */
+
+	uint16_t	active_channels_mask;
+	/* Active channels mask to denote the bit mask for active channels.
+	 * Bits 0 to 7 denote channels 0 to 7. A 1 denotes the channel is active
+	 * while a 0 denotes a channel is inactive.
+	 * Supported values:
+	 * Any mask with number of active bits equal to num_channels
+	 */
+} __packed;
+
 union afe_port_config {
 	struct afe_param_id_pcm_cfg               pcm;
 	struct afe_param_id_i2s_cfg               i2s;
@@ -3816,6 +4056,7 @@ union afe_port_config {
 	struct avs_dec_depacketizer_id_param_t    dec_depkt_id_param;
 	struct afe_enc_level_to_bitrate_map_param_t    map_param;
 	struct afe_enc_dec_imc_info_param_t       imc_info_param;
+	struct afe_param_id_cdc_dma_cfg_t         cdc_dma;
 } __packed;
 
 #define AFE_PORT_CMD_DEVICE_START 0x000100E5
@@ -4708,6 +4949,22 @@ struct asm_enc_cfg_blk_param_v2 {
  * this member.
  */
 
+} __packed;
+
+struct asm_custom_enc_cfg_t_v2 {
+	struct apr_hdr hdr;
+	struct asm_stream_cmd_set_encdec_param encdec;
+	struct asm_enc_cfg_blk_param_v2 encblk;
+	uint32_t sample_rate;
+
+	uint16_t num_channels;
+	uint16_t reserved;
+	/* num_ch == 1, then PCM_CHANNEL_C,
+	 * num_ch == 2, then {PCM_CHANNEL_L, PCM_CHANNEL_R}
+	 */
+	uint8_t  channel_mapping[8];
+	uint32_t  custom_size;
+	uint8_t  custom_data[15];
 } __packed;
 
 /* @brief Dolby Digital Plus end point configuration structure
@@ -9583,6 +9840,7 @@ struct asm_aptx_dec_fmt_blk_v2 {
 
 #define AVCS_SERVICE_ID_ALL (0xFFFFFFFF)
 #define APRV2_IDS_SERVICE_ID_ADSP_CVP_V	(0xB)
+#define APRV2_IDS_SERVICE_ID_ADSP_AFE_V (0x4)
 
 struct avcs_get_fwk_version {
 	/*
@@ -9674,6 +9932,7 @@ struct avcs_fwk_ver_info {
 #define LSM_DATA_EVENT_READ_DONE			(0x00012B02)
 #define LSM_DATA_EVENT_STATUS				(0x00012B03)
 #define LSM_SESSION_EVENT_DETECTION_STATUS_V3		(0x00012B04)
+#define LSM_SESSION_DETECTION_ENGINE_GENERIC_EVENT	(0x00012B06)
 
 #define LSM_MODULE_ID_VOICE_WAKEUP			(0x00012C00)
 #define LSM_PARAM_ID_ENDPOINT_DETECT_THRESHOLD		(0x00012C01)
@@ -9692,6 +9951,8 @@ struct avcs_fwk_ver_info {
 #define LSM_PARAM_ID_POLLING_ENABLE			(0x00012C1B)
 #define LSM_PARAM_ID_MEDIA_FMT				(0x00012C1E)
 #define LSM_PARAM_ID_FWK_MODE_CONFIG			(0x00012C27)
+#define LSM_PARAM_ID_MEDIA_FMT_V2			(0x00012C32)
+#define LSM_PARAM_ID_LAB_OUTPUT_CHANNEL_CONFIG		(0x00012C2D)
 
 /* HW MAD specific */
 #define AFE_MODULE_HW_MAD				(0x00010230)
@@ -11032,5 +11293,33 @@ struct admx_sec_primary_mic_ch {
 	uint16_t sec_primary_mic_ch;
 	uint16_t reserved1;
 } __packed;
+
+/** ID of the Voice Activity Detection (VAD) module, which is used to
+ *   configure AFE VAD.
+ */
+#define AFE_MODULE_VAD                                          0x000102B9
+
+/** ID of the parameter used by #AFE_MODULE_VAD to configure the VAD.
+ */
+#define AFE_PARAM_ID_VAD_CFG                                      0x000102BA
+
+#define AFE_API_VERSION_VAD_CFG                                     0x1
+
+/* Payload of the AFE_PARAM_ID_VAD_CONFIG parameter used by
+ * AFE_MODULE_VAD.
+ */
+struct afe_param_id_vad_cfg_t {
+	uint32_t                  vad_cfg_minor_version;
+	/** Tracks the configuration of this parameter.
+	 * Supported Values: #AFE_API_VERSION_VAD_CFG
+	 */
+
+	uint32_t                  pre_roll_in_ms;
+	/** Pre-roll period in ms.
+	 * Supported Values: 0x0 to 0x3E8
+	 */
+} __packed;
+
+#define AFE_PARAM_ID_VAD_CORE_CFG                              0x000102BB
 
 #endif /*_APR_AUDIO_V2_H_ */
