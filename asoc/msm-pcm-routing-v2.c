@@ -68,6 +68,7 @@ static int int4_mi2s_switch_enable;
 static int pri_mi2s_switch_enable;
 static int sec_mi2s_switch_enable;
 static int tert_mi2s_switch_enable;
+static int tert_tdm_switch_enable;
 static int quat_mi2s_switch_enable;
 static int quin_mi2s_switch_enable;
 static int fm_pcmrx_switch_enable;
@@ -2374,6 +2375,36 @@ static int msm_routing_put_tert_mi2s_switch_mixer(
 		snd_soc_dapm_mixer_update_power(widget->dapm, kcontrol, 0,
 						update);
 	tert_mi2s_switch_enable = ucontrol->value.integer.value[0];
+	return 1;
+}
+
+static int msm_routing_get_tert_tdm_switch_mixer(
+				struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = tert_tdm_switch_enable;
+	pr_debug("%s: TERT TDM Switch enable %ld\n", __func__,
+		ucontrol->value.integer.value[0]);
+	return 0;
+}
+
+static int msm_routing_put_tert_tdm_switch_mixer(
+				struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_dapm_widget *widget =
+		snd_soc_dapm_kcontrol_widget(kcontrol);
+	struct snd_soc_dapm_update *update = NULL;
+
+	pr_debug("%s: TERT TDM Switch enable %ld\n", __func__,
+			ucontrol->value.integer.value[0]);
+	if (ucontrol->value.integer.value[0])
+		snd_soc_dapm_mixer_update_power(widget->dapm, kcontrol, 1,
+						update);
+	else
+		snd_soc_dapm_mixer_update_power(widget->dapm, kcontrol, 0,
+						update);
+	tert_tdm_switch_enable = ucontrol->value.integer.value[0];
 	return 1;
 }
 
@@ -14410,6 +14441,11 @@ static const struct snd_kcontrol_new tert_mi2s_rx_switch_mixer_controls =
 	0, 1, 0, msm_routing_get_tert_mi2s_switch_mixer,
 	msm_routing_put_tert_mi2s_switch_mixer);
 
+static const struct snd_kcontrol_new tert_tdm_rx_switch_mixer_controls =
+	SOC_SINGLE_EXT("Switch", SND_SOC_NOPM,
+	0, 1, 0, msm_routing_get_tert_tdm_switch_mixer,
+	msm_routing_put_tert_tdm_switch_mixer);
+
 static const struct snd_kcontrol_new quat_mi2s_rx_switch_mixer_controls =
 	SOC_SINGLE_EXT("Switch", SND_SOC_NOPM,
 	0, 1, 0, msm_routing_get_quat_mi2s_switch_mixer,
@@ -16310,6 +16346,8 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 				&sec_mi2s_rx_switch_mixer_controls),
 	SND_SOC_DAPM_SWITCH("TERT_MI2S_RX_DL_HL", SND_SOC_NOPM, 0, 0,
 				&tert_mi2s_rx_switch_mixer_controls),
+	SND_SOC_DAPM_SWITCH("TERT_TDM_RX_DL_HL", SND_SOC_NOPM, 0, 0,
+				&tert_tdm_rx_switch_mixer_controls),
 	SND_SOC_DAPM_SWITCH("QUAT_MI2S_RX_DL_HL", SND_SOC_NOPM, 0, 0,
 				&quat_mi2s_rx_switch_mixer_controls),
 	SND_SOC_DAPM_SWITCH("QUIN_MI2S_RX_DL_HL", SND_SOC_NOPM, 0, 0,
@@ -18889,7 +18927,8 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"TERT_TDM_TX_1_UL_HL", NULL, "TERT_TDM_TX_1"},
 	{"TERT_TDM_TX_2_UL_HL", NULL, "TERT_TDM_TX_2"},
 	{"TERT_TDM_TX_3_UL_HL", NULL, "TERT_TDM_TX_3"},
-	{"TERT_TDM_RX_0", NULL, "TERT_TDM_RX_0_DL_HL"},
+	{"TERT_TDM_RX_DL_HL", "Switch", "TERT_TDM_RX_0_DL_HL"},
+	{"TERT_TDM_RX_0", NULL, "TERT_TDM_RX_DL_HL"},
 	{"TERT_TDM_RX_1", NULL, "TERT_TDM_RX_1_DL_HL"},
 	{"TERT_TDM_RX_2", NULL, "TERT_TDM_RX_2_DL_HL"},
 	{"TERT_TDM_RX_3", NULL, "TERT_TDM_RX_3_DL_HL"},

@@ -6036,6 +6036,40 @@ static struct snd_soc_dai_link msm_common_be_dai_links[] = {
 	},
 };
 
+static struct snd_soc_dai_link msm_loopback_dai_link[] = {
+	{
+		.name = "Quaternary TDM TX 0 Hostless",
+		.stream_name = "Quaternary TDM TX 0 Hostless",
+		.cpu_dai_name = "QUAT_TDM_TX_0_HOSTLESS",
+		.platform_name = "msm-pcm-hostless",
+		.dynamic = 1,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+	},
+	{
+		.name = "Tertiary TDM RX 0 Hostless",
+		.stream_name = "Tertiary TDM RX 0 Hostless",
+		.cpu_dai_name = "TERT_TDM_RX_0_HOSTLESS",
+		.platform_name = "msm-pcm-hostless",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+	},
+};
+
+
 static struct snd_soc_dai_link msm_pahu_be_dai_links[] = {
 	{
 		.name = LPASS_BE_SLIMBUS_0_RX,
@@ -6860,7 +6894,8 @@ static struct snd_soc_dai_link msm_pahu_snd_card_dai_links[
 			 ARRAY_SIZE(msm_wcn_be_dai_links) +
 			 ARRAY_SIZE(ext_disp_be_dai_link) +
 			 ARRAY_SIZE(msm_mi2s_be_dai_links) +
-			 ARRAY_SIZE(msm_auxpcm_be_dai_links)];
+			 ARRAY_SIZE(msm_auxpcm_be_dai_links) +
+			 ARRAY_SIZE(msm_loopback_dai_link)];
 
 static struct snd_soc_dai_link msm_tavil_dai_links[
 			 ARRAY_SIZE(msm_common_dai_links) +
@@ -7348,6 +7383,10 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 			total_links += ARRAY_SIZE(msm_auxpcm_be_dai_links);
 		}
 
+		memcpy(msm_pahu_snd_card_dai_links + total_links,
+			msm_loopback_dai_link,
+			sizeof(msm_loopback_dai_link));
+		total_links += ARRAY_SIZE(msm_loopback_dai_link);
 		dailink = msm_pahu_snd_card_dai_links;
 	}
 
