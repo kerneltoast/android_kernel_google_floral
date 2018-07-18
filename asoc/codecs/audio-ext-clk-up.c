@@ -141,7 +141,7 @@ static struct audio_ext_clk audio_clk_array[] = {
 			.hw.init = &(struct clk_init_data){
 				.name = "audio_ext_pmi_lnbb_clk",
 				.parent_names = (const char *[])
-							{ "ln_bb_clk2" },
+							{ "ln_bb_clk3" },
 				.num_parents = 1,
 				.ops = &clk_dummy_ops,
 			},

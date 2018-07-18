@@ -101,7 +101,11 @@ endif
 
 # for SM8150 sound card driver
 ifdef CONFIG_SND_SOC_SM8150
+ifdef CONFIG_SND_SOC_SM8150_FLORAL
+	MACHINE_OBJS += sm8150_floral.o
+else
 	MACHINE_OBJS += sm8150.o
+endif
 endif
 
 # for qcs405 sound card driver
