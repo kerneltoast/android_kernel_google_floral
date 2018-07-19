@@ -5503,7 +5503,7 @@ typedef enum {
 	wmi_ap_ps_egap_info_event_id,
 	wmi_peer_assoc_conf_event_id,
 	wmi_vdev_delete_resp_event_id,
-	wmi_bpf_capability_info_event_id,
+	wmi_apf_capability_info_event_id,
 	wmi_vdev_encrypt_decrypt_data_rsp_event_id,
 	wmi_report_rx_aggr_failure_event_id,
 	wmi_pdev_chip_pwr_save_failure_detect_event_id,
@@ -5525,7 +5525,8 @@ typedef enum {
 	wmi_host_dfs_status_check_event_id,
 #endif
 	wmi_twt_enable_complete_event_id,
-
+	wmi_apf_get_vdev_work_memory_resp_event_id,
+	wmi_wlan_sar2_result_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5908,7 +5909,7 @@ typedef enum {
 	wmi_service_sta_pmf_offload,
 	wmi_service_unified_wow_capability,
 	wmi_service_enterprise_mesh,
-	wmi_service_bpf_offload,
+	wmi_service_apf_offload,
 	wmi_service_sync_delete_cmds,
 	wmi_service_ratectrl_limit_max_min_rates,
 	wmi_service_nan_data,
@@ -5955,6 +5956,7 @@ typedef enum {
 	wmi_service_dual_beacon_on_single_mac_mcc_support,
 	wmi_service_twt_requestor,
 	wmi_service_twt_responder,
+	wmi_service_listen_interval_offload_support,
 
 	wmi_services_max,
 } wmi_conv_service_ids;
@@ -6065,7 +6067,7 @@ struct wmi_host_fw_abi_ver {
  * @num_packet_filters: maximum number of packet filter rules to support
  * @num_max_sta_vdevs: maximum number of concurrent station vdevs to support
  * @num_ns_ext_tuples_cfg:
- * @bpf_instruction_size:
+ * @apf_instruction_size:
  * @max_bssid_rx_filters:
  * @use_pdev_id:
  * @max_num_dbs_scan_duty_cycle: max dbs can duty cycle value
@@ -6140,7 +6142,7 @@ typedef struct {
 	uint32_t num_packet_filters;
 	uint32_t num_max_sta_vdevs;
 	uint32_t num_ns_ext_tuples_cfg;
-	uint32_t bpf_instruction_size;
+	uint32_t apf_instruction_size;
 	uint32_t max_bssid_rx_filters;
 	uint32_t use_pdev_id;
 	uint32_t max_num_dbs_scan_duty_cycle;
@@ -7943,16 +7945,16 @@ struct pdev_csa_switch_count_status {
 };
 
 /**
- * enum wmi_host_active-bpf_mode - FW_ACTIVE_BPF_MODE, replicated from FW header
- * @WMI_HOST_ACTIVE_BPF_DISABLED: BPF is disabled for all packets in active mode
- * @WMI_HOST_ACTIVE_BPF_ENABLED: BPF is enabled for all packets in active mode
- * @WMI_HOST_ACTIVE_BPF_ADAPTIVE: BPF is enabled for packets up to some
+ * enum wmi_host_active-apf_mode - FW_ACTIVE_APF_MODE, replicated from FW header
+ * @WMI_HOST_ACTIVE_APF_DISABLED: APF is disabled for all packets in active mode
+ * @WMI_HOST_ACTIVE_APF_ENABLED: APF is enabled for all packets in active mode
+ * @WMI_HOST_ACTIVE_APF_ADAPTIVE: APF is enabled for packets up to some
  *	threshold in active mode
  */
-enum wmi_host_active_bpf_mode {
-	WMI_HOST_ACTIVE_BPF_DISABLED =	(1 << 1),
-	WMI_HOST_ACTIVE_BPF_ENABLED =	(1 << 2),
-	WMI_HOST_ACTIVE_BPF_ADAPTIVE =	(1 << 3)
+enum wmi_host_active_apf_mode {
+	WMI_HOST_ACTIVE_APF_DISABLED =	(1 << 1),
+	WMI_HOST_ACTIVE_APF_ENABLED =	(1 << 2),
+	WMI_HOST_ACTIVE_APF_ADAPTIVE =	(1 << 3)
 };
 
 /**
@@ -8429,4 +8431,55 @@ struct wmi_host_congestion_stats {
 	uint32_t congestion;
 };
 #endif
+
+#ifdef FEATURE_WLAN_APF
+/**
+ * struct wmi_apf_write_memory_params - Android Packet Filter write memory
+ * params
+ * @vdev_id: VDEV on which APF memory is to be written
+ * @apf_version: APF version number
+ * @program_len: Length reserved for program in the APF work memory
+ * @addr_offset: Relative address in APF work memory to start writing
+ * @length: Size of the write
+ * @buf: Pointer to the buffer
+ */
+struct wmi_apf_write_memory_params {
+	uint8_t vdev_id;
+	uint32_t apf_version;
+	uint32_t program_len;
+	uint32_t addr_offset;
+	uint32_t length;
+	uint8_t *buf;
+};
+
+/**
+ * struct wmi_apf_read_memory_params - Android Packet Filter read memory params
+ * @vdev_id: vdev id
+ * @addr_offset: Relative address in APF work memory to read from
+ * @length: Size of the memory fetch
+ */
+struct wmi_apf_read_memory_params {
+	uint8_t vdev_id;
+	uint32_t addr_offset;
+	uint32_t length;
+};
+
+/**
+ * struct wmi_apf_read_memory_resp_event_params - Event containing read Android
+ *	Packet Filter memory response
+ * @vdev_id: vdev id
+ * @offset: Read memory offset
+ * @length: Read memory length
+ * @more_data: Indicates more data to come
+ * @data: Pointer to the data
+ */
+struct wmi_apf_read_memory_resp_event_params {
+	uint32_t vdev_id;
+	uint32_t offset;
+	uint32_t length;
+	bool more_data;
+	uint8_t *data;
+};
+#endif /* FEATURE_WLAN_APF */
+
 #endif /* _WMI_UNIFIED_PARAM_H_ */

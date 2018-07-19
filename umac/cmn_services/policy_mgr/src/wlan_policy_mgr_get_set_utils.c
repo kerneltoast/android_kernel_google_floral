@@ -1273,6 +1273,7 @@ QDF_STATUS policy_mgr_incr_connection_count(
 	uint8_t chan;
 	uint32_t nss = 0;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
+	bool update_conn = true;
 
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
@@ -1314,6 +1315,8 @@ QDF_STATUS policy_mgr_incr_connection_count(
 		policy_mgr_err("Error in getting nss");
 	}
 
+	if (mode == PM_STA_MODE || mode == PM_P2P_CLIENT_MODE)
+		update_conn = false;
 
 	/* add the entry */
 	policy_mgr_update_conc_list(psoc, conn_index,
@@ -1322,7 +1325,7 @@ QDF_STATUS policy_mgr_incr_connection_count(
 			policy_mgr_get_bw(conn_table_entry.chan_width),
 			conn_table_entry.mac_id,
 			chain_mask,
-			nss, vdev_id, true);
+			nss, vdev_id, true, update_conn);
 	policy_mgr_debug("Add at idx:%d vdev %d mac=%d",
 		conn_index, vdev_id,
 		conn_table_entry.mac_id);
@@ -1540,6 +1543,7 @@ bool policy_mgr_allow_concurrency(struct wlan_objmgr_psoc *psoc,
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
 	QDF_STATUS ret;
 	struct policy_mgr_pcl_list pcl;
+	bool sta_sap_scc_on_dfs_chan;
 
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
@@ -1594,7 +1598,13 @@ bool policy_mgr_allow_concurrency(struct wlan_objmgr_psoc *psoc,
 			channel, list, PM_SAP_MODE))
 			goto done;
 
-		if ((PM_P2P_GO_MODE == mode) || (PM_SAP_MODE == mode)) {
+		sta_sap_scc_on_dfs_chan =
+			policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(psoc);
+		policy_mgr_debug("sta_sap_scc_on_dfs_chan %u",
+				 sta_sap_scc_on_dfs_chan);
+
+		if (!sta_sap_scc_on_dfs_chan && ((mode == PM_P2P_GO_MODE) ||
+		    (mode == PM_SAP_MODE))) {
 			if (wlan_reg_is_dfs_ch(pm_ctx->pdev, channel))
 				match = policy_mgr_disallow_mcc(psoc, channel);
 		}
@@ -2072,6 +2082,34 @@ enum policy_mgr_con_mode policy_mgr_convert_device_mode_to_qdf_type(
 	return mode;
 }
 
+enum QDF_OPMODE policy_mgr_get_qdf_mode_from_pm(
+			enum policy_mgr_con_mode device_mode)
+{
+	enum QDF_OPMODE mode = QDF_MAX_NO_OF_MODE;
+
+	switch (device_mode) {
+	case PM_STA_MODE:
+		mode = QDF_STA_MODE;
+		break;
+	case PM_SAP_MODE:
+		mode = QDF_SAP_MODE;
+		break;
+	case PM_P2P_CLIENT_MODE:
+		mode = QDF_P2P_CLIENT_MODE;
+		break;
+	case PM_P2P_GO_MODE:
+		mode = QDF_P2P_GO_MODE;
+		break;
+	case PM_IBSS_MODE:
+		mode = QDF_IBSS_MODE;
+		break;
+	default:
+		policy_mgr_err("Unsupported policy mgr mode (%d)",
+			       device_mode);
+	}
+	return mode;
+}
+
 QDF_STATUS policy_mgr_mode_specific_num_open_sessions(
 		struct wlan_objmgr_psoc *psoc, enum QDF_OPMODE mode,
 		uint8_t *num_sessions)
@@ -2258,27 +2296,9 @@ QDF_STATUS policy_mgr_get_nss_for_vdev(struct wlan_objmgr_psoc *psoc,
 	enum QDF_OPMODE dev_mode;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
 
-	switch (mode) {
-	case PM_STA_MODE:
-		dev_mode = QDF_STA_MODE;
-		break;
-	case PM_SAP_MODE:
-		dev_mode = QDF_SAP_MODE;
-		break;
-	case PM_P2P_CLIENT_MODE:
-		dev_mode = QDF_P2P_CLIENT_MODE;
-		break;
-	case PM_P2P_GO_MODE:
-		dev_mode = QDF_P2P_GO_MODE;
-		break;
-	case PM_IBSS_MODE:
-		dev_mode = QDF_IBSS_MODE;
-		break;
-	default:
-		policy_mgr_err("Invalid mode to get allowed NSS value");
-		return QDF_STATUS_E_FAILURE;
-	};
-
+	dev_mode = policy_mgr_get_qdf_mode_from_pm(mode);
+	if (dev_mode == QDF_MAX_NO_OF_MODE)
+		return  QDF_STATUS_E_FAILURE;
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
 		policy_mgr_err("Invalid Context");
@@ -2804,7 +2824,9 @@ bool policy_mgr_is_force_scc(struct wlan_objmgr_psoc *psoc)
 		(pm_ctx->user_cfg.mcc_to_scc_switch_mode ==
 		QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL) ||
 		(pm_ctx->user_cfg.mcc_to_scc_switch_mode ==
-		QDF_MCC_TO_SCC_SWITCH_FORCE_PREFERRED_WITHOUT_DISCONNECTION));
+		QDF_MCC_TO_SCC_SWITCH_FORCE_PREFERRED_WITHOUT_DISCONNECTION) ||
+		(pm_ctx->user_cfg.mcc_to_scc_switch_mode ==
+		QDF_MCC_TO_SCC_WITH_PREFERRED_BAND));
 }
 
 bool policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(
@@ -3073,4 +3095,85 @@ bool policy_mgr_dual_beacon_on_single_mac_mcc_capable(
 	}
 	policy_mgr_debug("Not support dual beacon on different channel on single MAC");
 	return false;
+}
+
+bool policy_mgr_sta_sap_scc_on_lte_coex_chan(
+	struct wlan_objmgr_psoc *psoc)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return false;
+	}
+	return pm_ctx->user_cfg.sta_sap_scc_on_lte_coex_chan;
+}
+
+bool policy_mgr_is_valid_for_channel_switch(struct wlan_objmgr_psoc *psoc,
+					    uint8_t channel)
+{
+	uint32_t sta_sap_scc_on_dfs_chan;
+	uint32_t sap_count;
+	enum channel_state state;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return false;
+	}
+
+	sta_sap_scc_on_dfs_chan =
+			policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(psoc);
+	sap_count = policy_mgr_mode_specific_connection_count(psoc,
+							      PM_SAP_MODE,
+							      NULL);
+	state = reg_get_channel_state(pm_ctx->pdev, channel);
+
+	policy_mgr_debug("sta_sap_scc_on_dfs_chan %u, sap_count %u, channel %u, state %u",
+			 sta_sap_scc_on_dfs_chan, sap_count, channel, state);
+
+	if ((state == CHANNEL_STATE_ENABLE) || (sap_count == 0) ||
+	    ((state == CHANNEL_STATE_DFS) && sta_sap_scc_on_dfs_chan)) {
+		policy_mgr_debug("Valid channel for channel switch");
+		return true;
+	}
+
+	policy_mgr_debug("Invalid channel for channel switch");
+	return false;
+}
+
+bool policy_mgr_is_sta_sap_scc(struct wlan_objmgr_psoc *psoc, uint8_t sap_ch)
+{
+	uint32_t conn_index;
+	bool is_scc = false;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return is_scc;
+	}
+
+	if (!policy_mgr_mode_specific_connection_count(
+		psoc, PM_STA_MODE, NULL)) {
+		policy_mgr_debug("There is no STA+SAP conc");
+		return is_scc;
+	}
+
+	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
+	for (conn_index = 0; conn_index < MAX_NUMBER_OF_CONC_CONNECTIONS;
+		conn_index++) {
+		if (pm_conc_connection_list[conn_index].in_use &&
+			(pm_conc_connection_list[conn_index].mode ==
+			PM_STA_MODE) &&
+			(sap_ch == pm_conc_connection_list[conn_index].chan)) {
+			is_scc = true;
+			break;
+		}
+	}
+	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
+
+	return is_scc;
 }

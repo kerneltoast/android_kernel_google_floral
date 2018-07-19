@@ -72,24 +72,10 @@ void lmac_dfs_get_thresholds(struct wlan_objmgr_pdev *pdev,
 		struct wlan_dfs_phyerr_param *param);
 
 /**
- * lmac_is_mode_offload() - Check the radio for offload.
- * @pdev: Pointer to PDEV structure.
- */
-bool lmac_is_mode_offload(struct wlan_objmgr_pdev *pdev);
-
-/**
  * lmac_get_ah_devid() - Get ah devid.
  * @pdev: Pointer to PDEV structure.
  */
 uint16_t lmac_get_ah_devid(struct wlan_objmgr_pdev *pdev);
-
-/**
- * lmac_is_mode_dfs_offload() - Check the DFS offload is enabled.
- * @psoc: Pointer to PSOC structure.
- *
- * returns true if DFS offload is enabled, otherwise returns false
- */
-bool lmac_is_mode_dfs_offload(struct wlan_objmgr_psoc *psoc);
 
 /**
  * lmac_get_ext_busy() - Get ext_busy.

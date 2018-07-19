@@ -185,6 +185,7 @@ static struct tdls_peer *tdls_add_peer(struct tdls_vdev_priv_obj *vdev_obj,
 		tdls_find_opclass(soc_obj->soc,
 				  peer->pref_off_chan_num,
 				  soc_obj->tdls_configs.tdls_pre_off_chan_bw);
+	peer->sta_id = INVALID_TDLS_PEER_ID;
 
 	qdf_list_insert_back(head, &peer->node);
 
@@ -514,7 +515,7 @@ void tdls_extract_peer_state_param(struct tdls_peer_update_state *peer_param,
 
 		if (CHANNEL_STATE_INVALID != ch_state &&
 		    CHANNEL_STATE_DFS != ch_state &&
-		    !wlan_is_dsrc_channel(wlan_is_dsrc_channel(chan_id))) {
+		    !wlan_reg_is_dsrc_chan(pdev, chan_id)) {
 			peer_param->peer_cap.peer_chan[num].chan_id = chan_id;
 			peer_param->peer_cap.peer_chan[num].pwr =
 				wlan_reg_get_channel_reg_power(pdev, chan_id);
@@ -756,7 +757,7 @@ QDF_STATUS tdls_reset_peer(struct tdls_vdev_priv_obj *vdev_obj,
 
 	tdls_set_peer_link_status(curr_peer, TDLS_LINK_IDLE,
 				  TDLS_LINK_UNSPECIFIED);
-	curr_peer->sta_id = 0;
+	curr_peer->sta_id = INVALID_TDLS_PEER_ID;
 
 	return QDF_STATUS_SUCCESS;
 }

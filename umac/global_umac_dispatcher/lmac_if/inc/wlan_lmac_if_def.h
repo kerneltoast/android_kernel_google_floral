@@ -565,7 +565,6 @@ struct wlan_lmac_if_reg_tx_ops {
  * @dfs_get_ext_busy:                   Get ext_busy.
  * @dfs_get_target_type:                Get target type.
  * @dfs_is_countryCode_KOREA_ROC3:      Check is county code Korea.
- * @dfs_is_mode_offload:                Check the radio for offload.
  * @dfs_get_ah_devid:                   Get ah devid.
  * @dfs_get_phymode_info:               Get phymode info.
  * @dfs_reg_ev_handler:                 Register dfs event handler.
@@ -596,16 +595,13 @@ struct wlan_lmac_if_dfs_tx_ops {
 			int *dfs_ext_chan_busy);
 	QDF_STATUS (*dfs_get_target_type)(struct wlan_objmgr_pdev *pdev,
 			uint32_t *target_type);
-	QDF_STATUS (*dfs_is_mode_offload)(struct wlan_objmgr_pdev *pdev,
-			bool *is_offload);
 	QDF_STATUS (*dfs_get_ah_devid)(struct wlan_objmgr_pdev *pdev,
 			uint16_t *devid);
 	QDF_STATUS (*dfs_get_phymode_info)(struct wlan_objmgr_pdev *pdev,
 			uint32_t chan_mode,
 			uint32_t *mode_info,
 			bool is_2gvht_en);
-	QDF_STATUS (*dfs_reg_ev_handler)(struct wlan_objmgr_psoc *psoc,
-			bool dfs_offload);
+	QDF_STATUS (*dfs_reg_ev_handler)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*dfs_process_emulate_bang_radar_cmd)(
 			struct wlan_objmgr_pdev *pdev,
 			struct dfs_emulate_bang_radar_test_cmd *dfs_unit_test);
@@ -614,8 +610,7 @@ struct wlan_lmac_if_dfs_tx_ops {
 	QDF_STATUS (*dfs_set_phyerr_filter_offload)(
 			struct wlan_objmgr_pdev *pdev,
 			bool dfs_phyerr_filter_offload);
-	QDF_STATUS (*dfs_is_tgt_offload)(struct wlan_objmgr_psoc *psoc,
-			bool *is_tgt_offload);
+	bool (*dfs_is_tgt_offload)(struct wlan_objmgr_psoc *psoc);
 	QDF_STATUS (*dfs_send_offload_enable_cmd)(
 			struct wlan_objmgr_pdev *pdev,
 			bool enable);
