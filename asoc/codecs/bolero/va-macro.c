@@ -16,6 +16,7 @@
 #include <linux/io.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
+#include <linux/regulator/consumer.h>
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
 #include <sound/tlv.h>
@@ -38,7 +39,11 @@
 #define  CF_MIN_3DB_75HZ		0x1
 #define  CF_MIN_3DB_150HZ		0x2
 
+#define VA_MACRO_DMIC_SAMPLE_RATE_UNDEFINED 0
+#define VA_MACRO_MCLK_FREQ 9600000
 #define VA_MACRO_TX_PATH_OFFSET 0x80
+#define VA_MACRO_TX_DMIC_CLK_DIV_MASK 0x0E
+#define VA_MACRO_TX_DMIC_CLK_DIV_SHFT 0x01
 
 #define BOLERO_CDC_VA_TX_UNMUTE_DELAY_MS	40
 
@@ -63,6 +68,15 @@ enum {
 	VA_MACRO_DEC6,
 	VA_MACRO_DEC7,
 	VA_MACRO_DEC_MAX,
+};
+
+enum {
+	VA_MACRO_CLK_DIV_2,
+	VA_MACRO_CLK_DIV_3,
+	VA_MACRO_CLK_DIV_4,
+	VA_MACRO_CLK_DIV_6,
+	VA_MACRO_CLK_DIV_8,
+	VA_MACRO_CLK_DIV_16,
 };
 
 struct va_mute_work {
@@ -93,8 +107,13 @@ struct va_macro_priv {
 	s32 dmic_2_3_clk_cnt;
 	s32 dmic_4_5_clk_cnt;
 	s32 dmic_6_7_clk_cnt;
+	u16 dmic_clk_div;
 	u16 va_mclk_users;
 	char __iomem *va_io_base;
+	struct regulator *micb_supply;
+	u32 micb_voltage;
+	u32 micb_current;
+	int micb_users;
 };
 
 static bool va_macro_get_data(struct snd_soc_codec *codec,
@@ -264,7 +283,7 @@ static void va_macro_mute_update_callback(struct work_struct *work)
 	hpf_gate_reg = BOLERO_CDC_VA_TX0_TX_PATH_SEC2 +
 			VA_MACRO_TX_PATH_OFFSET * decimator;
 	snd_soc_update_bits(codec, hpf_gate_reg, 0x01, 0x01);
-	snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x01, 0x00);
+	snd_soc_update_bits(codec, tx_vol_ctl_reg, 0x10, 0x00);
 	dev_dbg(va_priv->dev, "%s: decimator %u unmute\n",
 		__func__, decimator);
 }
@@ -410,22 +429,22 @@ static int va_macro_enable_dmic(struct snd_soc_dapm_widget *w,
 	case 0:
 	case 1:
 		dmic_clk_cnt = &(va_priv->dmic_0_1_clk_cnt);
-		dmic_clk_reg = BOLERO_CDC_VA_TX0_TX_PATH_CTL;
+		dmic_clk_reg = BOLERO_CDC_VA_TOP_CSR_DMIC0_CTL;
 		break;
 	case 2:
 	case 3:
 		dmic_clk_cnt = &(va_priv->dmic_2_3_clk_cnt);
-		dmic_clk_reg = BOLERO_CDC_VA_TX1_TX_PATH_CTL;
+		dmic_clk_reg = BOLERO_CDC_VA_TOP_CSR_DMIC1_CTL;
 		break;
 	case 4:
 	case 5:
 		dmic_clk_cnt = &(va_priv->dmic_4_5_clk_cnt);
-		dmic_clk_reg = BOLERO_CDC_VA_TX2_TX_PATH_CTL;
+		dmic_clk_reg = BOLERO_CDC_VA_TOP_CSR_DMIC2_CTL;
 		break;
 	case 6:
 	case 7:
 		dmic_clk_cnt = &(va_priv->dmic_6_7_clk_cnt);
-		dmic_clk_reg = BOLERO_CDC_VA_TX3_TX_PATH_CTL;
+		dmic_clk_reg = BOLERO_CDC_VA_TOP_CSR_DMIC3_CTL;
 		break;
 	default:
 		dev_err(va_dev, "%s: Invalid DMIC Selection\n",
@@ -439,6 +458,13 @@ static int va_macro_enable_dmic(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_PRE_PMU:
 		(*dmic_clk_cnt)++;
 		if (*dmic_clk_cnt == 1) {
+			snd_soc_update_bits(codec,
+					BOLERO_CDC_VA_TOP_CSR_DMIC_CFG,
+					0x80, 0x00);
+			snd_soc_update_bits(codec, dmic_clk_reg,
+					VA_MACRO_TX_DMIC_CLK_DIV_MASK,
+					va_priv->dmic_clk_div <<
+					VA_MACRO_TX_DMIC_CLK_DIV_SHFT);
 			snd_soc_update_bits(codec, dmic_clk_reg,
 					dmic_clk_en, dmic_clk_en);
 		}
@@ -541,7 +567,65 @@ static int va_macro_enable_dec(struct snd_soc_dapm_widget *w,
 static int va_macro_enable_micbias(struct snd_soc_dapm_widget *w,
 		struct snd_kcontrol *kcontrol, int event)
 {
-	/* Add code to enable/disable regulalator? */
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+	struct device *va_dev = NULL;
+	struct va_macro_priv *va_priv = NULL;
+	int ret = 0;
+
+	if (!va_macro_get_data(codec, &va_dev, &va_priv, __func__))
+		return -EINVAL;
+
+	if (!va_priv->micb_supply) {
+		dev_err(va_dev,
+			"%s:regulator not provided in dtsi\n", __func__);
+		return -EINVAL;
+	}
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		if (va_priv->micb_users++ > 0)
+			return 0;
+		ret = regulator_set_voltage(va_priv->micb_supply,
+				      va_priv->micb_voltage,
+				      va_priv->micb_voltage);
+		if (ret) {
+			dev_err(va_dev, "%s: Setting voltage failed, err = %d\n",
+				__func__, ret);
+			return ret;
+		}
+		ret = regulator_set_load(va_priv->micb_supply,
+					 va_priv->micb_current);
+		if (ret) {
+			dev_err(va_dev, "%s: Setting current failed, err = %d\n",
+				__func__, ret);
+			return ret;
+		}
+		ret = regulator_enable(va_priv->micb_supply);
+		if (ret) {
+			dev_err(va_dev, "%s: regulator enable failed, err = %d\n",
+				__func__, ret);
+			return ret;
+		}
+		break;
+	case SND_SOC_DAPM_POST_PMD:
+		if (--va_priv->micb_users > 0)
+			return 0;
+		if (va_priv->micb_users < 0) {
+			va_priv->micb_users = 0;
+			dev_dbg(va_dev, "%s: regulator already disabled\n",
+				__func__);
+			return 0;
+		}
+		ret = regulator_disable(va_priv->micb_supply);
+		if (ret) {
+			dev_err(va_dev, "%s: regulator disable failed, err = %d\n",
+				__func__, ret);
+			return ret;
+		}
+		regulator_set_voltage(va_priv->micb_supply, 0,
+				va_priv->micb_voltage);
+		regulator_set_load(va_priv->micb_supply, 0);
+		break;
+	}
 	return 0;
 }
 
@@ -1192,6 +1276,56 @@ static const struct snd_kcontrol_new va_macro_snd_controls[] = {
 			  0, -84, 40, digital_gain),
 };
 
+static int va_macro_validate_dmic_sample_rate(u32 dmic_sample_rate,
+				      struct va_macro_priv *va_priv)
+{
+	u32 div_factor;
+	u32 mclk_rate = VA_MACRO_MCLK_FREQ;
+
+	if (dmic_sample_rate == VA_MACRO_DMIC_SAMPLE_RATE_UNDEFINED ||
+	    mclk_rate % dmic_sample_rate != 0)
+		goto undefined_rate;
+
+	div_factor = mclk_rate / dmic_sample_rate;
+
+	switch (div_factor) {
+	case 2:
+		va_priv->dmic_clk_div = VA_MACRO_CLK_DIV_2;
+		break;
+	case 3:
+		va_priv->dmic_clk_div = VA_MACRO_CLK_DIV_3;
+		break;
+	case 4:
+		va_priv->dmic_clk_div = VA_MACRO_CLK_DIV_4;
+		break;
+	case 6:
+		va_priv->dmic_clk_div = VA_MACRO_CLK_DIV_6;
+		break;
+	case 8:
+		va_priv->dmic_clk_div = VA_MACRO_CLK_DIV_8;
+		break;
+	case 16:
+		va_priv->dmic_clk_div = VA_MACRO_CLK_DIV_16;
+		break;
+	default:
+		/* Any other DIV factor is invalid */
+		goto undefined_rate;
+	}
+
+	/* Valid dmic DIV factors */
+	dev_dbg(va_priv->dev, "%s: DMIC_DIV = %u, mclk_rate = %u\n",
+		__func__, div_factor, mclk_rate);
+
+	return dmic_sample_rate;
+
+undefined_rate:
+	dev_dbg(va_priv->dev, "%s: Invalid rate %d, for mclk %d\n",
+		 __func__, dmic_sample_rate, mclk_rate);
+	dmic_sample_rate = VA_MACRO_DMIC_SAMPLE_RATE_UNDEFINED;
+
+	return dmic_sample_rate;
+}
+
 static int va_macro_init(struct snd_soc_codec *codec)
 {
 	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
@@ -1292,11 +1426,16 @@ static int va_macro_probe(struct platform_device *pdev)
 {
 	struct macro_ops ops;
 	struct va_macro_priv *va_priv;
-	u32 va_base_addr;
+	u32 va_base_addr, sample_rate = 0;
 	char __iomem *va_io_base;
 	struct clk *va_core_clk;
 	bool va_without_decimation = false;
+	const char *micb_supply_str = "va-vdd-micb-supply";
+	const char *micb_supply_str1 = "va-vdd-micb";
+	const char *micb_voltage_str = "qcom,va-vdd-micb-voltage";
+	const char *micb_current_str = "qcom,va-vdd-micb-current";
 	int ret = 0;
+	const char *dmic_sample_rate = "qcom,va-dmic-sample-rate";
 
 	va_priv = devm_kzalloc(&pdev->dev, sizeof(struct va_macro_priv),
 			    GFP_KERNEL);
@@ -1315,6 +1454,18 @@ static int va_macro_probe(struct platform_device *pdev)
 					"qcom,va-without-decimation");
 
 	va_priv->va_without_decimation = va_without_decimation;
+	ret = of_property_read_u32(pdev->dev.of_node, dmic_sample_rate,
+				   &sample_rate);
+	if (ret) {
+		dev_err(&pdev->dev, "%s: could not find %d entry in dt\n",
+			__func__, sample_rate);
+		va_priv->dmic_clk_div = VA_MACRO_CLK_DIV_2;
+	} else {
+		if (va_macro_validate_dmic_sample_rate(
+		sample_rate, va_priv) == VA_MACRO_DMIC_SAMPLE_RATE_UNDEFINED)
+			return -EINVAL;
+	}
+
 	va_io_base = devm_ioremap(&pdev->dev, va_base_addr,
 				  VA_MAX_OFFSET);
 	if (!va_io_base) {
@@ -1330,6 +1481,38 @@ static int va_macro_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 	va_priv->va_core_clk = va_core_clk;
+
+	if (of_parse_phandle(pdev->dev.of_node, micb_supply_str, 0)) {
+		va_priv->micb_supply = devm_regulator_get(&pdev->dev,
+						micb_supply_str1);
+		if (IS_ERR(va_priv->micb_supply)) {
+			ret = PTR_ERR(va_priv->micb_supply);
+			dev_err(&pdev->dev,
+				"%s:Failed to get micbias supply for VA Mic %d\n",
+				__func__, ret);
+			return ret;
+		}
+		ret = of_property_read_u32(pdev->dev.of_node,
+					micb_voltage_str,
+					&va_priv->micb_voltage);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"%s:Looking up %s property in node %s failed\n",
+				__func__, micb_voltage_str,
+				pdev->dev.of_node->full_name);
+			return ret;
+		}
+		ret = of_property_read_u32(pdev->dev.of_node,
+					micb_current_str,
+					&va_priv->micb_current);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"%s:Looking up %s property in node %s failed\n",
+				__func__, micb_current_str,
+				pdev->dev.of_node->full_name);
+			return ret;
+		}
+	}
 
 	mutex_init(&va_priv->mclk_lock);
 	dev_set_drvdata(&pdev->dev, va_priv);

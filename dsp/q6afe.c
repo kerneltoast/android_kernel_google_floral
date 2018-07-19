@@ -131,6 +131,7 @@ struct afe_ctl {
 	struct afe_fw_info *fw_data;
 	u32 island_mode[AFE_MAX_PORTS];
 	struct vad_config vad_cfg[AFE_MAX_PORTS];
+	struct work_struct afe_dc_work;
 };
 
 static atomic_t afe_ports_mad_type[SLIMBUS_PORT_LAST - SLIMBUS_0_RX];
@@ -336,14 +337,20 @@ static int32_t sp_make_afe_callback(uint32_t opcode, uint32_t *payload,
 
 static void afe_notify_dc_presence(void)
 {
+	msm_aud_evt_notifier_call_chain(MSM_AUD_DC_EVENT, NULL);
+
+	schedule_work(&this_afe.afe_dc_work);
+}
+
+static void afe_notify_dc_presence_work_fn(struct work_struct *work)
+{
 	int ret = 0;
 	char event[] = "DC_PRESENCE=TRUE";
 
-	msm_aud_evt_notifier_call_chain(MSM_AUD_DC_EVENT, NULL);
-
 	ret = q6core_send_uevent(this_afe.uevent_data, event);
 	if (ret)
-		pr_err("%s: Send UEvent %s failed :%d\n", __func__, event, ret);
+		pr_err("%s: Send UEvent %s failed :%d\n",
+		       __func__, event, ret);
 }
 
 static int32_t afe_callback(struct apr_client_data *data, void *priv)
@@ -586,11 +593,23 @@ int afe_get_port_type(u16 port_id)
 {
 	int ret = MSM_AFE_PORT_TYPE_RX;
 
-	/* Odd numbered ports are TX and Rx are Even numbered */
-	if (port_id & 0x1)
+	switch (port_id) {
+	case VOICE_RECORD_RX:
+	case VOICE_RECORD_TX:
 		ret = MSM_AFE_PORT_TYPE_TX;
-	else
+		break;
+	case VOICE_PLAYBACK_TX:
+	case VOICE2_PLAYBACK_TX:
 		ret = MSM_AFE_PORT_TYPE_RX;
+		break;
+	default:
+		/* Odd numbered ports are TX and Rx are Even numbered */
+		if (port_id & 0x1)
+			ret = MSM_AFE_PORT_TYPE_TX;
+		else
+			ret = MSM_AFE_PORT_TYPE_RX;
+		break;
+	}
 
 	return ret;
 }
@@ -898,6 +917,61 @@ fail_cmd:
 	kfree(packed_param_data);
 	return ret;
 }
+
+static int q6afe_set_aanc_level(void)
+{
+	struct param_hdr_v3 param_hdr;
+	struct afe_param_id_aanc_noise_reduction aanc_noise_level;
+	int ret = 0;
+	uint16_t tx_port = 0;
+
+	if (!this_afe.aanc_info.aanc_active)
+		return -EINVAL;
+
+	pr_debug("%s: level: %d\n", __func__, this_afe.aanc_info.level);
+	memset(&aanc_noise_level, 0, sizeof(aanc_noise_level));
+	aanc_noise_level.minor_version = 1;
+	aanc_noise_level.ad_beta = this_afe.aanc_info.level;
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	param_hdr.module_id = AFE_MODULE_AANC;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_PARAM_ID_AANC_NOISE_REDUCTION;
+	param_hdr.param_size = sizeof(struct afe_param_id_aanc_noise_reduction);
+
+	tx_port = this_afe.aanc_info.aanc_tx_port;
+	ret = q6afe_pack_and_set_param_in_band(tx_port,
+					       q6audio_get_port_index(tx_port),
+					       param_hdr,
+					       (u8 *) &aanc_noise_level);
+	if (ret)
+		pr_err("%s: AANC noise level enable failed for tx_port 0x%x ret %d\n",
+			__func__, tx_port, ret);
+	return ret;
+}
+
+/**
+ * afe_set_aanc_noise_level - controls aanc noise reduction strength
+ *
+ * @level: Noise level to be controlled
+ *
+ * Returns 0 on success or error on failure.
+ */
+int afe_set_aanc_noise_level(int level)
+{
+	int ret = 0;
+
+	if (this_afe.aanc_info.level == level)
+		return ret;
+
+	mutex_lock(&this_afe.afe_cmd_lock);
+	this_afe.aanc_info.level = level;
+	ret = q6afe_set_aanc_level();
+	mutex_unlock(&this_afe.afe_cmd_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(afe_set_aanc_noise_level);
 
 /* This function shouldn't be called directly. Instead call q6afe_get_param. */
 static int q6afe_get_params_v2(u16 port_id, int index,
@@ -2336,6 +2410,8 @@ static int afe_aanc_port_cfg(void *apr, uint16_t tx_port, uint16_t rx_port)
 	if (ret)
 		pr_err("%s: AFE AANC port config failed for tx_port 0x%x, rx_port 0x%x ret %d\n",
 		       __func__, tx_port, rx_port, ret);
+	else
+		q6afe_set_aanc_level();
 
 	return ret;
 }
@@ -3437,10 +3513,11 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		/* send VAD configuration if is enabled */
 		if (this_afe.vad_cfg[port_index].is_enable) {
 			ret = afe_send_port_vad_cfg_params(port_id);
-			if (ret)
+			if (ret) {
 				pr_err("%s: afe send VAD config failed %d\n",
 					__func__, ret);
 				goto fail_cmd;
+			}
 		}
 	}
 
@@ -4022,6 +4099,20 @@ int afe_get_port_index(u16 port_id)
 		return IDX_AFE_PORT_ID_INT6_MI2S_RX;
 	case AFE_PORT_ID_INT6_MI2S_TX:
 		return IDX_AFE_PORT_ID_INT6_MI2S_TX;
+	case AFE_PORT_ID_VA_CODEC_DMA_TX_0:
+		return IDX_AFE_PORT_ID_VA_CODEC_DMA_TX_0;
+	case AFE_PORT_ID_VA_CODEC_DMA_TX_1:
+		return IDX_AFE_PORT_ID_VA_CODEC_DMA_TX_1;
+	case AFE_PORT_ID_WSA_CODEC_DMA_RX_0:
+		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_RX_0;
+	case AFE_PORT_ID_WSA_CODEC_DMA_TX_0:
+		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_0;
+	case AFE_PORT_ID_WSA_CODEC_DMA_RX_1:
+		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_RX_1;
+	case AFE_PORT_ID_WSA_CODEC_DMA_TX_1:
+		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_1;
+	case AFE_PORT_ID_WSA_CODEC_DMA_TX_2:
+		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_2;
 	default:
 		pr_err("%s: port 0x%x\n", __func__, port_id);
 		return -EINVAL;
@@ -7574,6 +7665,8 @@ int __init afe_init(void)
 	 */
 	this_afe.uevent_data->ktype.release = afe_release_uevent_data;
 	q6core_init_uevent_data(this_afe.uevent_data, "q6afe_uevent");
+
+	INIT_WORK(&this_afe.afe_dc_work, afe_notify_dc_presence_work_fn);
 
 	return 0;
 }

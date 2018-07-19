@@ -83,6 +83,7 @@ static int msm_route_ext_ec_ref;
 static bool is_custom_stereo_on;
 static bool is_ds2_on;
 static bool swap_ch;
+static int aanc_level;
 
 #define WEIGHT_0_DB 0x4000
 /* all the FEs which can support channel mixer */
@@ -149,6 +150,9 @@ static struct msm_pcm_route_bdai_name be_dai_name_table[MSM_BACKEND_DAI_MAX];
 
 static int msm_routing_send_device_pp_params(int port_id,  int copp_idx,
 					     int fe_id);
+
+static void msm_routing_load_topology(size_t data_size, void *data);
+static void msm_routing_unload_topology(uint32_t topology_id);
 
 static int msm_routing_get_bit_width(unsigned int format)
 {
@@ -802,6 +806,69 @@ static bool is_mm_lsm_fe_id(int fe_id)
 	return rc;
 }
 
+/*
+ * msm_pcm_routing_send_chmix_cfg:
+ *	send the channel mixer command to mix the input channels
+ *	into output channels.
+ *
+ * @fe_id: front end id
+ * @ip_channel_cnt: input channel count
+ * @op_channel_cnt: output channel count
+ * @ch_wght_coeff: channel weight co-efficients for channel mixing
+ * @session_type: indicates session is of type TX or RX
+ * @stream_type: indicates either Audio or Listen stream type
+ */
+int msm_pcm_routing_send_chmix_cfg(int fe_id, int ip_channel_cnt,
+				int op_channel_cnt, int *ch_wght_coeff,
+				int session_type, int stream_type)
+{
+
+	int rc = 0, idx = 0;
+	int be_index = 0, port_id;
+	unsigned int session_id = 0;
+
+	pr_debug("%s:fe_id[%d] ip_ch[%d] op_ch[%d] sess_type [%d], stream_type[%d]",
+		 __func__, fe_id, ip_channel_cnt, op_channel_cnt, session_type,
+		 stream_type);
+	if (!is_mm_lsm_fe_id(fe_id)) {
+		/* bad ID assigned in machine driver */
+		pr_err("%s: bad MM ID %d\n", __func__, fe_id);
+		return -EINVAL;
+	}
+
+	if (ch_wght_coeff == NULL) {
+		pr_err("%s: Null channel weightage coefficients passed\n",
+			__func__);
+		return -EINVAL;
+	}
+
+	for (be_index = 0; be_index < MSM_BACKEND_DAI_MAX; be_index++) {
+		port_id = msm_bedais[be_index].port_id;
+		if (!msm_bedais[be_index].active ||
+		    !test_bit(fe_id, &msm_bedais[be_index].fe_sessions[0]))
+			continue;
+
+		session_id = fe_dai_map[fe_id][session_type].strm_id;
+
+		for (idx = 0; idx < MAX_COPPS_PER_PORT; idx++) {
+			unsigned long copp =
+				session_copp_map[fe_id][session_type][be_index];
+			if (!test_bit(idx, &copp))
+				continue;
+			msm_qti_pp_send_chmix_cfg_cmd(port_id, idx,
+						session_id, ip_channel_cnt,
+						op_channel_cnt, ch_wght_coeff,
+						session_type, stream_type);
+			if (rc < 0)
+				pr_err("%s: err setting channel mix config\n",
+					__func__);
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(msm_pcm_routing_send_chmix_cfg);
+
 int msm_pcm_routing_reg_stream_app_type_cfg(
 	int fedai_id, int session_type, int be_id,
 	struct msm_pcm_stream_app_type_cfg *cfg_data)
@@ -1133,6 +1200,39 @@ static bool route_check_fe_id_adm_support(int fe_id)
 
 	return rc;
 }
+
+/*
+ * msm_pcm_routing_get_pp_ch_cnt:
+ *	Read the processed channel count
+ *
+ * @fe_id: Front end ID
+ * @session_type: Inidicates RX or TX session type
+ */
+int msm_pcm_routing_get_pp_ch_cnt(int fe_id, int session_type)
+{
+	struct msm_pcm_stream_app_type_cfg cfg_data;
+	int be_id = 0, app_type_idx = 0, app_type = 0;
+	int ret = -EINVAL;
+
+	memset(&cfg_data, 0, sizeof(cfg_data));
+
+	if (!is_mm_lsm_fe_id(fe_id)) {
+		pr_err("%s: bad MM ID\n", __func__);
+		return -EINVAL;
+	}
+
+	ret = msm_pcm_routing_get_stream_app_type_cfg(fe_id, session_type,
+						      &be_id, &cfg_data);
+	if (ret) {
+		pr_err("%s: cannot get stream app type cfg\n", __func__);
+		return ret;
+	}
+
+	app_type = cfg_data.app_type;
+	app_type_idx = msm_pcm_routing_get_lsm_app_type_idx(app_type);
+	return lsm_app_type_cfg[app_type_idx].num_out_channels;
+}
+EXPORT_SYMBOL(msm_pcm_routing_get_pp_ch_cnt);
 
 int msm_pcm_routing_reg_phy_compr_stream(int fe_id, int perf_mode,
 					  int dspst_id, int stream_type,
@@ -1587,6 +1687,7 @@ void msm_pcm_routing_dereg_phy_stream(int fedai_id, int stream_type)
 			}
 			topology = adm_get_topology_for_port_copp_idx(
 					msm_bedais[i].port_id, idx);
+			msm_routing_unload_topology(topology);
 			adm_close(msm_bedais[i].port_id, fdai->perf_mode, idx);
 			pr_debug("%s:copp:%ld,idx bit fe:%d,type:%d,be:%d\n",
 				 __func__, copp, fedai_id, session_type, i);
@@ -1785,6 +1886,7 @@ static void msm_pcm_routing_process_audio(u16 reg, u16 val, int set)
 			port_id = msm_bedais[reg].port_id;
 			topology = adm_get_topology_for_port_copp_idx(port_id,
 								      idx);
+			msm_routing_unload_topology(topology);
 			adm_close(msm_bedais[reg].port_id, fdai->perf_mode,
 				  idx);
 			pr_debug("%s: copp: %ld, reset idx bit fe:%d, type: %d, be:%d topology=0x%x\n",
@@ -3731,6 +3833,10 @@ static int msm_routing_ec_ref_rx_put(struct snd_kcontrol *kcontrol,
 		msm_route_ec_ref_rx = 28;
 		ec_ref_port_id = AFE_PORT_ID_WSA_CODEC_DMA_TX_2;
 		break;
+	case 29:
+		msm_route_ec_ref_rx = 29;
+		ec_ref_port_id = SLIMBUS_7_RX;
+		break;
 	default:
 		msm_route_ec_ref_rx = 0; /* NONE */
 		pr_err("%s EC ref rx %ld not valid\n",
@@ -3755,7 +3861,8 @@ static const char *const ec_ref_rx[] = { "None", "SLIM_RX", "I2S_RX",
 	"TERT_MI2S_RX", "QUAT_MI2S_RX", "TERT_TDM_TX_0", "USB_AUDIO_RX",
 	"INT0_MI2S_RX", "INT4_MI2S_RX", "INT3_MI2S_TX", "DISPLAY_PORT",
 	"WSA_CDC_DMA_RX_0", "WSA_CDC_DMA_RX_1",
-	"WSA_CDC_DMA_TX_0", "WSA_CDC_DMA_TX_1", "WSA_CDC_DMA_TX_2"
+	"WSA_CDC_DMA_TX_0", "WSA_CDC_DMA_TX_1", "WSA_CDC_DMA_TX_2",
+	"SLIM_7_RX"
 };
 
 static const struct soc_enum msm_route_ec_ref_rx_enum[] = {
@@ -3887,6 +3994,9 @@ static int msm_routing_ext_ec_put(struct snd_kcontrol *kcontrol,
 	case EXT_EC_REF_SLIM_1_TX:
 		ext_ec_ref_port_id = SLIMBUS_1_TX;
 		break;
+	case EXT_EC_REF_SEC_TDM_TX:
+		ext_ec_ref_port_id = AFE_PORT_ID_SECONDARY_TDM_TX;
+		break;
 	case EXT_EC_REF_NONE:
 	default:
 		ext_ec_ref_port_id = AFE_PORT_INVALID;
@@ -3911,7 +4021,7 @@ static int msm_routing_ext_ec_put(struct snd_kcontrol *kcontrol,
 static const char * const ext_ec_ref_rx[] = {"NONE", "PRI_MI2S_TX",
 					"SEC_MI2S_TX", "TERT_MI2S_TX",
 					"QUAT_MI2S_TX", "QUIN_MI2S_TX",
-					"SLIM_1_TX"};
+					"SLIM_1_TX", "SEC_TDM_TX"};
 
 static const struct soc_enum msm_route_ext_ec_ref_rx_enum[] = {
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(ext_ec_ref_rx), ext_ec_ref_rx),
@@ -14375,6 +14485,11 @@ static const struct snd_kcontrol_new slim4_fm_switch_mixer_controls =
 	0, 1, 0, msm_routing_get_switch_mixer,
 	msm_routing_put_switch_mixer);
 
+static const struct snd_kcontrol_new cdc_dma_fm_switch_mixer_controls =
+	SOC_SINGLE_EXT("Switch", SND_SOC_NOPM,
+	0, 1, 0, msm_routing_get_switch_mixer,
+	msm_routing_put_switch_mixer);
+
 static const struct snd_kcontrol_new slim6_fm_switch_mixer_controls =
 	SOC_SINGLE_EXT("Switch", SND_SOC_NOPM,
 	0, 1, 0, msm_routing_get_switch_mixer,
@@ -14519,6 +14634,34 @@ static const struct snd_kcontrol_new aanc_slim_0_rx_mux[] = {
 	SOC_ENUM_EXT("AANC_SLIM_0_RX MUX", aanc_slim_0_rx_enum,
 		msm_routing_slim_0_rx_aanc_mux_get,
 		msm_routing_slim_0_rx_aanc_mux_put)
+};
+
+static int msm_routing_aanc_noise_level_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = aanc_level;
+
+	return 0;
+}
+
+static int msm_routing_aanc_noise_level_put(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int ret = 0;
+
+	mutex_lock(&routing_lock);
+	aanc_level = ucontrol->value.integer.value[0];
+	pr_debug("%s: value: %ld\n",
+		 __func__, ucontrol->value.integer.value[0]);
+	ret = afe_set_aanc_noise_level(aanc_level);
+	mutex_unlock(&routing_lock);
+
+	return ret;
+}
+
+static const struct snd_kcontrol_new aanc_noise_level[] = {
+	SOC_SINGLE_EXT("AANC Noise Level", SND_SOC_NOPM, 0, 255,
+	0, msm_routing_aanc_noise_level_get, msm_routing_aanc_noise_level_put)
 };
 
 static int msm_routing_get_stereo_to_custom_stereo_control(
@@ -15617,6 +15760,10 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 		0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("SLIM0_UL_HL", "SLIMBUS0_HOSTLESS Capture",
 		0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_IN("CDC_DMA_DL_HL", "CDC_DMA_HOSTLESS Playback",
+		0, 0, 0, 0),
+	SND_SOC_DAPM_AIF_OUT("CDC_DMA_UL_HL", "CDC_DMA_HOSTLESS Capture",
+		0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_OUT("CPE_LSM_UL_HL", "CPE LSM capture",
 		0, 0, 0, 0),
 	SND_SOC_DAPM_AIF_IN("SLIM1_DL_HL", "SLIMBUS1_HOSTLESS Playback",
@@ -16326,6 +16473,8 @@ static const struct snd_soc_dapm_widget msm_qdsp6_widgets[] = {
 				&usb_switch_mixer_controls),
 	SND_SOC_DAPM_SWITCH("A2DP_SLIM7_UL_HL", SND_SOC_NOPM, 0, 0,
 				&a2dp_slim7_switch_mixer_controls),
+	SND_SOC_DAPM_SWITCH("WSA_CDC_DMA_RX_0_DL_HL", SND_SOC_NOPM, 0, 0,
+				&cdc_dma_fm_switch_mixer_controls),
 
 	/* Mixer definitions */
 	SND_SOC_DAPM_MIXER("PRI_RX Audio Mixer", SND_SOC_NOPM, 0, 0,
@@ -18707,7 +18856,9 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"SLIM3_UL_HL", NULL, "SLIMBUS_3_TX"},
 	{"SLIM4_UL_HL", NULL, "SLIMBUS_4_TX"},
 	{"SLIM8_UL_HL", NULL, "SLIMBUS_8_TX"},
-
+	{"WSA_CDC_DMA_RX_0_DL_HL", "Switch", "CDC_DMA_DL_HL"},
+	{"WSA_CDC_DMA_RX_0", NULL, "WSA_CDC_DMA_RX_0_DL_HL"},
+	{"CDC_DMA_UL_HL", NULL, "VA_CDC_DMA_TX_0"},
 	{"LSM1 Mixer", "SLIMBUS_0_TX", "SLIMBUS_0_TX"},
 	{"LSM1 Mixer", "SLIMBUS_1_TX", "SLIMBUS_1_TX"},
 	{"LSM1 Mixer", "SLIMBUS_3_TX", "SLIMBUS_3_TX"},
@@ -19812,6 +19963,7 @@ static int msm_pcm_routing_close(struct snd_pcm_substream *substream)
 			port_id = bedai->port_id;
 			topology = adm_get_topology_for_port_copp_idx(port_id,
 								     idx);
+			msm_routing_unload_topology(topology);
 			adm_close(bedai->port_id, fdai->perf_mode, idx);
 			pr_debug("%s: copp:%ld,idx bit fe:%d, type:%d,be:%d topology=0x%x\n",
 				 __func__, copp, i, session_type, be_id,
@@ -20104,6 +20256,60 @@ static int msm_routing_send_device_pp_params(int port_id, int copp_idx,
 	return 0;
 }
 
+static uint32_t msm_routing_get_topology(size_t data_size, void *data)
+{
+	uint32_t topology = NULL_COPP_TOPOLOGY;
+	void *cal_info = NULL;
+	uint32_t size = 0;
+
+	/* Retrieve cal_info size from cal data*/
+	size = data_size - sizeof(struct audio_cal_type_basic);
+	cal_info = kzalloc(size, GFP_KERNEL);
+
+	if (!cal_info)
+		goto done;
+
+	memcpy(cal_info,
+		((uint8_t *)data + sizeof(struct audio_cal_type_basic)), size);
+
+	topology = ((struct audio_cal_info_adm_top *)cal_info)->topology;
+	kfree(cal_info);
+	cal_info = NULL;
+
+done:
+	pr_debug("%s: Using topology %d\n", __func__, topology);
+
+	return topology;
+}
+
+static void msm_routing_load_topology(size_t data_size, void *data)
+{
+	uint32_t topology_id;
+	int ret = -EINVAL;
+
+	topology_id = msm_routing_get_topology(data_size, data);
+	if (topology_id != NULL_COPP_TOPOLOGY)
+		ret = q6core_load_unload_topo_modules(topology_id,
+			CORE_LOAD_TOPOLOGY);
+	if (ret < 0)
+		pr_debug("%s %d load topology failed\n",
+				 __func__, topology_id);
+
+}
+
+static void msm_routing_unload_topology(uint32_t topology_id)
+{
+	int ret = -EINVAL;
+
+	if (topology_id != NULL_COPP_TOPOLOGY)
+		ret = q6core_load_unload_topo_modules(topology_id,
+			CORE_UNLOAD_TOPOLOGY);
+	if (ret < 0)
+		pr_debug("%s %d unload topology failed\n",
+				 __func__, topology_id);
+
+}
+
 static int msm_routing_put_device_pp_params_mixer(struct snd_kcontrol *kcontrol,
 					struct snd_ctl_elem_value *ucontrol)
 {
@@ -20242,7 +20448,7 @@ static int msm_routing_be_dai_name_table_tlv_get(struct snd_kcontrol *kcontrol,
 						 unsigned int size)
 {
 	int i;
-	int ret;
+	int ret = 0;
 
 	if (size < sizeof(be_dai_name_table)) {
 		pr_err("%s: invalid size %d requested, returning\n",
@@ -20411,6 +20617,9 @@ static int msm_routing_probe(struct snd_soc_platform *platform)
 	snd_soc_add_platform_controls(platform, aanc_slim_0_rx_mux,
 				      ARRAY_SIZE(aanc_slim_0_rx_mux));
 
+	snd_soc_add_platform_controls(platform, aanc_noise_level,
+				      ARRAY_SIZE(aanc_noise_level));
+
 	snd_soc_add_platform_controls(platform, msm_voc_session_controls,
 				      ARRAY_SIZE(msm_voc_session_controls));
 
@@ -20568,6 +20777,11 @@ static int msm_routing_set_cal(int32_t cal_type,
 			__func__, ret, cal_type);
 		ret = -EINVAL;
 		goto done;
+	}
+	/* Pre-load if it is ADM topology */
+	if ((cal_index == ADM_TOPOLOGY_CAL_TYPE_IDX) ||
+		(cal_index == ADM_LSM_TOPOLOGY_CAL_TYPE_IDX)) {
+		msm_routing_load_topology(data_size, data);
 	}
 done:
 	return ret;

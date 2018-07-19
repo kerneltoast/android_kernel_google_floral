@@ -433,6 +433,7 @@ enum {
 	EXT_EC_REF_QUAT_MI2S_TX,
 	EXT_EC_REF_QUIN_MI2S_TX,
 	EXT_EC_REF_SLIM_1_TX,
+	EXT_EC_REF_SEC_TDM_TX,
 };
 
 #define INVALID_SESSION -1
@@ -453,6 +454,9 @@ enum {
 #define ADM_PP_PARAM_LATENCY_BIT		2
 #define BE_DAI_PORT_SESSIONS_IDX_MAX		4
 #define BE_DAI_FE_SESSIONS_IDX_MAX		2
+
+#define STREAM_TYPE_ASM 0
+#define STREAM_TYPE_LSM 1
 
 enum {
 	ADM_TOPOLOGY_CAL_TYPE_IDX = 0,
@@ -543,4 +547,8 @@ int msm_pcm_routing_reg_stream_app_type_cfg(
 int msm_pcm_routing_get_stream_app_type_cfg(
 	int fedai_id, int session_type, int *be_id,
 	struct msm_pcm_stream_app_type_cfg *cfg_data);
+int msm_pcm_routing_send_chmix_cfg(int fe_id, int ip_channel_cnt,
+	int op_channel_cnt, int *ch_wght_coeff,
+	int session_type, int stream_type);
+int msm_pcm_routing_get_pp_ch_cnt(int fe_id, int session_type);
 #endif /*_MSM_PCM_H*/

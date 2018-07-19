@@ -575,6 +575,29 @@ struct adm_cmd_set_pspd_mtmx_strtr_params_v5 {
 	u16		reserved;
 } __packed;
 
+/* set customized mixing on matrix mixer.
+ * Updated to account for both LSM as well as ASM path.
+ */
+#define ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V6                        0x00010364
+struct adm_cmd_set_pspd_mtmx_strtr_params_v6 {
+	struct apr_hdr hdr;
+	/* LSW of parameter data payload address.*/
+	u32		payload_addr_lsw;
+	/* MSW of parameter data payload address.*/
+	u32		payload_addr_msw;
+	/* Memory map handle returned by ADM_CMD_SHARED_MEM_MAP_REGIONS */
+	/* command. If mem_map_handle is zero implies the message is in */
+	/* the payload */
+	u32		mem_map_handle;
+	/* Size in bytes of the variable payload accompanying this */
+	/* message or in shared memory. This is used for parsing the */
+	/* parameter payload. */
+	u32		payload_size;
+	u16		direction;
+	u16		sessionid;
+	u16		deviceid;
+	u16		stream_type;
+} __packed;
 /* Returns the status and COPP ID to an #ADM_CMD_DEVICE_OPEN_V5 command.
  */
 #define ADM_CMDRSP_DEVICE_OPEN_V5                      0x00010329
@@ -4683,6 +4706,7 @@ struct asm_softvolume_params {
 #define PCM_CHANNEL_RRC  16
 
 #define PCM_FORMAT_MAX_NUM_CHANNEL  8
+#define PCM_FORMAT_MAX_CHANNELS_9   9
 
 #define ASM_MEDIA_FMT_MULTI_CHANNEL_PCM_V2 0x00010DA5
 
@@ -9925,6 +9949,7 @@ struct avcs_fwk_ver_info {
 #define LSM_SESSION_CMD_EOB				(0x00012A89)
 #define LSM_SESSION_CMD_READ				(0x00012A8A)
 #define LSM_SESSION_CMD_OPEN_TX_V2			(0x00012A8B)
+#define LSM_SESSION_CMD_OPEN_TX_V3			(0x00012A95)
 #define LSM_CMD_ADD_TOPOLOGIES				(0x00012A8C)
 
 #define LSM_SESSION_EVENT_DETECTION_STATUS		(0x00012B00)
@@ -10027,6 +10052,17 @@ struct afe_param_id_cdc_aanc_version {
 
 	/* HW version. */
 	uint32_t aanc_hw_version;
+} __packed;
+
+#define AFE_PARAM_ID_AANC_NOISE_REDUCTION    0x000102AB
+struct afe_param_id_aanc_noise_reduction {
+	/* Minor version used for tracking the version of the module's
+	 * hw version
+	 */
+	uint32_t minor_version;
+
+	/* Target noise level */
+	int32_t ad_beta;
 } __packed;
 
 struct afe_param_id_clip_bank_sel {
@@ -11239,6 +11275,7 @@ struct adm_set_compressed_device_latency {
 } __packed;
 
 #define VOICEPROC_MODULE_ID_GENERIC_TX                      0x00010EF6
+#define VOICEPROC_MODULE_ID_FLUENCE_PRO_VC_TX               0x00010F35
 #define VOICEPROC_PARAM_ID_FLUENCE_SOUNDFOCUS               0x00010E37
 #define VOICEPROC_PARAM_ID_FLUENCE_SOURCETRACKING           0x00010E38
 #define MAX_SECTORS                                         8

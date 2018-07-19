@@ -35,6 +35,7 @@
 #include "codecs/msm-cdc-pinctrl.h"
 #include "codecs/wcd9335.h"
 #include "codecs/wsa881x.h"
+#include "codecs/csra66x0/csra66x0.h"
 #include <dt-bindings/sound/audio-codec-port-types.h>
 
 #define DRV_NAME "qcs405-asoc-snd"
@@ -146,6 +147,11 @@ struct dev_config {
 };
 
 struct msm_wsa881x_dev_info {
+	struct device_node *of_node;
+	u32 index;
+};
+
+struct msm_csra66x0_dev_info {
 	struct device_node *of_node;
 	u32 index;
 };
@@ -456,7 +462,8 @@ static const char *const cdc_dma_rx_ch_text[] = {"One", "Two"};
 static const char *const cdc_dma_tx_ch_text[] = {"One", "Two", "Three", "Four",
 						"Five", "Six", "Seven",
 						"Eight"};
-static char const *cdc_dma_sample_rate_text[] = {"KHZ_8", "KHZ_16",
+static char const *cdc_dma_sample_rate_text[] = {"KHZ_8", "KHZ_11P025",
+					"KHZ_16", "KHZ_22P05",
 					"KHZ_32", "KHZ_44P1", "KHZ_48",
 					"KHZ_88P2", "KHZ_96", "KHZ_176P4",
 					"KHZ_192", "KHZ_352P8", "KHZ_384"};
@@ -564,7 +571,8 @@ static struct msm_asoc_wcd93xx_codec msm_codec_fn;
 static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec,
 					int enable, bool dapm);
 static int msm_wsa881x_init(struct snd_soc_component *component);
-
+static int msm_snd_vad_cfg_put(struct snd_kcontrol *kcontrol,
+				  struct snd_ctl_elem_value *ucontrol);
 
 static struct snd_soc_dapm_route wcd_audio_paths[] = {
 	{"MIC BIAS1", NULL, "MCLK TX"},
@@ -5238,6 +5246,24 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
+	/* Hostless PCM purpose */
+	{
+		.name = "CDC_DMA Hostless",
+		.stream_name = "CDC_DMA Hostless",
+		.cpu_dai_name = "CDC_DMA_HOSTLESS",
+		.platform_name = "msm-pcm-hostless",
+		.dynamic = 1,
+		.dpcm_playback = 1,
+		.dpcm_capture = 1,
+		.trigger = {SND_SOC_DPCM_TRIGGER_POST,
+			    SND_SOC_DPCM_TRIGGER_POST},
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+		 /* this dailink has playback support */
+		.ignore_pmdown_time = 1,
+		.codec_dai_name = "snd-soc-dummy-dai",
+		.codec_name = "snd-soc-dummy",
+	},
 	{
 		.name = "MSM AFE-PCM RX",
 		.stream_name = "AFE-PROXY RX",
@@ -6027,6 +6053,35 @@ static struct snd_soc_dai_link msm_common_be_dai_links[] = {
 		.ops = &qcs405_tdm_be_ops,
 		.ignore_suspend = 1,
 	},
+	{
+		.name = LPASS_BE_QUIN_TDM_RX_0,
+		.stream_name = "Quinary TDM0 Playback",
+		.cpu_dai_name = "msm-dai-q6-tdm.36928",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-rx",
+		.no_pcm = 1,
+		.dpcm_playback = 1,
+		.id = MSM_BACKEND_DAI_QUIN_TDM_RX_0,
+		.be_hw_params_fixup = msm_tdm_be_hw_params_fixup,
+		.ops = &qcs405_tdm_be_ops,
+		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
+	},
+	{
+		.name = LPASS_BE_QUIN_TDM_TX_0,
+		.stream_name = "Quinary TDM0 Capture",
+		.cpu_dai_name = "msm-dai-q6-tdm.36929",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-tx",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_QUIN_TDM_TX_0,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ops = &qcs405_tdm_be_ops,
+		.ignore_suspend = 1,
+	},
 };
 
 static struct snd_soc_dai_link msm_tasha_be_dai_links[] = {
@@ -6625,7 +6680,7 @@ static struct snd_soc_dai_link msm_va_cdc_dma_be_dai_links[] = {
 	{
 		.name = LPASS_BE_VA_CDC_DMA_TX_0,
 		.stream_name = "VA CDC DMA0 Capture",
-		.cpu_dai_name = "msm-dai-cdc-dma.49153",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45089",
 		.platform_name = "msm-pcm-routing",
 		.codec_name = "bolero_codec",
 		.codec_dai_name = "va_macro_tx1",
@@ -6640,7 +6695,7 @@ static struct snd_soc_dai_link msm_va_cdc_dma_be_dai_links[] = {
 	{
 		.name = LPASS_BE_VA_CDC_DMA_TX_1,
 		.stream_name = "VA CDC DMA1 Capture",
-		.cpu_dai_name = "msm-dai-cdc-dma.49155",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45091",
 		.platform_name = "msm-pcm-routing",
 		.codec_name = "bolero_codec",
 		.codec_dai_name = "va_macro_tx2",
@@ -6832,47 +6887,6 @@ err:
 	return ret;
 }
 
-static int msm_audrx_stub_init(struct snd_soc_pcm_runtime *rtd)
-{
-	return 0;
-}
-
-static int msm_snd_stub_hw_params(struct snd_pcm_substream *substream,
-			     struct snd_pcm_hw_params *params)
-{
-	struct snd_soc_pcm_runtime *rtd = substream->private_data;
-	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
-
-	int ret = 0;
-	unsigned int rx_ch[] = {144, 145, 146, 147, 148, 149, 150,
-				151};
-	unsigned int tx_ch[] = {128, 129, 130, 131, 132, 133,
-				134, 135, 136, 137, 138, 139,
-				140, 141, 142, 143};
-
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		ret = snd_soc_dai_set_channel_map(cpu_dai, 0, 0,
-					slim_rx_cfg[SLIM_RX_0].channels,
-					rx_ch);
-		if (ret < 0)
-			pr_err("%s: RX failed to set cpu chan map error %d\n",
-				__func__, ret);
-	} else {
-		ret = snd_soc_dai_set_channel_map(cpu_dai,
-					slim_tx_cfg[SLIM_TX_0].channels,
-					tx_ch, 0, 0);
-		if (ret < 0)
-			pr_err("%s: TX failed to set cpu chan map error %d\n",
-				__func__, ret);
-	}
-
-	return ret;
-}
-
-static struct snd_soc_ops msm_stub_be_ops = {
-	.hw_params = msm_snd_stub_hw_params,
-};
-
 static struct snd_soc_dai_link msm_stub_fe_dai_links[] = {
 
 	/* FrontEnd DAI Links */
@@ -6900,34 +6914,33 @@ static struct snd_soc_dai_link msm_stub_be_dai_links[] = {
 
 	/* Backend DAI Links */
 	{
-		.name = LPASS_BE_SLIMBUS_0_RX,
-		.stream_name = "Slimbus Playback",
-		.cpu_dai_name = "msm-dai-q6-dev.16384",
+		.name = LPASS_BE_VA_CDC_DMA_TX_0,
+		.stream_name = "VA CDC DMA0 Capture",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45089",
 		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-rx",
-		.no_pcm = 1,
-		.dpcm_playback = 1,
-		.id = MSM_BACKEND_DAI_SLIMBUS_0_RX,
-		.init = &msm_audrx_stub_init,
-		.be_hw_params_fixup = msm_be_hw_params_fixup,
-		.ignore_pmdown_time = 1, /* dai link has playback support */
-		.ignore_suspend = 1,
-		.ops = &msm_stub_be_ops,
-	},
-	{
-		.name = LPASS_BE_SLIMBUS_0_TX,
-		.stream_name = "Slimbus Capture",
-		.cpu_dai_name = "msm-dai-q6-dev.16385",
-		.platform_name = "msm-pcm-routing",
-		.codec_name = "msm-stub-codec.1",
-		.codec_dai_name = "msm-stub-tx",
+		.codec_name = "bolero_codec",
+		.codec_dai_name = "va_macro_tx1",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
-		.id = MSM_BACKEND_DAI_SLIMBUS_0_TX,
+		.init = &msm_va_cdc_dma_init,
+		.id = MSM_BACKEND_DAI_VA_CDC_DMA_TX_0,
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ignore_suspend = 1,
-		.ops = &msm_stub_be_ops,
+		.ops = &msm_cdc_dma_be_ops,
+	},
+	{
+		.name = LPASS_BE_VA_CDC_DMA_TX_1,
+		.stream_name = "VA CDC DMA1 Capture",
+		.cpu_dai_name = "msm-dai-cdc-dma-dev.45091",
+		.platform_name = "msm-pcm-routing",
+		.codec_name = "bolero_codec",
+		.codec_dai_name = "va_macro_tx2",
+		.no_pcm = 1,
+		.dpcm_capture = 1,
+		.id = MSM_BACKEND_DAI_VA_CDC_DMA_TX_1,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ignore_suspend = 1,
+		.ops = &msm_cdc_dma_be_ops,
 	},
 };
 
@@ -7341,6 +7354,200 @@ err:
 	return ret;
 }
 
+static int msm_csra66x0_init(struct snd_soc_component *component)
+{
+	struct snd_soc_codec *codec = snd_soc_component_to_codec(component);
+
+	if (!codec) {
+		pr_err("%s codec is NULL\n", __func__);
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static int msm_init_csra_dev(struct platform_device *pdev,
+				struct snd_soc_card *card)
+{
+	struct device_node *csra_of_node;
+	u32 csra_max_devs;
+	u32 csra_dev_cnt;
+	char *dev_name_str = NULL;
+	struct msm_csra66x0_dev_info *csra66x0_dev_info;
+	const char *csra_auxdev_name_prefix[1];
+	int i;
+	int found = 0;
+	int ret = 0;
+
+	/* Get maximum CSRA device count for this platform */
+	ret = of_property_read_u32(pdev->dev.of_node,
+		"qcom,csra-max-devs", &csra_max_devs);
+	if (ret) {
+		dev_info(&pdev->dev,
+			"%s: csra-max-devs property missing in DT %s, ret = %d\n",
+			__func__, pdev->dev.of_node->full_name, ret);
+		card->num_aux_devs = 0;
+		return 0;
+	}
+	if (csra_max_devs == 0) {
+		dev_warn(&pdev->dev,
+		"%s: Max CSRA devices is 0 for this target?\n",
+		__func__);
+		return 0;
+	}
+
+	/* Get count of CSRA device phandles for this platform */
+	csra_dev_cnt = of_count_phandle_with_args(pdev->dev.of_node,
+			"qcom,csra-devs", NULL);
+	if (csra_dev_cnt == -ENOENT) {
+		dev_warn(&pdev->dev, "%s: No csra device defined in DT.\n",
+			__func__);
+		goto err;
+	} else if (csra_dev_cnt <= 0) {
+		dev_err(&pdev->dev,
+			"%s: Error reading csra device from DT. csra_dev_cnt = %d\n",
+			__func__, csra_dev_cnt);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	/*
+	 * Expect total phandles count to be NOT less than maximum possible
+	 * CSRA count. However, if it is less, then assign same value to
+	 * max count as well.
+	 */
+	if (csra_dev_cnt < csra_max_devs) {
+		dev_dbg(&pdev->dev,
+			"%s: csra_max_devs = %d cannot exceed csra_dev_cnt = %d\n",
+			__func__, csra_max_devs, csra_dev_cnt);
+		csra_max_devs = csra_dev_cnt;
+	}
+
+	/* Make sure prefix string passed for each CSRA device */
+	ret = of_property_count_strings(pdev->dev.of_node,
+		"qcom,csra-aux-dev-prefix");
+	if (ret != csra_dev_cnt) {
+		dev_err(&pdev->dev,
+			"%s: expecting %d csra prefix. Defined only %d in DT\n",
+			__func__, csra_dev_cnt, ret);
+		ret = -EINVAL;
+		goto err;
+	}
+
+	/*
+	 * Alloc mem to store phandle and index info of CSRA device, if already
+	 * registered with ALSA core
+	 */
+	csra66x0_dev_info = devm_kcalloc(&pdev->dev, csra_max_devs,
+			sizeof(struct msm_csra66x0_dev_info),
+			GFP_KERNEL);
+	if (!csra66x0_dev_info) {
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	/*
+	 * search and check whether all CSRA devices are already
+	 * registered with ALSA core or not. If found a node, store
+	 * the node and the index in a local array of struct for later
+	 * use.
+	 */
+	for (i = 0; i < csra_dev_cnt; i++) {
+		csra_of_node = of_parse_phandle(pdev->dev.of_node,
+			"qcom,csra-devs", i);
+		if (unlikely(!csra_of_node)) {
+			/* we should not be here */
+			dev_err(&pdev->dev,
+				"%s: csra dev node is not present\n",
+				__func__);
+			ret = -EINVAL;
+			goto err_free_dev_info;
+		}
+		if (soc_find_component(csra_of_node, NULL)) {
+			/* CSRA device registered with ALSA core */
+			csra66x0_dev_info[found].of_node = csra_of_node;
+			csra66x0_dev_info[found].index = i;
+			found++;
+			if (found == csra_max_devs)
+				break;
+		}
+	}
+
+	if (found < csra_max_devs) {
+		dev_dbg(&pdev->dev,
+			"%s: failed to find %d components. Found only %d\n",
+			__func__, csra_max_devs, found);
+		return -EPROBE_DEFER;
+	}
+	dev_info(&pdev->dev,
+		"%s: found %d csra66x0 devices registered with ALSA core\n",
+		__func__, found);
+
+	card->num_aux_devs = csra_max_devs;
+	card->num_configs = csra_max_devs;
+
+	/* Alloc array of AUX devs struct */
+	msm_aux_dev = devm_kcalloc(&pdev->dev, card->num_aux_devs,
+			sizeof(struct snd_soc_aux_dev), GFP_KERNEL);
+	if (!msm_aux_dev) {
+		ret = -ENOMEM;
+		goto err_free_dev_info;
+	}
+
+	/* Alloc array of codec conf struct */
+	msm_codec_conf = devm_kcalloc(&pdev->dev, card->num_aux_devs,
+			sizeof(struct snd_soc_codec_conf), GFP_KERNEL);
+	if (!msm_codec_conf) {
+		ret = -ENOMEM;
+		goto err_free_aux_dev;
+	}
+
+	for (i = 0; i < card->num_aux_devs; i++) {
+		dev_name_str = devm_kzalloc(&pdev->dev, DEV_NAME_STR_LEN,
+				GFP_KERNEL);
+		if (!dev_name_str) {
+			ret = -ENOMEM;
+			goto err_free_cdc_conf;
+		}
+
+		ret = of_property_read_string_index(pdev->dev.of_node,
+				"qcom,csra-aux-dev-prefix",
+				csra66x0_dev_info[i].index,
+				csra_auxdev_name_prefix);
+		if (ret) {
+			dev_err(&pdev->dev,
+				"%s: failed to read csra aux dev prefix, ret = %d\n",
+				__func__, ret);
+			ret = -EINVAL;
+			goto err_free_dev_name_str;
+		}
+
+		snprintf(dev_name_str, strlen("csra66x0.%d"), "csra66x0.%d", i);
+		msm_aux_dev[i].name = dev_name_str;
+		msm_aux_dev[i].codec_name = NULL;
+		msm_aux_dev[i].codec_of_node =
+						csra66x0_dev_info[i].of_node;
+		msm_aux_dev[i].init = msm_csra66x0_init; /* codec specific init */
+		msm_codec_conf[i].dev_name = NULL;
+		msm_codec_conf[i].name_prefix = csra_auxdev_name_prefix[0];
+		msm_codec_conf[i].of_node = csra66x0_dev_info[i].of_node;
+	}
+	card->codec_conf = msm_codec_conf;
+	card->aux_dev = msm_aux_dev;
+
+	return 0;
+
+err_free_dev_name_str:
+	devm_kfree(&pdev->dev, dev_name_str);
+err_free_cdc_conf:
+	devm_kfree(&pdev->dev, msm_codec_conf);
+err_free_aux_dev:
+	devm_kfree(&pdev->dev, msm_aux_dev);
+err_free_dev_info:
+	devm_kfree(&pdev->dev, csra66x0_dev_info);
+err:
+	return ret;
+}
+
 static void msm_i2s_auxpcm_init(struct platform_device *pdev)
 {
 	int count;
@@ -7382,6 +7589,7 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 	struct snd_soc_card *card;
 	struct msm_asoc_mach_data *pdata;
 	int ret;
+	u32 val;
 
 	if (!pdev->dev.of_node) {
 		dev_err(&pdev->dev, "No platform supplied from device tree\n");
@@ -7422,9 +7630,21 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		ret = -EPROBE_DEFER;
 		goto err;
 	}
-	ret = msm_init_wsa_dev(pdev, card);
-	if (ret)
-		goto err;
+
+	ret = of_property_read_u32(pdev->dev.of_node, "qcom,csra-codec", &val);
+	if (ret) {
+		dev_info(&pdev->dev, "no 'qcom,csra-codec' in DT\n");
+		val = 0;
+	}
+	if (val) {
+		ret = msm_init_csra_dev(pdev, card);
+		if (ret)
+			goto err;
+	} else {
+		ret = msm_init_wsa_dev(pdev, card);
+		if (ret)
+			goto err;
+	}
 
 	pdata->dmic_01_gpio_p = of_parse_phandle(pdev->dev.of_node,
 					      "qcom,cdc-dmic01-gpios",

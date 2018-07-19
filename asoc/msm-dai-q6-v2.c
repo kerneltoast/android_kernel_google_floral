@@ -1127,7 +1127,6 @@ static int msm_dai_q6_dai_auxpcm_remove(struct snd_soc_dai *dai)
 	return 0;
 }
 
-
 static int msm_dai_q6_island_mode_put(struct snd_kcontrol *kcontrol,
 				      struct snd_ctl_elem_value *ucontrol)
 {
@@ -1155,6 +1154,7 @@ static struct snd_kcontrol_new island_config_controls[] = {
 	{
 	.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
 	.name = "?",
+	.info = snd_ctl_boolean_mono_info,
 	.get = msm_dai_q6_island_mode_get,
 	.put = msm_dai_q6_island_mode_put,
 	.private_value = SOC_SINGLE_VALUE(0, 0, 1, 0, 0)
@@ -1178,8 +1178,7 @@ static int msm_dai_q6_add_island_mx_ctls(struct snd_card *card,
 	if (!mixer_str)
 		return -ENOMEM;
 
-	snprintf(mixer_str, ctl_len + strlen(mx_ctl_name) + 1,
-		 "%s %s", dai_name, mx_ctl_name);
+	snprintf(mixer_str, ctl_len, "%s %s", dai_name, mx_ctl_name);
 	island_config_controls[0].name = mixer_str;
 	((struct soc_enum *) island_config_controls[0].private_value)->reg
 		= dai_id;
@@ -9405,6 +9404,9 @@ static int msm_dai_q6_cdc_dma_hw_params(
 		return -EINVAL;
 	}
 
+	dai_data->rate = params_rate(params);
+	dai_data->channels = params_channels(params);
+
 	dai_data->port_config.cdc_dma.cdc_dma_cfg_minor_version =
 				AFE_API_VERSION_CODEC_DMA_CONFIG;
 	dai_data->port_config.cdc_dma.sample_rate = dai_data->rate;
@@ -9673,12 +9675,12 @@ static const struct snd_soc_component_driver msm_q6_cdc_dma_dai_component = {
 static int msm_dai_q6_cdc_dma_dev_probe(struct platform_device *pdev)
 {
 	const char *q6_cdc_dma_dev_id = "qcom,msm-dai-cdc-dma-dev-id";
-	u16 cdc_dma_id = 0;
+	u32 cdc_dma_id = 0;
 	int i;
 	int rc = 0;
 	struct msm_dai_q6_cdc_dma_dai_data *dai_data = NULL;
 
-	rc = of_property_read_u16(pdev->dev.of_node, q6_cdc_dma_dev_id,
+	rc = of_property_read_u32(pdev->dev.of_node, q6_cdc_dma_dev_id,
 				  &cdc_dma_id);
 	if (rc) {
 		dev_err(&pdev->dev,
