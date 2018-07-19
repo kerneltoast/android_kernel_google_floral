@@ -40,17 +40,6 @@ static QDF_STATUS csr_neighbor_roam_add_preauth_fail(tpAniSirGlobal mac_ctx,
 			uint8_t session_id, tSirMacAddr bssid);
 
 /**
- * csr_get_dot11_mode() - Derives dot11mode
- * @hal: Global Handle
- * @session_id: SME Session ID
- * @bss_desc: BSS descriptor
- *
- * Return: dot11mode
- */
-static uint32_t csr_get_dot11_mode(tHalHandle hal, uint32_t session_id,
-			      tpSirBssDescription bss_desc);
-
-/**
  * csr_neighbor_roam_state_preauth_done() - Check if state is preauth done
  * @mac_ctx: Global MAC context
  * @session_id: SME session ID
@@ -216,7 +205,7 @@ void csr_neighbor_roam_reset_preauth_control_info(tpAniSirGlobal mac_ctx,
  * csr_neighbor_roam_preauth_rsp_handler() - handle preauth response
  * @mac_ctx: The handle returned by mac_open.
  * @session_id: SME session
- * @lim_status: eSIR_SUCCESS/eSIR_FAILURE/eSIR_LIM_MAX_STA_REACHED_ERROR/
+ * @lim_status: QDF_STATUS_SUCCESS/QDF_STATUS_E_FAILURE/QDF_STATUS_E_NOSPC/
  *              eSIT_LIM_AUTH_RSP_TIMEOUT status from PE
  *
  * This function handle the Preauth response from PE
@@ -231,7 +220,7 @@ void csr_neighbor_roam_reset_preauth_control_info(tpAniSirGlobal mac_ctx,
  */
 QDF_STATUS csr_neighbor_roam_preauth_rsp_handler(tpAniSirGlobal mac_ctx,
 						 uint8_t session_id,
-						 tSirRetStatus lim_status)
+						 QDF_STATUS lim_status)
 {
 	tpCsrNeighborRoamControlInfo neighbor_roam_info =
 		&mac_ctx->roam.neighborRoamInfo[session_id];
@@ -263,12 +252,12 @@ QDF_STATUS csr_neighbor_roam_preauth_rsp_handler(tpAniSirGlobal mac_ctx,
 
 	neighbor_roam_info->FTRoamInfo.preauthRspPending = false;
 
-	if (eSIR_SUCCESS == lim_status)
+	if (QDF_STATUS_SUCCESS == lim_status)
 		preauth_rsp_node =
 			csr_neighbor_roam_next_roamable_ap(
 				mac_ctx, &neighbor_roam_info->roamableAPList,
 				NULL);
-	if ((eSIR_SUCCESS == lim_status) && (NULL != preauth_rsp_node)) {
+	if ((QDF_STATUS_SUCCESS == lim_status) && (NULL != preauth_rsp_node)) {
 		sme_debug("Preauth completed successfully after %d tries",
 			neighbor_roam_info->FTRoamInfo.numPreAuthRetries);
 		sme_debug("After Pre-Auth: BSSID " MAC_ADDRESS_STR ", Ch:%d",
@@ -315,7 +304,7 @@ QDF_STATUS csr_neighbor_roam_preauth_rsp_handler(tpAniSirGlobal mac_ctx,
 		 */
 		if ((neighbor_roam_info->FTRoamInfo.numPreAuthRetries >=
 		     CSR_NEIGHBOR_ROAM_MAX_NUM_PREAUTH_RETRIES) ||
-		    (eSIR_LIM_MAX_STA_REACHED_ERROR == lim_status)) {
+		    (QDF_STATUS_E_NOSPC == lim_status)) {
 			/*
 			 * We are going to remove the node as it fails for
 			 * more than MAX tries. Reset this count to 0
@@ -468,10 +457,18 @@ bool csr_neighbor_roam_is_preauth_candidate(tpAniSirGlobal pMac,
 	return true;
 }
 
-uint32_t csr_get_dot11_mode(tHalHandle hal, uint32_t session_id,
-			      tpSirBssDescription bss_desc)
+/**
+ * csr_get_dot11_mode() - Derives dot11mode
+ * @mac_ctx: Global MAC context
+ * @session_id: SME Session ID
+ * @bss_desc: BSS descriptor
+ *
+ * Return: dot11mode
+ */
+static uint32_t csr_get_dot11_mode(tpAniSirGlobal mac_ctx,
+				   uint32_t session_id,
+				   tpSirBssDescription bss_desc)
 {
-	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
 	struct csr_roam_session *csr_session = CSR_GET_SESSION(mac_ctx,
 				session_id);
 	enum csr_cfgdot11mode ucfg_dot11_mode, cfg_dot11_mode;

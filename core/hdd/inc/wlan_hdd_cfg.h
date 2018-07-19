@@ -3139,7 +3139,7 @@ enum hdd_dot11_mode {
 #define CFG_WLAN_MCC_TO_SCC_SWITCH_MODE          "gWlanMccToSccSwitchMode"
 #define CFG_WLAN_MCC_TO_SCC_SWITCH_MODE_MIN      (QDF_MCC_TO_SCC_SWITCH_DISABLE)
 #define CFG_WLAN_MCC_TO_SCC_SWITCH_MODE_MAX \
-		   (QDF_MCC_TO_SCC_SWITCH_FORCE_PREFERRED_WITHOUT_DISCONNECTION)
+		   (QDF_MCC_TO_SCC_SWITCH_MAX - 1)
 #define CFG_WLAN_MCC_TO_SCC_SWITCH_MODE_DEFAULT  (QDF_MCC_TO_SCC_SWITCH_DISABLE)
 #endif
 
@@ -8640,13 +8640,13 @@ enum hdd_link_speed_rpt_type {
 #define CFG_ACTIVE_MODE_OFFLOAD_DEFAULT    (1)
 
 /*
- * 0: Disable BPF packet filter
- * 1: Enable BPF packet filter
+ * 0: Disable APF packet filter
+ * 1: Enable APF packet filter
  */
-#define CFG_BPF_PACKET_FILTER_OFFLOAD           "gBpfFilterEnable"
-#define CFG_BPF_PACKET_FILTER_OFFLOAD_MIN       (0)
-#define CFG_BPF_PACKET_FILTER_OFFLOAD_MAX       (1)
-#define CFG_BPF_PACKET_FILTER_OFFLOAD_DEFAULT   (1)
+#define CFG_APF_PACKET_FILTER_OFFLOAD           "gBpfFilterEnable"
+#define CFG_APF_PACKET_FILTER_OFFLOAD_MIN       (0)
+#define CFG_APF_PACKET_FILTER_OFFLOAD_MAX       (1)
+#define CFG_APF_PACKET_FILTER_OFFLOAD_DEFAULT   (1)
 
 /*
  * <ini>
@@ -9048,6 +9048,30 @@ enum dot11p_mode {
 
 /*
  * <ini>
+ * etsi13_srd_chan_in_master_mode - Enable/disable ETSI SRD channels in
+ * master mode PCL and ACS functionality
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * etsi13_srd_chan_in_master_mode is to enable/disable ETSI SRD channels in
+ * master mode PCL and ACS functionality
+ *
+ * Related: None
+ *
+ * Supported Feature: SAP/P2P-GO
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_ETSI13_SRD_CHAN_IN_MASTER_MODE    "etsi13_srd_chan_in_master_mode"
+#define CFG_ETSI13_SRD_CHAN_IN_MASTER_MODE_DEF (0)
+#define CFG_ETSI13_SRD_CHAN_IN_MASTER_MODE_MIN (0)
+#define CFG_ETSI13_SRD_CHAN_IN_MASTER_MODE_MAX (1)
+
+/*
+ * <ini>
  * gEnable_go_cts2self_for_sta - Indicate firmware to stop NOA and
  * start using cts2self
  * @Min: 1
@@ -9161,6 +9185,30 @@ enum dot11p_mode {
 #define CFG_STA_SAP_SCC_ON_DFS_CHAN_MIN          (0)
 #define CFG_STA_SAP_SCC_ON_DFS_CHAN_MAX          (1)
 #define CFG_STA_SAP_SCC_ON_DFS_CHAN_DEFAULT      (0)
+
+/*
+ * <ini>
+ * g_sta_sap_scc_on_lte_coex_chan - Allow STA+SAP SCC on LTE coex channel
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to allow STA+SAP SCC on LTE coex channel
+ * 0 - Disallow STA+SAP SCC on LTE coex channel
+ * 1 - Allow STA+SAP SCC on LTE coex channel
+ *
+ * Related: None.
+ *
+ * Supported Feature: Non-DBS, DBS
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_STA_SAP_SCC_ON_LTE_COEX_CHAN              "g_sta_sap_scc_on_lte_coex_chan"
+#define CFG_STA_SAP_SCC_ON_LTE_COEX_CHAN_MIN          (0)
+#define CFG_STA_SAP_SCC_ON_LTE_COEX_CHAN_MAX          (1)
+#define CFG_STA_SAP_SCC_ON_LTE_COEX_CHAN_DEFAULT      (0)
 
 /*
  * gPNOChannelPrediction will allow user to enable/disable the
@@ -9750,7 +9798,7 @@ enum dot11p_mode {
  * Param 2: DP Trace live mode high bandwidth thresh.(uint8_t)
  *         (packets/second) beyond which DP Trace is disabled. Decimal Val.
  *          MGMT, DHCP, EAPOL, ARP pkts are not counted. ICMP and Data are.
- * Param 3: Default Verbosity (0-3)
+ * Param 3: Default Verbosity (0-4)
  * Param 4: Proto Bitmap (uint8_t). Decimal Value.
  *          (decimal 62 = 0x3e)
  * e.g., to disable live mode, use the following param in the ini file.
@@ -9760,7 +9808,7 @@ enum dot11p_mode {
  * gDptraceConfig = 1, 4
  */
 #define CFG_ENABLE_DP_TRACE_CONFIG		"gDptraceConfig"
-#define CFG_ENABLE_DP_TRACE_CONFIG_DEFAULT	"1, 8, 1, 126"
+#define CFG_ENABLE_DP_TRACE_CONFIG_DEFAULT	"1, 4, 1, 126"
 #endif
 
 /*
@@ -9970,6 +10018,47 @@ enum dot11p_mode {
 #define CFG_CE_SERVICE_MAX_RX_IND_FLUSH_MAX      (32)
 #define CFG_CE_SERVICE_MAX_RX_IND_FLUSH_DEFAULT  (32)
 
+/*
+ * <ini>
+ * NAPI_CPU_AFFINITY_MASK - CPU mask to affine NAPIs
+ *
+ * @Min: 0
+ * @Max: 0xFF
+ * @Default: 0
+ *
+ * This ini is used to set NAPI IRQ CPU affinity
+ *
+ * Supported Feature: NAPI
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_NAPI_CE_CPU_MASK_NAME	"NAPI_CPU_AFFINITY_MASK"
+#define CFG_NAPI_CE_CPU_MASK_MIN	(0)
+#define CFG_NAPI_CE_CPU_MASK_MAX	(0xFF)
+#define CFG_NAPI_CE_CPU_MASK_DEFAULT	(0)
+
+/*
+ * <ini>
+ * RX_THREAD_CPU_AFFINITY_MASK - CPU mask to affine Rx_thread
+ *
+ * @Min: 0
+ * @Max: 0xFF
+ * @Default: 0
+ *
+ * This ini is used to set Rx_thread CPU affinity
+ *
+ * Supported Feature: Rx_thread
+ *
+ * Usage: Internal
+ *
+ * </ini>
+ */
+#define CFG_RX_THREAD_CPU_MASK_NAME	"RX_THREAD_CPU_AFFINITY_MASK"
+#define CFG_RX_THREAD_CPU_MASK_MIN	(0)
+#define CFG_RX_THREAD_CPU_MASK_MAX	(0xFF)
+#define CFG_RX_THREAD_CPU_MASK_DEFAULT	(0)
 
 /* List of RPS CPU maps for different rx queues registered by WLAN driver
  * Ref - Kernel/Documentation/networking/scaling.txt
@@ -11205,51 +11294,51 @@ enum hdd_wext_control {
 
 /*
  * <ini>
- * gActiveUcBpfMode - Control UC active BPF mode
+ * gActiveUcBpfMode - Control UC active APF mode
  * @Min: 0 (disabled)
  * @Max: 2 (adaptive)
  * @Default: 0 (disabled)
  *
- * This config item controls UC BPF in active mode. There are 3 modes:
- *	0) disabled - BPF is disabled in active mode
- *	1) enabled - BPF is enabled for all packets in active mode
- *	2) adaptive - BPF is enabled for packets up to some throughput threshold
+ * This config item controls UC APF in active mode. There are 3 modes:
+ *	0) disabled - APF is disabled in active mode
+ *	1) enabled - APF is enabled for all packets in active mode
+ *	2) adaptive - APF is enabled for packets up to some throughput threshold
  *
  * Related: gActiveMcBcBpfMode
  *
- * Supported Feature: Active Mode BPF
+ * Supported Feature: Active Mode APF
  *
  * Usage: Internal/External
  * </ini>
  */
-#define CFG_ACTIVE_UC_BPF_MODE_NAME    "gActiveUcBpfMode"
-#define CFG_ACTIVE_UC_BPF_MODE_MIN     (ACTIVE_BPF_DISABLED)
-#define CFG_ACTIVE_UC_BPF_MODE_MAX     (ACTIVE_BPF_MODE_COUNT - 1)
-#define CFG_ACTIVE_UC_BPF_MODE_DEFAULT (ACTIVE_BPF_DISABLED)
+#define CFG_ACTIVE_UC_APF_MODE_NAME    "gActiveUcBpfMode"
+#define CFG_ACTIVE_UC_APF_MODE_MIN     (ACTIVE_APF_DISABLED)
+#define CFG_ACTIVE_UC_APF_MODE_MAX     (ACTIVE_APF_MODE_COUNT - 1)
+#define CFG_ACTIVE_UC_APF_MODE_DEFAULT (ACTIVE_APF_DISABLED)
 
 /*
  * <ini>
- * gActiveMcBcBpfMode - Control MC/BC active BPF mode
+ * gActiveMcBcBpfMode - Control MC/BC active APF mode
  * @Min: 0 (disabled)
  * @Max: 1 (enabled)
  * @Default: 0 (disabled)
  *
- * This config item controls MC/BC BPF in active mode. There are 3 modes:
- *	0) disabled - BPF is disabled in active mode
- *	1) enabled - BPF is enabled for all packets in active mode
- *	2) adaptive - BPF is enabled for packets up to some throughput threshold
+ * This config item controls MC/BC APF in active mode. There are 3 modes:
+ *	0) disabled - APF is disabled in active mode
+ *	1) enabled - APF is enabled for all packets in active mode
+ *	2) adaptive - APF is enabled for packets up to some throughput threshold
  *
  * Related: gActiveUcBpfMode
  *
- * Supported Feature: Active Mode BPF
+ * Supported Feature: Active Mode APF
  *
  * Usage: Internal/External
  * </ini>
  */
-#define CFG_ACTIVE_MC_BC_BPF_MODE_NAME    "gActiveMcBcBpfMode"
-#define CFG_ACTIVE_MC_BC_BPF_MODE_MIN     (ACTIVE_BPF_DISABLED)
-#define CFG_ACTIVE_MC_BC_BPF_MODE_MAX     (ACTIVE_BPF_ENABLED)
-#define CFG_ACTIVE_MC_BC_BPF_MODE_DEFAULT (ACTIVE_BPF_DISABLED)
+#define CFG_ACTIVE_MC_BC_APF_MODE_NAME    "gActiveMcBcBpfMode"
+#define CFG_ACTIVE_MC_BC_APF_MODE_MIN     (ACTIVE_APF_DISABLED)
+#define CFG_ACTIVE_MC_BC_APF_MODE_MAX     (ACTIVE_APF_ENABLED)
+#define CFG_ACTIVE_MC_BC_APF_MODE_DEFAULT (ACTIVE_APF_DISABLED)
 
 /*
  * <ini>
@@ -11402,6 +11491,56 @@ enum hdd_wext_control {
 #define CFG_HE_STA_OBSSPD_DEFAULT (0x15b8c2ae)
 
 #endif /* WLAN_FEATURE_11AX */
+#ifdef WLAN_SUPPORT_TWT
+/*
+ * <ini>
+ * enable_twt - Enable Target Wake Time support.
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to enable or disable TWT support.
+ *
+ * Related: NA
+ *
+ * Supported Feature: 11AX
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ENABLE_TWT_NAME    "enable_twt"
+#define CFG_ENABLE_TWT_MIN     (0)
+#define CFG_ENABLE_TWT_MAX     (1)
+#define CFG_ENABLE_TWT_DEFAULT (1)
+
+/*
+ * <ini>
+ * twt_congestion_timeout - Target wake time congestion timeout.
+ * @Min: 0
+ * @Max: 10000
+ * @Default: 100
+ *
+ * STA uses this timer to continuously monitor channel congestion levels to
+ * decide whether to start or stop TWT. This ini is used to configure the
+ * target wake time congestion timeout value in the units of milliseconds.
+ * A value of Zero indicates that this is a host triggered TWT and all the
+ * necessary configuration for TWT will be directed from the host.
+ *
+ * Related: NA
+ *
+ * Supported Feature: 11AX
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_TWT_CONGESTION_TIMEOUT_NAME    "twt_congestion_timeout"
+#define CFG_TWT_CONGESTION_TIMEOUT_MIN     (0)
+#define CFG_TWT_CONGESTION_TIMEOUT_MAX     (10000)
+#define CFG_TWT_CONGESTION_TIMEOUT_DEFAULT (100)
+
+#endif /* WLAN_SUPPORT_TWT */
 
 /*
  * <ini>
@@ -14752,7 +14891,7 @@ struct hdd_config {
 	bool flow_steering_enable;
 	uint8_t max_msdus_per_rxinorderind;
 	bool active_mode_offload;
-	bool bpf_packet_filter_enable;
+	bool apf_packet_filter_enable;
 	/* parameter for defer timer for enabling TDLS on p2p listen */
 	uint16_t tdls_enable_defer_time;
 	uint32_t fine_time_meas_cap;
@@ -14761,9 +14900,13 @@ struct hdd_config {
 	bool fastpath_enable;
 #endif
 	uint8_t dot11p_mode;
+	bool etsi13_srd_chan_in_master_mode;
 	uint8_t rx_mode;
 	uint32_t ce_service_max_yield_time;
 	uint8_t ce_service_max_rx_ind_flush;
+	uint32_t napi_cpu_affinity_mask;
+	/* CPU affinity mask for rx_thread */
+	uint32_t rx_thread_affinity_mask;
 	uint8_t cpu_map_list[CFG_RPS_RX_QUEUE_CPU_MAP_LIST_LEN];
 #ifdef FEATURE_WLAN_EXTSCAN
 	bool     extscan_enabled;
@@ -14776,6 +14919,7 @@ struct hdd_config {
 	uint32_t dual_mac_feature_disable;
 	uint8_t dbs_scan_selection[CFG_DBS_SCAN_PARAM_LENGTH];
 	uint32_t sta_sap_scc_on_dfs_chan;
+	uint32_t sta_sap_scc_on_lte_coex_chan;
 	bool     tx_chain_mask_cck;
 	uint8_t  tx_chain_mask_1ss;
 	bool smart_chainmask_enabled;
@@ -14840,7 +14984,7 @@ struct hdd_config {
 	uint8_t  tx_sched_wrr_bk[TX_SCHED_WRR_PARAM_STRING_LENGTH];
 
 	bool enable_fatal_event;
-	bool bpf_enabled;
+	bool apf_enabled;
 #ifdef CONFIG_DP_TRACE
 	bool enable_dp_trace;
 	uint8_t dp_trace_config[DP_TRACE_CONFIG_STRING_LENGTH];
@@ -14913,14 +15057,18 @@ struct hdd_config {
 	uint32_t per_roam_rest_time;
 	uint32_t per_roam_mon_time;
 	uint32_t min_candidate_rssi;
-	enum active_bpf_mode active_uc_bpf_mode;
-	enum active_bpf_mode active_mc_bc_bpf_mode;
+	enum active_apf_mode active_uc_apf_mode;
+	enum active_apf_mode active_mc_bc_apf_mode;
 	bool enable_bcast_probe_rsp;
 	uint8_t he_dynamic_frag_support;
 #ifdef WLAN_FEATURE_11AX
 	bool enable_ul_mimo;
 	bool enable_ul_ofdma;
 	uint32_t he_sta_obsspd;
+#endif
+#ifdef WLAN_SUPPORT_TWT
+	bool enable_twt;
+	uint32_t twt_congestion_timeout;
 #endif
 	uint32_t arp_ac_category;
 	bool ani_enabled;

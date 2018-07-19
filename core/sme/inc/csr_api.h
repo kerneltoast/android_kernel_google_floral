@@ -1525,7 +1525,7 @@ typedef struct tagCsrSummaryStatsInfo {
 } tCsrSummaryStatsInfo;
 
 typedef struct tagCsrGlobalClassAStatsInfo {
-	uint32_t nss;
+	uint8_t nss;
 	uint32_t max_pwr;
 	uint32_t tx_rate;
 	/* mcs index for HT20 and HT40 rates */
@@ -1666,11 +1666,11 @@ typedef QDF_STATUS (*csr_scan_completeCallback)(tHalHandle, void *p2,
 						uint8_t sessionId,
 						uint32_t scanID,
 						eCsrScanStatus status);
-typedef QDF_STATUS (*csr_roam_completeCallback)(void *pContext,
-						struct csr_roam_info *pParam,
-						uint32_t roamId,
-						eRoamCmdStatus roamStatus,
-						eCsrRoamResult roamResult);
+typedef QDF_STATUS (*csr_roam_complete_cb)(void *context,
+					   struct csr_roam_info *param,
+					   uint32_t roam_id,
+					   eRoamCmdStatus roam_status,
+					   eCsrRoamResult roam_result);
 typedef QDF_STATUS (*csr_session_open_cb)(uint8_t session_id);
 typedef QDF_STATUS (*csr_session_close_cb)(uint8_t session_id);
 
@@ -1706,7 +1706,7 @@ typedef QDF_STATUS (*csr_session_close_cb)(uint8_t session_id);
 #define CSR_IS_AUTH_TYPE_SAE(auth_type) (false)
 #endif
 
-QDF_STATUS csr_set_channels(tHalHandle hHal, tCsrConfigParam *pParam);
+QDF_STATUS csr_set_channels(tpAniSirGlobal pMac, tCsrConfigParam *pParam);
 
 /* enum to string conversion for debug output */
 const char *get_e_roam_cmd_status_str(eRoamCmdStatus val);

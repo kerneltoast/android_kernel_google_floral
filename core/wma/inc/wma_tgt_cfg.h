@@ -37,6 +37,8 @@
  * @en_roam_offload: enable roam offload
  * @en_11ax: enable 11ax
  * @is_fw_mawc_capable: Motion Aided Wireless Connectivity feature
+ * @twt_requestor: TWT requestor capability
+ * @twt_responder: TWT responder capability
  */
 struct wma_tgt_services {
 	uint32_t sta_power_save;
@@ -65,6 +67,8 @@ struct wma_tgt_services {
 	bool is_fils_roaming_supported;
 	bool is_fw_mawc_capable;
 	bool is_11k_offload_supported;
+	bool twt_requestor;
+	bool twt_responder;
 };
 
 /**
@@ -190,7 +194,7 @@ struct wma_tgt_cfg {
 #endif
 	uint8_t ap_arpns_support;
 	uint32_t fine_time_measurement_cap;
-	bool bpf_enabled;
+	bool apf_enabled;
 #ifdef FEATURE_WLAN_RA_FILTERING
 	bool is_ra_rate_limit_enabled;
 #endif

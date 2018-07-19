@@ -46,9 +46,7 @@ void sme_set_tspec_uapsd_mask_per_session(tpAniSirGlobal mac_ctx,
 typedef void (*uapsd_start_indication_cb)(void *callback_context,
 		uint32_t session_id, QDF_STATUS status);
 
-QDF_STATUS sme_ps_start_uapsd(tHalHandle hal_ctx, uint32_t session_id,
-		uapsd_start_indication_cb uapsd_start_ind_cb,
-		void *callback_context);
+QDF_STATUS sme_ps_start_uapsd(tHalHandle hal_ctx, uint32_t session_id);
 QDF_STATUS sme_set_ps_host_offload(tHalHandle hal_ctx,
 		tpSirHostOffloadReq request,
 		uint8_t session_id);
@@ -60,8 +58,8 @@ QDF_STATUS sme_set_ps_ns_offload(tHalHandle hal_ctx,
 
 #endif /* WLAN_NS_OFFLOAD */
 /* / Post a message to PE module */
-tSirRetStatus sme_post_pe_message(tpAniSirGlobal mac_ctx,
-				  struct scheduler_msg *pMsg);
+QDF_STATUS sme_post_pe_message(tpAniSirGlobal mac_ctx,
+			       struct scheduler_msg *pMsg);
 
 /**
  * sme_ps_enable_auto_ps_timer(): Enable power-save auto timer with timeout

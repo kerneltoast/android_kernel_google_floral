@@ -77,8 +77,8 @@ void convert_qos_caps_station(tpAniSirGlobal pMac,
 	pOld->qosInfo.acvo_uapsd = pNew->acvo_uapsd;
 }
 
-tSirRetStatus convert_wpa(tpAniSirGlobal pMac,
-			  tSirMacWpaInfo *pOld, tDot11fIEWPA *pNew)
+QDF_STATUS convert_wpa(tpAniSirGlobal pMac,
+		       tSirMacWpaInfo *pOld, tDot11fIEWPA *pNew)
 {
 	/* This is awful, I know, but the old code just rammed the IE into an */
 	/* array... */
@@ -88,17 +88,17 @@ tSirRetStatus convert_wpa(tpAniSirGlobal pMac,
 	status = dot11f_pack_ie_wpa(pMac, pNew, buffer, nbuffer, &written);
 	if (DOT11F_FAILED(status)) {
 		pe_err("Failed to re-pack the WPA IE (0x%0x8)", status);
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	pOld->length = (uint8_t) written - 2;
 	qdf_mem_copy(pOld->info, buffer + 2, pOld->length);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
-tSirRetStatus convert_wpa_opaque(tpAniSirGlobal pMac,
-				 tSirMacWpaInfo *pOld, tDot11fIEWPAOpaque *pNew)
+QDF_STATUS convert_wpa_opaque(tpAniSirGlobal pMac,
+			      tSirMacWpaInfo *pOld, tDot11fIEWPAOpaque *pNew)
 {
 	/* This is awful, I know, but the old code just rammed the IE into */
 	/* an opaque array.  Note that we need to explicitly add the OUI! */
@@ -109,25 +109,25 @@ tSirRetStatus convert_wpa_opaque(tpAniSirGlobal pMac,
 	pOld->info[3] = 0x01;
 	qdf_mem_copy(pOld->info + 4, pNew->data, pNew->num_data);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef FEATURE_WLAN_WAPI
-tSirRetStatus convert_wapi_opaque(tpAniSirGlobal pMac,
-				  tSirMacWapiInfo *pOld,
-				  tDot11fIEWAPIOpaque *pNew)
+QDF_STATUS convert_wapi_opaque(tpAniSirGlobal pMac,
+			       tSirMacWapiInfo *pOld,
+			       tDot11fIEWAPIOpaque *pNew)
 {
 	/* This is awful, I know, but the old code just rammed the IE into */
 	/* an opaque array.  Note that we need to explicitly add the OUI! */
 	pOld->length = pNew->num_data;
 	qdf_mem_copy(pOld->info, pNew->data, pNew->num_data);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 
-tSirRetStatus convert_wsc_opaque(tpAniSirGlobal pMac,
-				 tSirAddie *pOld, tDot11fIEWscIEOpaque *pNew)
+QDF_STATUS convert_wsc_opaque(tpAniSirGlobal pMac,
+			      tSirAddie *pOld, tDot11fIEWscIEOpaque *pNew)
 {
 	/* This is awful, I know, but the old code just rammed the IE into */
 	/* an opaque array.  Note that we need to explicitly add the vendorIE and OUI ! */
@@ -142,11 +142,11 @@ tSirRetStatus convert_wsc_opaque(tpAniSirGlobal pMac,
 	pOld->addIEdata[curAddIELen++] = 0x04;
 	qdf_mem_copy(pOld->addIEdata + curAddIELen, pNew->data, pNew->num_data);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
-tSirRetStatus convert_p2p_opaque(tpAniSirGlobal pMac,
-				  tSirAddie *pOld, tDot11fIEP2PIEOpaque *pNew)
+QDF_STATUS convert_p2p_opaque(tpAniSirGlobal pMac,
+			      tSirAddie *pOld, tDot11fIEP2PIEOpaque *pNew)
 {
 	/* This is awful, I know, but the old code just rammed the IE into */
 	/* an opaque array.  Note that we need to explicitly add the vendorIE and OUI ! */
@@ -161,12 +161,12 @@ tSirRetStatus convert_p2p_opaque(tpAniSirGlobal pMac,
 	pOld->addIEdata[curAddIELen++] = 0x09;
 	qdf_mem_copy(pOld->addIEdata + curAddIELen, pNew->data, pNew->num_data);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef WLAN_FEATURE_WFD
-tSirRetStatus convert_wfd_opaque(tpAniSirGlobal pMac,
-				 tSirAddie *pOld, tDot11fIEWFDIEOpaque *pNew)
+QDF_STATUS convert_wfd_opaque(tpAniSirGlobal pMac,
+			      tSirAddie *pOld, tDot11fIEWFDIEOpaque *pNew)
 {
 	/* This is awful, I know, but the old code just rammed the IE into */
 	/* an opaque array.  Note that we need to explicitly add the vendorIE and OUI ! */
@@ -181,12 +181,12 @@ tSirRetStatus convert_wfd_opaque(tpAniSirGlobal pMac,
 	pOld->addIEdata[curAddIELen++] = 0x0a;
 	qdf_mem_copy(pOld->addIEdata + curAddIELen, pNew->data, pNew->num_data);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 #endif
 
-tSirRetStatus convert_rsn(tpAniSirGlobal pMac,
-			  tSirMacRsnInfo *pOld, tDot11fIERSN *pNew)
+QDF_STATUS convert_rsn(tpAniSirGlobal pMac,
+		       tSirMacRsnInfo *pOld, tDot11fIERSN *pNew)
 {
 	uint8_t buffer[257];
 	uint32_t status, written = 0, nbuffer = 257;
@@ -194,24 +194,24 @@ tSirRetStatus convert_rsn(tpAniSirGlobal pMac,
 	status = dot11f_pack_ie_rsn(pMac, pNew, buffer, nbuffer, &written);
 	if (DOT11F_FAILED(status)) {
 		pe_err("Failed to re-pack the RSN IE (0x%0x8)", status);
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	pOld->length = (uint8_t) written - 2;
 	qdf_mem_copy(pOld->info, buffer + 2, pOld->length);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
-tSirRetStatus convert_rsn_opaque(tpAniSirGlobal pMac,
-				 tSirMacRsnInfo *pOld, tDot11fIERSNOpaque *pNew)
+QDF_STATUS convert_rsn_opaque(tpAniSirGlobal pMac,
+			      tSirMacRsnInfo *pOld, tDot11fIERSNOpaque *pNew)
 {
 	/* This is awful, I know, but the old code just rammed the IE into */
 	/* an opaque array. */
 	pOld->length = pNew->num_data;
 	qdf_mem_copy(pOld->info, pNew->data, pOld->length);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 void convert_power_caps(tpAniSirGlobal pMac,
@@ -432,13 +432,13 @@ void convert_tspec(tpAniSirGlobal pMac,
 	pOld->mediumTime = pNew->medium_time;
 }
 
-tSirRetStatus convert_tclas(tpAniSirGlobal pMac,
-			    tSirTclasInfo *pOld, tDot11fIETCLAS *pNew)
+QDF_STATUS convert_tclas(tpAniSirGlobal pMac,
+			 tSirTclasInfo *pOld, tDot11fIETCLAS *pNew)
 {
 	uint32_t length = 0;
 
 	if (DOT11F_FAILED(dot11f_get_packed_ietclas(pMac, pNew, &length))) {
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	pOld->tclas.type = DOT11F_EID_TCLAS;
@@ -494,7 +494,7 @@ tSirRetStatus convert_tclas(tpAniSirGlobal pMac,
 				     (uint8_t *) pNew->info.IpParams.params.
 				     IpV6Params.flow_label, 3);
 		} else {
-			return eSIR_FAILURE;
+			return QDF_STATUS_E_FAILURE;
 		}
 		break;
 	case 2:
@@ -502,10 +502,10 @@ tSirRetStatus convert_tclas(tpAniSirGlobal pMac,
 			pNew->info.Params8021dq.tag_type;
 		break;
 	default:
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 void convert_wmmtspec(tpAniSirGlobal pMac,
@@ -536,13 +536,13 @@ void convert_wmmtspec(tpAniSirGlobal pMac,
 	pOld->mediumTime = pNew->medium_time;
 }
 
-tSirRetStatus convert_wmmtclas(tpAniSirGlobal pMac,
-			       tSirTclasInfo *pOld, tDot11fIEWMMTCLAS *pNew)
+QDF_STATUS convert_wmmtclas(tpAniSirGlobal pMac,
+			    tSirTclasInfo *pOld, tDot11fIEWMMTCLAS *pNew)
 {
 	uint32_t length = 0;
 
 	if (DOT11F_FAILED(dot11f_get_packed_iewmmtclas(pMac, pNew, &length))) {
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	pOld->tclas.type = DOT11F_EID_WMMTCLAS;
@@ -598,7 +598,7 @@ tSirRetStatus convert_wmmtclas(tpAniSirGlobal pMac,
 				     (uint8_t *) pNew->info.IpParams.params.
 				     IpV6Params.flow_label, 3);
 		} else {
-			return eSIR_FAILURE;
+			return QDF_STATUS_E_FAILURE;
 		}
 		break;
 	case 2:
@@ -606,10 +606,10 @@ tSirRetStatus convert_wmmtclas(tpAniSirGlobal pMac,
 			pNew->info.Params8021dq.tag_type;
 		break;
 	default:
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 void convert_ts_delay(tpAniSirGlobal pMac,
@@ -650,87 +650,6 @@ void convert_wmm_schedule(tpAniSirGlobal pMac,
 	pOld->specInterval = pNew->spec_interval;
 }
 
-/**
-    @brief   :    This functions converts the given buffer till given size to
-    Big endian format assuming the bus is 32 bit. The size should
-    be four byte aligned.
-    @param :    ptr to be converted, size
-    @return  :    void
- */
-
-void convertto_big_endian(void *ptr, uint16_t size)
-{
-	uint8_t *temp_ptr;
-	uint32_t *dest_ptr;
-
-	dest_ptr = (uint32_t *) ptr;
-	while (size) {
-		temp_ptr = (uint8_t *) dest_ptr;
-		*dest_ptr =
-			(temp_ptr[0] << 24) | (temp_ptr[1] << 16) | (temp_ptr[2] <<
-								     8) |
-			temp_ptr[3];
-		dest_ptr++;
-		size -= 4;
-	}
-}
-
-void create_scan_data_null_frame(tpAniSirGlobal pMac, tSirMacMgmtHdr *macMgmtHdr,
-				 uint8_t pwrMgmt, tSirMacAddr bssid,
-				 tSirMacAddr selfMacAddr)
-{
-
-	macMgmtHdr->fc.type = SIR_MAC_DATA_FRAME;
-	macMgmtHdr->fc.subType = SIR_MAC_DATA_NULL;
-	macMgmtHdr->fc.protVer = SIR_MAC_PROTOCOL_VERSION;
-	macMgmtHdr->fc.order = 0;
-	macMgmtHdr->fc.wep = 0;
-	macMgmtHdr->fc.moreData = 0;
-	macMgmtHdr->fc.powerMgmt = pwrMgmt;
-	macMgmtHdr->fc.retry = 0;
-	macMgmtHdr->fc.moreFrag = 0;
-	macMgmtHdr->fc.fromDS = 0;
-	macMgmtHdr->fc.toDS = 0;
-	macMgmtHdr->durationLo =
-		(uint8_t) (SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff);
-	macMgmtHdr->durationHi =
-		(uint8_t) ((SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff00) >> 8);
-	macMgmtHdr->seqControl.fragNum = 0;
-	macMgmtHdr->seqControl.seqNumLo = 0;
-	macMgmtHdr->seqControl.seqNumHi = 2;
-	qdf_mem_copy((void *)&macMgmtHdr->da,
-		     (void *)bssid, sizeof(tSirMacAddr));
-	qdf_mem_copy((void *)&macMgmtHdr->sa,
-		     (void *)selfMacAddr, sizeof(tSirMacAddr));
-	qdf_mem_copy((void *)&macMgmtHdr->bssId,
-		     (void *)bssid, sizeof(tSirMacAddr));
-
-	return;
-}
-
-void create_scan_cts_frame(tpAniSirGlobal pMac, tSirMacMgmtHdr *macMgmtHdr,
-			   tSirMacAddr selfMac)
-{
-	macMgmtHdr->fc.type = SIR_MAC_CTRL_FRAME;
-	macMgmtHdr->fc.subType = SIR_MAC_CTRL_CTS;
-	macMgmtHdr->fc.order = 0;
-	macMgmtHdr->fc.wep = 0;
-	macMgmtHdr->fc.moreData = 0;
-	macMgmtHdr->fc.powerMgmt = 0;
-	macMgmtHdr->fc.retry = 0;
-	macMgmtHdr->fc.moreFrag = 0;
-	macMgmtHdr->fc.fromDS = 0;
-	macMgmtHdr->fc.toDS = 0;
-	macMgmtHdr->durationLo =
-		(uint8_t) (SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff);
-	macMgmtHdr->durationHi =
-		(uint8_t) ((SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff00) >> 8);
-	qdf_mem_copy((void *)macMgmtHdr->da, (void *)selfMac,
-		     sizeof(tSirMacAddr));
-
-	return;
-}
-
 void convert_qos_mapset_frame(tpAniSirGlobal pMac, tSirQosMapSet *Qos,
 			      tDot11fIEQosMapSet *dot11fIE)
 {
@@ -761,108 +680,6 @@ void convert_qos_mapset_frame(tpAniSirGlobal pMac, tSirQosMapSet *Qos,
 		Qos->dscp_range[i][1] = dot11fIE->dscp_exceptions[j];
 		j++;
 	}
-}
-
-/**
-    @brief    :    This functions creates a DATA_NULL/CTS2SELF frame in Big endian format
-    @param    :    Global MAC structure, pointer to return the created packet, role which is Station/AP
-    @return    :    void
- */
-
-void create_init_scan_raw_frame(tpAniSirGlobal pMac, tSirMacMgmtHdr *macMgmtHdr,
-				tBssSystemRole role)
-{
-#if 0
-	tpStaStruct pSta = (tpStaStruct) pMac->hal.halMac.staTable;
-
-	if (role == eSYSTEM_STA_ROLE) {
-		macMgmtHdr->fc.type = SIR_MAC_DATA_FRAME;
-		macMgmtHdr->fc.subType = SIR_MAC_DATA_NULL;
-		macMgmtHdr->fc.protVer = SIR_MAC_PROTOCOL_VERSION;
-		macMgmtHdr->fc.order = 0;
-		macMgmtHdr->fc.wep = 0;
-		macMgmtHdr->fc.moreData = 0;
-		macMgmtHdr->fc.powerMgmt = 1;   /* Needed for station */
-		macMgmtHdr->fc.retry = 0;
-		macMgmtHdr->fc.moreFrag = 0;
-		macMgmtHdr->fc.fromDS = 0;
-		macMgmtHdr->fc.toDS = 1;
-		macMgmtHdr->durationLo =
-			(uint8_t) (SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff);
-		macMgmtHdr->durationHi =
-			(uint8_t) ((SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff00) >>
-				   8);
-		macMgmtHdr->seqControl.fragNum = 0;
-		macMgmtHdr->seqControl.seqNumLo = 0;
-		macMgmtHdr->seqControl.seqNumHi = 2;
-		qdf_mem_copy((void *)&macMgmtHdr->da, (void *)pSta[0].bssId, 6);
-		qdf_mem_copy(&macMgmtHdr->sa, pSta[0].staAddr, 6);
-		qdf_mem_copy((void *)&macMgmtHdr->bssId, (void *)pSta[0].bssId,
-			     6);
-	} else if (role == eSYSTEM_AP_ROLE || role == eSYSTEM_STA_IN_IBSS_ROLE) {
-		macMgmtHdr->fc.type = SIR_MAC_CTRL_FRAME;
-		macMgmtHdr->fc.subType = SIR_MAC_CTRL_CTS;
-		macMgmtHdr->fc.order = 0;
-		macMgmtHdr->fc.wep = 0;
-		macMgmtHdr->fc.moreData = 0;
-		macMgmtHdr->fc.powerMgmt = 0;   /* Needed for station */
-		macMgmtHdr->fc.retry = 0;
-		macMgmtHdr->fc.moreFrag = 0;
-		macMgmtHdr->fc.fromDS = 0;
-		macMgmtHdr->fc.toDS = 0;
-		macMgmtHdr->durationLo =
-			(uint8_t) (SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff);
-		macMgmtHdr->durationHi =
-			(uint8_t) ((SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff00) >>
-				   8);
-		qdf_mem_copy((void *)macMgmtHdr->da, (void *)pSta[0].staAddr,
-			     6);
-	}
-	return;
-#endif
-}
-
-/**
-    @brief    :    This functions creates a DATA_NULL frame in Big endian format
-    @param    :    Global MAC structure, pointer to return the created packet, role which is Station/AP
-    @return    :    void
- */
-
-void create_finish_scan_raw_frame(tpAniSirGlobal pMac, tSirMacMgmtHdr *macMgmtHdr,
-				  tBssSystemRole role)
-{
-#if 0
-	tpStaStruct pSta = (tpStaStruct) pMac->hal.halMac.staTable;
-
-	if (role == eSYSTEM_STA_ROLE) {
-		macMgmtHdr->fc.type = SIR_MAC_DATA_FRAME;
-		macMgmtHdr->fc.subType = SIR_MAC_DATA_NULL;
-		macMgmtHdr->fc.protVer = SIR_MAC_PROTOCOL_VERSION;
-		macMgmtHdr->fc.order = 0;
-		macMgmtHdr->fc.wep = 0;
-		macMgmtHdr->fc.moreData = 0;
-		macMgmtHdr->fc.powerMgmt = 0;   /* Needed for station */
-		macMgmtHdr->fc.retry = 0;
-		macMgmtHdr->fc.moreFrag = 0;
-		macMgmtHdr->fc.fromDS = 0;
-		macMgmtHdr->fc.toDS = 1;
-		macMgmtHdr->durationLo =
-			(uint8_t) (SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff);
-		macMgmtHdr->durationHi =
-			(uint8_t) ((SIR_MAC_MAX_DURATION_MICRO_SECONDS & 0xff00) >>
-				   8);
-		macMgmtHdr->seqControl.fragNum = 0;
-		macMgmtHdr->seqControl.seqNumLo = 0;
-		macMgmtHdr->seqControl.seqNumHi = 2;
-		qdf_mem_copy((void *)macMgmtHdr->da, (void *)pSta[0].bssId, 6);
-		qdf_mem_copy(macMgmtHdr->sa, pSta[0].staAddr, 6);
-		qdf_mem_copy((void *)macMgmtHdr->bssId, (void *)pSta[0].bssId,
-			     6);
-
-	}
-
-	return;
-#endif
 }
 
 /* utils_parser.c ends here. */

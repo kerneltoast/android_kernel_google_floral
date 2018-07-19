@@ -412,7 +412,8 @@ typedef struct sSirSmeReadyReq {
 	uint16_t transactionId;
 	void *csr_roam_synch_cb;
 	void *pe_roam_synch_cb;
-	void *sme_msg_cb;
+	QDF_STATUS (*sme_msg_cb)(tpAniSirGlobal mac,
+				 struct scheduler_msg *msg);
 } tSirSmeReadyReq, *tpSirSmeReadyReq;
 
 /**
@@ -2412,12 +2413,8 @@ typedef struct sSirUpdateAPWPARSNIEsReq {
 #define SIR_ROAM_SCAN_MAX_PB_REQ_SIZE    450
 /* Occupied channel list remains static */
 #define CHANNEL_LIST_STATIC                   1
-/* Occupied channel list can be learnt after init */
-#define CHANNEL_LIST_DYNAMIC_INIT             2
-/* Occupied channel list can be learnt after flush */
-#define CHANNEL_LIST_DYNAMIC_FLUSH            3
-/* Occupied channel list can be learnt after update */
-#define CHANNEL_LIST_DYNAMIC_UPDATE           4
+/* Occupied channel list can be dynamic */
+#define CHANNEL_LIST_DYNAMIC                  2
 #define SIR_ROAM_SCAN_24G_DEFAULT_CH     1
 #define SIR_ROAM_SCAN_5G_DEFAULT_CH      36
 #define SIR_ROAM_SCAN_RESERVED_BYTES     61
@@ -3651,6 +3648,7 @@ typedef struct sSirChanChangeRequest {
 	uint8_t center_freq_seg_1;
 	uint8_t bssid[QDF_MAC_ADDR_SIZE];
 	uint32_t dot11mode;
+	tSirNwType nw_type;
 	tSirMacRateSet operational_rateset;
 	tSirMacRateSet extended_rateset;
 	uint32_t cac_duration_ms;
@@ -6164,17 +6162,17 @@ struct obss_scanparam {
 };
 
 /**
- * struct sir_bpf_set_offload - set bpf filter instructions
+ * struct sir_apf_set_offload - set apf filter instructions
  * @session_id: session identifier
- * @version: host bpf version
- * @filter_id: Filter ID for BPF filter
+ * @version: host apf version
+ * @filter_id: Filter ID for APF filter
  * @total_length: The total length of the full instruction
  *                total_length equal to 0 means reset
  * @current_offset: current offset, 0 means start a new setting
  * @current_length: Length of current @program
- * @program: BPF instructions
+ * @program: APF instructions
  */
-struct sir_bpf_set_offload {
+struct sir_apf_set_offload {
 	uint8_t  session_id;
 	uint32_t version;
 	uint32_t filter_id;
@@ -6185,18 +6183,18 @@ struct sir_bpf_set_offload {
 };
 
 /**
- * struct sir_bpf_offload_capabilities - get bpf Capabilities
- * @bpf_version: fw's implement version
- * @max_bpf_filters: max filters that fw supports
- * @max_bytes_for_bpf_inst: the max bytes that can be used as bpf instructions
- * @remaining_bytes_for_bpf_inst: remaining bytes for bpf instructions
+ * struct sir_apf_offload_capabilities - get apf Capabilities
+ * @apf_version: fw's implement version
+ * @max_apf_filters: max filters that fw supports
+ * @max_bytes_for_apf_inst: the max bytes that can be used as apf instructions
+ * @remaining_bytes_for_apf_inst: remaining bytes for apf instructions
  *
  */
-struct sir_bpf_get_offload {
-	uint32_t bpf_version;
-	uint32_t max_bpf_filters;
-	uint32_t max_bytes_for_bpf_inst;
-	uint32_t remaining_bytes_for_bpf_inst;
+struct sir_apf_get_offload {
+	uint32_t apf_version;
+	uint32_t max_apf_filters;
+	uint32_t max_bytes_for_apf_inst;
+	uint32_t remaining_bytes_for_apf_inst;
 };
 
 #ifndef QCA_SUPPORT_CP_STATS

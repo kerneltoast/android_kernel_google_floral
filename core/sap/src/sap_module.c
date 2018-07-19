@@ -367,6 +367,12 @@ QDF_STATUS sap_deinit_ctx(struct sap_context *sap_ctx)
 		sap_clear_session_param(hal, sap_ctx, sap_ctx->sessionId);
 	}
 
+	if (sap_ctx->channelList) {
+		qdf_mem_free(sap_ctx->channelList);
+		sap_ctx->channelList = NULL;
+		sap_ctx->num_of_channel = 0;
+	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -1286,6 +1292,7 @@ QDF_STATUS wlansap_set_channel_change_with_csa(struct sap_context *sapContext,
 	void *hHal = NULL;
 	bool valid;
 	QDF_STATUS status;
+	bool sta_sap_scc_on_dfs_chan;
 
 	if (NULL == sapContext) {
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
@@ -1313,6 +1320,8 @@ QDF_STATUS wlansap_set_channel_change_with_csa(struct sap_context *sapContext,
 		policy_mgr_is_any_mode_active_on_band_along_with_session(
 			pMac->psoc, sapContext->sessionId, POLICY_MGR_BAND_5));
 
+	sta_sap_scc_on_dfs_chan =
+		policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(pMac->psoc);
 	/*
 	 * Now, validate if the passed channel is valid in the
 	 * current regulatory domain.
@@ -1322,9 +1331,10 @@ QDF_STATUS wlansap_set_channel_change_with_csa(struct sap_context *sapContext,
 			CHANNEL_STATE_ENABLE) ||
 		(wlan_reg_get_channel_state(pMac->pdev, targetChannel) ==
 			CHANNEL_STATE_DFS &&
-		!policy_mgr_is_any_mode_active_on_band_along_with_session(
+		(!policy_mgr_is_any_mode_active_on_band_along_with_session(
 			pMac->psoc, sapContext->sessionId,
-			POLICY_MGR_BAND_5)))) {
+			POLICY_MGR_BAND_5) ||
+			sta_sap_scc_on_dfs_chan)))) {
 		/*
 		 * validate target channel switch w.r.t various concurrency
 		 * rules set.
@@ -2313,18 +2323,22 @@ void wlansap_extend_to_acs_range(tHalHandle hal, uint8_t *startChannelNum,
 				 (*endChannelNum + ACS_2G_EXTEND) : 14;
 	} else if (*startChannelNum >= 36 && *endChannelNum >= 36) {
 		*bandStartChannel = CHAN_ENUM_36;
-		*bandEndChannel = CHAN_ENUM_165;
+		*bandEndChannel = CHAN_ENUM_173;
 		tmp_startChannelNum = (*startChannelNum - ACS_5G_EXTEND) > 36 ?
 				   (*startChannelNum - ACS_5G_EXTEND) : 36;
-		tmp_endChannelNum = (*endChannelNum + ACS_5G_EXTEND) <= 165 ?
-				 (*endChannelNum + ACS_5G_EXTEND) : 165;
+		tmp_endChannelNum = (*endChannelNum + ACS_5G_EXTEND) <=
+				     WNI_CFG_CURRENT_CHANNEL_STAMAX ?
+				     (*endChannelNum + ACS_5G_EXTEND) :
+				     WNI_CFG_CURRENT_CHANNEL_STAMAX;
 	} else {
 		*bandStartChannel = CHAN_ENUM_1;
-		*bandEndChannel = CHAN_ENUM_165;
+		*bandEndChannel = CHAN_ENUM_173;
 		tmp_startChannelNum = *startChannelNum > 5 ?
 			(*startChannelNum - ACS_2G_EXTEND) : 1;
-		tmp_endChannelNum = (*endChannelNum + ACS_5G_EXTEND) <= 165 ?
-			(*endChannelNum + ACS_5G_EXTEND) : 165;
+		tmp_endChannelNum = (*endChannelNum + ACS_5G_EXTEND) <=
+				     WNI_CFG_CURRENT_CHANNEL_STAMAX ?
+				     (*endChannelNum + ACS_5G_EXTEND) :
+				     WNI_CFG_CURRENT_CHANNEL_STAMAX;
 	}
 
 	/* Note if the ACS range include only DFS channels, do not cross range

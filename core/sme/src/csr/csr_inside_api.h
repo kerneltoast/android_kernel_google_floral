@@ -211,10 +211,6 @@ void csr_release_command_wm_status_change(tpAniSirGlobal pMac,
 void csr_release_roc_req_cmd(tpAniSirGlobal mac_ctx,
 			     tSmeCmd *pCommand);
 
-bool csr_is_duplicate_bss_description(tpAniSirGlobal pMac,
-				      tSirBssDescription *pSirBssDesc1,
-				      tSirBssDescription *pSirBssDesc2,
-				      tDot11fBeaconIEs *pIes2, bool fForced);
 QDF_STATUS csr_roam_save_connected_bss_desc(tpAniSirGlobal pMac,
 					    uint32_t sessionId,
 					    tSirBssDescription *pBssDesc);
@@ -741,6 +737,7 @@ QDF_STATUS csr_roam_set_pmkid_cache(tpAniSirGlobal pMac, uint32_t sessionId,
 				    tPmkidCacheInfo *pPMKIDCache,
 				   uint32_t numItems, bool update_entire_cache);
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /*
  * csr_get_pmk_info(): store PMK in pmk_cache
  * @mac_ctx: pointer to global structure for MAC
@@ -755,7 +752,6 @@ QDF_STATUS csr_roam_set_pmkid_cache(tpAniSirGlobal pMac, uint32_t sessionId,
 void csr_get_pmk_info(tpAniSirGlobal mac_ctx, uint8_t session_id,
 		      tPmkidCacheInfo *pmk_cache);
 
-#ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /*
  * csr_roam_set_psk_pmk() -
  * store PSK/PMK

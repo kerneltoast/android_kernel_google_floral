@@ -118,8 +118,8 @@ static QDF_STATUS csr_ll_scan_purge_result(tpAniSirGlobal pMac,
 
 QDF_STATUS csr_scan_open(tpAniSirGlobal mac_ctx)
 {
-	csr_ll_open(mac_ctx->hHdd, &mac_ctx->scan.channelPowerInfoList24);
-	csr_ll_open(mac_ctx->hHdd, &mac_ctx->scan.channelPowerInfoList5G);
+	csr_ll_open(&mac_ctx->scan.channelPowerInfoList24);
+	csr_ll_open(&mac_ctx->scan.channelPowerInfoList5G);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -150,6 +150,18 @@ QDF_STATUS csr_scan_handle_search_for_ssid(tpAniSirGlobal mac_ctx,
 	profile = session->scan_info.profile;
 	sme_debug("session %d", session_id);
 	do {
+		/* If this scan is for HDD reassociate */
+		if (mac_ctx->roam.neighborRoamInfo[session_id].
+				uOsRequestedHandoff) {
+			/* notify LFR state m/c */
+			status = csr_neighbor_roam_sssid_scan_done
+				(mac_ctx, session_id, QDF_STATUS_SUCCESS);
+			if (!QDF_IS_STATUS_SUCCESS(status))
+				csr_neighbor_roam_start_lfr_scan(mac_ctx,
+								 session_id);
+			status = QDF_STATUS_SUCCESS;
+			break;
+		}
 		/*
 		 * If there is roam command waiting, ignore this roam because
 		 * the newer roam command is the one to execute
@@ -251,6 +263,17 @@ QDF_STATUS csr_scan_handle_search_for_ssid_failure(tpAniSirGlobal mac_ctx,
 		sme_err("session %d not found", session_id);
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	/* If this scan is for HDD reassociate */
+	if (mac_ctx->roam.neighborRoamInfo[session_id].uOsRequestedHandoff) {
+		/* notify LFR state m/c */
+		status = csr_neighbor_roam_sssid_scan_done
+				(mac_ctx, session_id, QDF_STATUS_E_FAILURE);
+		if (!QDF_IS_STATUS_SUCCESS(status))
+			csr_neighbor_roam_start_lfr_scan(mac_ctx, session_id);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	profile = session->scan_info.profile;
 
 	/*
@@ -1274,18 +1297,15 @@ void csr_scan_callback(struct wlan_objmgr_vdev *vdev,
 	struct csr_roam_session *session;
 	uint32_t session_id = 0;
 	uint8_t chan = 0;
+	bool success = false;
 
 	mac_ctx = (tpAniSirGlobal)arg;
-	if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
-			((event->reason == SCAN_REASON_CANCELLED) ||
-			(event->reason == SCAN_REASON_TIMEDOUT) ||
-			(event->reason == SCAN_REASON_INTERNAL_FAILURE)))
-		scan_status = eCSR_SCAN_FAILURE;
-	else if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
-			(event->reason == SCAN_REASON_COMPLETED))
-		scan_status = eCSR_SCAN_SUCCESS;
-	else
+
+	if (!util_is_scan_completed(event, &success))
 		return;
+
+	if (success)
+		scan_status = eCSR_SCAN_SUCCESS;
 
 	session_id = wlan_vdev_get_id(vdev);
 	if (!CSR_IS_SESSION_VALID(mac_ctx, session_id)) {
@@ -1727,14 +1747,14 @@ static void csr_set_cfg_country_code(tpAniSirGlobal pMac, uint8_t *countryCode)
 QDF_STATUS csr_get_country_code(tpAniSirGlobal pMac, uint8_t *pBuf,
 				uint8_t *pbLen)
 {
-	tSirRetStatus status;
+	QDF_STATUS status;
 	uint32_t len;
 
 	if (pBuf && pbLen && (*pbLen >= WNI_CFG_COUNTRY_CODE_LEN)) {
 		len = *pbLen;
 		status = wlan_cfg_get_str(pMac, WNI_CFG_COUNTRY_CODE, pBuf,
 					&len);
-		if (status == eSIR_SUCCESS) {
+		if (status == QDF_STATUS_SUCCESS) {
 			*pbLen = (uint8_t) len;
 			return QDF_STATUS_SUCCESS;
 		}
@@ -1753,7 +1773,7 @@ void csr_set_cfg_scan_control_list(tpAniSirGlobal pMac, uint8_t *countryCode,
 
 	pControlList = qdf_mem_malloc(WNI_CFG_SCAN_CONTROL_LIST_LEN);
 	if (pControlList != NULL) {
-		if (IS_SIR_STATUS_SUCCESS(wlan_cfg_get_str(pMac,
+		if (QDF_IS_STATUS_SUCCESS(wlan_cfg_get_str(pMac,
 					WNI_CFG_SCAN_CONTROL_LIST,
 					pControlList, &len))) {
 			for (i = 0; i < pChannelList->numChannels; i++) {
@@ -1844,7 +1864,7 @@ QDF_STATUS csr_remove_nonscan_cmd_from_pending_list(tpAniSirGlobal pMac,
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	qdf_mem_zero(&localList, sizeof(tDblLinkList));
-	if (!QDF_IS_STATUS_SUCCESS(csr_ll_open(pMac->hHdd, &localList))) {
+	if (!QDF_IS_STATUS_SUCCESS(csr_ll_open(&localList))) {
 		sme_err("failed to open list");
 		return status;
 	}
@@ -2861,7 +2881,7 @@ QDF_STATUS csr_scan_get_result(tpAniSirGlobal mac_ctx,
 		goto error;
 	}
 
-	csr_ll_open(mac_ctx->hHdd, &ret_list->List);
+	csr_ll_open(&ret_list->List);
 	ret_list->pCurEntry = NULL;
 	status = csr_parse_scan_list(mac_ctx,
 		ret_list, list);

@@ -22,7 +22,6 @@
  * Connectivity driver services APIs
  */
 
-#include "cds_sched.h"
 #include <cds_api.h>
 #include "sir_types.h"
 #include "sir_api.h"
@@ -39,7 +38,6 @@
 
 #include "pld_common.h"
 #include "sap_api.h"
-#include "qdf_trace.h"
 #include "bmi.h"
 #include "ol_fw.h"
 #include "ol_if_athvar.h"
@@ -56,10 +54,8 @@
 #include <cdp_txrx_misc.h>
 #include <dispatcher_init_deinit.h>
 #include <cdp_txrx_handle.h>
-#include "qdf_cpuhp.h"
 #include "target_type.h"
 #include "wlan_ocb_ucfg_api.h"
-#include "qdf_platform.h"
 #include "wlan_ipa_ucfg_api.h"
 
 #ifdef ENABLE_SMMU_S1_TRANSLATION
@@ -171,6 +167,10 @@ QDF_STATUS cds_init(void)
 	qdf_cpuhp_init();
 	qdf_register_self_recovery_callback(cds_trigger_recovery);
 	qdf_register_fw_down_callback(cds_is_fw_down);
+	qdf_register_ssr_protect_callbacks(cds_ssr_protect,
+					   cds_ssr_unprotect);
+	qdf_register_module_state_query_callback(
+				cds_is_module_state_transitioning);
 
 	gp_cds_context = &g_cds_context;
 
@@ -449,7 +449,6 @@ cds_set_ac_specs_params(struct cds_config_info *cds_cfg)
 QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
-	tSirRetStatus sirStatus = eSIR_SUCCESS;
 	struct cds_config_info *cds_cfg;
 	qdf_device_t qdf_ctx;
 	struct htc_init_info htcInfo;
@@ -458,6 +457,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	void *HTCHandle;
 	struct hdd_context *hdd_ctx;
 	struct cds_context *cds_ctx;
+	mac_handle_t mac_handle;
 
 	cds_debug("Opening CDS");
 
@@ -632,21 +632,19 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	bmi_target_ready(scn, gp_cds_context->cfg_ctx);
 
 	/* Now proceed to open the MAC */
-	sirStatus =
-		mac_open(psoc, &(gp_cds_context->mac_context),
-			gp_cds_context->hdd_context, cds_cfg);
+	status = mac_open(psoc, &mac_handle,
+			  gp_cds_context->hdd_context, cds_cfg);
 
-	if (eSIR_SUCCESS != sirStatus) {
+	if (QDF_STATUS_SUCCESS != status) {
 		/* Critical Error ...  Cannot proceed further */
 		cds_alert("Failed to open MAC");
 		QDF_ASSERT(0);
-
-		status = QDF_STATUS_E_FAILURE;
 		goto err_soc_detach;
 	}
+	gp_cds_context->mac_context = mac_handle;
 
 	/* Now proceed to open the SME */
-	status = sme_open(gp_cds_context->mac_context);
+	status = sme_open(mac_handle);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		/* Critical Error ...  Cannot proceed further */
 		cds_alert("Failed to open SME");
@@ -659,7 +657,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	return dispatcher_psoc_open(psoc);
 
 err_mac_close:
-	mac_close(gp_cds_context->mac_context);
+	mac_close(mac_handle);
 
 err_soc_detach:
 	/* todo: add propper error handling */
@@ -842,7 +840,6 @@ exit_with_status:
 QDF_STATUS cds_enable(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
-	tSirRetStatus sirStatus = eSIR_SUCCESS;
 	tHalMacStartParameters halStartParams;
 
 	/* We support only one instance for now ... */
@@ -874,10 +871,9 @@ QDF_STATUS cds_enable(struct wlan_objmgr_psoc *psoc)
 		     sizeof(tHalMacStartParameters));
 
 	/* Start the MAC */
-	sirStatus =
-		mac_start(gp_cds_context->mac_context, &halStartParams);
+	qdf_status = mac_start(gp_cds_context->mac_context, &halStartParams);
 
-	if (eSIR_SUCCESS != sirStatus) {
+	if (QDF_STATUS_SUCCESS != qdf_status) {
 		cds_alert("Failed to start MAC");
 		goto err_wma_stop;
 	}

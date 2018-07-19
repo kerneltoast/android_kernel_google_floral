@@ -575,7 +575,7 @@ tListElem *csr_nonscan_pending_ll_next(struct sAniSirGlobal *mac_ctx,
 	if (!entry)
 		return NULL;
 	sme_cmd = GET_BASE_ADDR(entry, tSmeCmd, Link);
-	cmd.cmd_id = 0;
+	cmd.cmd_id = sme_cmd->cmd_id;
 	cmd.cmd_type = csr_get_cmd_type(sme_cmd);
 	cmd.vdev = wlan_objmgr_get_vdev_by_id_from_psoc(mac_ctx->psoc,
 				sme_cmd->sessionId, WLAN_LEGACY_SME_ID);
@@ -1103,13 +1103,7 @@ uint16_t csr_check_concurrent_channel_overlap(tpAniSirGlobal mac_ctx,
 			policy_mgr_is_dbs_enable(mac_ctx->psoc));
 
 	if (intf_ch && sap_ch != intf_ch &&
-	    cc_switch_mode != QDF_MCC_TO_SCC_SWITCH_FORCE &&
-	    cc_switch_mode !=
-	    QDF_MCC_TO_SCC_SWITCH_FORCE_WITHOUT_DISCONNECTION &&
-	    cc_switch_mode !=
-	    QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL &&
-	    cc_switch_mode !=
-	    QDF_MCC_TO_SCC_SWITCH_FORCE_PREFERRED_WITHOUT_DISCONNECTION) {
+	    !policy_mgr_is_force_scc(mac_ctx->psoc)) {
 		sap_lfreq = sap_cfreq - sap_hbw;
 		sap_hfreq = sap_cfreq + sap_hbw;
 		intf_lfreq = intf_cfreq - intf_hbw;
@@ -1129,15 +1123,12 @@ uint16_t csr_check_concurrent_channel_overlap(tpAniSirGlobal mac_ctx,
 			intf_ch = 0;
 	} else if (intf_ch && sap_ch != intf_ch &&
 		((cc_switch_mode == QDF_MCC_TO_SCC_SWITCH_FORCE) ||
-		(cc_switch_mode ==
-			QDF_MCC_TO_SCC_SWITCH_FORCE_WITHOUT_DISCONNECTION) ||
-		(cc_switch_mode ==
-			QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL) ||
-		(cc_switch_mode ==
-	QDF_MCC_TO_SCC_SWITCH_FORCE_PREFERRED_WITHOUT_DISCONNECTION))) {
+		 policy_mgr_is_force_scc(mac_ctx->psoc))) {
 		if (!((intf_ch <= 14 && sap_ch <= 14) ||
 			(intf_ch > 14 && sap_ch > 14))) {
-			if (policy_mgr_is_dbs_enable(mac_ctx->psoc))
+			if (policy_mgr_is_dbs_enable(mac_ctx->psoc) ||
+			    cc_switch_mode ==
+			    QDF_MCC_TO_SCC_WITH_PREFERRED_BAND)
 				intf_ch = 0;
 		} else if (cc_switch_mode ==
 			QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL) {
@@ -1536,11 +1527,10 @@ bool csr_is_ssid_equal(tpAniSirGlobal pMac,
 }
 
 /* pIes can be passed in as NULL if the caller doesn't have one prepared */
-static bool csr_is_bss_description_wme(tHalHandle hHal,
+static bool csr_is_bss_description_wme(tpAniSirGlobal pMac,
 				       tSirBssDescription *pSirBssDesc,
 				       tDot11fBeaconIEs *pIes)
 {
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
 	/* Assume that WME is found... */
 	bool fWme = true;
 	tDot11fBeaconIEs *pIesTemp = pIes;
@@ -3340,7 +3330,7 @@ static void csr_check_sae_auth(tpAniSirGlobal mac_ctx,
 
 /**
  * csr_get_rsn_information() - to get RSN information
- * @hal: pointer to HAL
+ * @mac_ctx: pointer to global MAC context
  * @auth_type: auth type
  * @encr_type: encryption type
  * @mc_encryption: multicast encryption type
@@ -3358,7 +3348,8 @@ static void csr_check_sae_auth(tpAniSirGlobal mac_ctx,
  *
  * Return: bool
  */
-static bool csr_get_rsn_information(tHalHandle hal, tCsrAuthList *auth_type,
+static bool csr_get_rsn_information(tpAniSirGlobal mac_ctx,
+				    tCsrAuthList *auth_type,
 				    eCsrEncryptionType encr_type,
 				    tCsrEncryptionList *mc_encryption,
 				    tDot11fIERSN *rsn_ie, uint8_t *ucast_cipher,
@@ -3369,7 +3360,6 @@ static bool csr_get_rsn_information(tHalHandle hal, tCsrAuthList *auth_type,
 				    uint8_t *gp_mgmt_cipher,
 				    tAniEdType *mgmt_encryption_type)
 {
-	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
 	bool acceptable_cipher = false;
 	bool group_mgmt_acceptable_cipher = false;
 	uint8_t c_ucast_cipher = 0;
@@ -3604,7 +3594,7 @@ end:
 #ifdef WLAN_FEATURE_11W
 /**
  * csr_is_pmf_capabilities_in_rsn_match() - check for PMF capability
- * @hHal:                  Global HAL handle
+ * @mac:                   Global MAC Context
  * @pFilterMFPEnabled:     given by supplicant to us to specify what kind
  *                         of connection supplicant is expecting to make
  *                         if it is enabled then make PMF connection.
@@ -3628,7 +3618,7 @@ end:
  *           to make connection with it. Else we will return false
  **/
 static bool
-csr_is_pmf_capabilities_in_rsn_match(tHalHandle hHal,
+csr_is_pmf_capabilities_in_rsn_match(tpAniSirGlobal mac,
 				     bool *pFilterMFPEnabled,
 				     uint8_t *pFilterMFPRequired,
 				     uint8_t *pFilterMFPCapable,
@@ -3671,7 +3661,7 @@ csr_is_pmf_capabilities_in_rsn_match(tHalHandle hHal,
 }
 #endif
 
-static bool csr_is_rsn_match(tHalHandle hHal, tCsrAuthList *pAuthType,
+static bool csr_is_rsn_match(tpAniSirGlobal mac_ctx, tCsrAuthList *pAuthType,
 			     eCsrEncryptionType enType,
 			     tCsrEncryptionList *pEnMcType,
 			     bool *pMFPEnabled, uint8_t *pMFPRequired,
@@ -3685,7 +3675,7 @@ static bool csr_is_rsn_match(tHalHandle hHal, tCsrAuthList *pAuthType,
 	/* See if the cyphers in the Bss description match with the
 	 * settings in the profile.
 	 */
-	fRSNMatch = csr_get_rsn_information(hHal, pAuthType, enType,
+	fRSNMatch = csr_get_rsn_information(mac_ctx, pAuthType, enType,
 					pEnMcType, &pIes->RSN,
 					NULL, NULL, NULL, NULL,
 					pNegotiatedAuthType,
@@ -3693,7 +3683,7 @@ static bool csr_is_rsn_match(tHalHandle hHal, tCsrAuthList *pAuthType,
 #ifdef WLAN_FEATURE_11W
 	/* If all the filter matches then finally checks for PMF capabilities */
 	if (fRSNMatch)
-		fRSNMatch = csr_is_pmf_capabilities_in_rsn_match(hHal,
+		fRSNMatch = csr_is_pmf_capabilities_in_rsn_match(mac_ctx,
 								pMFPEnabled,
 								 pMFPRequired,
 								 pMFPCapable,
@@ -4038,6 +4028,8 @@ uint8_t csr_construct_rsn_ie(tpAniSirGlobal pMac, uint32_t sessionId,
 				     gp_mgmt_cipher_suite, CSR_RSN_OUI_SIZE);
 		}
 #endif
+	host_log_rsn_info(UnicastCypher, MulticastCypher,
+			  AuthSuite, gp_mgmt_cipher_suite);
 
 		/* Add in the fixed fields plus 1 Unicast cypher, less the
 		 * IE Header length Add in the size of the Auth suite (count
@@ -4077,7 +4069,7 @@ uint8_t csr_construct_rsn_ie(tpAniSirGlobal pMac, uint32_t sessionId,
 #ifdef FEATURE_WLAN_WAPI
 /**
  * csr_get_wapi_information() - to get WAPI information
- * @hal: pointer to HAL
+ * @mac_ctx: pointer to global MAC context
  * @auth_type: auth type
  * @encr_type: encryption type
  * @mc_encryption: multicast encryption type
@@ -4092,7 +4084,8 @@ uint8_t csr_construct_rsn_ie(tpAniSirGlobal pMac, uint32_t sessionId,
  *
  * Return: bool
  */
-static bool csr_get_wapi_information(tHalHandle hal, tCsrAuthList *auth_type,
+static bool csr_get_wapi_information(tpAniSirGlobal mac_ctx,
+				     tCsrAuthList *auth_type,
 				     eCsrEncryptionType encr_type,
 				     tCsrEncryptionList *mc_encryption,
 				     tDot11fIEWAPI *wapi_ie,
@@ -4101,7 +4094,6 @@ static bool csr_get_wapi_information(tHalHandle hal, tCsrAuthList *auth_type,
 				     eCsrAuthType *negotiated_authtype,
 				     eCsrEncryptionType *negotiated_mccipher)
 {
-	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
 	bool acceptable_cipher = false;
 	uint8_t c_ucast_cipher = 0;
 	uint8_t c_mcast_cipher = 0;
@@ -4207,7 +4199,7 @@ end:
 	return acceptable_cipher;
 }
 
-static bool csr_is_wapi_match(tHalHandle hHal, tCsrAuthList *pAuthType,
+static bool csr_is_wapi_match(tpAniSirGlobal mac_ctx, tCsrAuthList *pAuthType,
 			      eCsrEncryptionType enType,
 			      tCsrEncryptionList *pEnMcType,
 			      tDot11fBeaconIEs *pIes,
@@ -4220,7 +4212,7 @@ static bool csr_is_wapi_match(tHalHandle hHal, tCsrAuthList *pAuthType,
 	 * settings in the profile.
 	 */
 	fWapiMatch =
-		csr_get_wapi_information(hHal, pAuthType, enType, pEnMcType,
+		csr_get_wapi_information(mac_ctx, pAuthType, enType, pEnMcType,
 					 &pIes->WAPI, NULL, NULL, NULL,
 					 pNegotiatedAuthType,
 					 pNegotiatedMCCipher);
@@ -5031,7 +5023,7 @@ static bool csr_validate_open_none(tSirBssDescription *bss_desc,
 
 /**
  * csr_validate_any_default() - Check if the security is matching
- * @hal:               Global HAL handle
+ * @mac_ctx:           Global MAC context
  * @auth_type:         Authentication type
  * @mc_enc_type:       Multicast encryption type
  * @mfp_enabled:       Management frame protection feature
@@ -5045,40 +5037,45 @@ static bool csr_validate_open_none(tSirBssDescription *bss_desc,
  *
  * Return: Boolean value to tell if matched or not.
  */
-static bool csr_validate_any_default(tHalHandle hal, tCsrAuthList *auth_type,
-	tCsrEncryptionList *mc_enc_type, bool *mfp_enabled,
-	uint8_t *mfp_required, uint8_t *mfp_capable,
-	tDot11fBeaconIEs *ies_ptr, eCsrAuthType *neg_auth_type,
-	tSirBssDescription *bss_desc, eCsrEncryptionType *uc_cipher,
-	eCsrEncryptionType *mc_cipher)
+static bool csr_validate_any_default(tpAniSirGlobal mac_ctx,
+				     tCsrAuthList *auth_type,
+				     tCsrEncryptionList *mc_enc_type,
+				     bool *mfp_enabled,
+				     uint8_t *mfp_required,
+				     uint8_t *mfp_capable,
+				     tDot11fBeaconIEs *ies_ptr,
+				     eCsrAuthType *neg_auth_type,
+				     tSirBssDescription *bss_desc,
+				     eCsrEncryptionType *uc_cipher,
+				     eCsrEncryptionType *mc_cipher)
 {
 	bool match_any = false;
 	bool match = true;
-	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
 	/* It is allowed to match anything. Try the more secured ones first. */
 	if (ies_ptr) {
 		/* Check GCMP-256 first */
 		*uc_cipher = eCSR_ENCRYPT_TYPE_AES_GCMP_256;
-		match_any = csr_is_rsn_match(hal, auth_type,
+		match_any = csr_is_rsn_match(mac_ctx, auth_type,
 				*uc_cipher, mc_enc_type, mfp_enabled,
 				mfp_required, mfp_capable, ies_ptr,
 				neg_auth_type, mc_cipher);
 		/* Check GCMP second */
 		*uc_cipher = eCSR_ENCRYPT_TYPE_AES_GCMP;
-		match_any = csr_is_rsn_match(hal, auth_type,
+		match_any = csr_is_rsn_match(mac_ctx, auth_type,
 				*uc_cipher, mc_enc_type, mfp_enabled,
 				mfp_required, mfp_capable, ies_ptr,
 				neg_auth_type, mc_cipher);
 		/* Check AES third */
 		*uc_cipher = eCSR_ENCRYPT_TYPE_AES;
-		match_any = csr_is_rsn_match(hal, auth_type,
+		match_any = csr_is_rsn_match(mac_ctx, auth_type,
 				*uc_cipher, mc_enc_type, mfp_enabled,
 				mfp_required, mfp_capable, ies_ptr,
 				neg_auth_type, mc_cipher);
 		if (!match_any) {
 			/* Check TKIP */
 			*uc_cipher = eCSR_ENCRYPT_TYPE_TKIP;
-			match_any = csr_is_rsn_match(hal, auth_type, *uc_cipher,
+			match_any = csr_is_rsn_match(mac_ctx, auth_type,
+					*uc_cipher,
 					mc_enc_type, mfp_enabled, mfp_required,
 					mfp_capable, ies_ptr, neg_auth_type,
 					mc_cipher);
@@ -5087,7 +5084,7 @@ static bool csr_validate_any_default(tHalHandle hal, tCsrAuthList *auth_type,
 		if (!match_any) {
 			/* Check WAPI */
 			*uc_cipher = eCSR_ENCRYPT_TYPE_WPI;
-			match_any = csr_is_wapi_match(hal, auth_type,
+			match_any = csr_is_wapi_match(mac_ctx, auth_type,
 					*uc_cipher, mc_enc_type, ies_ptr,
 					neg_auth_type, mc_cipher);
 		}
@@ -6327,9 +6324,8 @@ bool csr_is_ndi_started(tpAniSirGlobal mac_ctx, uint32_t session_id)
 	return eCSR_CONNECT_STATE_TYPE_NDI_STARTED == session->connectState;
 }
 
-bool csr_is_mcc_channel(tHalHandle hal, uint8_t channel)
+bool csr_is_mcc_channel(tpAniSirGlobal mac_ctx, uint8_t channel)
 {
-	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
 	struct csr_roam_session *session;
 	enum QDF_OPMODE oper_mode;
 	uint8_t oper_channel = 0;

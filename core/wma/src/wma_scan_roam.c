@@ -991,7 +991,7 @@ void wma_roam_scan_fill_scan_params(tp_wma_handle wma_handle,
 
 		if (wlan_cfg_get_int
 			    (pMac, WNI_CFG_PASSIVE_MAXIMUM_CHANNEL_TIME,
-			    &val) != eSIR_SUCCESS) {
+			    &val) != QDF_STATUS_SUCCESS) {
 			/*
 			 * Could not get max channel value from CFG. Log error.
 			 */
@@ -1615,6 +1615,7 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 						       NULL, &scan_params);
 
 			if (roam_req->reason == REASON_ROAM_STOP_ALL ||
+			    roam_req->reason == REASON_DISCONNECTED ||
 			    roam_req->reason == REASON_ROAM_SYNCH_FAILED) {
 				mode = WMI_ROAM_SCAN_MODE_NONE;
 			} else {
@@ -2296,7 +2297,7 @@ int wma_roam_synch_event_handler(void *handle, uint8_t *event,
 				__func__);
 		goto cleanup_label;
 	}
-	WMA_LOGI("LFR3: Received WMA_ROAM_OFFLOAD_SYNCH_IND");
+	WMA_LOGD("LFR3: Received WMA_ROAM_OFFLOAD_SYNCH_IND");
 
 	/*
 	 * All below length fields are unsigned and hence positive numbers.
@@ -2631,7 +2632,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	}
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_PRIVACY_ENABLED, &val) !=
-							 eSIR_SUCCESS) {
+							 QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_PRIVACY_ENABLED");
 		return QDF_STATUS_E_FAILURE;
@@ -2641,7 +2642,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	if (val)
 		selfCaps.privacy = 1;
 	if (wlan_cfg_get_int(pMac, WNI_CFG_SHORT_PREAMBLE, &val) !=
-							 eSIR_SUCCESS) {
+							 QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_SHORT_PREAMBLE");
 		return QDF_STATUS_E_FAILURE;
@@ -2652,21 +2653,23 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	selfCaps.pbcc = 0;
 	selfCaps.channelAgility = 0;
 	if (wlan_cfg_get_int(pMac, WNI_CFG_11G_SHORT_SLOT_TIME_ENABLED,
-			     &val) != eSIR_SUCCESS) {
+			     &val) != QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_11G_SHORT_SLOT_TIME_ENABLED");
 		return QDF_STATUS_E_FAILURE;
 	}
 	if (val)
 		selfCaps.shortSlotTime = 1;
-	if (wlan_cfg_get_int(pMac, WNI_CFG_11H_ENABLED, &val) != eSIR_SUCCESS) {
+	if (wlan_cfg_get_int(pMac, WNI_CFG_11H_ENABLED, &val) !=
+							QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_11H_ENABLED");
 		return QDF_STATUS_E_FAILURE;
 	}
 	if (val)
 		selfCaps.spectrumMgt = 1;
-	if (wlan_cfg_get_int(pMac, WNI_CFG_QOS_ENABLED, &val) != eSIR_SUCCESS) {
+	if (wlan_cfg_get_int(pMac, WNI_CFG_QOS_ENABLED, &val) !=
+							QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_QOS_ENABLED");
 		return QDF_STATUS_E_FAILURE;
@@ -2674,7 +2677,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	if (val)
 		selfCaps.qos = 1;
 	if (wlan_cfg_get_int(pMac, WNI_CFG_APSD_ENABLED, &val) !=
-								eSIR_SUCCESS) {
+							QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_APSD_ENABLED");
 		return QDF_STATUS_E_FAILURE;
@@ -2685,7 +2688,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	selfCaps.rrm = pMac->rrm.rrmSmeContext.rrmConfig.rrm_enabled;
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_BLOCK_ACK_ENABLED, &val) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_BLOCK_ACK_ENABLED");
 		return QDF_STATUS_E_FAILURE;
@@ -2710,7 +2713,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	roam_offload_params->capability |= ((*pCfgValue16) & 0xFFFF);
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_HT_CAP_INFO, &nCfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_HT_CAP_INFO");
 		return QDF_STATUS_E_FAILURE;
@@ -2719,7 +2722,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	roam_offload_params->ht_caps_info =
 		uHTCapabilityInfo.nCfgValue16 & 0xFFFF;
 	if (wlan_cfg_get_int(pMac, WNI_CFG_HT_AMPDU_PARAMS, &nCfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_HT_AMPDU_PARAMS");
 		return QDF_STATUS_E_FAILURE;
@@ -2731,13 +2734,13 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	val = ROAM_OFFLOAD_NUM_MCS_SET;
 	if (wlan_cfg_get_str(pMac, WNI_CFG_SUPPORTED_MCS_SET,
 			     (uint8_t *) roam_offload_params->mcsset,
-			     &val) != eSIR_SUCCESS) {
+			     &val) != QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_SUPPORTED_MCS_SET");
 		return QDF_STATUS_E_FAILURE;
 	}
 	if (wlan_cfg_get_int(pMac, WNI_CFG_EXT_HT_CAP_INFO, &nCfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_EXT_HT_CAP_INFO");
 		return QDF_STATUS_E_FAILURE;
@@ -2748,7 +2751,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 		uHTCapabilityInfo.nCfgValue16 & 0xFFFF;
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_TX_BF_CAP, &nCfgValue) !=
-								eSIR_SUCCESS) {
+							QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_TX_BF_CAP");
 		return QDF_STATUS_E_FAILURE;
@@ -2757,7 +2760,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 	nCfgValue8 = (uint8_t) nCfgValue;
 	roam_offload_params->ht_txbf = nCfgValue8 & 0xFF;
 	if (wlan_cfg_get_int(pMac, WNI_CFG_AS_CAP, &nCfgValue) !=
-								eSIR_SUCCESS) {
+							QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_AS_CAP");
 		return QDF_STATUS_E_FAILURE;
@@ -2768,7 +2771,7 @@ QDF_STATUS wma_roam_scan_fill_self_caps(tp_wma_handle wma_handle,
 
 	/* QOS Info */
 	if (wlan_cfg_get_int(pMac, WNI_CFG_MAX_SP_LENGTH, &nCfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 			  "Failed to get WNI_CFG_MAX_SP_LENGTH");
 		return QDF_STATUS_E_FAILURE;
@@ -2868,18 +2871,9 @@ int wma_rssi_breached_event_handler(void *handle,
  */
 static void wma_roam_ho_fail_handler(tp_wma_handle wma, uint32_t vdev_id)
 {
-	struct wma_txrx_node *iface = &wma->interfaces[vdev_id];
 	tSirSmeHOFailureInd *ho_failure_ind;
 	struct scheduler_msg sme_msg = { 0 };
 	QDF_STATUS qdf_status;
-
-	/* For LFR 3.0 hand-off failure, peers will be deleted by FW
-	 * no WMI_PEER_DELETE_CMDID will be sent to FW
-	 * reset the peer count here
-	 */
-	WMA_LOGD("Reset FW peer count");
-	qdf_atomic_init(&iface->fw_peer_count);
-	qdf_event_set(&iface->fw_peer_delete_completion);
 
 	ho_failure_ind = qdf_mem_malloc(sizeof(tSirSmeHOFailureInd));
 
@@ -4309,12 +4303,14 @@ int wma_extscan_change_results_event_handler(void *handle,
 						   src_rssi[count++];
 			}
 		}
-		dest_ap += dest_ap->numOfRssi * sizeof(int32_t);
+		dest_ap = (tSirWifiSignificantChange *)((char *)dest_ap +
+					dest_ap->numOfRssi * sizeof(int32_t) +
+					sizeof(*dest_ap));
 		src_chglist++;
 	}
 	dest_chglist->requestId = event->request_id;
 	dest_chglist->moreData = moredata;
-	dest_chglist->numResults = event->total_entries;
+	dest_chglist->numResults = numap;
 
 	pMac->sme.pExtScanIndCb(pMac->hHdd,
 			eSIR_EXTSCAN_SIGNIFICANT_WIFI_CHANGE_RESULTS_IND,
