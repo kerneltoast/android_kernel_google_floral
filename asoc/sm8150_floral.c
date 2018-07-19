@@ -5713,6 +5713,19 @@ static struct snd_soc_dai_link msm_tavil_fe_dai_links[] = {
 	},
 };
 
+#ifdef CONFIG_SND_SOC_CS35L36
+static struct snd_soc_dai_link_component spk_codec[] = {
+	{
+		.name = "cs35l36.2-0041",
+		.dai_name = "cs35l36-pcm",
+	},
+	{
+		.name = "cs35l36.2-0040",
+		.dai_name = "cs35l36-pcm",
+	},
+};
+#endif
+
 static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 	{
 		.name = MSM_DAILINK_NAME(ASM Loopback),
@@ -5958,8 +5971,13 @@ static struct snd_soc_dai_link msm_common_be_dai_links[] = {
 		.stream_name = "Tertiary TDM0 Playback",
 		.cpu_dai_name = "msm-dai-q6-tdm.36896",
 		.platform_name = "msm-pcm-routing",
+#ifdef CONFIG_SND_SOC_CS35L36_TDM
+		.codecs = spk_codec,
+		.num_codecs = ARRAY_SIZE(spk_codec),
+#else
 		.codec_name = "msm-stub-codec.1",
 		.codec_dai_name = "msm-stub-rx",
+#endif
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.id = MSM_BACKEND_DAI_TERT_TDM_RX_0,
@@ -6892,6 +6910,15 @@ err_pcm_runtime:
 	return ret;
 }
 
+#ifdef CONFIG_SND_SOC_CS35L36
+static struct snd_soc_codec_conf spk_codec_right_ch_conf[] = {
+	{
+		.dev_name	= "cs35l36.2-0040",
+		.name_prefix	= "R",
+	}
+};
+#endif
+
 struct snd_soc_card snd_soc_card_pahu_msm = {
 	.name		= "sm8150-pahu-snd-card",
 };
@@ -6903,6 +6930,10 @@ struct snd_soc_card snd_soc_card_tavil_msm = {
 
 struct snd_soc_card snd_soc_card_msm = {
 	.name		= "sm8150-snd-card",
+#ifdef CONFIG_SND_SOC_CS35L36
+	.codec_conf	= spk_codec_right_ch_conf,
+	.num_configs	= ARRAY_SIZE(spk_codec_right_ch_conf),
+#endif
 };
 
 static int msm_populate_dai_link_component_of_node(
