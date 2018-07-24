@@ -2636,7 +2636,6 @@ QDF_STATUS hdd_sme_close_session_callback(uint8_t session_id);
 
 int hdd_reassoc(struct hdd_adapter *adapter, const uint8_t *bssid,
 		uint8_t channel, const handoff_src src);
-void hdd_svc_fw_shutdown_ind(struct device *dev);
 int hdd_register_cb(struct hdd_context *hdd_ctx);
 void hdd_deregister_cb(struct hdd_context *hdd_ctx);
 int hdd_start_station_adapter(struct hdd_adapter *adapter);
@@ -3011,7 +3010,7 @@ void hdd_start_complete(int ret);
 /**
  * hdd_chip_pwr_save_fail_detected_cb() - chip power save failure detected
  * callback
- * @hddctx: HDD context
+ * @hdd_handle: HDD handle
  * @data: chip power save failure detected data
  *
  * This function reads the chip power save failure detected data and fill in
@@ -3022,7 +3021,7 @@ void hdd_start_complete(int ret);
  * Return: none
  */
 
-void hdd_chip_pwr_save_fail_detected_cb(void *hddctx,
+void hdd_chip_pwr_save_fail_detected_cb(hdd_handle_t hdd_handle,
 				struct chip_pwr_save_fail_detected_params
 				*data);
 

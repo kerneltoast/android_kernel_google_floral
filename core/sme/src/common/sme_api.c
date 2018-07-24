@@ -2201,7 +2201,7 @@ QDF_STATUS sme_process_msg(tpAniSirGlobal pMac, struct scheduler_msg *pMsg)
 #ifdef FEATURE_WLAN_EXTSCAN
 	case eWNI_SME_EXTSCAN_FULL_SCAN_RESULT_IND:
 		if (pMac->sme.pExtScanIndCb)
-			pMac->sme.pExtScanIndCb(pMac->hHdd,
+			pMac->sme.pExtScanIndCb(pMac->hdd_handle,
 					eSIR_EXTSCAN_FULL_SCAN_RESULT_IND,
 					pMsg->bodyptr);
 		else
@@ -2212,7 +2212,7 @@ QDF_STATUS sme_process_msg(tpAniSirGlobal pMac, struct scheduler_msg *pMsg)
 		break;
 	case eWNI_SME_EPNO_NETWORK_FOUND_IND:
 		if (pMac->sme.pExtScanIndCb)
-			pMac->sme.pExtScanIndCb(pMac->hHdd,
+			pMac->sme.pExtScanIndCb(pMac->hdd_handle,
 					eSIR_EPNO_NETWORK_FOUND_IND,
 					pMsg->bodyptr);
 		else
@@ -2313,8 +2313,8 @@ QDF_STATUS sme_process_msg(tpAniSirGlobal pMac, struct scheduler_msg *pMsg)
 		break;
 	case eWNI_SME_SET_THERMAL_LEVEL_IND:
 		if (pMac->sme.set_thermal_level_cb)
-			pMac->sme.set_thermal_level_cb(pMac->hHdd,
-								pMsg->bodyval);
+			pMac->sme.set_thermal_level_cb(pMac->hdd_handle,
+						       pMsg->bodyval);
 		break;
 	case eWNI_SME_EXT_CHANGE_CHANNEL_IND:
 		 status = sme_extended_change_channel_ind(pMac, pMsg->bodyptr);
@@ -2331,24 +2331,25 @@ QDF_STATUS sme_process_msg(tpAniSirGlobal pMac, struct scheduler_msg *pMsg)
 		break;
 	case eWNI_SME_LOST_LINK_INFO_IND:
 		if (pMac->sme.lost_link_info_cb)
-			pMac->sme.lost_link_info_cb(pMac->hHdd,
+			pMac->sme.lost_link_info_cb(pMac->hdd_handle,
 				(struct sir_lost_link_info *)pMsg->bodyptr);
 		qdf_mem_free(pMsg->bodyptr);
 		break;
 	case eWNI_SME_RSO_CMD_STATUS_IND:
 		if (pMac->sme.rso_cmd_status_cb)
-			pMac->sme.rso_cmd_status_cb(pMac->hHdd, pMsg->bodyptr);
+			pMac->sme.rso_cmd_status_cb(pMac->hdd_handle,
+						    pMsg->bodyptr);
 		qdf_mem_free(pMsg->bodyptr);
 		break;
 	case eWMI_SME_LL_STATS_IND:
 		if (pMac->sme.link_layer_stats_ext_cb)
-			pMac->sme.link_layer_stats_ext_cb(pMac->hHdd,
+			pMac->sme.link_layer_stats_ext_cb(pMac->hdd_handle,
 							  pMsg->bodyptr);
 		qdf_mem_free(pMsg->bodyptr);
 		break;
 	case eWNI_SME_BT_ACTIVITY_INFO_IND:
 		if (pMac->sme.bt_activity_info_cb)
-			pMac->sme.bt_activity_info_cb(pMac->hHdd,
+			pMac->sme.bt_activity_info_cb(pMac->hdd_handle,
 						      pMsg->bodyval);
 		break;
 	default:
@@ -3898,49 +3899,6 @@ void sme_set_dhcp_till_power_active_flag(tHalHandle hal, uint8_t flag)
 	/* Set/Clear the DHCP flag which will disable/enable auto PS */
 	ps_global_info->remain_in_power_active_till_dhcp = flag;
 }
-
-/*
- * sme_register11d_scan_done_callback() -
- * Register a routine of type csr_scan_completeCallback which is
- *	called whenever an 11d scan is done
- *
- * hHal - The handle returned by mac_open.
- * callback -  11d scan complete routine to be registered
- * Return QDF_STATUS
- */
-QDF_STATUS sme_register11d_scan_done_callback(tHalHandle hHal,
-					     csr_scan_completeCallback callback)
-{
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
-
-	pMac->scan.callback11dScanDone = callback;
-
-	return status;
-}
-
-/**
- * sme_deregister11d_scan_done_callback() - De-register scandone callback
- * @h_hal: Handler return by mac_open
- *
- * This function De-registers the scandone callback  to SME
- *
- * Return: None
- */
-void sme_deregister11d_scan_done_callback(tHalHandle h_hal)
-{
-	tpAniSirGlobal pmac;
-
-	if (!h_hal) {
-		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-			  FL("hHal is not valid"));
-		return;
-	}
-
-	pmac = PMAC_STRUCT(h_hal);
-	pmac->scan.callback11dScanDone = NULL;
-}
-
 
 #ifdef FEATURE_OEM_DATA_SUPPORT
 /**
@@ -10802,7 +10760,7 @@ static QDF_STATUS sme_stats_ext_event(tpAniSirGlobal mac,
 	}
 
 	if (mac->sme.StatsExtCallback)
-		mac->sme.StatsExtCallback(mac->hHdd, msg);
+		mac->sme.StatsExtCallback(mac->hdd_handle, msg);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -13072,12 +13030,11 @@ bool sme_is_any_session_in_connected_state(tHalHandle h_hal)
 	return ret;
 }
 
-QDF_STATUS sme_set_chip_pwr_save_fail_cb(tHalHandle hal,
-		 void (*cb)(void *,
-		 struct chip_pwr_save_fail_detected_params *)) {
-
-	QDF_STATUS status  = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal mac = PMAC_STRUCT(hal);
+QDF_STATUS sme_set_chip_pwr_save_fail_cb(mac_handle_t mac_handle,
+					 pwr_save_fail_cb cb)
+{
+	QDF_STATUS status;
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 
 	status = sme_acquire_global_lock(&mac->sme);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -15063,7 +15020,23 @@ QDF_STATUS sme_fast_reassoc(tHalHandle hal, struct csr_roam_profile *profile,
 	struct wma_roam_invoke_cmd *fastreassoc;
 	struct scheduler_msg msg = {0};
 	tpAniSirGlobal mac_ctx = PMAC_STRUCT(hal);
+	struct csr_roam_session *session;
+	struct csr_roam_profile *roam_profile;
 
+	session = CSR_GET_SESSION(mac_ctx, vdev_id);
+	if (!session || !session->pCurRoamProfile) {
+		sme_err("session %d not found", vdev_id);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	roam_profile = session->pCurRoamProfile;
+	if (roam_profile->supplicant_disabled_roaming ||
+	    roam_profile->driver_disabled_roaming) {
+		sme_debug("roaming status in Supplicant %d and in driver %d",
+			  roam_profile->supplicant_disabled_roaming,
+			  roam_profile->driver_disabled_roaming);
+		return QDF_STATUS_E_FAILURE;
+	}
 	fastreassoc = qdf_mem_malloc(sizeof(*fastreassoc));
 	if (NULL == fastreassoc) {
 		sme_err("qdf_mem_malloc failed for fastreassoc");
@@ -15398,7 +15371,7 @@ void sme_store_pdev(tHalHandle hal, struct wlan_objmgr_pdev *pdev)
 }
 
 QDF_STATUS sme_congestion_register_callback(tHalHandle hal,
-	void (*congestion_cb)(void *, uint32_t congestion, uint32_t vdev_id))
+					    congestion_cb congestion_cb)
 {
 	QDF_STATUS status;
 	tpAniSirGlobal mac = PMAC_STRUCT(hal);

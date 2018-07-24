@@ -793,8 +793,9 @@ static int hdd_parse_reassoc_command_v1_data(const uint8_t *pValue,
 }
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
-void hdd_wma_send_fastreassoc_cmd(struct hdd_adapter *adapter,
-				  const tSirMacAddr bssid, int channel)
+QDF_STATUS hdd_wma_send_fastreassoc_cmd(struct hdd_adapter *adapter,
+					const tSirMacAddr bssid,
+					int channel)
 {
 	struct hdd_station_ctx *hdd_sta_ctx =
 			WLAN_HDD_GET_STATION_CTX_PTR(adapter);
@@ -804,9 +805,9 @@ void hdd_wma_send_fastreassoc_cmd(struct hdd_adapter *adapter,
 	roam_profile = hdd_roam_profile(adapter);
 	qdf_mem_copy(connected_bssid, hdd_sta_ctx->conn_info.bssId.bytes,
 		     ETH_ALEN);
-	sme_fast_reassoc(adapter->hdd_ctx->mac_handle, roam_profile,
-			 bssid, channel, adapter->session_id,
-			 connected_bssid);
+	return sme_fast_reassoc(adapter->hdd_ctx->mac_handle, roam_profile,
+				bssid, channel, adapter->session_id,
+				connected_bssid);
 }
 #endif
 
@@ -827,6 +828,7 @@ int hdd_reassoc(struct hdd_adapter *adapter, const uint8_t *bssid,
 	struct hdd_station_ctx *sta_ctx;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	int ret = 0;
+	QDF_STATUS status;
 
 	if (hdd_ctx == NULL) {
 		hdd_err("Invalid hdd ctx");
@@ -869,8 +871,12 @@ int hdd_reassoc(struct hdd_adapter *adapter, const uint8_t *bssid,
 
 	/* Proceed with reassoc */
 	if (roaming_offload_enabled(hdd_ctx)) {
-		hdd_wma_send_fastreassoc_cmd(adapter,
-					bssid, (int)channel);
+		status = hdd_wma_send_fastreassoc_cmd(adapter,
+						      bssid, (int)channel);
+		if (status != QDF_STATUS_SUCCESS) {
+			hdd_err("Failed to send fast reassoc cmd");
+			ret = -EINVAL;
+		}
 	} else {
 		tCsrHandoffRequest handoff;
 
@@ -3077,7 +3083,29 @@ static inline int drv_cmd_country(struct hdd_adapter *adapter,
 				  uint8_t command_len,
 				  struct hdd_priv_data *priv_data)
 {
-	return hdd_reg_set_country(hdd_ctx, command + command_len + 1);
+	char *country_code;
+
+	country_code = strnchr(command, strlen(command), ' ');
+	/* no argument after the command */
+	if (!country_code)
+		return -EINVAL;
+
+	/* no space after the command */
+	if (*country_code != SPACE_ASCII_VALUE)
+		return -EINVAL;
+
+	country_code++;
+
+	/* removing empty spaces */
+	while ((*country_code == SPACE_ASCII_VALUE) &&
+	       (*country_code != '\0'))
+		country_code++;
+
+	/* no or less than 2  arguments followed by spaces */
+	if (*country_code == '\0' || *(country_code + 1) == '\0')
+		return -EINVAL;
+
+	return hdd_reg_set_country(hdd_ctx, country_code);
 }
 
 static int drv_cmd_set_roam_trigger(struct hdd_adapter *adapter,

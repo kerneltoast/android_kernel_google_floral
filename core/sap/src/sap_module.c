@@ -713,13 +713,6 @@ QDF_STATUS wlansap_start_bss(struct sap_context *sap_ctx,
 		goto fail;
 	}
 	pmac = PMAC_STRUCT(hHal);
-	if (NULL == pmac) {
-		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH,
-			  "%s: Invalid MAC context from p_cds_gctx",
-			  __func__);
-		qdf_status = QDF_STATUS_E_FAULT;
-		goto fail;
-	}
 	/* If concurrent session is running that is already associated
 	 * then we just follow that sessions country info (whether
 	 * present or not doesn't maater as we have to follow whatever
@@ -1748,6 +1741,21 @@ QDF_STATUS wlansap_channel_change_request(struct sap_context *sapContext,
 	mac_ctx = PMAC_STRUCT(hHal);
 	phy_mode = sapContext->csr_roamProfile.phyMode;
 
+	/* Update phy_mode if the target channel is in the other band */
+	if (WLAN_CHAN_IS_5GHZ(target_channel) &&
+	    ((phy_mode == eCSR_DOT11_MODE_11g) ||
+	    (phy_mode == eCSR_DOT11_MODE_11g_ONLY)))
+		phy_mode = eCSR_DOT11_MODE_11a;
+	else if (WLAN_CHAN_IS_2GHZ(target_channel) &&
+		 (phy_mode == eCSR_DOT11_MODE_11a))
+		phy_mode = eCSR_DOT11_MODE_11g;
+
+	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_DEBUG,
+		  "%s: phy_mode: %d, target_channel: %d new phy_mode: %d",
+		  __func__, sapContext->csr_roamProfile.phyMode,
+		  target_channel, phy_mode);
+	sapContext->csr_roamProfile.phyMode = phy_mode;
+
 	if (sapContext->csr_roamProfile.ChannelInfo.numOfChannels == 0 ||
 	    sapContext->csr_roamProfile.ChannelInfo.ChannelList == NULL) {
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
@@ -1781,8 +1789,8 @@ QDF_STATUS wlansap_channel_change_request(struct sap_context *sapContext,
 				ch_params, &sapContext->csr_roamProfile);
 
 	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO,
-		"%s: chan:%d width:%d offset:%d seg0:%d seg1:%d",
-		__func__, sapContext->channel, ch_params->ch_width,
+		"%s: chan:%d phy_mode %d width:%d offset:%d seg0:%d seg1:%d",
+		__func__, sapContext->channel, phy_mode, ch_params->ch_width,
 		ch_params->sec_ch_offset, ch_params->center_freq_seg0,
 		ch_params->center_freq_seg1);
 

@@ -1600,6 +1600,7 @@ cppflags-y +=	-DTRACE_RECORD \
 		-DHDD_TRACE_RECORD
 endif
 endif
+cppflags-$(CONFIG_UNIT_TEST) += -DWLAN_UNIT_TEST
 cppflags-$(CONFIG_WLAN_DEBUG_CRASH_INJECT) += -DCONFIG_WLAN_DEBUG_CRASH_INJECT
 cppflags-$(CONFIG_FEATURE_UNIT_TEST_SUSPEND) += -DWLAN_SUSPEND_RESUME_TEST
 
@@ -1609,6 +1610,7 @@ cppflags-y += \
 	-DCONFIG_LEAK_DETECTION \
 	-DMEMORY_DEBUG \
 	-DNBUF_MEMORY_DEBUG \
+	-DNBUF_MAP_UNMAP_DEBUG \
 	-DTIMER_MANAGER
 endif
 
@@ -1925,6 +1927,9 @@ cppflags-y += -DDP_PRINT_ENABLE=0
 cppflags-y += -DATH_SUPPORT_WRAP=0
 cppflags-y += -DQCA_HOST2FW_RXBUF_RING
 #endof dummy flags
+
+# Enable lock of serialization component to avoid race condition issues
+cppflags-y += -DWLAN_CMD_SERIALIZATION_LOCKING
 
 ccflags-$(CONFIG_ENABLE_SIZE_OPTIMIZE) += -Os
 

@@ -227,6 +227,9 @@ static qdf_wake_lock_t wlan_wake_lock;
 #define WOW_MIN_PATTERN_SIZE 6
 #define WOW_MAX_PATTERN_SIZE 64
 
+/* max peer can be tdls peers + self peer + bss peer */
+#define HDD_MAX_VDEV_PEER_COUNT  (HDD_MAX_NUM_TDLS_STA + 2)
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0))
 static const struct wiphy_wowlan_support wowlan_support_reg_init = {
 	.flags = WIPHY_WOWLAN_ANY |
@@ -2077,7 +2080,9 @@ bool hdd_dfs_indicate_radar(struct hdd_context *hdd_ctx)
 				true;
 			hdd_info("tx blocked for session: %d",
 				adapter->session_id);
-			cdp_fc_vdev_flush(cds_get_context(QDF_MODULE_ID_SOC),
+			if (adapter->txrx_vdev)
+				cdp_fc_vdev_flush(
+					cds_get_context(QDF_MODULE_ID_SOC),
 					adapter->txrx_vdev);
 		}
 	}
@@ -3821,7 +3826,7 @@ int hdd_vdev_ready(struct hdd_adapter *adapter)
 int hdd_vdev_destroy(struct hdd_adapter *adapter)
 {
 	QDF_STATUS status;
-	int errno = 0;
+	int errno;
 	struct hdd_context *hdd_ctx;
 	uint8_t vdev_id;
 
@@ -3830,9 +3835,10 @@ int hdd_vdev_destroy(struct hdd_adapter *adapter)
 
 	/* vdev created sanity check */
 	if (!test_bit(SME_SESSION_OPENED, &adapter->event_flags)) {
-		hdd_err("vdev for Id %d does not exist", adapter->session_id);
+		hdd_err("vdev %u does not exist", vdev_id);
 		return -EINVAL;
 	}
+
 	status = ucfg_reg_11d_vdev_delete_update(adapter->hdd_vdev);
 	ucfg_scan_set_vdev_del_in_progress(adapter->hdd_vdev);
 
@@ -3841,8 +3847,7 @@ int hdd_vdev_destroy(struct hdd_adapter *adapter)
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	status = sme_close_session(hdd_ctx->mac_handle, adapter->session_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("failed to close sme session: %d", status);
-		errno = qdf_status_to_os_return(status);
+		hdd_err("failed to close sme session; status:%d", status);
 		goto release_vdev;
 	}
 
@@ -3850,34 +3855,24 @@ int hdd_vdev_destroy(struct hdd_adapter *adapter)
 	status = qdf_wait_for_event_completion(
 			&adapter->qdf_session_close_event,
 			WLAN_WAIT_TIME_SESSIONOPENCLOSE);
-	if (QDF_STATUS_SUCCESS != status) {
+
+	if (QDF_IS_STATUS_ERROR(status)) {
+		clear_bit(SME_SESSION_OPENED, &adapter->event_flags);
+
 		if (adapter->device_mode == QDF_NDI_MODE)
 			hdd_ndp_session_end_handler(adapter);
-		clear_bit(SME_SESSION_OPENED, &adapter->event_flags);
-		adapter->session_id = HDD_SESSION_ID_INVALID;
-		if (QDF_STATUS_E_TIMEOUT != status) {
-			hdd_err("timed out waiting for close sme session: %u", status);
-			errno = -ETIMEDOUT;
-			goto release_vdev;
-		} else if (adapter->qdf_session_close_event.force_set) {
-			hdd_err("Session close evt focefully set, SSR/PDR has occurred");
-			errno = -EINVAL;
-			goto release_vdev;
-		} else {
-			hdd_err("Failed to close sme session (%u)", status);
-			errno = -EINVAL;
-			goto release_vdev;
-		}
+
+		if (status == QDF_STATUS_E_TIMEOUT)
+			hdd_err("timed out waiting for sme close session");
+		else if (adapter->qdf_session_close_event.force_set)
+			hdd_info("SSR occurred during sme close session");
+		else
+			hdd_err("failed to wait for sme close session; status:%u",
+				status);
 	}
 
 release_vdev:
 	ucfg_scan_clear_vdev_del_in_progress(adapter->hdd_vdev);
-	/*
-	 * In SSR or driver unloading case, directly exit may cause objects
-	 * leak, if sme_close_session failed. Free objects anyway.
-	 */
-	if (errno && !cds_is_driver_recovering() && !cds_is_driver_unloading())
-		return errno;
 
 	/* do vdev logical destroy via objmgr */
 	errno = hdd_objmgr_release_and_destroy_vdev(adapter);
@@ -3998,6 +3993,11 @@ int hdd_vdev_create(struct hdd_adapter *adapter,
 			hdd_err("RTT mac randomization param set failed %d",
 				errno);
 	}
+
+	if (adapter->device_mode == QDF_STA_MODE ||
+	    adapter->device_mode == QDF_P2P_CLIENT_MODE)
+		wlan_vdev_set_max_peer_count(adapter->hdd_vdev,
+					     HDD_MAX_VDEV_PEER_COUNT);
 
 	hdd_info("vdev %d created successfully", adapter->session_id);
 
@@ -5385,6 +5385,7 @@ QDF_STATUS hdd_reset_all_adapters(struct hdd_context *hdd_ctx)
 		hdd_set_disconnect_status(adapter, false);
 
 		hdd_softap_deinit_tx_rx(adapter);
+		hdd_deregister_tx_flow_control(adapter);
 
 		/* Destroy vdev which will be recreated during reinit. */
 		hdd_vdev_destroy(adapter);
@@ -7249,7 +7250,7 @@ static void hdd_pld_request_bus_bandwidth(struct hdd_context *hdd_ctx,
 	bool rx_level_change = false;
 	bool tx_level_change = false;
 	bool rxthread_high_tput_req = false;
-
+	bool dptrace_high_tput_req;
 	if (total_pkts > hdd_ctx->config->busBandwidthHighThreshold)
 		next_vote_level = PLD_BUS_WIDTH_HIGH;
 	else if (total_pkts > hdd_ctx->config->busBandwidthMediumThreshold)
@@ -7258,6 +7259,9 @@ static void hdd_pld_request_bus_bandwidth(struct hdd_context *hdd_ctx,
 		next_vote_level = PLD_BUS_WIDTH_LOW;
 	else
 		next_vote_level = PLD_BUS_WIDTH_NONE;
+
+	dptrace_high_tput_req =
+			next_vote_level > PLD_BUS_WIDTH_NONE ? true : false;
 
 	if (hdd_ctx->cur_vote_level != next_vote_level) {
 		hdd_debug("trigger level %d, tx_packets: %lld, rx_packets: %lld",
@@ -7291,9 +7295,9 @@ static void hdd_pld_request_bus_bandwidth(struct hdd_context *hdd_ctx,
 			hdd_disable_rx_ol_for_low_tput(hdd_ctx, true);
 		else
 			hdd_disable_rx_ol_for_low_tput(hdd_ctx, false);
-
-		qdf_dp_trace_apply_tput_policy(next_vote_level);
 	}
+
+	qdf_dp_trace_apply_tput_policy(dptrace_high_tput_req);
 
 	/*
 	 * Includes tcp+udp, if perf core is required for tcp, then
@@ -7880,39 +7884,6 @@ void wlan_hdd_clear_netif_queue_history(struct hdd_context *hdd_ctx)
 		adapter->total_pause_time = 0;
 		adapter->total_unpause_time = 0;
 	}
-}
-
-/**
- * hdd_11d_scan_done() - callback for 11d scan completion of flushing results
- * @mac_handle:	MAC handle
- * @context:	Pointer to the context
- * @session_id:	Session ID
- * @scan_id:	Scan ID
- * @status:	Status
- *
- * This is the callback to be executed when 11d scan is completed to flush out
- * the scan results
- *
- * 11d scan is done during driver load and is a passive scan on all
- * channels supported by the device, 11d scans may find some APs on
- * frequencies which are forbidden to be used in the regulatory domain
- * the device is operating in. If these APs are notified to the supplicant
- * it may try to connect to these APs, thus flush out all the scan results
- * which are present in SME after 11d scan is done.
- *
- * Return:  QDF_STATUS_SUCCESS
- */
-static QDF_STATUS hdd_11d_scan_done(mac_handle_t mac_handle, void *context,
-				    uint8_t session_id, uint32_t scan_id,
-				    eCsrScanStatus status)
-{
-	hdd_enter();
-
-	sme_scan_flush_result(mac_handle);
-
-	hdd_exit();
-
-	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef WLAN_FEATURE_OFFLOAD_PACKETS
@@ -10835,7 +10806,6 @@ static void wlan_init_bug_report_lock(void)
 #ifdef CONFIG_DP_TRACE
 void hdd_dp_trace_init(struct hdd_config *config)
 {
-
 	bool live_mode = DP_TRACE_CONFIG_DEFAULT_LIVE_MODE;
 	uint8_t thresh = DP_TRACE_CONFIG_DEFAULT_THRESH;
 	uint16_t thresh_time_limit = DP_TRACE_CONFIG_DEFAULT_THRESH_TIME_LIMIT;
@@ -10877,9 +10847,9 @@ void hdd_dp_trace_init(struct hdd_config *config)
 		live_mode = config_params[0];
 		/* fall through */
 	default:
-		hdd_debug("live_mode %u thresh %u time_limit %u verbosity %u bitmap 0x%x",
-			live_mode, thresh, thresh_time_limit,
-			verbosity, proto_bitmap);
+		hdd_info("live_mode %u thresh %u time_limit %u verbosity %u bitmap 0x%x",
+			 live_mode, thresh, thresh_time_limit,
+			 verbosity, proto_bitmap);
 	};
 
 	qdf_dp_trace_init(live_mode, thresh, thresh_time_limit,
@@ -11160,7 +11130,6 @@ int hdd_register_cb(struct hdd_context *hdd_ctx)
 	hdd_enter();
 
 	mac_handle = hdd_ctx->mac_handle;
-	sme_register11d_scan_done_callback(mac_handle, hdd_11d_scan_done);
 
 	sme_register_oem_data_rsp_callback(mac_handle,
 					   hdd_send_oem_data_rsp_msg);
@@ -11267,7 +11236,6 @@ void hdd_deregister_cb(struct hdd_context *hdd_ctx)
 		hdd_err("Failed to de-register data stall detect event callback");
 
 	sme_deregister_oem_data_rsp_callback(mac_handle);
-	sme_deregister11d_scan_done_callback(mac_handle);
 
 	hdd_exit();
 }
@@ -12315,6 +12283,13 @@ static void __hdd_module_exit(void)
 
 	if (!hdd_wait_for_recovery_completion())
 		return;
+
+	cds_set_driver_loaded(false);
+	cds_set_unload_in_progress(true);
+
+	if (!cds_wait_for_external_threads_completion(__func__))
+		hdd_warn("External threads are still active attempting "
+			 "driver unload anyway");
 
 	if (hdd_ctx)
 		qdf_cancel_delayed_work(&hdd_ctx->iface_idle_work);
@@ -14002,7 +13977,7 @@ void hdd_start_driver_ops_timer(int drv_op)
 
 	hdd_drv_ops_task = current;
 	qdf_timer_start(&hdd_drv_ops_inactivity_timer,
-		HDD_OPS_INACTIVITY_TIMEOUT);
+		HDD_OPS_INACTIVITY_TIMEOUT * qdf_timer_get_multiplier());
 }
 
 /**

@@ -523,9 +523,6 @@ QDF_STATUS sme_get_modify_profile_fields(tHalHandle hHal, uint8_t sessionId,
 extern QDF_STATUS sme_set_host_power_save(tHalHandle hHal, bool psMode);
 
 void sme_set_dhcp_till_power_active_flag(tHalHandle hHal, uint8_t flag);
-extern QDF_STATUS sme_register11d_scan_done_callback(tHalHandle hHal,
-		csr_scan_completeCallback);
-void sme_deregister11d_scan_done_callback(tHalHandle hHal);
 
 #ifdef FEATURE_OEM_DATA_SUPPORT
 extern QDF_STATUS sme_register_oem_data_rsp_callback(tHalHandle h_hal,
@@ -1676,14 +1673,14 @@ QDF_STATUS sme_fast_reassoc(tHalHandle hal, struct csr_roam_profile *profile,
 			    uint8_t vdev_id, const tSirMacAddr connected_bssid);
 #endif
 /**
- * sme_congestion_register_callback(): registers congestion callback
+ * sme_congestion_register_callback() - registers congestion callback
  * @hal: handler for HAL
  * @congestion_cb: congestion callback
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS sme_congestion_register_callback(tHalHandle hal,
-	void (*congestion_cb)(void *, uint32_t congestion, uint32_t vdev_id));
+					    congestion_cb congestion_cb);
 
 /**
  * sme_register_tx_queue_cb(): Register tx queue callback
@@ -1804,9 +1801,9 @@ QDF_STATUS sme_set_rx_set_blocksize(tHalHandle hal,
  */
 QDF_STATUS sme_get_rcpi(tHalHandle hal, struct sme_rcpi_req *rcpi);
 
-/*
+/**
  * sme_set_chip_pwr_save_fail_cb() - set chip power save failure callback
- * @hal: global hal handle
+ * @mac_handle: opaque handle to the MAC context
  * @cb: callback function pointer
  *
  * This function stores the chip power save failure callback function.
@@ -1814,8 +1811,8 @@ QDF_STATUS sme_get_rcpi(tHalHandle hal, struct sme_rcpi_req *rcpi);
  * Return: QDF_STATUS enumeration.
  */
 
-QDF_STATUS sme_set_chip_pwr_save_fail_cb(tHalHandle hal, void (*cb)(void *,
-				 struct chip_pwr_save_fail_detected_params *));
+QDF_STATUS sme_set_chip_pwr_save_fail_cb(mac_handle_t mac_handle,
+					 pwr_save_fail_cb cb);
 /**
  * sme_cli_set_command() - SME wrapper API over WMA "set" command
  * processor cmd

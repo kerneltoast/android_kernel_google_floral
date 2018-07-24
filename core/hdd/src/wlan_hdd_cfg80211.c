@@ -4026,24 +4026,12 @@ wlan_hdd_cfg80211_set_ext_roam_params(struct wiphy *wiphy,
 
 #define PWR_SAVE_FAIL_CMD_INDEX \
 	QCA_NL80211_VENDOR_SUBCMD_PWR_SAVE_FAIL_DETECTED_INDEX
-/**
- * hdd_chip_pwr_save_fail_detected_cb() - chip power save failure detected
- * callback
- * @hddctx: HDD context
- * @data: chip power save failure detected data
- *
- * This function reads the chip power save failure detected data and fill in
- * the skb with NL attributes and send up the NL event.
- * This callback execute in atomic context and must not invoke any
- * blocking calls.
- *
- * Return: none
- */
-void hdd_chip_pwr_save_fail_detected_cb(void *hddctx,
+
+void hdd_chip_pwr_save_fail_detected_cb(hdd_handle_t hdd_handle,
 			struct chip_pwr_save_fail_detected_params
 			*data)
 {
-	struct hdd_context *hdd_ctx	= hddctx;
+	struct hdd_context *hdd_ctx = hdd_handle_to_context(hdd_handle);
 	struct sk_buff *skb;
 	int flags = cds_get_gfp_flags();
 
@@ -5997,6 +5985,7 @@ void wlan_hdd_save_gtk_offload_params(struct hdd_adapter *adapter,
 	qdf_copy_macaddr(&gtk_req->bssid, &hdd_sta_ctx->conn_info.bssId);
 
 	gtk_req->kek_len = kek_len;
+	gtk_req->is_fils_connection = hdd_is_fils_connection(adapter);
 
 	/* convert big to little endian since driver work on little endian */
 	buf = (uint8_t *)&gtk_req->replay_counter;
@@ -8442,7 +8431,7 @@ void hdd_rssi_threshold_breached(void *hddctx,
 				  GFP_KERNEL);
 
 	if (!skb) {
-		hdd_err("cfg80211_vendor_event_alloc failed");
+		hdd_err("mem alloc failed");
 		return;
 	}
 
@@ -12483,10 +12472,10 @@ end:
 	return err;
 }
 
-void hdd_update_cca_info_cb(void *context, uint32_t congestion,
+void hdd_update_cca_info_cb(hdd_handle_t hdd_handle, uint32_t congestion,
 			    uint32_t vdev_id)
 {
-	struct hdd_context *hdd_ctx = (struct hdd_context *)context;
+	struct hdd_context *hdd_ctx = hdd_handle_to_context(hdd_handle);
 	int status;
 	struct hdd_adapter *adapter = NULL;
 	struct hdd_station_ctx *hdd_sta_ctx;
@@ -16208,6 +16197,7 @@ static int __wlan_hdd_change_station(struct wiphy *wiphy,
 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
 	struct hdd_context *hdd_ctx;
 	struct hdd_station_ctx *sta_ctx;
+	struct hdd_ap_ctx *ap_ctx;
 	struct qdf_mac_addr STAMacAddress;
 	int ret;
 
@@ -16239,6 +16229,18 @@ static int __wlan_hdd_change_station(struct wiphy *wiphy,
 	if ((adapter->device_mode == QDF_SAP_MODE) ||
 	    (adapter->device_mode == QDF_P2P_GO_MODE)) {
 		if (params->sta_flags_set & BIT(NL80211_STA_FLAG_AUTHORIZED)) {
+			ap_ctx = WLAN_HDD_GET_AP_CTX_PTR(adapter);
+			/*
+			 * For Encrypted SAP session, this will be done as
+			 * part of eSAP_STA_SET_KEY_EVENT
+			 */
+			if (ap_ctx->encryption_type !=
+			    eCSR_ENCRYPT_TYPE_NONE) {
+				hdd_debug("Encrypt type %d, not setting peer authorized now",
+					  ap_ctx->encryption_type);
+				return 0;
+			}
+
 			status =
 				hdd_softap_change_sta_state(adapter,
 							    &STAMacAddress,
@@ -21355,6 +21357,7 @@ int __wlan_hdd_cfg80211_set_rekey_data(struct wiphy *wiphy,
 
 	wlan_hdd_copy_gtk_kek(gtk_req, data);
 	qdf_mem_copy(gtk_req->kck, data->kck, NL80211_KCK_LEN);
+	gtk_req->is_fils_connection = hdd_is_fils_connection(adapter);
 	status = pmo_ucfg_cache_gtk_offload_req(adapter->hdd_vdev, gtk_req);
 	if (status != QDF_STATUS_SUCCESS) {
 		hdd_err("Failed to cache GTK Offload");
