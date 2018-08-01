@@ -5716,11 +5716,11 @@ static struct snd_soc_dai_link msm_tavil_fe_dai_links[] = {
 #ifdef CONFIG_SND_SOC_CS35L36
 static struct snd_soc_dai_link_component spk_codec[] = {
 	{
-		.name = "cs35l36.2-0041",
+		.name = "cs35l36.3-0041",
 		.dai_name = "cs35l36-pcm",
 	},
 	{
-		.name = "cs35l36.2-0040",
+		.name = "cs35l36.3-0040",
 		.dai_name = "cs35l36-pcm",
 	},
 };
@@ -6913,7 +6913,7 @@ err_pcm_runtime:
 #ifdef CONFIG_SND_SOC_CS35L36
 static struct snd_soc_codec_conf spk_codec_right_ch_conf[] = {
 	{
-		.dev_name	= "cs35l36.2-0040",
+		.dev_name	= "cs35l36.3-0040",
 		.name_prefix	= "R",
 	}
 };
