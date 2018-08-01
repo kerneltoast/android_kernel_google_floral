@@ -1184,9 +1184,16 @@ static int cs35l36_handle_of_data(struct i2c_client *i2c_client,
 	struct device_node *irq_gpio;
 	int ret;
 	u32 val;
+	const char* dev_name;
 
 	if (!np)
 		return 0;
+
+	if (of_property_read_string(np, "cirrus,name", &dev_name) >= 0) {
+		dev_set_name(&i2c_client->dev, dev_name);
+	} else {
+		pr_warn("%s: missing cirrus,name in dtsi\n", __func__);
+	}
 
 	ret = of_property_read_u32(np, "cirrus,boost-ctl-millivolt", &val);
 	if (!ret) {
