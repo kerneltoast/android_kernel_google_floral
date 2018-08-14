@@ -150,7 +150,7 @@ static INLINE void wmi_packed_arr_set_bits(A_UINT32 *arr, A_UINT32 entry_index,
 }
 
 /** 2 word representation of MAC addr */
-typedef struct {
+typedef struct _wmi_mac_addr {
     /** upper 4 bytes of  MAC address */
     A_UINT32 mac_addr31to0;
     /** lower 2 bytes of  MAC address */
@@ -176,6 +176,16 @@ typedef struct {
         ((c_macaddr)[3] << 24)); \
     (pwmi_mac_addr)->mac_addr47to32 = ((c_macaddr)[4] | ((c_macaddr)[5] << 8));\
    } while (0)
+
+/*
+ * The below function declarations are for implementations on some
+ * platforms of the above macros, but in function form, to save code
+ * memory by avoiding macro-inlining of a non-trivial amount of code.
+ * These function versions of the above macros may not be available
+ * on all host and target platforms.
+ */
+void wmi_mac_addr_to_char_array(wmi_mac_addr *pwmi_mac_addr, A_UINT8 *c_macaddr);
+void wmi_char_array_to_mac_addr(A_UINT8 *c_macaddr, wmi_mac_addr *pwmi_mac_addr);
 
 /*
  * wmi command groups.
@@ -245,6 +255,7 @@ typedef enum {
     WMI_GRP_TWT,            /* 0x3e TWT (Target Wake Time) for STA and AP */
     WMI_GRP_MOTION_DET,     /* 0x3f */
     WMI_GRP_SPATIAL_REUSE,  /* 0x40 */
+    WMI_GRP_ESP,            /* 0x41 Estimate Service Parameters (802.11mc) */
 } WMI_GRP_ID;
 
 #define WMI_CMD_GRP_START_ID(grp_id) (((grp_id) << 12) | 0x1)
@@ -1704,6 +1715,9 @@ typedef enum {
     /** WMI events related to motion detection */
     WMI_MOTION_DET_HOST_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_MOTION_DET),
     WMI_MOTION_DET_BASE_LINE_HOST_EVENTID,
+
+    /** WMI events related to Estimation of Service Parameters (802.11mc) */
+    WMI_ESP_ESTIMATE_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_ESP),
 } WMI_EVT_ID;
 
 /* defines for OEM message sub-types */
@@ -2769,6 +2783,20 @@ typedef struct {
     #define WMI_RSRC_CFG_FLAG_EAPOL_REKEY_MINRATE_SUPPORT_ENABLE_S 14
     #define WMI_RSRC_CFG_FLAG_EAPOL_REKEY_MINRATE_SUPPORT_ENABLE_M 0x4000
 
+    #define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_VALID_S 15
+    #define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_VALID_M 0x8000
+
+    /*
+     * If the AC override valid bit is set then this field will specify the
+     * access category to use for EAPOL frames
+     * 0 - WMM_AC_BE
+     * 1 - WMM_AC_BK
+     * 2 - WMM_AC_VI
+     * 3 - WMM_AC_VO
+     */
+    #define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_S 16
+    #define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_M 0x30000
+
     A_UINT32 flag1;
 
     /** @brief smart_ant_cap - Smart Antenna capabilities information
@@ -2976,6 +3004,16 @@ typedef struct {
     WMI_RSRC_CFG_FLAG_SET((word32), EAPOL_REKEY_MINRATE_SUPPORT_ENABLE, (value))
 #define WMI_RSRC_CFG_FLAG_EAPOL_REKEY_MINRATE_SUPPORT_ENABLE_GET(word32) \
     WMI_RSRC_CFG_FLAG_GET((word32), EAPOL_REKEY_MINRATE_SUPPORT_ENABLE)
+
+#define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_VALID_SET(word32, value) \
+    WMI_RSRC_CFG_FLAG_SET((word32), EAPOL_AC_OVERRIDE_VALID, (value))
+#define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_VALID_GET(word32) \
+    WMI_RSRC_CFG_FLAG_GET((word32), EAPOL_AC_OVERRIDE_VALID)
+
+#define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_SET(word32, value) \
+    WMI_RSRC_CFG_FLAG_SET((word32), EAPOL_AC_OVERRIDE, (value))
+#define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_GET(word32) \
+    WMI_RSRC_CFG_FLAG_GET((word32), EAPOL_AC_OVERRIDE)
 
 typedef struct {
     A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_init_cmd_fixed_param */
@@ -5104,6 +5142,15 @@ typedef enum {
      * >21:  invalid value (ignored)
      */
     WMI_PDEV_PARAM_MWSCOEX_SET_5GNR_PWR_LIMIT,        /* 0xA5 */
+    /** Set max msdus available for cong ctrl in target */
+    WMI_PDEV_PARAM_SET_CONG_CTRL_MAX_MSDUS,           /* 0xA6 */
+    /*
+     * Configures the Estimated Throughput Calculation indication (802.11mc) settings.
+     * The accompanying A_UINT32 parameter, in units of seconds, specifies how often FW needs to send the ESP estimation indication to the host.
+     * Value 0: Disable this feature
+     * Non zero Value: Periodicity (seconds)
+     */
+    WMI_PDEV_PARAM_ESP_INDICATION_PERIOD,             /* 0xA7 */
 } WMI_PDEV_PARAM;
 
 typedef struct {
@@ -5180,6 +5227,35 @@ typedef struct {
  * ARRAY_BYTE TLV of ctltable_data
  */
 } wmi_pdev_update_ctltable_request_fixed_param;
+
+#define WMI_ESP_ESTIMATE_GET_BE(airtime)         WMI_GET_BITS(airtime, 0, 8)
+#define WMI_ESP_ESTIMATE_SET_BE(airtime, value)  WMI_SET_BITS(airtime, 0, 8, value)
+
+#define WMI_ESP_ESTIMATE_GET_BK(airtime)         WMI_GET_BITS(airtime, 8, 8)
+#define WMI_ESP_ESTIMATE_SET_BK(airtime, value)  WMI_SET_BITS(airtime, 8, 8, value)
+
+#define WMI_ESP_ESTIMATE_GET_VI(airtime)         WMI_GET_BITS(airtime, 16, 8)
+#define WMI_ESP_ESTIMATE_SET_VI(airtime, value)  WMI_SET_BITS(airtime, 16, 8, value)
+
+#define WMI_ESP_ESTIMATE_GET_VO(airtime)         WMI_GET_BITS(airtime, 24, 8)
+#define WMI_ESP_ESTIMATE_SET_VO(airtime, value)  WMI_SET_BITS(airtime, 24, 8, value)
+
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_esp_estimate_event_fixed_param */
+    /** pdev_id for identifying the MAC
+     * See macros starting with WMI_PDEV_ID_ for values.
+     * In non-DBDC case host should set it to 0
+     */
+    A_UINT32 pdev_id;
+    /*
+     * Percentage of air time available for each AC
+     * BIT[0-7]   : AC_BE
+     * BIT[8-15]  : AC_BK
+     * BIT[16-23] : AC_VI
+     * BIT[24-31] : AC_VO
+     */
+    A_UINT32 ac_airtime_percentage;
+} wmi_esp_estimate_event_fixed_param;
 
 #define WMI_FAST_DIVERSITY_BIT_OFFSET 0
 #define WMI_SLOW_DIVERSITY_BIT_OFFSET 1
@@ -9028,6 +9104,8 @@ typedef struct {
     A_UINT32 csa_event_bitmap;
     /** offset (in octets/bytes) of MBSSID IE in beacon frame */
     A_UINT32 mbssid_ie_offset;
+    /** offset (in octets/bytes) of ESP IE in beacon frame */
+    A_UINT32 esp_ie_offset;
 
 /*
  * The TLVs follows:
@@ -11274,6 +11352,8 @@ typedef struct {
     A_UINT32 wmm_caps;
     A_UINT32 mcsset[ROAM_OFFLOAD_NUM_MCS_SET>>2]; /* since this 4 byte aligned, we don't declare it as tlv array */
     A_UINT32 handoff_delay_for_rx; /* In msec. Delay Hand-Off by this duration to receive pending Rx frames from current BSS */
+    A_UINT32 max_mlme_sw_retries; /* maximum number of software retries for preauth and reassoc req */
+    A_UINT32 no_ack_timeout; /* In msec. duration to wait before another SW retry made if no ack seen for previous frame */
 } wmi_roam_offload_tlv_param;
 
 
@@ -20688,6 +20768,16 @@ typedef enum wmi_coex_config_type {
     WMI_COEX_CONFIG_SINK_WLAN_TDM       = 21, /* config interval (ms units) (arg1 BT, arg2 WLAN) for A2DP SINK + WLAN */
     WMI_COEX_CONFIG_COEX_ENABLE_MCC_TDM = 22, /* config disable/enable COEX TDM for MCC */
     WMI_COEX_CONFIG_LOWRSSI_A2DPOPP_TDM = 23, /* config interval (ms units) (arg1 BT, arg2 WLAN) for STA + A2dp + OPP + LOWRSSI */
+    WMI_COEX_CONFIG_BTC_MODE            = 24, /* config BTC mode, arg1 mode: 0 TDD/1 FDD/2 Hybrid*/
+    WMI_COEX_CONFIG_ANTENNA_ISOLATION   = 25, /* config isolation between BT and WLAN antenna, arg1 isolation in db*/
+    WMI_COEX_CONFIG_BT_LOW_RSSI_THRESHOLD = 26,/*config BT low rssi threshold (dbm units)*/
+    WMI_COEX_CONFIG_BT_INTERFERENCE_LEVEL = 27,/*config bt interference level (dbm units)
+                                                 arg1 low - lower limit
+                                                 arg2 low - upper limit
+                                                 arg3 medium - lower limit
+                                                 arg4 medium - upper limit
+                                                 arg5 high - lower limit
+                                                 arg6 high - upper limit */
 } WMI_COEX_CONFIG_TYPE;
 
 typedef struct {
@@ -21982,6 +22072,8 @@ static INLINE A_UINT8 *wmi_id_to_name(A_UINT32 wmi_command)
         WMI_RETURN_STRING(WMI_MOTION_DET_BASE_LINE_CONFIG_PARAM_CMDID);
         WMI_RETURN_STRING(WMI_MOTION_DET_START_STOP_CMDID);
         WMI_RETURN_STRING(WMI_MOTION_DET_BASE_LINE_START_STOP_CMDID);
+        WMI_RETURN_STRING(WMI_SAR_LIMITS_CMDID);
+        WMI_RETURN_STRING(WMI_SAR_GET_LIMITS_CMDID);
     }
 
     return "Invalid WMI cmd";
