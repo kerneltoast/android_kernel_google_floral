@@ -142,7 +142,8 @@ struct wsa_macro_swr_ctrl_platform_data {
 };
 
 enum {
-	WSA_MACRO_AIF1_PB = 0,
+	WSA_MACRO_AIF_INVALID = 0,
+	WSA_MACRO_AIF1_PB,
 	WSA_MACRO_AIF_MIX1_PB,
 	WSA_MACRO_AIF_VI,
 	WSA_MACRO_AIF_ECHO,
@@ -1606,14 +1607,14 @@ static int wsa_macro_rx_mux_put(struct snd_kcontrol *kcontrol,
 	switch (rx_port_value) {
 	case 0:
 		clear_bit(bit_input,
-			  &wsa_priv->active_ch_mask[aif_rst - 1]);
-		wsa_priv->active_ch_cnt[aif_rst - 1]--;
+			  &wsa_priv->active_ch_mask[aif_rst]);
+		wsa_priv->active_ch_cnt[aif_rst]--;
 		break;
 	case 1:
 	case 2:
 		set_bit(bit_input,
-			&wsa_priv->active_ch_mask[rx_port_value - 1]);
-		wsa_priv->active_ch_cnt[rx_port_value - 1]++;
+			&wsa_priv->active_ch_mask[rx_port_value]);
+		wsa_priv->active_ch_cnt[rx_port_value]++;
 		break;
 	default:
 		dev_err(wsa_dev,
@@ -1912,6 +1913,7 @@ static const struct snd_soc_dapm_route wsa_audio_map[] = {
 	{"WSA_RX INT0 INTERP", NULL, "WSA_RX INT0 SEC MIX"},
 	{"WSA_RX INT0 CHAIN", NULL, "WSA_RX INT0 INTERP"},
 	{"WSA_SPK1 OUT", NULL, "WSA_RX INT0 CHAIN"},
+	{"WSA_SPK1 OUT", NULL, "WSA_MCLK"},
 
 	{"WSA_RX1 INP0", "RX0", "WSA RX0"},
 	{"WSA_RX1 INP0", "RX1", "WSA RX1"},
@@ -1941,6 +1943,7 @@ static const struct snd_soc_dapm_route wsa_audio_map[] = {
 	{"WSA_RX INT1 INTERP", NULL, "WSA_RX INT1 SEC MIX"},
 	{"WSA_RX INT1 CHAIN", NULL, "WSA_RX INT1 INTERP"},
 	{"WSA_SPK2 OUT", NULL, "WSA_RX INT1 CHAIN"},
+	{"WSA_SPK2 OUT", NULL, "WSA_MCLK"},
 };
 
 static const struct wsa_macro_reg_mask_val wsa_macro_reg_init[] = {
@@ -2249,17 +2252,19 @@ static int wsa_macro_probe(struct platform_device *pdev)
 	/* Register MCLK for wsa macro */
 	wsa_core_clk = devm_clk_get(&pdev->dev, "wsa_core_clk");
 	if (IS_ERR(wsa_core_clk)) {
+		ret = PTR_ERR(wsa_core_clk);
 		dev_err(&pdev->dev, "%s: clk get %s failed\n",
 			__func__, "wsa_core_clk");
-		return -EINVAL;
+		return ret;
 	}
 	wsa_priv->wsa_core_clk = wsa_core_clk;
 	/* Register npl clk for soundwire */
 	wsa_npl_clk = devm_clk_get(&pdev->dev, "wsa_npl_clk");
 	if (IS_ERR(wsa_npl_clk)) {
+		ret = PTR_ERR(wsa_npl_clk);
 		dev_err(&pdev->dev, "%s: clk get %s failed\n",
 			__func__, "wsa_npl_clk");
-		return -EINVAL;
+		return ret;
 	}
 	wsa_priv->wsa_npl_clk = wsa_npl_clk;
 	dev_set_drvdata(&pdev->dev, wsa_priv);

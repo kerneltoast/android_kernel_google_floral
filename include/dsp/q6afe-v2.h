@@ -107,7 +107,7 @@ enum {
 	/* IDX 45->49 */
 	IDX_SLIMBUS_6_RX,
 	IDX_SLIMBUS_6_TX,
-	IDX_SPDIF_RX,
+	IDX_PRIMARY_SPDIF_RX,
 	IDX_GLOBAL_CFG,
 	IDX_AUDIO_PORT_ID_I2S_RX,
 	/* IDX 50->53 */
@@ -229,7 +229,7 @@ enum {
 	IDX_AFE_PORT_ID_QUINARY_TDM_TX_6,
 	IDX_AFE_PORT_ID_QUINARY_TDM_RX_7,
 	IDX_AFE_PORT_ID_QUINARY_TDM_TX_7,
-	/* IDX 161 to 166 */
+	/* IDX 161 to 181 */
 	IDX_AFE_PORT_ID_WSA_CODEC_DMA_RX_0,
 	IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_0,
 	IDX_AFE_PORT_ID_WSA_CODEC_DMA_RX_1,
@@ -237,6 +237,24 @@ enum {
 	IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_2,
 	IDX_AFE_PORT_ID_VA_CODEC_DMA_TX_0,
 	IDX_AFE_PORT_ID_VA_CODEC_DMA_TX_1,
+	IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_0,
+	IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_0,
+	IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_1,
+	IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_1,
+	IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_2,
+	IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_2,
+	IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_3,
+	IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_3,
+	IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_4,
+	IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_4,
+	IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_5,
+	IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_5,
+	IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_6,
+	IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_7,
+	/* IDX 182 to 185 */
+	IDX_SECONDARY_SPDIF_RX,
+	IDX_PRIMARY_SPDIF_TX,
+	IDX_SECONDARY_SPDIF_TX,
 	AFE_MAX_PORTS
 };
 
@@ -342,6 +360,7 @@ void afe_set_cal_mode(u16 port_id, enum afe_cal_mode afe_cal_mode);
 void afe_set_vad_cfg(u32 vad_enable, u32 preroll_config,
 		     u32 port_id);
 void afe_set_island_mode_cfg(u16 port_id, u32 enable_flag);
+void afe_get_island_mode_cfg(u16 port_id, u32 *enable_flag);
 int afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	u32 rate);
 int afe_port_start_v2(u16 port_id, union afe_port_config *afe_config,
@@ -388,6 +407,11 @@ int afe_send_spdif_ch_status_cfg(struct afe_param_id_spdif_ch_status_cfg
 
 int afe_spdif_port_start(u16 port_id, struct afe_spdif_port_config *spdif_port,
 		u32 rate);
+
+int afe_spdif_reg_event_cfg(u16 port_id, u16 reg_flag,
+		void (*cb)(uint32_t opcode,
+		uint32_t token, uint32_t *payload, void *priv),
+		void *private_data);
 
 int afe_turn_onoff_hw_mad(u16 mad_type, u16 mad_enable);
 int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type);

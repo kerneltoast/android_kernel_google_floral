@@ -27,7 +27,14 @@ enum {
 	AUDIO_EXT_CLK_PMI,
 	AUDIO_EXT_CLK_LNBB2,
 	AUDIO_EXT_CLK_LPASS,
-	AUDIO_EXT_CLK_MAX,
+	AUDIO_EXT_CLK_LPASS2,
+	AUDIO_EXT_CLK_LPASS3,
+	AUDIO_EXT_CLK_LPASS4,
+	AUDIO_EXT_CLK_LPASS5,
+	AUDIO_EXT_CLK_LPASS6,
+	AUDIO_EXT_CLK_LPASS7,
+	AUDIO_EXT_CLK_LPASS_MAX,
+	AUDIO_EXT_CLK_MAX = AUDIO_EXT_CLK_LPASS_MAX,
 };
 
 struct pinctrl_info {
@@ -61,7 +68,8 @@ static int audio_ext_clk_prepare(struct clk_hw *hw)
 	struct pinctrl_info *pnctrl_info = &clk_priv->audio_clk.pnctrl_info;
 	int ret;
 
-	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS) {
+	if ((clk_priv->clk_src >= AUDIO_EXT_CLK_LPASS) &&
+		(clk_priv->clk_src < AUDIO_EXT_CLK_LPASS_MAX))  {
 		clk_priv->clk_cfg.enable = 1;
 		ret = afe_set_lpass_clk_cfg(IDX_RSVD_3, &clk_priv->clk_cfg);
 		if (ret < 0) {
@@ -102,7 +110,8 @@ static void audio_ext_clk_unprepare(struct clk_hw *hw)
 		}
 	}
 
-	if (clk_priv->clk_src == AUDIO_EXT_CLK_LPASS) {
+	if ((clk_priv->clk_src >= AUDIO_EXT_CLK_LPASS) &&
+		(clk_priv->clk_src < AUDIO_EXT_CLK_LPASS_MAX))  {
 		clk_priv->clk_cfg.enable = 0;
 		ret = afe_set_lpass_clk_cfg(IDX_RSVD_3, &clk_priv->clk_cfg);
 		if (ret < 0)
@@ -144,6 +153,21 @@ static const char * const audio_ext_pmi_div_clk[] = {
 	"pm6150_div_clk1",
 };
 
+static int audio_ext_clk_dummy_prepare(struct clk_hw *hw)
+{
+	return 0;
+}
+
+static void audio_ext_clk_dummy_unprepare(struct clk_hw *hw)
+{
+
+}
+
+static const struct clk_ops audio_ext_clk_dummy_ops = {
+	.prepare = audio_ext_clk_dummy_prepare,
+	.unprepare = audio_ext_clk_dummy_unprepare,
+};
+
 static struct audio_ext_clk audio_clk_array[] = {
 	{
 		.pnctrl_info = {NULL},
@@ -169,7 +193,7 @@ static struct audio_ext_clk audio_clk_array[] = {
 				.parent_names = (const char *[])
 							{ "ln_bb_clk2" },
 				.num_parents = 1,
-				.ops = &clk_dummy_ops,
+				.ops = &audio_ext_clk_dummy_ops,
 			},
 		},
 	},
@@ -180,6 +204,72 @@ static struct audio_ext_clk audio_clk_array[] = {
 			.div = 1,
 			.hw.init = &(struct clk_init_data){
 				.name = "audio_lpass_mclk",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk2",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk3",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk4",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk5",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk6",
+				.ops = &audio_ext_clk_ops,
+			},
+		},
+	},
+	{
+		.pnctrl_info = {NULL},
+		.fact = {
+			.mult = 1,
+			.div = 1,
+			.hw.init = &(struct clk_init_data){
+				.name = "audio_lpass_mclk7",
 				.ops = &audio_ext_clk_ops,
 			},
 		},

@@ -98,6 +98,7 @@ static struct asm_mmap this_mmap;
 struct audio_session {
 	struct audio_client *ac;
 	spinlock_t session_lock;
+	struct mutex mutex_lock_per_session;
 };
 /* session id: 0 reserved */
 static struct audio_session session[ASM_ACTIVE_STREAMS_ALLOWED + 1];
@@ -564,6 +565,10 @@ static int q6asm_get_session_id_from_audio_client(struct audio_client *ac)
 		if (session[n].ac == ac)
 			return n;
 	}
+
+	pr_debug("%s: cannot find matching audio client. ac = %pK\n",
+		__func__, ac);
+
 	return 0;
 }
 
@@ -579,6 +584,7 @@ static void q6asm_session_free(struct audio_client *ac)
 
 	pr_debug("%s: sessionid[%d]\n", __func__, ac->session);
 	session_id = ac->session;
+	mutex_lock(&session[session_id].mutex_lock_per_session);
 	rtac_remove_popp_from_adm_devices(ac->session);
 	spin_lock_irqsave(&(session[session_id].session_lock), flags);
 	session[ac->session].ac = NULL;
@@ -590,6 +596,7 @@ static void q6asm_session_free(struct audio_client *ac)
 	kfree(ac);
 	ac = NULL;
 	spin_unlock_irqrestore(&(session[session_id].session_lock), flags);
+	mutex_unlock(&session[session_id].mutex_lock_per_session);
 }
 
 static uint32_t q6asm_get_next_buf(struct audio_client *ac,
@@ -1189,11 +1196,20 @@ int q6asm_send_stream_cmd(struct audio_client *ac,
 {
 	char *asm_params = NULL;
 	struct apr_hdr hdr;
-	int sz, rc;
+	int rc;
+	uint32_t sz = 0;
+	uint64_t actual_sz = 0;
+	int session_id = 0;
 
 	if (!data || !ac) {
 		pr_err("%s: %s is NULL\n", __func__,
 			(!data) ? "data" : "ac");
+		rc = -EINVAL;
+		goto done;
+	}
+
+	session_id = q6asm_get_session_id_from_audio_client(ac);
+	if (!session_id) {
 		rc = -EINVAL;
 		goto done;
 	}
@@ -1206,11 +1222,25 @@ int q6asm_send_stream_cmd(struct audio_client *ac,
 		goto done;
 	}
 
-	sz = sizeof(struct apr_hdr) + data->payload_len;
+	actual_sz = sizeof(struct apr_hdr) + data->payload_len;
+	if (actual_sz > U32_MAX) {
+		pr_err("%s: payload size 0x%X exceeds limit\n",
+		       __func__, data->payload_len);
+		rc = -EINVAL;
+		goto done;
+	}
+
+	sz = (uint32_t)actual_sz;
 	asm_params = kzalloc(sz, GFP_KERNEL);
 	if (!asm_params) {
 		rc = -ENOMEM;
 		goto done;
+	}
+
+	mutex_lock(&session[session_id].mutex_lock_per_session);
+	if (!q6asm_is_valid_audio_client(ac)) {
+		rc = -EINVAL;
+		goto fail_send_param;
 	}
 
 	q6asm_add_hdr_async(ac, &hdr, sz, TRUE);
@@ -1245,6 +1275,7 @@ int q6asm_send_stream_cmd(struct audio_client *ac,
 
 	rc = 0;
 fail_send_param:
+	mutex_unlock(&session[session_id].mutex_lock_per_session);
 	kfree(asm_params);
 done:
 	return rc;
@@ -1953,6 +1984,7 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 		case ASM_DATA_CMD_REMOVE_INITIAL_SILENCE:
 		case ASM_DATA_CMD_REMOVE_TRAILING_SILENCE:
 		case ASM_SESSION_CMD_REGISTER_FOR_RX_UNDERFLOW_EVENTS:
+		case ASM_STREAM_CMD_OPEN_READ_COMPRESSED:
 		case ASM_STREAM_CMD_OPEN_WRITE_COMPRESSED:
 			pr_debug("%s: session %d opcode 0x%x token 0x%x Payload = [0x%x] stat 0x%x src %d dest %d\n",
 				__func__, ac->session,
@@ -2166,7 +2198,7 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 
 		if (ac->io_mode & SYNC_IO_MODE) {
 			if (port->buf == NULL) {
-				pr_err("%s: Unexpected Write Done\n", __func__);
+				pr_err("%s: Unexpected Read Done\n", __func__);
 				spin_unlock_irqrestore(
 					&(session[session_id].session_lock),
 					flags);
@@ -2685,6 +2717,7 @@ int q6asm_set_pp_params(struct audio_client *ac,
 	struct asm_stream_cmd_set_pp_params *asm_set_param = NULL;
 	int pkt_size = 0;
 	int ret = 0;
+	int session_id = 0;
 
 	if (ac == NULL) {
 		pr_err("%s: Audio Client is NULL\n", __func__);
@@ -2694,6 +2727,10 @@ int q6asm_set_pp_params(struct audio_client *ac,
 		return -EINVAL;
 	}
 
+	session_id = q6asm_get_session_id_from_audio_client(ac);
+	if (!session_id)
+		return -EINVAL;
+
 	pkt_size = sizeof(struct asm_stream_cmd_set_pp_params);
 	/* Add param size to packet size when sending in-band only */
 	if (param_data != NULL)
@@ -2701,6 +2738,18 @@ int q6asm_set_pp_params(struct audio_client *ac,
 	asm_set_param = kzalloc(pkt_size, GFP_KERNEL);
 	if (!asm_set_param)
 		return -ENOMEM;
+
+	mutex_lock(&session[session_id].mutex_lock_per_session);
+	if (!q6asm_is_valid_audio_client(ac)) {
+		ret = -EINVAL;
+		goto done;
+	}
+
+	if (ac->apr == NULL) {
+		pr_err("%s: AC APR handle NULL\n", __func__);
+		ret = -EINVAL;
+		goto done;
+	}
 
 	q6asm_add_hdr_async(ac, &asm_set_param->apr_hdr, pkt_size, TRUE);
 
@@ -2754,6 +2803,7 @@ int q6asm_set_pp_params(struct audio_client *ac,
 	}
 	ret = 0;
 done:
+	mutex_unlock(&session[session_id].mutex_lock_per_session);
 	kfree(asm_set_param);
 	return ret;
 }
@@ -2832,6 +2882,85 @@ int q6asm_set_soft_volume_module_instance_ids(int instance,
 	}
 }
 EXPORT_SYMBOL(q6asm_set_soft_volume_module_instance_ids);
+
+/**
+ * q6asm_open_read_compressed -
+ *       command to open ASM in compressed read mode
+ *
+ * @ac: Audio client handle
+ * @format: capture format for ASM
+ * @passthrough_flag: flag to indicate passthrough option
+ *
+ * Returns 0 on success or error on failure
+ */
+int q6asm_open_read_compressed(struct audio_client *ac, uint32_t format,
+			       uint32_t passthrough_flag)
+{
+	int rc = 0;
+	struct asm_stream_cmd_open_read_compressed open;
+
+	if (ac == NULL) {
+		pr_err("%s: ac[%pK] NULL\n",  __func__, ac);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+
+	if (ac->apr == NULL) {
+		pr_err("%s: APR handle[%pK] NULL\n", __func__,  ac->apr);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+	pr_debug("%s: session[%d] wr_format[0x%x]\n", __func__, ac->session,
+		format);
+
+	q6asm_add_hdr(ac, &open.hdr, sizeof(open), TRUE);
+	open.hdr.opcode = ASM_STREAM_CMD_OPEN_READ_COMPRESSED;
+	atomic_set(&ac->cmd_state, -1);
+
+	/*
+	 * Below flag indicates whether DSP shall keep IEC61937 packing or
+	 * unpack to raw compressed format
+	 */
+	if (format == FORMAT_IEC61937) {
+		open.mode_flags = 0x1;
+		pr_debug("%s: Flag 1 IEC61937 output\n", __func__);
+	} else {
+		open.mode_flags = 0;
+		open.frames_per_buf = 1;
+		pr_debug("%s: Flag 0 RAW_COMPR output\n", __func__);
+	}
+
+	rc = apr_send_pkt(ac->apr, (uint32_t *) &open);
+	if (rc < 0) {
+		pr_err("%s: open failed op[0x%x]rc[%d]\n",
+			__func__, open.hdr.opcode, rc);
+		rc = -EINVAL;
+		goto fail_cmd;
+	}
+	rc = wait_event_timeout(ac->cmd_wait,
+			(atomic_read(&ac->cmd_state) >= 0), 1*HZ);
+	if (!rc) {
+		pr_err("%s: timeout. waited for OPEN_READ_COMPR rc[%d]\n",
+			__func__, rc);
+		rc = -ETIMEDOUT;
+		goto fail_cmd;
+	}
+
+	if (atomic_read(&ac->cmd_state) > 0) {
+		pr_err("%s: DSP returned error[%s]\n",
+			__func__, adsp_err_get_err_str(
+			atomic_read(&ac->cmd_state)));
+		rc = adsp_err_get_lnx_err_code(
+			atomic_read(&ac->cmd_state));
+		goto fail_cmd;
+	}
+
+	return 0;
+
+fail_cmd:
+	return rc;
+}
+EXPORT_SYMBOL(q6asm_open_read_compressed);
 
 static int __q6asm_open_read(struct audio_client *ac,
 			     uint32_t format, uint16_t bits_per_sample,
@@ -3937,11 +4066,13 @@ done:
  * parameters
  *   config - session parameters (channels, bits_per_sample, sr)
  *   dir - stream direction (IN for playback, OUT for capture)
+ *   use_default_chmap: true if default channel map to be used
+ *   channel_map: input channel map
  * returns 0 if successful, error code otherwise
  */
 int q6asm_open_shared_io(struct audio_client *ac,
 			 struct shared_io_config *config,
-			 int dir)
+			 int dir, bool use_default_chmap, u8 *channel_map)
 {
 	struct asm_stream_cmd_open_shared_io *open;
 	u8 *channel_mapping;
@@ -3950,6 +4081,12 @@ int q6asm_open_shared_io(struct audio_client *ac,
 
 	if (!ac || !config)
 		return -EINVAL;
+
+	if (!use_default_chmap && (channel_map == NULL)) {
+		pr_err("%s: No valid chan map and can't use default\n",
+			__func__);
+		return -EINVAL;
+	}
 
 	bufsz = config->bufsz;
 	bufcnt = config->bufcnt;
@@ -4047,10 +4184,17 @@ int q6asm_open_shared_io(struct audio_client *ac,
 
 	memset(channel_mapping, 0, PCM_FORMAT_MAX_NUM_CHANNEL);
 
-	rc = q6asm_map_channels(channel_mapping, config->channels, false);
-	if (rc) {
-		pr_err("%s: Map channels failed, ret: %d\n", __func__, rc);
-		goto done;
+	if (use_default_chmap) {
+		rc = q6asm_map_channels(channel_mapping, config->channels,
+					false);
+		if (rc) {
+			pr_err("%s: Map channels failed, ret: %d\n",
+				 __func__, rc);
+			goto done;
+		}
+	} else {
+		memcpy(channel_mapping, channel_map,
+				PCM_FORMAT_MAX_NUM_CHANNEL);
 	}
 
 	open->num_watermark_levels = num_watermarks;
@@ -10223,8 +10367,10 @@ int __init q6asm_init(void)
 
 	memset(session, 0, sizeof(struct audio_session) *
 		(ASM_ACTIVE_STREAMS_ALLOWED + 1));
-	for (lcnt = 0; lcnt <= ASM_ACTIVE_STREAMS_ALLOWED; lcnt++)
+	for (lcnt = 0; lcnt <= ASM_ACTIVE_STREAMS_ALLOWED; lcnt++) {
 		spin_lock_init(&(session[lcnt].session_lock));
+		mutex_init(&(session[lcnt].mutex_lock_per_session));
+	}
 	set_custom_topology = 1;
 
 	/*setup common client used for cal mem map */

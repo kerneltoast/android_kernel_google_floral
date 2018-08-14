@@ -15,6 +15,7 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/mod_devicetable.h>
+#include <linux/irqdomain.h>
 
 extern struct bus_type soundwire_type;
 
@@ -76,6 +77,8 @@ struct swr_port_info {
 	u8 hstop;
 	u8 blk_grp_count;
 	u8 blk_pack_mode;
+	u8 word_length;
+	u8 lane_ctrl;
 	u8 ch_en;
 	u8 req_ch;
 	u8 num_ch;
@@ -204,7 +207,7 @@ struct swr_device {
 	struct device    dev;
 	unsigned long    addr;
 	u8 group_id;
-	u8 slave_irq;
+	struct irq_domain *slave_irq;
 };
 
 static inline struct swr_device *to_swr_device(struct device *dev)
@@ -334,4 +337,7 @@ extern int swr_slvdev_datapath_control(struct swr_device *swr_dev, u8 dev_num,
 extern int swr_remove_from_group(struct swr_device *dev, u8 dev_num);
 
 extern void swr_remove_device(struct swr_device *swr_dev);
+
+extern struct swr_device *get_matching_swr_slave_device(struct device_node *np);
+
 #endif /* _LINUX_SOUNDWIRE_H */

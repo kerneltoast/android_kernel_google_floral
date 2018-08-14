@@ -245,7 +245,7 @@ int swr_remove_from_group(struct swr_device *dev, u8 dev_num)
 	if (!dev->group_id)
 		return 0;
 
-	if (master->gr_sid == dev_num)
+	if (master->gr_sid != dev_num)
 		return 0;
 
 	if (master->remove_from_group && master->remove_from_group(master))
@@ -791,6 +791,26 @@ void swr_master_add_boarddevices(struct swr_master *master)
 	mutex_unlock(&board_lock);
 }
 EXPORT_SYMBOL(swr_master_add_boarddevices);
+
+struct swr_device *get_matching_swr_slave_device(struct device_node *np)
+{
+	struct swr_device *swr = NULL;
+	struct swr_master *master;
+
+	mutex_lock(&board_lock);
+	list_for_each_entry(master, &swr_master_list, list) {
+		mutex_lock(&master->mlock);
+		list_for_each_entry(swr, &master->devices, dev_list) {
+			if (swr->dev.of_node == np)
+				break;
+		}
+		mutex_unlock(&master->mlock);
+	}
+	mutex_unlock(&board_lock);
+
+	return swr;
+}
+EXPORT_SYMBOL(get_matching_swr_slave_device);
 
 static void swr_unregister_device(struct swr_device *swr)
 {
