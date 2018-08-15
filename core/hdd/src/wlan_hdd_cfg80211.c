@@ -2581,6 +2581,22 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 		}
 		sap_config->acs_cfg.ch_list_count = ch_cnt;
 	}
+
+	ch_cnt = 0;
+	for (i = 0; i < sap_config->acs_cfg.ch_list_count; i++) {
+		if (sap_config->acs_cfg.ch_list[i] >
+				WLAN_REG_CH_NUM(CHAN_ENUM_11) &&
+			sap_config->acs_cfg.ch_list[i] <
+				WLAN_REG_CH_NUM(CHAN_ENUM_36)) {
+			hdd_info("skip channel %d",
+					sap_config->acs_cfg.ch_list[i]);
+			continue;
+		}
+		sap_config->acs_cfg.ch_list[ch_cnt++] =
+			sap_config->acs_cfg.ch_list[i];
+	}
+	sap_config->acs_cfg.ch_list_count = ch_cnt;
+
 	hdd_debug("get pcl for DO_ACS vendor command");
 
 	/* consult policy manager to get PCL */
