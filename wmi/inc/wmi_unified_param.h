@@ -2784,6 +2784,7 @@ struct dhcp_stop_ind_params {
  * @tspec: tspec value
  * @status: CDF status
  * @sessionId: session id
+ * @vdev_id: vdev id
  */
 struct aggr_add_ts_param {
 	uint16_t staIdx;
@@ -2791,6 +2792,7 @@ struct aggr_add_ts_param {
 	struct mac_tspec_ie tspec[WMI_QOS_NUM_AC_MAX];
 	QDF_STATUS status[WMI_QOS_NUM_AC_MAX];
 	uint8_t sessionId;
+	uint8_t vdev_id;
 };
 
 
@@ -3545,8 +3547,6 @@ struct extscan_bssid_hotlist_set_params {
 	uint32_t  num_ap;
 	struct ap_threshold_params ap[WMI_WLAN_EXTSCAN_MAX_HOTLIST_APS];
 };
-/* legacy naming */
-#define ext_scan_setbssid_hotlist_params extscan_bssid_hotlist_set_params
 
 /**
  * struct host_mem_req - Host memory request paramseters request by target

@@ -313,7 +313,7 @@ void dfs_get_po_radars(struct wlan_dfs *dfs)
 	tx_ops = &(psoc->soc_cb.tx_ops.target_tx_ops);
 	switch (dfsdomain) {
 	case DFS_FCC_DOMAIN:
-		dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "FCC domain");
+		dfs_debug(dfs, WLAN_DEBUG_DFS_ALWAYS, "FCC domain");
 		rinfo.dfsdomain = DFS_FCC_DOMAIN;
 		dfs_assign_fcc_pulse_table(&rinfo, target_type, tx_ops);
 		break;
@@ -455,10 +455,8 @@ static os_timer_func(dfs_no_res_from_fw_task)
 
 	dfs->dfs_is_host_wait_running = 0;
 	dfs->dfs_no_res_from_fw = 1;
-	dfs_radarfound_action_generic(dfs, dfs->dfs_seg_id,
-				      dfs->dfs_false_radar_found);
+	dfs_radarfound_action_generic(dfs, dfs->dfs_seg_id);
 	dfs->dfs_seg_id = 0;
-	dfs->dfs_false_radar_found = 0;
 }
 
 void dfs_host_wait_timer_init(struct wlan_dfs *dfs)
@@ -532,8 +530,7 @@ void dfs_extract_radar_found_params(struct wlan_dfs *dfs,
 	dfs->dfs_average_pri = 0;
 }
 
-void dfs_radarfound_action_fcc(struct wlan_dfs *dfs, uint8_t seg_id,
-			       int false_radar_found)
+void dfs_radarfound_action_fcc(struct wlan_dfs *dfs, uint8_t seg_id)
 {
 	struct dfs_radar_found_params params;
 
@@ -543,7 +540,6 @@ void dfs_radarfound_action_fcc(struct wlan_dfs *dfs, uint8_t seg_id,
 	dfs_send_avg_params_to_fw(dfs, &params);
 	dfs->dfs_is_host_wait_running = 1;
 	dfs->dfs_seg_id = seg_id;
-	dfs->dfs_false_radar_found = false_radar_found;
 	qdf_timer_mod(&dfs->dfs_host_wait_timer,
 		      (dfs->dfs_status_timeout_override ==
 		       -1) ? HOST_DFS_STATUS_WAIT_TIMER_MS :
@@ -611,8 +607,7 @@ void dfs_action_on_fw_radar_status_check(struct wlan_dfs *dfs,
 			    dfs->dfs_curchan->dfs_ch_freq) {
 				dfs_radarfound_action_generic(
 						dfs,
-						dfs->dfs_seg_id,
-						dfs->dfs_false_radar_found);
+						dfs->dfs_seg_id);
 			} else {
 				/* Else of this case, no action is needed as
 				 * dfs_action would have been done at timer

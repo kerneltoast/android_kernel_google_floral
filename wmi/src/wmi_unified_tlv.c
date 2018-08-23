@@ -9141,7 +9141,7 @@ static QDF_STATUS send_aggr_qos_cmd_tlv(wmi_unified_t wmi_handle,
 			       WMITLV_TAG_STRUC_wmi_vdev_wmm_addts_cmd_fixed_param,
 			       WMITLV_GET_STRUCT_TLVLEN
 				       (wmi_vdev_wmm_addts_cmd_fixed_param));
-			cmd->vdev_id = aggr_qos_rsp_msg->sessionId;
+			cmd->vdev_id = aggr_qos_rsp_msg->vdev_id;
 			cmd->ac =
 				WMI_TID_TO_AC(aggr_qos_rsp_msg->tspec[i].tsinfo.
 					      traffic.userPrio);
@@ -13209,8 +13209,8 @@ QDF_STATUS send_pdev_set_dual_mac_config_cmd_tlv(wmi_unified_t wmi_handle,
 							WMI_HOST_PDEV_ID_SOC);
 	cmd->concurrent_scan_config_bits = msg->scan_config;
 	cmd->fw_mode_config_bits = msg->fw_mode_config;
-	WMI_LOGI("%s: scan_config:%x fw_mode_config:%x",
-			__func__, msg->scan_config, msg->fw_mode_config);
+	WMI_LOGD("%s: scan_config:%x fw_mode_config:%x",
+		 __func__, msg->scan_config, msg->fw_mode_config);
 
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PDEV_SET_MAC_CONFIG_CMDID)) {
@@ -13563,16 +13563,18 @@ static QDF_STATUS send_wow_patterns_to_fw_cmd_tlv(wmi_unified_t wmi_handle,
 	bitmap_pattern->bitmask_len = bitmap_pattern->pattern_len;
 	bitmap_pattern->pattern_id = ptrn_id;
 
-	WMI_LOGI("vdev: %d, ptrn id: %d, ptrn len: %d, ptrn offset: %d user %d",
+	WMI_LOGD("vdev: %d, ptrn id: %d, ptrn len: %d, ptrn offset: %d user %d",
 		 cmd->vdev_id, cmd->pattern_id, bitmap_pattern->pattern_len,
 		 bitmap_pattern->pattern_offset, user);
-	WMI_LOGI("Pattern : ");
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_INFO,
-		&bitmap_pattern->patternbuf[0], bitmap_pattern->pattern_len);
+	WMI_LOGD("Pattern : ");
+	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+			   &bitmap_pattern->patternbuf[0],
+			   bitmap_pattern->pattern_len);
 
-	WMI_LOGI("Mask : ");
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_INFO,
-		&bitmap_pattern->bitmaskbuf[0], bitmap_pattern->pattern_len);
+	WMI_LOGD("Mask : ");
+	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
+			   &bitmap_pattern->bitmaskbuf[0],
+			   bitmap_pattern->pattern_len);
 
 	buf_ptr += sizeof(WOW_BITMAP_PATTERN_T);
 
