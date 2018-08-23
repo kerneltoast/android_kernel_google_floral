@@ -15450,17 +15450,16 @@ void csr_dump_vendor_ies(uint8_t *ie, uint16_t ie_len)
 		elem_len = ptr[1];
 		left -= 2;
 		if (elem_len > left) {
-			pe_err("Invalid IEs eid: %d elem_len: %d left: %d",
-			       elem_id, elem_len, left);
+			sme_err("Invalid IEs eid: %d elem_len: %d left: %d",
+				elem_id, elem_len, left);
 			return;
 		}
 		if (elem_id == SIR_MAC_EID_VENDOR) {
-			pe_debug("Dumping Vendor IE of len %d", elem_len);
+			sme_debug("Dumping Vendor IE of len %d", elem_len);
 			QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_PE,
 					   QDF_TRACE_LEVEL_DEBUG,
 					   &ptr[2], elem_len);
 		}
-
 		left -= elem_len;
 		ptr += (elem_len + 2);
 	}
@@ -15489,7 +15488,7 @@ csr_check_vendor_ap_3_present(tpAniSirGlobal mac_ctx, uint8_t *ie,
 	    SIR_MAC_VENDOR_AP_3_OUI_LEN, ie, ie_len)) &&
 	    (wlan_get_vendor_ie_ptr_from_oui(SIR_MAC_VENDOR_AP_4_OUI,
 	    SIR_MAC_VENDOR_AP_4_OUI_LEN, ie, ie_len))) {
-		pe_debug("Vendor OUI 3 and Vendor OUI 4 found");
+		sme_debug("Vendor OUI 3 and Vendor OUI 4 found");
 		ret = false;
 	}
 
@@ -15708,6 +15707,22 @@ QDF_STATUS csr_send_join_req_msg(tpAniSirGlobal pMac, uint32_t sessionId,
 						pMac, (uint8_t *)pIes, ieLen);
 		}
 
+		/*
+		 * For WMI_ACTION_OUI_CONNECT_1x1_WITH_1_CHAIN, the host
+		 * sends the NSS as 1 to the FW and the FW then decides
+		 * after receiving the first beacon after connection to
+		 * switch to 1 Tx/Rx Chain.
+		 */
+
+		if (!is_vendor_ap_present) {
+			is_vendor_ap_present =
+				ucfg_action_oui_search(pMac->psoc,
+					&vendor_ap_search_attr,
+					ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN);
+			if (is_vendor_ap_present)
+				sme_debug("1x1 with 1 Chain AP");
+		}
+
 		if (pMac->roam.configParam.is_force_1x1 &&
 		    pMac->lteCoexAntShare &&
 		    is_vendor_ap_present) {
@@ -15727,7 +15742,7 @@ QDF_STATUS csr_send_join_req_msg(tpAniSirGlobal pMac, uint32_t sessionId,
 						       &vendor_ap_search_attr,
 						       ACTION_OUI_CCKM_1X1);
 		if (is_vendor_ap_present) {
-			pe_debug("vdev: %d WMI_VDEV_PARAM_ABG_MODE_TX_CHAIN_NUM 1",
+			sme_debug("vdev: %d WMI_VDEV_PARAM_ABG_MODE_TX_CHAIN_NUM 1",
 				 pSession->sessionId);
 			wma_cli_set_command(
 				pSession->sessionId,
@@ -17488,33 +17503,55 @@ QDF_STATUS csr_roam_open_session(tpAniSirGlobal mac_ctx,
 				session_param->subtype_of_persona);
 }
 
-QDF_STATUS csr_process_del_sta_session_rsp(tpAniSirGlobal pMac, uint8_t *pMsg)
+QDF_STATUS csr_process_del_sta_session_rsp(tpAniSirGlobal mac_ctx,
+					   uint8_t *pMsg)
 {
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 	struct del_sta_self_params *rsp;
 	uint8_t sessionId;
+	tListElem *entry;
+	tSmeCmd *sme_command;
 
 	if (pMsg == NULL) {
 		sme_err("msg ptr is NULL");
 		return status;
 	}
+
+	entry = csr_nonscan_active_ll_peek_head(mac_ctx, LL_ACCESS_LOCK);
+	if (!entry) {
+		sme_err("NO commands are ACTIVE");
+		return status;
+	}
+
+	sme_command = GET_BASE_ADDR(entry, tSmeCmd, Link);
+	if (e_sme_command_del_sta_session != sme_command->command) {
+		sme_err("No Del sta session command ACTIVE");
+		return status;
+	}
+
 	rsp = (struct del_sta_self_params *) pMsg;
 	sessionId = rsp->session_id;
 	sme_debug("Del Sta rsp status = %d", rsp->status);
 	/* This session is done. */
-	csr_cleanup_session(pMac, sessionId);
+	csr_cleanup_session(mac_ctx, sessionId);
 	if (rsp->sme_callback) {
-		status = sme_release_global_lock(&pMac->sme);
+		status = sme_release_global_lock(&mac_ctx->sme);
 		if (!QDF_IS_STATUS_SUCCESS(status))
 			sme_debug("Failed to Release Lock");
 		else {
 			rsp->sme_callback(rsp->session_id);
-			status = sme_acquire_global_lock(&pMac->sme);
+			status = sme_acquire_global_lock(&mac_ctx->sme);
 			if (!QDF_IS_STATUS_SUCCESS(status)) {
 				sme_debug("Failed to get Lock");
 				return status;
 			}
 		}
+	}
+
+	/* Remove this command out of the non scan active list */
+	if (csr_nonscan_active_ll_remove_entry(mac_ctx, entry,
+					       LL_ACCESS_LOCK)) {
+		csr_release_command(mac_ctx, sme_command);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -17588,6 +17625,13 @@ QDF_STATUS csr_roam_close_session(tpAniSirGlobal mac_ctx,
 	if (sync) {
 		csr_cleanup_session(mac_ctx, session_id);
 		return status;
+	}
+
+	if (CSR_IS_WAIT_FOR_KEY(mac_ctx, session_id)) {
+		sme_debug("Stop Wait for key timer and change substate to eCSR_ROAM_SUBSTATE_NONE");
+		csr_roam_stop_wait_for_key_timer(mac_ctx);
+		csr_roam_substate_change(mac_ctx, eCSR_ROAM_SUBSTATE_NONE,
+					 session_id);
 	}
 
 	purge_sme_session_pending_cmd_list(mac_ctx, session_id);
@@ -19849,14 +19893,6 @@ csr_roam_offload_scan(tpAniSirGlobal mac_ctx, uint8_t session_id,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if ((ROAM_SCAN_OFFLOAD_START == command &&
-		REASON_CTX_INIT != reason) &&
-		(session->pCurRoamProfile &&
-		session->pCurRoamProfile->supplicant_disabled_roaming)) {
-		sme_debug("Supplicant disabled driver roaming");
-		return QDF_STATUS_E_FAILURE;
-	}
-
 	if (command == ROAM_SCAN_OFFLOAD_START &&
 	    (session->pCurRoamProfile &&
 	    session->pCurRoamProfile->driver_disabled_roaming)) {
@@ -19870,6 +19906,14 @@ csr_roam_offload_scan(tpAniSirGlobal mac_ctx, uint8_t session_id,
 				  session_id);
 			return QDF_STATUS_E_FAILURE;
 		}
+	}
+
+	if ((ROAM_SCAN_OFFLOAD_START == command &&
+	    REASON_CTX_INIT != reason) &&
+	    (session->pCurRoamProfile &&
+	    session->pCurRoamProfile->supplicant_disabled_roaming)) {
+		sme_debug("Supplicant disabled driver roaming");
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (0 == csr_roam_is_roam_offload_scan_enabled(mac_ctx)) {
@@ -19893,7 +19937,7 @@ csr_roam_offload_scan(tpAniSirGlobal mac_ctx, uint8_t session_id,
 	/* Roaming is not supported currently for FILS akm */
 	if (session->pCurRoamProfile && CSR_IS_AUTH_TYPE_FILS(
 	    session->pCurRoamProfile->AuthType.authType[0]) &&
-				!mac_ctx->is_fils_roaming_supported) {
+	    !mac_ctx->is_fils_roaming_supported) {
 		sme_info("FILS Roaming not suppprted by fw");
 		return QDF_STATUS_SUCCESS;
 	}

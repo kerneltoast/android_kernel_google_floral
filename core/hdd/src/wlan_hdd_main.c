@@ -581,7 +581,7 @@ static int __hdd_netdev_notifier_call(struct notifier_block *nb,
 	}
 
 	if (hdd_ctx->driver_status == DRIVER_MODULES_CLOSED) {
-		hdd_err("%s: Driver module is closed", __func__);
+		hdd_debug("%s: Driver module is closed", __func__);
 		return NOTIFY_DONE;
 	}
 
@@ -1868,15 +1868,18 @@ void hdd_update_tgt_cfg(hdd_handle_t hdd_handle, struct wma_tgt_cfg *cfg)
 	}
 	ret = hdd_objmgr_create_and_store_pdev(hdd_ctx);
 	if (ret) {
-		hdd_err("Failed to create pdev; errno:%d", ret);
-		QDF_BUG(0);
-	} else {
-		hdd_debug("New pdev has been created with pdev_id = %u",
-			  hdd_ctx->hdd_pdev->pdev_objmgr.wlan_pdev_id);
-		if (dispatcher_pdev_open(hdd_ctx->hdd_pdev)) {
-			hdd_err("dispatcher pdev open failed");
-			QDF_BUG(0);
-		}
+		QDF_DEBUG_PANIC("Failed to create pdev; errno:%d", ret);
+		return;
+	}
+
+	hdd_debug("New pdev has been created with pdev_id = %u",
+		  hdd_ctx->hdd_pdev->pdev_objmgr.wlan_pdev_id);
+
+	status = dispatcher_pdev_open(hdd_ctx->hdd_pdev);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		QDF_DEBUG_PANIC("dispatcher pdev open failed; status:%d",
+				status);
+		return;
 	}
 
 	hdd_objmgr_update_tgt_max_vdev_psoc(hdd_ctx, cfg->max_intf_count);
@@ -2556,6 +2559,34 @@ static void hdd_update_ipa_component_config(struct hdd_context *hdd_ctx)
 }
 #endif
 
+#ifdef FEATURE_WLAN_WAPI
+/**
+ * hdd_wapi_security_sta_exist() - return wapi security sta exist or not
+ *
+ * This API returns the wapi security station exist or not
+ *
+ * Return: true - wapi security station exist
+ */
+static bool hdd_wapi_security_sta_exist(void)
+{
+	struct hdd_adapter *adapter = NULL;
+	struct hdd_context *hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
+
+	hdd_for_each_adapter(hdd_ctx, adapter) {
+		if ((adapter->device_mode == QDF_STA_MODE) &&
+		    adapter->wapi_info.wapi_mode &&
+		    (adapter->wapi_info.wapi_auth_mode != WAPI_AUTH_MODE_OPEN))
+			return true;
+	}
+	return false;
+}
+#else
+static bool hdd_wapi_security_sta_exist(void)
+{
+	return false;
+}
+#endif
+
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 static enum policy_mgr_con_mode wlan_hdd_get_mode_for_non_connected_vdev(
 			struct wlan_objmgr_psoc *psoc, uint8_t vdev_id)
@@ -2578,6 +2609,7 @@ static void hdd_register_policy_manager_callback(
 {
 	struct policy_mgr_hdd_cbacks hdd_cbacks;
 
+	qdf_mem_zero(&hdd_cbacks, sizeof(hdd_cbacks));
 	hdd_cbacks.sap_restart_chan_switch_cb =
 		hdd_sap_restart_chan_switch_cb;
 	hdd_cbacks.wlan_hdd_get_channel_for_sap_restart =
@@ -2585,7 +2617,8 @@ static void hdd_register_policy_manager_callback(
 	hdd_cbacks.get_mode_for_non_connected_vdev =
 		wlan_hdd_get_mode_for_non_connected_vdev;
 	hdd_cbacks.hdd_get_device_mode = hdd_get_device_mode;
-
+	hdd_cbacks.hdd_wapi_security_sta_exist =
+		hdd_wapi_security_sta_exist;
 	if (QDF_STATUS_SUCCESS !=
 	    policy_mgr_register_hdd_cb(psoc, &hdd_cbacks)) {
 		hdd_err("HDD callback registration with policy manager failed");
@@ -3125,9 +3158,9 @@ static int __hdd_stop(struct net_device *dev)
 	 * Disable TX on the interface, after this hard_start_xmit() will not
 	 * be called on that interface
 	 */
-	hdd_info("Disabling queues, adapter device mode: %s(%d)",
-		 hdd_device_mode_to_string(adapter->device_mode),
-		 adapter->device_mode);
+	hdd_debug("Disabling queues, adapter device mode: %s(%d)",
+		  hdd_device_mode_to_string(adapter->device_mode),
+		  adapter->device_mode);
 
 	wlan_hdd_netif_queue_control(adapter,
 				     WLAN_STOP_ALL_NETIF_QUEUE_N_CARRIER,
@@ -4375,25 +4408,25 @@ static int hdd_configure_chain_mask(struct hdd_adapter *adapter)
 	    non_dbs_phy_cap.rx_chain_mask_2G < 3 ||
 	    non_dbs_phy_cap.tx_chain_mask_5G < 3 ||
 	    non_dbs_phy_cap.rx_chain_mask_5G < 3) {
-		hdd_info("firmware not capable. skip chain mask programming");
+		hdd_debug("firmware not capable. skip chain mask programming");
 		return 0;
 	}
 
 	if (hdd_ctx->config->enable2x2 &&
 	    !hdd_ctx->config->enable_bt_chain_separation) {
-		hdd_info("2x2 enabled. skip chain mask programming");
+		hdd_debug("2x2 enabled. skip chain mask programming");
 		return 0;
 	}
 
 	if (hdd_ctx->config->dual_mac_feature_disable !=
 	    DISABLE_DBS_CXN_AND_SCAN) {
-		hdd_info("DBS enabled(%d). skip chain mask programming",
-			 hdd_ctx->config->dual_mac_feature_disable);
+		hdd_debug("DBS enabled(%d). skip chain mask programming",
+			  hdd_ctx->config->dual_mac_feature_disable);
 		return 0;
 	}
 
 	if (hdd_ctx->lte_coex_ant_share) {
-		hdd_info("lte ant sharing enabled. skip chainmask programming");
+		hdd_debug("lte ant sharing enabled. skip chainmask programming");
 		return 0;
 	}
 
@@ -4417,7 +4450,7 @@ static int hdd_configure_chain_mask(struct hdd_adapter *adapter)
 
 	if (hdd_ctx->config->txchainmask1x1 ||
 	    hdd_ctx->config->rxchainmask1x1) {
-		hdd_info("band agnostic tx/rx chain mask set. skip per band chain mask");
+		hdd_debug("band agnostic tx/rx chain mask set. skip per band chain mask");
 		return 0;
 	}
 
@@ -10069,9 +10102,8 @@ int hdd_dbs_scan_selection_init(struct hdd_context *hdd_ctx)
 			       (CDS_DBS_SCAN_PARAM_PER_CLIENT
 				* CDS_DBS_SCAN_CLIENTS_MAX));
 
-	hdd_info("numentries %hu", numentries);
 	if (!numentries) {
-		hdd_info("Donot send scan_selection_config");
+		hdd_debug("Do not send scan_selection_config");
 		return 0;
 	}
 
@@ -10958,9 +10990,9 @@ void hdd_dp_trace_init(struct hdd_config *config)
 		live_mode = config_params[0];
 		/* fall through */
 	default:
-		hdd_info("live_mode %u thresh %u time_limit %u verbosity %u bitmap 0x%x",
-			 live_mode, thresh, thresh_time_limit,
-			 verbosity, proto_bitmap);
+		hdd_debug("live_mode %u thresh %u time_limit %u verbosity %u bitmap 0x%x",
+			  live_mode, thresh, thresh_time_limit,
+			  verbosity, proto_bitmap);
 	};
 
 	qdf_dp_trace_init(live_mode, thresh, thresh_time_limit,
@@ -12007,34 +12039,6 @@ end:
 	 */
 	hdd_err("SAP restart after SSR failed! Reload WLAN and try SAP again");
 
-}
-
-/**
- * wlan_hdd_soc_set_antenna_mode_cb() - Callback for set dual
- * mac scan config
- * @status: Status of set antenna mode
- * @context: callback context
- *
- * Callback on setting the dual mac configuration
- *
- * Return: None
- */
-void wlan_hdd_soc_set_antenna_mode_cb(enum set_antenna_mode_status status,
-				      void *context)
-{
-	struct osif_request *request = NULL;
-
-	hdd_debug("Status: %d", status);
-
-	request = osif_request_get(context);
-	if (!request) {
-		hdd_err("obselete request");
-		return;
-	}
-
-	/* Signal the completion of set dual mac config */
-	osif_request_complete(request);
-	osif_request_put(request);
 }
 
 /**
@@ -14156,10 +14160,7 @@ void hdd_drv_ops_inactivity_handler(void)
 		return;
 	}
 
-	if (cds_is_self_recovery_enabled())
-		cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
-	else
-		QDF_BUG(0);
+	cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
 }
 
 void hdd_pld_ipa_uc_shutdown_pipes(void)

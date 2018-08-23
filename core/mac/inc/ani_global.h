@@ -759,6 +759,8 @@ typedef struct sAniSirLim {
 	uint8_t gLimDfsTargetChanNum;
 	QDF_STATUS(*sme_msg_callback)
 		(tpAniSirGlobal mac, struct scheduler_msg *msg);
+	QDF_STATUS(*stop_roaming_callback)
+		(tpAniSirGlobal mac, uint8_t session_id, uint8_t reason);
 	uint8_t retry_packet_cnt;
 	uint8_t beacon_probe_rsp_cnt_per_scan;
 	wlan_scan_requester req_id;
@@ -878,7 +880,6 @@ typedef struct sAniSirGlobal {
 	csr_readyToExtWoWCallback readyToExtWoWCallback;
 	void *readyToExtWoWContext;
 #endif
-	hdd_ftm_msg_processor ftm_msg_processor_callback;
 	struct vdev_type_nss vdev_type_nss_2g;
 	struct vdev_type_nss vdev_type_nss_5g;
 

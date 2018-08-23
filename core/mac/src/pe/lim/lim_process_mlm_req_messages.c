@@ -734,9 +734,20 @@ static void lim_post_join_set_link_state_callback(tpAniSirGlobal mac,
 		void *callback_arg, bool status)
 {
 	uint8_t chan_num, sec_chan_offset;
-	tpPESession session_entry = (tpPESession) callback_arg;
+	struct session_params *session_cb_param =
+					(struct session_params *)callback_arg;
 	tLimMlmJoinCnf mlm_join_cnf;
 
+	tpPESession session_entry = pe_find_session_by_session_id(mac,
+					session_cb_param->session_id);
+	if (!session_entry) {
+		pe_err("sessionId:%d does not exist",
+		       session_cb_param->session_id);
+		qdf_mem_free(session_cb_param);
+		return;
+	}
+
+	qdf_mem_free(session_cb_param);
 	pe_debug("Sessionid %d set link state(%d) cb status: %d",
 			session_entry->peSessionId, session_entry->limMlmState,
 			status);
@@ -774,7 +785,7 @@ failure:
 	MTRACE(mac_trace(mac, TRACE_CODE_MLM_STATE, session_entry->peSessionId,
 			 session_entry->limMlmState));
 	session_entry->limMlmState = eLIM_MLM_IDLE_STATE;
-	mlm_join_cnf.resultCode = eSIR_SME_RESOURCES_UNAVAILABLE;
+	mlm_join_cnf.resultCode = eSIR_SME_PEER_CREATE_FAILED;
 	mlm_join_cnf.sessionId = session_entry->peSessionId;
 	mlm_join_cnf.protStatusCode = eSIR_MAC_UNSPEC_FAILURE_STATUS;
 	lim_post_sme_message(mac, LIM_MLM_JOIN_CNF, (uint32_t *) &mlm_join_cnf);
@@ -805,6 +816,7 @@ lim_process_mlm_post_join_suspend_link(tpAniSirGlobal mac_ctx,
 	tLimMlmJoinCnf mlm_join_cnf;
 	tpPESession session = (tpPESession) ctx;
 	tSirLinkState lnk_state;
+	struct session_params *pe_session_param = NULL;
 
 	if (QDF_STATUS_SUCCESS != status) {
 		pe_err("Sessionid %d Suspend link(NOTIFY_BSS) failed. Still proceeding with join",
@@ -820,11 +832,18 @@ lim_process_mlm_post_join_suspend_link(tpAniSirGlobal mac_ctx,
 	pe_debug("[lim_process_mlm_join_req]: lnk_state: %d",
 		lnk_state);
 
+	pe_session_param = qdf_mem_malloc(sizeof(struct session_params));
+	if (pe_session_param) {
+		pe_session_param->session_id = session->peSessionId;
+	} else {
+		pe_err("insufficient memory");
+		goto error;
+	}
 	if (lim_set_link_state(mac_ctx, lnk_state,
 			session->pLimMlmJoinReq->bssDescription.bssId,
 			session->selfMacAddr,
 			lim_post_join_set_link_state_callback,
-			session) != QDF_STATUS_SUCCESS) {
+			pe_session_param) != QDF_STATUS_SUCCESS) {
 		pe_err("SessionId:%d lim_set_link_state to eSIR_LINK_PREASSOC_STATE Failed!!",
 			session->peSessionId);
 		lim_print_mac_addr(mac_ctx,
@@ -833,6 +852,7 @@ lim_process_mlm_post_join_suspend_link(tpAniSirGlobal mac_ctx,
 		session->limMlmState = eLIM_MLM_IDLE_STATE;
 		MTRACE(mac_trace(mac_ctx, TRACE_CODE_MLM_STATE,
 				 session->peSessionId, session->limMlmState));
+		qdf_mem_free(pe_session_param);
 		goto error;
 	}
 
@@ -2358,7 +2378,7 @@ static void lim_process_auth_retry_timer(tpAniSirGlobal mac_ctx)
 			auth_frame.authTransactionSeqNumber =
 						SIR_MAC_AUTH_FRAME_1;
 			auth_frame.authStatusCode = 0;
-			pe_warn("Retry Auth");
+			pe_debug("Retry Auth");
 			mac_ctx->auth_ack_status = LIM_AUTH_ACK_NOT_RCD;
 			lim_increase_fils_sequence_number(session_entry);
 			lim_send_auth_mgmt_frame(mac_ctx,
@@ -2541,7 +2561,7 @@ void lim_process_assoc_failure_timeout(tpAniSirGlobal mac_ctx,
 	 * when device has missed the assoc resp sent by peer.
 	 * By sending deauth try to clear the session created on peer device.
 	 */
-	pe_info("Sessionid: %d try sending deauth on channel %d to BSSID: "
+	pe_debug("Sessionid: %d try sending deauth on channel %d to BSSID: "
 		MAC_ADDRESS_STR, session->peSessionId,
 		session->currentOperChannel,
 		MAC_ADDR_ARRAY(session->bssId));

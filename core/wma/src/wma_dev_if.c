@@ -464,15 +464,6 @@ static void wma_vdev_detach_callback(void *ctx)
 			qdf_mem_free(req_msg);
 		}
 	}
-	if (iface->addBssStaContext)
-		qdf_mem_free(iface->addBssStaContext);
-
-
-	if (iface->staKeyParams)
-		qdf_mem_free(iface->staKeyParams);
-
-	if (iface->stats_rsp)
-		qdf_mem_free(iface->stats_rsp);
 
 	wma_vdev_deinit(iface);
 	qdf_mem_zero(iface, sizeof(*iface));
@@ -607,6 +598,7 @@ static QDF_STATUS wma_handle_vdev_detach(tp_wma_handle wma_handle,
 		WMA_LOGE("%s: Failed to fill vdev request for vdev_id %d",
 			 __func__, vdev_id);
 		status = QDF_STATUS_E_NOMEM;
+		iface->del_staself_req = NULL;
 		goto out;
 	}
 
@@ -631,11 +623,6 @@ out:
 	WMA_LOGE("Call txrx detach callback for vdev %d, generate_rsp %u",
 		vdev_id, generate_rsp);
 	wma_cdp_vdev_detach(soc, wma_handle, vdev_id);
-
-	if (iface->addBssStaContext)
-		qdf_mem_free(iface->addBssStaContext);
-	if (iface->staKeyParams)
-		qdf_mem_free(iface->staKeyParams);
 
 	wma_vdev_deinit(iface);
 	qdf_mem_zero(iface, sizeof(*iface));
@@ -786,10 +773,10 @@ QDF_STATUS wma_vdev_detach(tp_wma_handle wma_handle,
 	}
 
 	/*
-	 * In SSR case, there is no need to destroy vdev in firmware since
-	 * it has already asserted.
+	 * In SSR case or if FW is down, there is no need to destroy vdev in
+	 * firmware since it has already asserted.
 	 */
-	if (cds_is_driver_recovering()) {
+	if (cds_is_driver_recovering() || !cds_is_target_ready()) {
 		wma_force_vdev_cleanup(wma_handle, vdev_id);
 		/* Delete objmgr self peer of STA as part of SSR. */
 		if (iface->type == WMI_VDEV_TYPE_STA) {
@@ -855,17 +842,8 @@ QDF_STATUS wma_vdev_detach(tp_wma_handle wma_handle,
 	return status;
 
 send_fail_rsp:
-	if (!cds_is_driver_recovering()) {
-		if (cds_is_self_recovery_enabled()) {
-			WMA_LOGE("rcvd del_self_sta without del_bss, trigger recovery, vdev_id %d",
-				 vdev_id);
-			cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
-		} else {
-			WMA_LOGE("rcvd del_self_sta without del_bss, BUG_ON(), vdev_id %d",
-				 vdev_id);
-			QDF_BUG(0);
-		}
-	}
+	WMA_LOGE("rcvd del_self_sta without del_bss; vdev_id:%d", vdev_id);
+	cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
 	status = QDF_STATUS_E_FAILURE;
 
 send_rsp:
@@ -1151,37 +1129,24 @@ int wma_vdev_start_resp_handler(void *handle, uint8_t *cmd_param_info,
 		policy_mgr_set_do_hw_mode_change_flag(wma->psoc, false);
 		return -EINVAL;
 	}
+	qdf_mc_timer_stop(&req_msg->event_timeout);
 
-	if ((resp_event->vdev_id < wma->max_bssid) &&
-	    (qdf_atomic_read(
-	    &wma->interfaces[resp_event->vdev_id].vdev_restart_params.hidden_ssid_restart_in_progress))
-	    && (wma_is_vdev_in_ap_mode(wma, resp_event->vdev_id) == true)
-	    && (req_msg->msg_type == WMA_HIDDEN_SSID_VDEV_RESTART)) {
+	if ((qdf_atomic_read(
+	    &wma->interfaces[resp_event->vdev_id].vdev_restart_params.
+					hidden_ssid_restart_in_progress)) &&
+	    wma_is_vdev_in_ap_mode(wma, resp_event->vdev_id) &&
+	    (req_msg->msg_type == WMA_HIDDEN_SSID_VDEV_RESTART)) {
 		tpHalHiddenSsidVdevRestart hidden_ssid_restart =
 			(tpHalHiddenSsidVdevRestart)req_msg->user_data;
 		WMA_LOGE("%s: vdev restart event recevied for hidden ssid set using IOCTL",
 			__func__);
-
-		param.vdev_id = resp_event->vdev_id;
-		param.assoc_id = 0;
 		qdf_atomic_set(&wma->interfaces[resp_event->vdev_id].
 			       vdev_restart_params.
 			       hidden_ssid_restart_in_progress, 0);
 
 		wma_send_msg(wma, WMA_HIDDEN_SSID_RESTART_RSP,
 				(void *)hidden_ssid_restart, 0);
-		/*
-		 * Unpause TX queue in SAP case while configuring hidden ssid
-		 * enable or disable, else the data path is paused forever
-		 * causing data packets(starting from DHCP offer) to get stuck
-		 */
-		cdp_fc_vdev_unpause(cds_get_context(QDF_MODULE_ID_SOC),
-				iface->handle,
-				OL_TXQ_PAUSE_REASON_VDEV_STOP);
-		wma_vdev_clear_pause_bit(resp_event->vdev_id, PAUSE_TYPE_HOST);
 	}
-
-	qdf_mc_timer_stop(&req_msg->event_timeout);
 
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
 	if (resp_event->status == QDF_STATUS_SUCCESS
@@ -1647,6 +1612,11 @@ QDF_STATUS wma_create_peer(tp_wma_handle wma, struct cdp_pdev *pdev,
 	target_resource_config *wlan_res_cfg;
 	struct wlan_objmgr_peer *obj_peer = NULL;
 
+	if (!cds_is_target_ready()) {
+		WMA_LOGE(FL("target not ready, drop the request"));
+		return QDF_STATUS_E_BUSY;
+	}
+
 	if (!psoc) {
 		WMA_LOGE("%s: psoc is NULL", __func__);
 		return QDF_STATUS_E_INVAL;
@@ -1755,52 +1725,6 @@ err:
 }
 
 /**
- * wma_hidden_ssid_vdev_restart_on_vdev_stop() - restart vdev to set hidden ssid
- * @wma_handle: wma handle
- * @sessionId: session id
- *
- * Return: none
- */
-static void wma_hidden_ssid_vdev_restart_on_vdev_stop(tp_wma_handle wma_handle,
-						      uint8_t sessionId)
-{
-	struct wma_txrx_node *intr = wma_handle->interfaces;
-	struct hidden_ssid_vdev_restart_params params;
-	QDF_STATUS status;
-
-	params.session_id = sessionId;
-	params.ssid_len = intr[sessionId].vdev_restart_params.ssid.ssid_len;
-	qdf_mem_copy(params.ssid,
-		     intr[sessionId].vdev_restart_params.ssid.ssid,
-		     params.ssid_len);
-	params.flags = intr[sessionId].vdev_restart_params.flags;
-	if (intr[sessionId].vdev_restart_params.ssidHidden)
-		params.flags |= WMI_UNIFIED_VDEV_START_HIDDEN_SSID;
-	else
-		params.flags &= (0xFFFFFFFE);
-	params.requestor_id = intr[sessionId].vdev_restart_params.requestor_id;
-	params.disable_hw_ack =
-		intr[sessionId].vdev_restart_params.disable_hw_ack;
-
-	params.mhz = intr[sessionId].vdev_restart_params.chan.mhz;
-	params.band_center_freq1 =
-		intr[sessionId].vdev_restart_params.chan.band_center_freq1;
-	params.band_center_freq2 =
-		intr[sessionId].vdev_restart_params.chan.band_center_freq2;
-	params.info = intr[sessionId].vdev_restart_params.chan.info;
-	params.reg_info_1 = intr[sessionId].vdev_restart_params.chan.reg_info_1;
-	params.reg_info_2 = intr[sessionId].vdev_restart_params.chan.reg_info_2;
-
-	status = wmi_unified_hidden_ssid_vdev_restart_send(
-			wma_handle->wmi_handle,	&params);
-	if (status == QDF_STATUS_E_FAILURE) {
-		WMA_LOGE("%s: Failed to send vdev restart command", __func__);
-		qdf_atomic_set(&intr[sessionId].vdev_restart_params.
-			       hidden_ssid_restart_in_progress, 0);
-	}
-}
-
-/**
  * wma_cleanup_target_req_param() - free param memory of target request
  * @tgt_req: target request params
  *
@@ -1819,6 +1743,7 @@ static void wma_cleanup_target_req_param(struct wma_target_req *tgt_req)
 		tpLinkStateParams params =
 			(tpLinkStateParams) tgt_req->user_data;
 		qdf_mem_free(params->callbackArg);
+		params->callbackArg = NULL;
 		qdf_mem_free(tgt_req->user_data);
 		tgt_req->user_data = NULL;
 	}
@@ -2085,7 +2010,7 @@ int wma_vdev_stop_resp_handler(void *handle, uint8_t *cmd_param_info,
 	tp_wma_handle wma = (tp_wma_handle) handle;
 	WMI_VDEV_STOPPED_EVENTID_param_tlvs *param_buf;
 	wmi_vdev_stopped_event_fixed_param *resp_event;
-	struct wma_target_req *req_msg, *del_req, *new_req_msg;
+	struct wma_target_req *req_msg, *del_req;
 	struct cdp_pdev *pdev;
 	void *peer = NULL;
 	uint8_t peer_id;
@@ -2132,31 +2057,6 @@ int wma_vdev_stop_resp_handler(void *handle, uint8_t *cmd_param_info,
 		WMA_LOGE("%s: Failed to lookup vdev request for vdev id %d",
 			 __func__, resp_event->vdev_id);
 		return -EINVAL;
-	}
-
-	if ((qdf_atomic_read
-		     (&wma->interfaces[resp_event->vdev_id].vdev_restart_params.
-		     hidden_ssid_restart_in_progress))
-	    && ((wma->interfaces[resp_event->vdev_id].type == WMI_VDEV_TYPE_AP)
-		&& (wma->interfaces[resp_event->vdev_id].sub_type == 0))) {
-		WMA_LOGE("%s: vdev stop event recevied for hidden ssid set using IOCTL ",
-			__func__);
-
-		wma_vdev_set_mlme_state(wma,
-				resp_event->vdev_id, WLAN_VDEV_S_STOP);
-		new_req_msg = wma_fill_vdev_req(wma, resp_event->vdev_id,
-				WMA_HIDDEN_SSID_VDEV_RESTART,
-				WMA_TARGET_REQ_TYPE_VDEV_START,
-				req_msg->user_data,
-				WMA_VDEV_START_REQUEST_TIMEOUT);
-		if (!new_req_msg) {
-			WMA_LOGE("%s: Failed to fill vdev request, vdev_id %d",
-					__func__, resp_event->vdev_id);
-			return -EINVAL;
-		}
-
-		wma_hidden_ssid_vdev_restart_on_vdev_stop(wma,
-							  resp_event->vdev_id);
 	}
 
 	pdev = cds_get_context(QDF_MODULE_ID_TXRX);
@@ -2772,16 +2672,8 @@ QDF_STATUS wma_vdev_start(tp_wma_handle wma,
 					    WMA_TARGET_REQ_TYPE_VDEV_STOP,
 					    false);
 		if (!req_msg || req_msg->msg_type != WMA_DELETE_BSS_REQ) {
-			if (!cds_is_driver_recovering()) {
-				if (cds_is_self_recovery_enabled()) {
-					WMA_LOGE("BSS is in started state before vdev start, trigger recovery");
-					cds_trigger_recovery(
-						QDF_REASON_UNSPECIFIED);
-				} else {
-					WMA_LOGE("BSS is in started state before vdev start, BUG_ON()");
-					QDF_BUG(0);
-				}
-			}
+			WMA_LOGE("BSS is in started state before vdev start");
+			cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
 		}
 	}
 
@@ -3184,18 +3076,11 @@ int wma_peer_delete_handler(void *handle, uint8_t *cmd_param_info,
 	return status;
 }
 
-static void wma_trigger_recovery_assert_on_fw_timeout(
-			uint16_t wma_msg)
+static void wma_trigger_recovery_assert_on_fw_timeout(uint16_t wma_msg)
 {
-	if (cds_is_self_recovery_enabled()) {
-		WMA_LOGE("%s timed out, triggering recovery",
-			 mac_trace_get_wma_msg_string(wma_msg));
-		cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
-	} else {
-		WMA_LOGE("%s timed out, BUG_ON()",
-			 mac_trace_get_wma_msg_string(wma_msg));
-		QDF_BUG(0);
-	}
+	WMA_LOGE("%s timed out, triggering recovery",
+		 mac_trace_get_wma_msg_string(wma_msg));
+	cds_trigger_recovery(QDF_REASON_UNSPECIFIED);
 }
 
 static inline bool wma_crash_on_fw_timeout(bool crash_enabled)
@@ -3631,16 +3516,7 @@ void wma_vdev_resp_timer(void *data)
 			iface->del_staself_req = NULL;
 		} else {
 			wma_send_del_sta_self_resp(iface->del_staself_req);
-		}
-
-		if (iface->addBssStaContext) {
-			qdf_mem_free(iface->addBssStaContext);
-			iface->addBssStaContext = NULL;
-		}
-
-		if (iface->staKeyParams) {
-			qdf_mem_free(iface->staKeyParams);
-			iface->staKeyParams = NULL;
+			iface->del_staself_req = NULL;
 		}
 
 		wma_vdev_deinit(iface);
@@ -3680,8 +3556,18 @@ void wma_vdev_resp_timer(void *data)
 			WLAN_VDEV_S_STOP);
 		wma_ocb_set_config_resp(wma, QDF_STATUS_E_TIMEOUT);
 	} else if (tgt_req->msg_type == WMA_HIDDEN_SSID_VDEV_RESTART) {
-		WMA_LOGE("Hidden ssid vdev restart Timed Out; vdev_id: %d, type = %d",
-				tgt_req->vdev_id, tgt_req->type);
+		if ((qdf_atomic_read(
+		    &wma->interfaces[tgt_req->vdev_id].vdev_restart_params.
+					hidden_ssid_restart_in_progress)) &&
+		    wma_is_vdev_in_ap_mode(wma, tgt_req->vdev_id)) {
+
+			WMA_LOGE("Hidden ssid vdev restart Timed Out; vdev_id: %d, type = %d",
+				 tgt_req->vdev_id, tgt_req->type);
+			qdf_atomic_set(&wma->interfaces[tgt_req->vdev_id].
+				       vdev_restart_params.
+				       hidden_ssid_restart_in_progress, 0);
+			qdf_mem_free(tgt_req->user_data);
+		}
 	} else if (tgt_req->msg_type == WMA_SET_LINK_STATE) {
 		tpLinkStateParams params =
 			(tpLinkStateParams) tgt_req->user_data;
@@ -4387,14 +4273,17 @@ static void wma_add_bss_sta_mode(tp_wma_handle wma, tpAddBssParams add_bss)
 		else
 			WMA_LOGD("Sent PKT_PWR_SAVE_5G_EBT cmd to target, val = %x, status = %d",
 				pps_val, status);
-		wma_send_peer_assoc(wma, add_bss->nwType,
-					    &add_bss->staContext);
-		/* we just had peer assoc, so install key will be done later */
+		status = wma_send_peer_assoc(wma, add_bss->nwType,
+					     &add_bss->staContext);
+		if (QDF_IS_STATUS_ERROR(status)) {
+			WMA_LOGE("Failed to send peer assoc status:%d", status);
+			goto peer_cleanup;
+		}
+		peer_assoc_sent = true;
 
+		/* we just had peer assoc, so install key will be done later */
 		if (add_bss->staContext.encryptType != eSIR_ED_NONE)
 			iface->is_waiting_for_key = true;
-
-		peer_assoc_sent = true;
 
 		if (add_bss->rmfEnabled)
 			wma_set_mgmt_frame_protection(wma);

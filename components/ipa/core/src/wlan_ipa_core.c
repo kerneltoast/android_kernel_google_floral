@@ -976,11 +976,6 @@ QDF_STATUS wlan_ipa_uc_disable_pipes(struct wlan_ipa_priv *ipa_ctx)
 	ipa_debug("enter");
 
 	if (ipa_ctx->ipa_pipes_down) {
-		/*
-		 * This shouldn't happen :
-		 * IPA WDI Pipes are already deactivated
-		 */
-		QDF_ASSERT(0);
 		ipa_warn("IPA WDI Pipes are already deactivated");
 		goto end;
 	}
@@ -1554,7 +1549,8 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 			/* Disable IPA UC TX PIPE when STA disconnected */
 			if ((ipa_ctx->num_iface == 1) &&
 			    wlan_ipa_is_fw_wdi_activated(ipa_ctx) &&
-			    !ipa_ctx->ipa_pipes_down) {
+			    !ipa_ctx->ipa_pipes_down &&
+			    (ipa_ctx->resource_unloading == false)) {
 				if (cds_is_driver_unloading()) {
 					/*
 					 * We disable WDI pipes directly here
@@ -1598,7 +1594,8 @@ static QDF_STATUS __wlan_ipa_wlan_evt(qdf_netdev_t net_dev, uint8_t device_mode,
 
 		if ((ipa_ctx->num_iface == 1) &&
 		    wlan_ipa_is_fw_wdi_activated(ipa_ctx) &&
-		    !ipa_ctx->ipa_pipes_down) {
+		    !ipa_ctx->ipa_pipes_down &&
+		    (ipa_ctx->resource_unloading == false)) {
 			if (cds_is_driver_unloading()) {
 				/*
 				 * We disable WDI pipes directly here since

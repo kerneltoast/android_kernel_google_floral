@@ -274,6 +274,7 @@ typedef enum eSirResultCodes {
 	eSIR_SME_DEAUTH_STATUS,
 	eSIR_PNO_SCAN_SUCCESS,
 	eSIR_SME_INVALID_SESSION,
+	eSIR_SME_PEER_CREATE_FAILED,
 	eSIR_DONOT_USE_RESULT_CODE = SIR_MAX_ENUM_SIZE
 } tSirResultCodes;
 
@@ -412,6 +413,7 @@ typedef struct sSirSmeReadyReq {
 	uint16_t transactionId;
 	void *csr_roam_synch_cb;
 	void *pe_roam_synch_cb;
+	void *stop_roaming_cb;
 	QDF_STATUS (*sme_msg_cb)(tpAniSirGlobal mac,
 				 struct scheduler_msg *msg);
 } tSirSmeReadyReq, *tpSirSmeReadyReq;
@@ -1784,28 +1786,6 @@ typedef struct sAniGetSnrReq {
 	void *pDevContext;      /* device context */
 	int8_t snr;
 } tAniGetSnrReq, *tpAniGetSnrReq;
-
-/**
- * struct ani_scan_req - Scan request
- * @msg_type: Message type
- * @msg_len: Message Length
- * @session_id: SME session Id
- * @scan_param: scan request parameter
- * @callback: call back function for scan result
- * @ctx: Global context
- *
- * Scan request message structure
- */
-struct ani_scan_req {
-	/* message type is same as the request type */
-	uint16_t msg_type;
-	/* length of the entire request */
-	uint16_t msg_len;
-	uint16_t session_id;
-	void *scan_param;
-	void *callback;
-	void *ctx;
-};
 
 /**
  * struct ani_roc_req - Remain on channel request
@@ -3902,7 +3882,6 @@ struct sir_wisa_params {
 
 #define WLAN_EXTSCAN_MAX_CHANNELS                 36
 #define WLAN_EXTSCAN_MAX_BUCKETS                  16
-#define WLAN_EXTSCAN_MAX_HOTLIST_APS              128
 #define WLAN_EXTSCAN_MAX_SIGNIFICANT_CHANGE_APS   64
 
 typedef enum {
@@ -4317,23 +4296,6 @@ typedef struct {
 	uint32_t requestId;
 	uint8_t sessionId;
 } tSirExtScanStopReqParams, *tpSirExtScanStopReqParams;
-
-/**
- * struct tSirExtScanSetBssidHotListReqParams - set hotlist request
- * @requestId: request identifier
- * @sessionId: session identifier
- * @lost_ap_sample_size: number of samples to confirm AP loss
- * @numAp: Number of hotlist APs
- * @ap: hotlist APs
- */
-typedef struct {
-	uint32_t  requestId;
-	uint8_t   sessionId;
-
-	uint32_t  lost_ap_sample_size;
-	uint32_t  numAp;
-	tSirAPThresholdParam ap[WLAN_EXTSCAN_MAX_HOTLIST_APS];
-} tSirExtScanSetBssidHotListReqParams, *tpSirExtScanSetBssidHotListReqParams;
 
 typedef struct {
 	uint32_t requestId;
