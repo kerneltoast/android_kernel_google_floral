@@ -790,6 +790,106 @@ set_stereo_to_custom_stereo_return:
 EXPORT_SYMBOL(adm_set_stereo_to_custom_stereo);
 
 /*
+ * adm_set_custom_chmix_cfg:
+ *	Set the custom channel mixer configuration for ADM
+ *
+ * @port_id: Backend port id
+ * @copp_idx: ADM copp index
+ * @session_id: ID of the requesting session
+ * @params: Expected packaged params for channel mixer
+ * @params_length: Length of the params to be set
+ * @direction: RX or TX direction
+ * @stream_type: Audio or Listen stream type
+ */
+int adm_set_custom_chmix_cfg(int port_id, int copp_idx,
+			     unsigned int session_id, char *params,
+			     uint32_t params_length, int direction,
+			     int stream_type)
+{
+	struct adm_cmd_set_pspd_mtmx_strtr_params_v6 *adm_params = NULL;
+	int sz, rc = 0, port_idx;
+
+	port_id = afe_convert_virtual_to_portid(port_id);
+	port_idx = adm_validate_and_get_port_index(port_id);
+	if (port_idx < 0) {
+		pr_err("%s: Invalid port_id 0x%x\n", __func__, port_id);
+		return -EINVAL;
+	}
+
+	sz = sizeof(struct adm_cmd_set_pspd_mtmx_strtr_params_v6) +
+		params_length;
+	adm_params = kzalloc(sz, GFP_KERNEL);
+	if (!adm_params) {
+		pr_err("%s, adm params memory alloc failed\n", __func__);
+		return -ENOMEM;
+	}
+
+	memcpy(((u8 *)adm_params +
+		sizeof(struct adm_cmd_set_pspd_mtmx_strtr_params_v6)),
+		params, params_length);
+	adm_params->hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+					APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
+	adm_params->hdr.pkt_size = sz;
+	adm_params->hdr.src_svc = APR_SVC_ADM;
+	adm_params->hdr.src_domain = APR_DOMAIN_APPS;
+	adm_params->hdr.src_port = port_id;
+	adm_params->hdr.dest_svc = APR_SVC_ADM;
+	adm_params->hdr.dest_domain = APR_DOMAIN_ADSP;
+	adm_params->hdr.dest_port = 0; /* Ignored */;
+	adm_params->hdr.token = port_idx << 16 | copp_idx;
+	adm_params->hdr.opcode = ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V6;
+	adm_params->payload_addr_lsw = 0;
+	adm_params->payload_addr_msw = 0;
+	adm_params->mem_map_handle = 0;
+	adm_params->payload_size = params_length;
+	adm_params->direction = direction;
+	/* session id for this cmd to be applied on */
+	adm_params->sessionid = session_id;
+	adm_params->deviceid =
+			atomic_read(&this_adm.copp.id[port_idx][copp_idx]);
+	/* connecting stream type i.e. lsm or asm */
+	adm_params->stream_type = stream_type;
+	pr_debug("%s: deviceid %d, session_id %d, src_port %d, dest_port %d\n",
+		__func__, adm_params->deviceid, adm_params->sessionid,
+		adm_params->hdr.src_port, adm_params->hdr.dest_port);
+	atomic_set(&this_adm.copp.stat[port_idx][copp_idx], -1);
+	rc = apr_send_pkt(this_adm.apr, (uint32_t *)adm_params);
+	if (rc < 0) {
+		pr_err("%s: Set params failed port = 0x%x rc %d\n",
+			__func__, port_id, rc);
+		rc = -EINVAL;
+		goto exit;
+	}
+	/* Wait for the callback */
+	rc = wait_event_timeout(this_adm.copp.wait[port_idx][copp_idx],
+				atomic_read(&this_adm.copp.stat
+				[port_idx][copp_idx]),
+				msecs_to_jiffies(TIMEOUT_MS));
+	if (!rc) {
+		pr_err("%s: Set params timed out port = 0x%x\n", __func__,
+			port_id);
+		rc = -EINVAL;
+		goto exit;
+	} else if (atomic_read(&this_adm.copp.stat
+				[port_idx][copp_idx]) > 0) {
+		pr_err("%s: DSP returned error[%s]\n", __func__,
+			adsp_err_get_err_str(atomic_read(
+				&this_adm.copp.stat
+				[port_idx][copp_idx])));
+		rc = adsp_err_get_lnx_err_code(
+				atomic_read(&this_adm.copp.stat
+					[port_idx][copp_idx]));
+		goto exit;
+	}
+
+	rc = 0;
+exit:
+	kfree(adm_params);
+	return rc;
+}
+EXPORT_SYMBOL(adm_set_custom_chmix_cfg);
+
+/*
  * With pre-packed data, only the opcode differes from V5 and V6.
  * Use q6common_pack_pp_params to pack the data correctly.
  */
@@ -965,7 +1065,10 @@ int adm_get_pp_params(int port_id, int copp_idx, uint32_t client_id,
 				NULL, &total_size);
 
 	/* Pack APR header after filling body so total_size has correct value */
-	adm_get_params.apr_hdr.pkt_size = total_size;
+	adm_get_params.apr_hdr.hdr_field =
+		APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD, APR_HDR_LEN(APR_HDR_SIZE),
+			      APR_PKT_VER);
+	adm_get_params.apr_hdr.pkt_size = sizeof(adm_get_params);
 	adm_get_params.apr_hdr.src_svc = APR_SVC_ADM;
 	adm_get_params.apr_hdr.src_domain = APR_DOMAIN_APPS;
 	adm_get_params.apr_hdr.src_port = port_id;
@@ -983,6 +1086,7 @@ int adm_get_pp_params(int port_id, int copp_idx, uint32_t client_id,
 
 	copp_stat = &this_adm.copp.stat[port_idx][copp_idx];
 	atomic_set(copp_stat, -1);
+
 	ret = apr_send_pkt(this_adm.apr, (uint32_t *) &adm_get_params);
 	if (ret < 0) {
 		pr_err("%s: Get params APR send failed port = 0x%x ret %d\n",
@@ -1277,6 +1381,8 @@ static int adm_process_get_param_response(u32 opcode, u32 idx, u32 *payload,
 	if ((payload_size >= struct_size + data_size) &&
 	    (ARRAY_SIZE(adm_get_parameters) > idx) &&
 	    (ARRAY_SIZE(adm_get_parameters) >= idx + 1 + data_size)) {
+		pr_debug("%s: Received parameter data in band\n",
+					__func__);
 		/*
 		 * data_size is expressed in number of bytes, store in number of
 		 * ints
@@ -1287,12 +1393,16 @@ static int adm_process_get_param_response(u32 opcode, u32 idx, u32 *payload,
 			 __func__, adm_get_parameters[idx]);
 		/* store params after param_size */
 		memcpy(&adm_get_parameters[idx + 1], param_data, data_size);
-		return 0;
+	} else if (payload_size == sizeof(uint32_t)) {
+		adm_get_parameters[idx] = -1;
+		pr_debug("%s: Out of band case, setting size to %d\n",
+			 __func__, adm_get_parameters[idx]);
+	} else {
+		pr_err("%s: Invalid parameter combination, payload_size %d, idx %d\n",
+		       __func__, payload_size, idx);
+		return -EINVAL;
 	}
-
-	pr_err("%s: Invalid parameter combination, payload_size %d, idx %d\n",
-	       __func__, payload_size, idx);
-	return -EINVAL;
+	return 0;
 }
 
 static int adm_process_get_topo_list_response(u32 opcode, int copp_idx,
@@ -1544,7 +1654,8 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 				}
 				break;
 			case ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V5:
-				pr_debug("%s: ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V5\n",
+			case ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V6:
+				pr_debug("%s:callback received PSPD MTMX, wake up\n",
 					__func__);
 				atomic_set(&this_adm.copp.stat[port_idx]
 						[copp_idx], payload[1]);
@@ -1603,18 +1714,12 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 
 			idx = ADM_GET_PARAMETER_LENGTH * copp_idx;
 			if (payload[0] == 0 && data->payload_size > 0) {
-				pr_debug("%s: Received parameter data in band\n",
-					__func__);
 				ret = adm_process_get_param_response(
 					data->opcode, idx, payload,
 					data->payload_size);
 				if (ret)
 					pr_err("%s: Failed to process get param response, error %d\n",
 					       __func__, ret);
-			} else if (payload[0] == 0 && data->payload_size == 0) {
-				adm_get_parameters[idx] = -1;
-				pr_debug("%s: Out of band case, setting size to %d\n",
-					__func__, adm_get_parameters[idx]);
 			} else {
 				adm_get_parameters[idx] = -1;
 				pr_err("%s: ADM_CMDRSP_GET_PP_PARAMS returned error 0x%x\n",
@@ -2279,6 +2384,8 @@ int adm_arrange_mch_map(struct adm_cmd_device_open_v5 *open, int path,
 			 int channel_mode)
 {
 	int rc = 0, idx;
+
+	pr_debug("%s: channel mode %d", __func__, channel_mode);
 
 	memset(open->dev_channel_mapping, 0, PCM_FORMAT_MAX_NUM_CHANNEL);
 	switch (path) {
@@ -4216,7 +4323,7 @@ int adm_set_sound_focus(int port_id, int copp_idx,
 		  __func__, port_id, copp_idx);
 
 	memset(&param_hdr, 0, sizeof(param_hdr));
-	param_hdr.module_id = VOICEPROC_MODULE_ID_GENERIC_TX;
+	param_hdr.module_id = VOICEPROC_MODULE_ID_FLUENCE_PRO_VC_TX;
 	param_hdr.instance_id = INSTANCE_ID_0;
 	param_hdr.param_id = VOICEPROC_PARAM_ID_FLUENCE_SOUNDFOCUS;
 	param_hdr.param_size = sizeof(soundfocus_params);
@@ -4277,7 +4384,7 @@ int adm_get_sound_focus(int port_id, int copp_idx,
 		return -ENOMEM;
 
 	memset(&param_hdr, 0, sizeof(param_hdr));
-	param_hdr.module_id = VOICEPROC_MODULE_ID_GENERIC_TX;
+	param_hdr.module_id = VOICEPROC_MODULE_ID_FLUENCE_PRO_VC_TX;
 	param_hdr.instance_id = INSTANCE_ID_0;
 	param_hdr.param_id = VOICEPROC_PARAM_ID_FLUENCE_SOUNDFOCUS;
 	param_hdr.param_size = max_param_size;
@@ -4416,7 +4523,7 @@ int adm_get_source_tracking(int port_id, int copp_idx,
 	mem_hdr.mem_map_handle = atomic_read(
 		&this_adm.mem_map_handles[ADM_MEM_MAP_INDEX_SOURCE_TRACKING]);
 
-	param_hdr.module_id = VOICEPROC_MODULE_ID_GENERIC_TX;
+	param_hdr.module_id = VOICEPROC_MODULE_ID_FLUENCE_PRO_VC_TX;
 	param_hdr.instance_id = INSTANCE_ID_0;
 	param_hdr.param_id = VOICEPROC_PARAM_ID_FLUENCE_SOURCETRACKING;
 	/*

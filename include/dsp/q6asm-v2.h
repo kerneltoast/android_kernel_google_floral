@@ -303,7 +303,8 @@ int q6asm_open_write_v2(struct audio_client *ac, uint32_t format,
 			uint16_t bits_per_sample);
 
 int q6asm_open_shared_io(struct audio_client *ac,
-			 struct shared_io_config *c, int dir);
+			 struct shared_io_config *c, int dir,
+			 bool use_default_chmap, u8 *channel_map);
 
 int q6asm_open_write_v3(struct audio_client *ac, uint32_t format,
 			uint16_t bits_per_sample);
@@ -322,6 +323,9 @@ int q6asm_stream_open_write_v3(struct audio_client *ac, uint32_t format,
 int q6asm_stream_open_write_v4(struct audio_client *ac, uint32_t format,
 			       uint16_t bits_per_sample, int32_t stream_id,
 			       bool is_gapless_mode);
+
+int q6asm_open_read_compressed(struct audio_client *ac, uint32_t format,
+				uint32_t passthrough_flag);
 
 int q6asm_open_write_compressed(struct audio_client *ac, uint32_t format,
 				uint32_t passthrough_flag);

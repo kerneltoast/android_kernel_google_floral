@@ -575,6 +575,29 @@ struct adm_cmd_set_pspd_mtmx_strtr_params_v5 {
 	u16		reserved;
 } __packed;
 
+/* set customized mixing on matrix mixer.
+ * Updated to account for both LSM as well as ASM path.
+ */
+#define ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V6                        0x00010364
+struct adm_cmd_set_pspd_mtmx_strtr_params_v6 {
+	struct apr_hdr hdr;
+	/* LSW of parameter data payload address.*/
+	u32		payload_addr_lsw;
+	/* MSW of parameter data payload address.*/
+	u32		payload_addr_msw;
+	/* Memory map handle returned by ADM_CMD_SHARED_MEM_MAP_REGIONS */
+	/* command. If mem_map_handle is zero implies the message is in */
+	/* the payload */
+	u32		mem_map_handle;
+	/* Size in bytes of the variable payload accompanying this */
+	/* message or in shared memory. This is used for parsing the */
+	/* parameter payload. */
+	u32		payload_size;
+	u16		direction;
+	u16		sessionid;
+	u16		deviceid;
+	u16		stream_type;
+} __packed;
 /* Returns the status and COPP ID to an #ADM_CMD_DEVICE_OPEN_V5 command.
  */
 #define ADM_CMDRSP_DEVICE_OPEN_V5                      0x00010329
@@ -1213,7 +1236,11 @@ struct adm_cmd_connect_afe_port_v5 {
 #define AFE_PORT_ID_QUINARY_PCM_RX       0x103C
 #define AFE_PORT_ID_QUINARY_PCM_TX       0x103D
 
-#define AFE_PORT_ID_SPDIF_RX                0x5000
+#define AFE_PORT_ID_PRIMARY_SPDIF_RX        0x5000
+#define AFE_PORT_ID_PRIMARY_SPDIF_TX        0x5001
+#define AFE_PORT_ID_SECONDARY_SPDIF_RX      0x5002
+#define AFE_PORT_ID_SECONDARY_SPDIF_TX      0x5003
+
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_RX   0x2000
 #define  AFE_PORT_ID_RT_PROXY_PORT_001_TX   0x2001
 #define AFE_PORT_ID_INTERNAL_BT_SCO_RX      0x3000
@@ -1283,6 +1310,48 @@ struct adm_cmd_connect_afe_port_v5 {
 
 /* AFE VA Codec DMA Tx port 1 */
 #define AFE_PORT_ID_VA_CODEC_DMA_TX_1            0xB023
+
+/* AFE Rx Codec DMA Rx port 0 */
+#define AFE_PORT_ID_RX_CODEC_DMA_RX_0            0xB030
+
+/* AFE Tx Codec DMA Tx port 0 */
+#define AFE_PORT_ID_TX_CODEC_DMA_TX_0            0xB031
+
+/* AFE Rx Codec DMA Rx port 1 */
+#define AFE_PORT_ID_RX_CODEC_DMA_RX_1            0xB032
+
+/* AFE Tx Codec DMA Tx port 1 */
+#define AFE_PORT_ID_TX_CODEC_DMA_TX_1            0xB033
+
+/* AFE Rx Codec DMA Rx port 2 */
+#define AFE_PORT_ID_RX_CODEC_DMA_RX_2            0xB034
+
+/* AFE Tx Codec DMA Tx port 2 */
+#define AFE_PORT_ID_TX_CODEC_DMA_TX_2            0xB035
+
+/* AFE Rx Codec DMA Rx port 3 */
+#define AFE_PORT_ID_RX_CODEC_DMA_RX_3            0xB036
+
+/* AFE Tx Codec DMA Tx port 3 */
+#define AFE_PORT_ID_TX_CODEC_DMA_TX_3            0xB037
+
+/* AFE Rx Codec DMA Rx port 4 */
+#define AFE_PORT_ID_RX_CODEC_DMA_RX_4            0xB038
+
+/* AFE Tx Codec DMA Tx port 4 */
+#define AFE_PORT_ID_TX_CODEC_DMA_TX_4            0xB039
+
+/* AFE Rx Codec DMA Rx port 5 */
+#define AFE_PORT_ID_RX_CODEC_DMA_RX_5            0xB03A
+
+/* AFE Tx Codec DMA Tx port 5 */
+#define AFE_PORT_ID_TX_CODEC_DMA_TX_5            0xB03B
+
+/* AFE Rx Codec DMA Rx port 6 */
+#define AFE_PORT_ID_RX_CODEC_DMA_RX_6            0xB03C
+
+/* AFE Rx Codec DMA Rx port 7 */
+#define AFE_PORT_ID_RX_CODEC_DMA_RX_7            0xB03E
 
 /* Generic pseudoport 1. */
 #define AFE_PORT_ID_PSEUDOPORT_01      0x8001
@@ -2247,6 +2316,7 @@ struct afe_param_id_i2s_cfg {
  * This param id is used to configure PCM interface
  */
 
+#define AFE_API_VERSION_SPDIF_CONFIG_V2 0x2
 #define AFE_API_VERSION_SPDIF_CONFIG 0x1
 #define AFE_API_VERSION_SPDIF_CH_STATUS_CONFIG 0x1
 #define AFE_API_VERSION_SPDIF_CLK_CONFIG 0x1
@@ -2260,10 +2330,20 @@ struct afe_param_id_i2s_cfg {
 #define AFE_PORT_CLK_ROOT_LPAPLL 0x3
 #define AFE_PORT_CLK_ROOT_LPAQ6PLL   0x4
 
-struct afe_param_id_spdif_cfg {
+#define AFE_MODULE_CUSTOM_EVENTS            0x00010251
+
+#define AFE_PORT_FMT_UPDATE_EVENT           0x0001010E
+
+#define AFE_API_VERSION_EVENT_FMT_UPDATE    0x1
+#define AFE_PORT_STATUS_NO_SIGNAL           0
+#define AFE_PORT_STATUS_AUDIO_ACTIVE        1
+#define AFE_PORT_STATUS_AUDIO_EOS           2
+
+struct afe_param_id_spdif_cfg_v2 {
 /* Minor version used for tracking the version of the SPDIF
  * configuration interface.
- * Supported values: #AFE_API_VERSION_SPDIF_CONFIG
+ * Supported values: #AFE_API_VERSION_SPDIF_CONFIG,
+ *                   #AFE_API_VERSION_SPDIF_CONFIG_V2
  */
 	u32	spdif_cfg_minor_version;
 
@@ -2295,6 +2375,8 @@ struct afe_param_id_spdif_cfg {
 	u16	bit_width;
 /* This field must be set to zero. */
 	u16	reserved;
+/* Input select for spdif input, must be set to 0 for spdif output. */
+	u32	src_sel;
 } __packed;
 
 struct afe_param_id_spdif_ch_status_cfg {
@@ -2321,6 +2403,7 @@ struct afe_param_id_spdif_ch_status_cfg {
  */
 } __packed;
 
+/* deprecated */
 struct afe_param_id_spdif_clk_cfg {
 	u32 clk_cfg_minor_version;
 /* Minor version used for tracking the version of SPDIF
@@ -2344,8 +2427,43 @@ struct afe_param_id_spdif_clk_cfg {
  */
 } __packed;
 
+struct afe_event_fmt_update {
+	/* Tracks the configuration of this event. */
+	u32 minor_version;
+
+	/* Detected port status.
+	 * Supported values:
+	 * - #AFE_PORT_STATUS_NO_SIGNAL
+	 * - #AFE_PORT_STATUS_AUDIO_ACTIVE
+	 * - #AFE_PORT_STATUS_AUDIO_EOS
+	 */
+	u32 status;
+
+	/* Sampling rate of the port.
+	 * Supported values:
+	 * - #AFE_PORT_SAMPLE_RATE_32K
+	 * - #AFE_PORT_SAMPLE_RATE_44_1K
+	 * - #AFE_PORT_SAMPLE_RATE_48K
+	 * - #AFE_PORT_SAMPLE_RATE_88_2K
+	 * - #AFE_PORT_SAMPLE_RATE_96K
+	 * - #AFE_PORT_SAMPLE_RATE_176_4K
+	 * - #AFE_PORT_SAMPLE_RATE_192K
+	 */
+	u32 sample_rate;
+
+	/* Data format of the port.
+	 * Supported values:
+	 * - #AFE_LINEAR_PCM_DATA
+	 * - #AFE_NON_LINEAR_DATA
+	 */
+	u16 data_format;
+
+	/* First 6 bytes of channel status bits */
+	u8 channel_status[6];
+} __packed;
+
 struct afe_spdif_port_config {
-	struct afe_param_id_spdif_cfg            cfg;
+	struct afe_param_id_spdif_cfg_v2         cfg;
 	struct afe_param_id_spdif_ch_status_cfg  ch_status;
 } __packed;
 
@@ -3416,6 +3534,21 @@ struct afe_param_id_aptx_sync_mode {
 	uint32_t     sync_mode;
 } __packed;
 
+#define AFE_ID_APTX_ADAPTIVE_ENC_INIT 0x00013324
+
+struct afe_id_aptx_adaptive_enc_init
+{
+	uint32_t  sampling_freq;
+	uint32_t  mtu;
+	uint32_t  channel_mode;
+	uint32_t  min_sink_modeA;
+	uint32_t  max_sink_modeA;
+	uint32_t  min_sink_modeB;
+	uint32_t  max_sink_modeB;
+	uint32_t  min_sink_modeC;
+	uint32_t  max_sink_modeC;
+} __attribute__ ((packed));
+
 /*
  * Generic encoder module ID.
  * This module supports the following parameter IDs:
@@ -3481,6 +3614,7 @@ struct afe_param_id_aptx_sync_mode {
  * Macro for defining the depacketizer ID: COP.
  */
 #define AFE_MODULE_ID_DEPACKETIZER_COP        0x00013233
+#define AFE_MODULE_ID_DEPACKETIZER_COP_V1     0x000132E9
 
 /*
  * Depacketizer type parameter for the #AVS_MODULE_ID_DECODER module.
@@ -3670,6 +3804,9 @@ struct asm_aac_enc_cfg_v2_t {
 /* FMT ID for apt-X HD */
 #define ASM_MEDIA_FMT_APTX_HD 0x00013200
 
+/* FMT ID for apt-X Adaptive */
+#define ASM_MEDIA_FMT_APTX_ADAPTIVE 0x00013204
+
 #define PCM_CHANNEL_L         1
 #define PCM_CHANNEL_R         2
 #define PCM_CHANNEL_C         3
@@ -3699,6 +3836,13 @@ struct asm_aptx_enc_cfg_t {
 	struct asm_custom_enc_cfg_t custom_cfg;
 	struct asm_aptx_v2_enc_cfg_ext_t aptx_v2_cfg;
 } __packed;
+
+struct asm_aptx_ad_enc_cfg_t
+{
+	struct asm_custom_enc_cfg_t  custom_cfg;
+	struct afe_id_aptx_adaptive_enc_init aptx_ad_cfg;
+	struct afe_abr_enc_cfg_t abr_cfg;
+} __attribute__ ((packed));
 
 #define ASM_MEDIA_FMT_CELT 0x00013221
 struct asm_celt_specific_enc_cfg_t {
@@ -3863,6 +4007,7 @@ union afe_enc_config_data {
 	struct asm_celt_enc_cfg_t  celt_config;
 	struct asm_aptx_enc_cfg_t  aptx_config;
 	struct asm_ldac_enc_cfg_t  ldac_config;
+	struct asm_aptx_ad_enc_cfg_t  aptx_ad_config;
 };
 
 struct afe_enc_config {
@@ -4043,7 +4188,7 @@ union afe_port_config {
 	struct afe_param_id_internal_bt_fm_cfg    int_bt_fm;
 	struct afe_param_id_pseudo_port_cfg       pseudo_port;
 	struct afe_param_id_device_hw_delay_cfg   hw_delay;
-	struct afe_param_id_spdif_cfg             spdif;
+	struct afe_param_id_spdif_cfg_v2          spdif;
 	struct afe_param_id_set_topology_cfg      topology;
 	struct afe_param_id_tdm_cfg               tdm;
 	struct afe_param_id_usb_audio_cfg         usb_audio;
@@ -4376,6 +4521,7 @@ struct afe_param_id_lpass_core_shared_clk_cfg {
 #define ADSP_MEMORY_MAP_SMI_POOL      1
 #define ADSP_MEMORY_MAP_IMEM_POOL      2
 #define ADSP_MEMORY_MAP_SHMEM8_4K_POOL      3
+#define ADSP_MEMORY_MAP_MDF_SHMEM_4K_POOL   4
 
 /* Definition of virtual memory flag */
 #define ADSP_MEMORY_MAP_VIRTUAL_MEMORY 1
@@ -4498,6 +4644,53 @@ struct avs_cmdrsp_shared_mem_map_regions {
  * returned
  */
 
+} __packed;
+
+#define AVS_MDF_MDSP_PROC_ID	 0x2
+#define AVS_MDF_SSC_PROC_ID      0x3
+#define AVS_MDF_CDSP_PROC_ID	 0x4
+
+/* Shared memory map command payload used by the
+ * #AVCS_CMD_MAP_MDF_SHARED_MEMORY.
+ *
+ * This structure allows clients to map multiple shared memory
+ * regions with remote processor ID. All mapped regions must be
+ * from the same memory pool. Following this structure are
+ * num_regions of avs_shared_map_region_payload.
+ */
+struct avs_cmd_map_mdf_shared_memory {
+	struct apr_hdr hdr;
+	uint32_t mem_map_handle;
+/* Unique identifier for the shared memory address.
+ *
+ * The aDSP returns this handle for
+ * #AVCS_CMD_SHARED_MEM_MAP_REGIONS
+ *
+ * Supported values:
+ * Any 32-bit value
+ *
+ * The aDSP uses this handle to retrieve the shared memory
+ * attributes. This handle can be an abstract representation
+ * of the shared memory regions that are being mapped.
+ */
+
+	uint32_t proc_id;
+/* Supported values:
+ * #AVS_MDF_MDSP_PROC_ID
+ * #AVS_MDF_SSC_PROC_ID
+ * #AVS_MDF_CDSP_PROC_ID
+ */
+
+	uint32_t num_regions;
+/* Number of regions to be mapped with the remote DSP processor
+ * mentioned by proc_id field.
+ *
+ * Array of structures of avs_shared_map_region_payload will follow.
+ * The address fields in those arrays should correspond to the remote
+ * processor mentioned by proc_id.
+ * In case of DSPs with SMMU enabled, the address should be IOVA.
+ * And for DSPs without SMMU, the address should be physical address.
+ */
 } __packed;
 
 /*adsp_audio_memmap_api.h*/
@@ -4683,6 +4876,7 @@ struct asm_softvolume_params {
 #define PCM_CHANNEL_RRC  16
 
 #define PCM_FORMAT_MAX_NUM_CHANNEL  8
+#define PCM_FORMAT_MAX_CHANNELS_9   9
 
 #define ASM_MEDIA_FMT_MULTI_CHANNEL_PCM_V2 0x00010DA5
 
@@ -4742,7 +4936,7 @@ struct asm_generic_compressed_fmt_blk_t {
 
 /* Command to send sample rate & channels for IEC61937 (compressed) or IEC60958
  * (pcm) streams. Both audio standards use the same format and are used for
- * HDMI or SPDIF.
+ * HDMI or SPDIF output.
  */
 #define ASM_DATA_CMD_IEC_60958_MEDIA_FMT        0x0001321E
 
@@ -7618,11 +7812,23 @@ struct asm_data_cmd_remove_silence {
 
 #define ASM_STREAM_CMD_OPEN_READ_COMPRESSED                        0x00010D95
 
+/* Bitmask for the IEC 61937 to 61937 pass-through capture. */
+#define ASM_BIT_MASK_IEC_61937_PASS_THROUGH_FLAG        (0x00000001UL)
+
+/* Shift value for the IEC 61937 to 61937 pass-through capture. */
+#define ASM_SHIFT_IEC_61937_PASS_THROUGH_FLAG           0
+
 struct asm_stream_cmd_open_read_compressed {
 	struct apr_hdr hdr;
 	u32                    mode_flags;
 /* Mode flags that indicate whether meta information per encoded
- * frame is to be provided.
+ * frame is to be provided and packaging.
+ * Supported values for bit 0: (IEC 61937 pass-through mode)
+ * - 0 -- Unpack the IEC 61937 format stream to RAW compressed format
+ * - 1 -- Pass-through transfer of the IEC 61937 format stream
+ * - Use #ASM_BIT_MASK_IEC_61937_PASS_THROUGH_FLAG to set the bitmask
+ *   and #ASM_SHIFT_IEC_61937_PASS_THROUGH_FLAG to set the shift value
+ *   for this bit.
  * Supported values for bit 4:
  * - 0 -- Return data buffer contains all encoded frames only; it does
  *      not contain frame metadata.
@@ -7636,7 +7842,9 @@ struct asm_stream_cmd_open_read_compressed {
 	u32                    frames_per_buf;
 /* Indicates the number of frames that need to be returned per
  * read buffer
- * Supported values: should be greater than 0
+ * Supported values: should be greater than 0 for IEC to RAW compressed
+ *                   unpack mode.
+ *                   Value is don't care for IEC 61937 pass-through mode.
  */
 
 } __packed;
@@ -9925,6 +10133,7 @@ struct avcs_fwk_ver_info {
 #define LSM_SESSION_CMD_EOB				(0x00012A89)
 #define LSM_SESSION_CMD_READ				(0x00012A8A)
 #define LSM_SESSION_CMD_OPEN_TX_V2			(0x00012A8B)
+#define LSM_SESSION_CMD_OPEN_TX_V3			(0x00012A95)
 #define LSM_CMD_ADD_TOPOLOGIES				(0x00012A8C)
 
 #define LSM_SESSION_EVENT_DETECTION_STATUS		(0x00012B00)
@@ -10027,6 +10236,17 @@ struct afe_param_id_cdc_aanc_version {
 
 	/* HW version. */
 	uint32_t aanc_hw_version;
+} __packed;
+
+#define AFE_PARAM_ID_AANC_NOISE_REDUCTION    0x000102AB
+struct afe_param_id_aanc_noise_reduction {
+	/* Minor version used for tracking the version of the module's
+	 * hw version
+	 */
+	uint32_t minor_version;
+
+	/* Target noise level */
+	int32_t ad_beta;
 } __packed;
 
 struct afe_param_id_clip_bank_sel {
@@ -10258,8 +10478,18 @@ enum afe_lpass_clk_mode {
 /* Clock ID for AHB HDMI input */
 #define Q6AFE_LPASS_CLK_ID_AHB_HDMI_INPUT                         0x400
 
-/* Clock ID for SPDIF core */
-#define Q6AFE_LPASS_CLK_ID_SPDIF_CORE                             0x500
+/* Clock ID for the primary SPDIF output core. */
+#define AFE_CLOCK_SET_CLOCK_ID_PRI_SPDIF_OUTPUT_CORE              0x500
+/* Clock ID for the secondary SPDIF output core. */
+#define AFE_CLOCK_SET_CLOCK_ID_SEC_SPDIF_OUTPUT_CORE              0x501
+/* Clock ID for the primary SPDIF input core. */
+#define AFE_CLOCK_SET_CLOCK_ID_PRI_SPDIF_INPUT_CORE               0x502
+/* Clock ID for the secondary SPDIF input core. */
+#define AFE_CLOCK_SET_CLOCK_ID_SEC_SPDIF_INPUT_CORE               0x503
+/* Clock ID for the secondary SPDIF output NPL clk. */
+#define AFE_CLOCK_SET_CLOCK_ID_PRI_SPDIF_OUTPUT_NPL               0x504
+/* Clock ID for the primary SPDIF output NPL clk. */
+#define AFE_CLOCK_SET_CLOCK_ID_SEC_SPDIF_OUTPUT_NPL               0x505
 
 
 /* Clock attribute for invalid use (reserved for internal usage) */
@@ -11239,6 +11469,7 @@ struct adm_set_compressed_device_latency {
 } __packed;
 
 #define VOICEPROC_MODULE_ID_GENERIC_TX                      0x00010EF6
+#define VOICEPROC_MODULE_ID_FLUENCE_PRO_VC_TX               0x00010F35
 #define VOICEPROC_PARAM_ID_FLUENCE_SOUNDFOCUS               0x00010E37
 #define VOICEPROC_PARAM_ID_FLUENCE_SOURCETRACKING           0x00010E38
 #define MAX_SECTORS                                         8

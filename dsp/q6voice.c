@@ -96,6 +96,8 @@ static int voice_send_cvp_channel_info_v2(struct voice_data *v,
 					  uint32_t param_type);
 static int voice_get_avcs_version_per_service(uint32_t service_id);
 
+static void voice_load_topo_modules(int cal_index);
+static void voice_unload_topo_modules(void);
 
 static int voice_cvs_stop_playback(struct voice_data *v);
 static int voice_cvs_start_playback(struct voice_data *v);
@@ -2698,6 +2700,35 @@ done:
 
 }
 
+static void voice_load_topo_modules(int cal_index)
+{
+	uint32_t topology_id;
+	int ret;
+
+	topology_id = voice_get_topology(cal_index);
+	ret = q6core_load_unload_topo_modules(topology_id, CORE_LOAD_TOPOLOGY);
+	if (ret < 0)
+		pr_debug("%s ret:%d load topo modules %d failed\n",
+			__func__, ret, topology_id);
+
+}
+
+static void voice_unload_topo_modules(void)
+{
+	uint32_t topology_id;
+	int i, ret;
+
+	for (i = CVP_VOC_RX_TOPOLOGY_CAL; i <= CVP_VOC_TX_TOPOLOGY_CAL; i++) {
+		topology_id = voice_get_topology(i);
+		ret = q6core_load_unload_topo_modules(topology_id,
+				CORE_UNLOAD_TOPOLOGY);
+		if (ret < 0) {
+			pr_debug("%s ret:%d unload topo modules %d failed\n",
+				  __func__, ret, topology_id);
+		}
+	}
+}
+
 static int voice_send_cvp_create_cmd(struct voice_data *v)
 {
 	struct cvp_create_full_ctl_session_cmd cvp_session_cmd;
@@ -5000,6 +5031,9 @@ static int voice_destroy_vocproc(struct voice_data *v)
 	voice_send_cvp_deregister_dev_cfg_cmd(v);
 	voice_send_cvs_deregister_cal_cmd(v);
 
+	/* Unload topology modules */
+	voice_unload_topo_modules();
+
 	/* destrop cvp session */
 	cvp_destroy_session_cmd.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 						APR_HDR_LEN(APR_HDR_SIZE),
@@ -6727,6 +6761,9 @@ int voc_disable_device(uint32_t session_id)
 		voice_send_cvp_deregister_vol_cal_cmd(v);
 		voice_send_cvp_deregister_cal_cmd(v);
 		voice_send_cvp_deregister_dev_cfg_cmd(v);
+
+		/* Unload topology modules */
+		voice_unload_topo_modules();
 
 		v->voc_state = VOC_CHANGE;
 	} else {
@@ -8721,6 +8758,11 @@ static int voice_set_cal(int32_t cal_type,
 		ret = -EINVAL;
 		goto done;
 	}
+	/* Pre-load if it is voice Rx or Tx topology */
+	if ((cal_index == CVP_VOC_RX_TOPOLOGY_CAL) ||
+		(cal_index == CVP_VOC_TX_TOPOLOGY_CAL)) {
+		voice_load_topo_modules(cal_index);
+	}
 done:
 	return ret;
 }
@@ -9522,6 +9564,8 @@ static int voice_pack_and_set_cvs_ui_property(struct voice_data *v,
 {
 	struct vss_icommon_cmd_set_ui_property *set_ui_property = NULL;
 	u32 total_size = 0;
+	u32 pkt_size = 0;
+	u32 param_size = 0;
 	bool iid_supported = q6common_is_instance_id_supported();
 	void *apr_cvs;
 	int ret = 0;
@@ -9532,14 +9576,15 @@ static int voice_pack_and_set_cvs_ui_property(struct voice_data *v,
 		return -EINVAL;
 	}
 
-	total_size = sizeof(struct vss_icommon_cmd_set_ui_property) +
-		     sizeof(union param_hdrs) + param_hdr.param_size;
+	pkt_size = sizeof(struct vss_icommon_cmd_set_ui_property);
+	param_size = sizeof(union param_hdrs) + param_hdr.param_size;
+	total_size = pkt_size + param_size;
 	set_ui_property = kzalloc(total_size, GFP_KERNEL);
 	if (!set_ui_property)
 		return -ENOMEM;
 
 	ret = q6common_pack_pp_params(set_ui_property->param_data, &param_hdr,
-				    param_data, &total_size);
+				    param_data, &param_size);
 	if (ret) {
 		pr_err("%s: Failed to pack params, error %d", __func__, ret);
 		goto done;
@@ -9549,11 +9594,11 @@ static int voice_pack_and_set_cvs_ui_property(struct voice_data *v,
 	 * Pack the APR header after packing the data so we have the actual
 	 * total size of the payload
 	 */
+	total_size = pkt_size + param_size;
 	set_ui_property->apr_hdr.hdr_field =
 		APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD, APR_HDR_LEN(APR_HDR_SIZE),
 			      APR_PKT_VER);
-	set_ui_property->apr_hdr.pkt_size =
-		APR_PKT_SIZE(APR_HDR_SIZE, total_size - APR_HDR_SIZE);
+	set_ui_property->apr_hdr.pkt_size = total_size;
 	set_ui_property->apr_hdr.src_svc = 0;
 	set_ui_property->apr_hdr.src_domain = APR_DOMAIN_APPS;
 	set_ui_property->apr_hdr.src_port =

@@ -758,7 +758,7 @@ static bool bolero_is_readable_register(struct device *dev,
 		return false;
 
 	reg_tbl = bolero_reg_access[macro_id];
-	reg_offset = reg - macro_id_base_offset[macro_id];
+	reg_offset = (reg - macro_id_base_offset[macro_id])/4;
 
 	if (reg_tbl)
 		return (reg_tbl[reg_offset] & RD_REG);
@@ -783,7 +783,7 @@ static bool bolero_is_writeable_register(struct device *dev,
 		return false;
 
 	reg_tbl = bolero_reg_access[macro_id];
-	reg_offset = reg - macro_id_base_offset[macro_id];
+	reg_offset = (reg - macro_id_base_offset[macro_id])/4;
 
 	if (reg_tbl)
 		return (reg_tbl[reg_offset] & WR_REG);
@@ -794,7 +794,58 @@ static bool bolero_is_writeable_register(struct device *dev,
 static bool bolero_is_volatile_register(struct device *dev,
 					unsigned int reg)
 {
-	return true;
+	/* Update volatile list for rx/tx macros */
+	switch (reg) {
+	case BOLERO_CDC_VA_TOP_CSR_CORE_ID_0:
+	case BOLERO_CDC_VA_TOP_CSR_CORE_ID_1:
+	case BOLERO_CDC_VA_TOP_CSR_CORE_ID_2:
+	case BOLERO_CDC_VA_TOP_CSR_CORE_ID_3:
+	case BOLERO_CDC_WSA_VBAT_BCL_VBAT_GAIN_MON_VAL:
+	case BOLERO_CDC_WSA_VBAT_BCL_VBAT_DECODE_ST:
+	case BOLERO_CDC_WSA_INTR_CTRL_PIN1_STATUS0:
+	case BOLERO_CDC_WSA_INTR_CTRL_PIN2_STATUS0:
+	case BOLERO_CDC_WSA_COMPANDER0_CTL6:
+	case BOLERO_CDC_WSA_COMPANDER1_CTL6:
+	case BOLERO_CDC_WSA_SPLINE_ASRC0_STATUS_FMIN_CNTR_LSB:
+	case BOLERO_CDC_WSA_SPLINE_ASRC0_STATUS_FMIN_CNTR_MSB:
+	case BOLERO_CDC_WSA_SPLINE_ASRC0_STATUS_FMAX_CNTR_LSB:
+	case BOLERO_CDC_WSA_SPLINE_ASRC0_STATUS_FMAX_CNTR_MSB:
+	case BOLERO_CDC_WSA_SPLINE_ASRC0_STATUS_FIFO:
+	case BOLERO_CDC_WSA_SPLINE_ASRC1_STATUS_FMIN_CNTR_LSB:
+	case BOLERO_CDC_WSA_SPLINE_ASRC1_STATUS_FMIN_CNTR_MSB:
+	case BOLERO_CDC_WSA_SPLINE_ASRC1_STATUS_FMAX_CNTR_LSB:
+	case BOLERO_CDC_WSA_SPLINE_ASRC1_STATUS_FMAX_CNTR_MSB:
+	case BOLERO_CDC_WSA_SPLINE_ASRC1_STATUS_FIFO:
+	case BOLERO_CDC_RX_TOP_HPHL_COMP_RD_LSB:
+	case BOLERO_CDC_RX_TOP_HPHL_COMP_RD_MSB:
+	case BOLERO_CDC_RX_TOP_HPHR_COMP_RD_LSB:
+	case BOLERO_CDC_RX_TOP_HPHR_COMP_RD_MSB:
+	case BOLERO_CDC_RX_TOP_DSD0_DEBUG_CFG2:
+	case BOLERO_CDC_RX_TOP_DSD1_DEBUG_CFG2:
+	case BOLERO_CDC_RX_BCL_VBAT_GAIN_MON_VAL:
+	case BOLERO_CDC_RX_BCL_VBAT_DECODE_ST:
+	case BOLERO_CDC_RX_INTR_CTRL_PIN1_STATUS0:
+	case BOLERO_CDC_RX_INTR_CTRL_PIN2_STATUS0:
+	case BOLERO_CDC_RX_COMPANDER0_CTL6:
+	case BOLERO_CDC_RX_COMPANDER1_CTL6:
+	case BOLERO_CDC_RX_EC_ASRC0_STATUS_FMIN_CNTR_LSB:
+	case BOLERO_CDC_RX_EC_ASRC0_STATUS_FMIN_CNTR_MSB:
+	case BOLERO_CDC_RX_EC_ASRC0_STATUS_FMAX_CNTR_LSB:
+	case BOLERO_CDC_RX_EC_ASRC0_STATUS_FMAX_CNTR_MSB:
+	case BOLERO_CDC_RX_EC_ASRC0_STATUS_FIFO:
+	case BOLERO_CDC_RX_EC_ASRC1_STATUS_FMIN_CNTR_LSB:
+	case BOLERO_CDC_RX_EC_ASRC1_STATUS_FMIN_CNTR_MSB:
+	case BOLERO_CDC_RX_EC_ASRC1_STATUS_FMAX_CNTR_LSB:
+	case BOLERO_CDC_RX_EC_ASRC1_STATUS_FMAX_CNTR_MSB:
+	case BOLERO_CDC_RX_EC_ASRC1_STATUS_FIFO:
+	case BOLERO_CDC_RX_EC_ASRC2_STATUS_FMIN_CNTR_LSB:
+	case BOLERO_CDC_RX_EC_ASRC2_STATUS_FMIN_CNTR_MSB:
+	case BOLERO_CDC_RX_EC_ASRC2_STATUS_FMAX_CNTR_LSB:
+	case BOLERO_CDC_RX_EC_ASRC2_STATUS_FMAX_CNTR_MSB:
+	case BOLERO_CDC_RX_EC_ASRC2_STATUS_FIFO:
+		return true;
+	}
+	return false;
 }
 
 const struct regmap_config bolero_regmap_config = {

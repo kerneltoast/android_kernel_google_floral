@@ -535,6 +535,48 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 	},
 	{
 		.playback = {
+			.stream_name = "CDC_DMA_HOSTLESS Playback",
+			.aif_name = "CDC_DMA_DL_HL",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE |
+				   SNDRV_PCM_FMTBIT_S32_LE,
+			.channels_min = 1,
+			.channels_max = 2,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.capture = {
+			.stream_name = "CDC_DMA_HOSTLESS Capture",
+			.aif_name = "CDC_DMA_UL_HL",
+			.rates = SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_11025 |
+				SNDRV_PCM_RATE_16000 | SNDRV_PCM_RATE_22050 |
+				SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_44100 |
+				SNDRV_PCM_RATE_48000 | SNDRV_PCM_RATE_88200 |
+				SNDRV_PCM_RATE_96000 | SNDRV_PCM_RATE_176400 |
+				SNDRV_PCM_RATE_192000 | SNDRV_PCM_RATE_352800 |
+				SNDRV_PCM_RATE_384000,
+			.formats = SNDRV_PCM_FMTBIT_S16_LE |
+				   SNDRV_PCM_FMTBIT_S24_LE |
+				   SNDRV_PCM_FMTBIT_S24_3LE,
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min = 8000,
+			.rate_max = 384000,
+		},
+		.ops = &msm_fe_dai_ops,
+		.name = "CDC_DMA_HOSTLESS",
+		.probe = fe_dai_probe,
+	},
+	{
+		.playback = {
 			.stream_name = "INT_FM_HOSTLESS Playback",
 			.aif_name = "INTFM_DL_HL",
 			.rates = SNDRV_PCM_RATE_8000_48000,
@@ -2567,6 +2609,39 @@ static struct snd_soc_dai_driver msm_fe_dais[] = {
 		},
 		.ops = &msm_fe_Multimedia_dai_ops,
 		.name = "MultiMedia20",
+		.probe = fe_dai_probe,
+	},
+	{
+		.playback = {
+			.stream_name = "MultiMedia21 Playback",
+			.aif_name = "MM_DL21",
+			.rates = (SNDRV_PCM_RATE_8000_384000|
+					SNDRV_PCM_RATE_KNOT),
+			.formats = (SNDRV_PCM_FMTBIT_S16_LE |
+				    SNDRV_PCM_FMTBIT_S24_LE |
+				    SNDRV_PCM_FMTBIT_S24_3LE |
+				    SNDRV_PCM_FMTBIT_S32_LE),
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min =     8000,
+			.rate_max =     384000,
+		},
+		.capture = {
+			.stream_name = "MultiMedia21 Capture",
+			.aif_name = "MM_UL21",
+			.rates = (SNDRV_PCM_RATE_8000_48000|
+					SNDRV_PCM_RATE_KNOT),
+			.formats = (SNDRV_PCM_FMTBIT_S16_LE |
+				    SNDRV_PCM_FMTBIT_S24_LE |
+				    SNDRV_PCM_FMTBIT_S24_3LE |
+				    SNDRV_PCM_FMTBIT_S32_LE),
+			.channels_min = 1,
+			.channels_max = 8,
+			.rate_min =     8000,
+			.rate_max =     48000,
+		},
+		.ops = &msm_fe_Multimedia_dai_ops,
+		.name = "MultiMedia21",
 		.probe = fe_dai_probe,
 	},
 	{

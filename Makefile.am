@@ -41,6 +41,8 @@ obj-m += asoc/codecs/msm_sdw/
 endif
 ifeq ($(TARGET_SUPPORT), $(filter $(TARGET_SUPPORT), qcs40x))
 obj-m += asoc/codecs/bolero/
+obj-m += asoc/codecs/csra66x0/
+obj-m += asoc/codecs/ep92/
 endif
 
 all:
