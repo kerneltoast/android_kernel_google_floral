@@ -1053,6 +1053,12 @@ QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
 				pm_ctx->pdev, channel) ||
 		    !(policy_mgr_sta_sap_scc_on_lte_coex_chan(psoc) ||
 		      policy_mgr_is_safe_channel(psoc, channel))) {
+			if (wlan_reg_is_dfs_ch(pm_ctx->pdev, channel) &&
+			    sta_sap_scc_on_dfs_chan) {
+				policy_mgr_debug("STA SAP SCC is allowed on DFS channel");
+				goto update_chan;
+			}
+
 			if (policy_mgr_is_hw_dbs_capable(psoc)) {
 				temp_channel =
 				policy_mgr_get_alternate_channel_for_sap(psoc);
@@ -1074,11 +1080,6 @@ QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
 					return QDF_STATUS_E_FAILURE;
 				}
 			} else {
-				if (wlan_reg_is_dfs_ch(pm_ctx->pdev, channel) &&
-				    sta_sap_scc_on_dfs_chan) {
-					policy_mgr_debug("STA SAP SCC is allowed on DFS channel");
-					goto update_chan;
-				}
 				policy_mgr_warn("Can't have concurrency on %d",
 					channel);
 				return QDF_STATUS_E_FAILURE;
@@ -1684,6 +1685,11 @@ QDF_STATUS policy_mgr_decr_connection_count_utfw(struct wlan_objmgr_psoc *psoc,
 	QDF_STATUS status;
 
 	if (del_all) {
+		status = policy_mgr_psoc_disable(psoc);
+		if (!QDF_IS_STATUS_SUCCESS(status)) {
+			policy_mgr_err("Policy manager initialization failed");
+			return QDF_STATUS_E_FAILURE;
+		}
 		status = policy_mgr_psoc_enable(psoc);
 		if (!QDF_IS_STATUS_SUCCESS(status)) {
 			policy_mgr_err("Policy manager initialization failed");
