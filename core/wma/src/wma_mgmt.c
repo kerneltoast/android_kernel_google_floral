@@ -2650,9 +2650,9 @@ static QDF_STATUS wma_store_bcn_tmpl(tp_wma_handle wma, uint8_t vdev_id,
 	}
 
 	len = *(u32 *) &bcn_info->beacon[0];
-	if (len > WMA_BCN_BUF_MAX_SIZE) {
+	if (len > SIR_MAX_BEACON_SIZE) {
 		WMA_LOGE("%s: Received beacon len %d exceeding max limit %d",
-			 __func__, len, WMA_BCN_BUF_MAX_SIZE);
+			 __func__, len, SIR_MAX_BEACON_SIZE);
 		return QDF_STATUS_E_INVAL;
 	}
 	WMA_LOGD("%s: Storing received beacon template buf to local buffer",
@@ -2874,8 +2874,8 @@ void wma_send_beacon(tp_wma_handle wma, tpSendbeaconParams bcn_info)
 
 		if (bcn_info->p2pIeOffset) {
 			p2p_ie = bcn_info->beacon + bcn_info->p2pIeOffset;
-			WMA_LOGI("%s: p2pIe is present - vdev_id %hu, p2p_ie = %pK, p2p ie len = %hu",
-				__func__, vdev_id, p2p_ie, p2p_ie[1]);
+			WMA_LOGD("%s: p2pIe is present - vdev_id %hu, p2p_ie = %pK, p2p ie len = %hu",
+				 __func__, vdev_id, p2p_ie, p2p_ie[1]);
 			if (wma_p2p_go_set_beacon_ie(wma, vdev_id,
 							 p2p_ie) < 0) {
 				WMA_LOGE("%s : wmi_unified_bcn_tmpl_send Failed ",
@@ -3749,11 +3749,7 @@ static bool wma_is_pkt_drop_candidate(tp_wma_handle wma_handle,
 				      uint8_t *peer_addr, uint8_t *bssid,
 				      uint8_t subtype)
 {
-	struct cdp_pdev *pdev_ctx;
 	bool should_drop = false;
-	qdf_time_t timestamp;
-	bool ret;
-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 	uint8_t nan_addr[] = {0x50, 0x6F, 0x9A, 0x01, 0x00, 0x00};
 
 	/* Drop the beacons from NAN device */
@@ -3762,53 +3758,6 @@ static bool wma_is_pkt_drop_candidate(tp_wma_handle wma_handle,
 			should_drop = true;
 			goto end;
 	}
-
-	/*
-	 * Currently this function handles only Disassoc,
-	 * Deauth and Assoc req frames. Return false for
-	 * all other frames.
-	 */
-	if (subtype != IEEE80211_FC0_SUBTYPE_DISASSOC &&
-	    subtype != IEEE80211_FC0_SUBTYPE_DEAUTH &&
-	    subtype != IEEE80211_FC0_SUBTYPE_ASSOC_REQ) {
-		should_drop = false;
-		goto end;
-	}
-
-	pdev_ctx = cds_get_context(QDF_MODULE_ID_TXRX);
-	if (!pdev_ctx) {
-		WMA_LOGE(FL("Failed to get the context"));
-		should_drop = true;
-		goto end;
-	}
-
-	ret = cdp_peer_get_last_mgmt_timestamp(soc, pdev_ctx,
-					       peer_addr, subtype,
-					       &timestamp);
-
-	if (!ret) {
-		if (IEEE80211_FC0_SUBTYPE_ASSOC_REQ != subtype) {
-			WMA_LOGE(FL("cdp_last_mgmt_timestamp_received %s 0x%x"),
-				 "failed for subtype", subtype);
-			should_drop = true;
-		}
-		goto end;
-	} else if (timestamp > 0 &&
-		   qdf_system_time_before(qdf_get_system_timestamp(),
-					  timestamp +
-					  WMA_MGMT_FRAME_DETECT_DOS_TIMER)) {
-		WMA_LOGD(FL("Dropping subtype 0x%x frame. %s %d ms %s %d ms"),
-			 subtype, "It is received after",
-			 (int)(qdf_get_system_timestamp() - timestamp),
-			 "of last frame. Allow it only after",
-			 WMA_MGMT_FRAME_DETECT_DOS_TIMER);
-		should_drop = true;
-		goto end;
-	}
-	if (!cdp_peer_update_last_mgmt_timestamp(soc, pdev_ctx, peer_addr,
-						 qdf_get_system_timestamp(),
-						 subtype))
-		should_drop = true;
 end:
 	return should_drop;
 }
@@ -4356,3 +4305,22 @@ QDF_STATUS wma_mgmt_unified_cmd_send(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+void wma_mgmt_nbuf_unmap_cb(struct wlan_objmgr_pdev *pdev,
+			    qdf_nbuf_t buf)
+{
+	tp_wma_handle wma_handle = cds_get_context(QDF_MODULE_ID_WMA);
+
+	if (!wma_handle) {
+		WMA_LOGE("%s: wma handle is NULL", __func__);
+		return;
+	}
+
+	if (!buf)
+		return;
+
+	if (wmi_service_enabled(wma_handle->wmi_handle,
+				wmi_service_mgmt_tx_wmi)) {
+		qdf_nbuf_unmap_single(wma_handle->qdf_dev, buf,
+				      QDF_DMA_TO_DEVICE);
+	}
+}

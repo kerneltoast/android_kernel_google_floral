@@ -2726,8 +2726,7 @@ QDF_STATUS sme_get_ap_channel_from_scan_cache(
 				status = QDF_STATUS_E_FAILURE;
 			}
 		} else {
-			QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
-					FL("Failed to get scan get result"));
+			sme_err("Failed to get scan get result");
 			status = QDF_STATUS_E_FAILURE;
 		}
 		csr_free_scan_filter(mac_ctx, scan_filter);
@@ -11263,70 +11262,72 @@ sme_reset_bss_hotlist(mac_handle_t mac_handle,
 	return status;
 }
 
-/*
- * sme_set_significant_change() -
- * SME API to set significant change
- *
- * hHal
- * pSetSignificantChangeReq: extscan set significant change structure
- * Return QDF_STATUS
- */
-QDF_STATUS sme_set_significant_change(tHalHandle hHal,
-				      tSirExtScanSetSigChangeReqParams *
-				      pSetSignificantChangeReq)
+QDF_STATUS
+sme_set_significant_change(mac_handle_t mac_handle,
+			   struct extscan_set_sig_changereq_params *params)
 {
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+	QDF_STATUS status;
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 	struct scheduler_msg message = {0};
+	struct extscan_set_sig_changereq_params *bodyptr;
 
-	status = sme_acquire_global_lock(&pMac->sme);
+	/* per contract must make a copy of the params when messaging */
+	bodyptr = qdf_mem_malloc(sizeof(*bodyptr));
+	if (!bodyptr) {
+		sme_err("buffer allocation failure");
+		return QDF_STATUS_E_NOMEM;
+	}
+	*bodyptr = *params;
+
+	status = sme_acquire_global_lock(&mac->sme);
 	if (QDF_IS_STATUS_SUCCESS(status)) {
 		/* Serialize the req through MC thread */
-		message.bodyptr = pSetSignificantChangeReq;
+		message.bodyptr = bodyptr;
 		message.type = WMA_EXTSCAN_SET_SIGNF_CHANGE_REQ;
 		MTRACE(qdf_trace(QDF_MODULE_ID_SME, TRACE_CODE_SME_TX_WMA_MSG,
 				 NO_SESSION, message.type));
-		qdf_status = scheduler_post_msg(QDF_MODULE_ID_WMA,
-						 &message);
-		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-			status = QDF_STATUS_E_FAILURE;
+		status = scheduler_post_msg(QDF_MODULE_ID_WMA, &message);
+		sme_release_global_lock(&mac->sme);
+	}
 
-		sme_release_global_lock(&pMac->sme);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		sme_err("failure: %d", status);
+		qdf_mem_free(bodyptr);
 	}
 	return status;
 }
 
-/*
- * sme_reset_significant_change
- * SME API to reset significant change
- *
- * hHal
- * pResetReq: extscan reset significant change structure
- * Return QDF_STATUS
- */
-QDF_STATUS sme_reset_significant_change(tHalHandle hHal,
-				tSirExtScanResetSignificantChangeReqParams
-					*pResetReq)
+QDF_STATUS
+sme_reset_significant_change(mac_handle_t mac_handle,
+			     struct extscan_capabilities_reset_params *params)
 {
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+	QDF_STATUS status;
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 	struct scheduler_msg message = {0};
+	struct extscan_capabilities_reset_params *bodyptr;
 
-	status = sme_acquire_global_lock(&pMac->sme);
+	/* per contract must make a copy of the params when messaging */
+	bodyptr = qdf_mem_malloc(sizeof(*bodyptr));
+	if (!bodyptr) {
+		sme_err("buffer allocation failure");
+		return QDF_STATUS_E_NOMEM;
+	}
+	*bodyptr = *params;
+
+	status = sme_acquire_global_lock(&mac->sme);
 	if (QDF_IS_STATUS_SUCCESS(status)) {
 		/* Serialize the req through MC thread */
-		message.bodyptr = pResetReq;
+		message.bodyptr = bodyptr;
 		message.type = WMA_EXTSCAN_RESET_SIGNF_CHANGE_REQ;
 		MTRACE(qdf_trace(QDF_MODULE_ID_SME, TRACE_CODE_SME_TX_WMA_MSG,
 				 NO_SESSION, message.type));
-		qdf_status = scheduler_post_msg(QDF_MODULE_ID_WMA,
-						 &message);
-		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-			status = QDF_STATUS_E_FAILURE;
+		status = scheduler_post_msg(QDF_MODULE_ID_WMA, &message);
+		sme_release_global_lock(&mac->sme);
+	}
 
-		sme_release_global_lock(&pMac->sme);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		sme_err("failure: %d", status);
+		qdf_mem_free(bodyptr);
 	}
 	return status;
 }
@@ -16062,4 +16063,44 @@ uint8_t sme_get_mcs_idx(uint16_t max_rate, uint8_t rate_flags,
 			uint8_t *nss, uint8_t *mcs_rate_flags)
 {
 	return wma_get_mcs_idx(max_rate, rate_flags, nss, mcs_rate_flags);
+}
+
+QDF_STATUS
+sme_get_roam_scan_stats(tHalHandle hal, roam_scan_stats_cb cb, void *context,
+			uint32_t vdev_id)
+{
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+	tpAniSirGlobal mac = PMAC_STRUCT(hal);
+	struct scheduler_msg msg = {0};
+	struct sir_roam_scan_stats *req;
+
+	req = qdf_mem_malloc(sizeof(*req));
+	if (!req) {
+		sme_err("Failed allocate memory for roam scan stats req");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	req->vdev_id = vdev_id;
+	req->cb = cb;
+	req->context = context;
+
+	status = sme_acquire_global_lock(&mac->sme);
+	if (QDF_IS_STATUS_SUCCESS(status)) {
+		msg.bodyptr = req;
+		msg.type = WMA_GET_ROAM_SCAN_STATS;
+		msg.reserved = 0;
+		status = scheduler_post_msg(QDF_MODULE_ID_WMA, &msg);
+		sme_release_global_lock(&mac->sme);
+		if (!QDF_IS_STATUS_SUCCESS(status)) {
+			QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
+				  FL("post roam scan stats req failed"));
+			status = QDF_STATUS_E_FAILURE;
+			qdf_mem_free(req);
+		}
+	} else {
+		sme_err("sme_acquire_global_lock failed");
+		qdf_mem_free(req);
+	}
+
+	return status;
 }

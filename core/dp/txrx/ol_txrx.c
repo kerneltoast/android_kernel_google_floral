@@ -2968,7 +2968,7 @@ ol_txrx_peer_attach(struct cdp_vdev *pvdev, uint8_t *peer_mac_addr)
 		qdf_atomic_init(&peer->access_list[i]);
 
 	/* keep one reference for attach */
-	ol_txrx_peer_get_ref(peer, PEER_DEBUG_ID_OL_INTERNAL);
+	ol_txrx_peer_get_ref(peer, PEER_DEBUG_ID_OL_PEER_ATTACH);
 
 	/* Set a flag to indicate peer create is pending in firmware */
 	qdf_atomic_init(&peer->fw_create_pending);
@@ -3629,27 +3629,28 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 	struct ol_txrx_pdev_t *pdev;
 	bool ref_silent = false;
 	int access_list = 0;
+	uint32_t err_code = 0;
 
 	/* preconditions */
 	TXRX_ASSERT2(peer);
 
 	vdev = peer->vdev;
 	if (NULL == vdev) {
-		ol_txrx_dbg(
-			   "The vdev is not present anymore\n");
+		ol_txrx_err("The vdev is not present anymore\n");
 		return -EINVAL;
 	}
 
 	pdev = vdev->pdev;
 	if (NULL == pdev) {
-		ol_txrx_dbg(
-			   "The pdev is not present anymore\n");
-		return -EINVAL;
+		ol_txrx_err("The pdev is not present anymore\n");
+		err_code = 0xbad2;
+		goto ERR_STATE;
 	}
 
 	if (debug_id >= PEER_DEBUG_ID_MAX || debug_id < 0) {
 		ol_txrx_err("incorrect debug_id %d ", debug_id);
-		return -EINVAL;
+		err_code = 0xbad3;
+		goto ERR_STATE;
 	}
 
 	if (debug_id == PEER_DEBUG_ID_OL_RX_THREAD)
@@ -3658,7 +3659,7 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 	if (!ref_silent)
 		wlan_roam_debug_log(vdev->vdev_id, DEBUG_PEER_UNREF_DELETE,
 				    DEBUG_INVALID_PEER_ID, &peer->mac_addr.raw,
-				    peer, 0,
+				    peer, 0xdead,
 				    qdf_atomic_read(&peer->ref_cnt));
 
 
@@ -3812,16 +3813,20 @@ int ol_txrx_peer_release_ref(ol_txrx_peer_handle peer,
 
 		qdf_mem_free(peer);
 	} else {
-		access_list = qdf_atomic_read(
-						&peer->access_list[debug_id]);
+		access_list = qdf_atomic_read(&peer->access_list[debug_id]);
 		qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
 		if (!ref_silent)
-			ol_txrx_dbg("[%d][%d]: ref delete peer %pK ref_cnt -> %d",
-					debug_id,
-					access_list,
-					peer, rc);
+			ol_txrx_info_high("[%d][%d]: ref delete peer %pK ref_cnt -> %d",
+					  debug_id,
+					  access_list,
+					  peer, rc);
 	}
 	return rc;
+ERR_STATE:
+	wlan_roam_debug_log(vdev->vdev_id, DEBUG_PEER_UNREF_DELETE,
+			    DEBUG_INVALID_PEER_ID, &peer->mac_addr.raw,
+			    peer, err_code, qdf_atomic_read(&peer->ref_cnt));
+	return -EINVAL;
 }
 
 /**
@@ -3889,7 +3894,7 @@ static QDF_STATUS ol_txrx_clear_peer(struct cdp_pdev *ppdev, uint8_t sta_id)
 
 void peer_unmap_timer_work_function(void *param)
 {
-	WMA_LOGE("Enter: %s", __func__);
+	WMA_LOGI("Enter: %s", __func__);
 	/* Added for debugging only */
 	ol_txrx_dump_peer_access_list(param);
 	wlan_roam_debug_dump_table();
@@ -3996,7 +4001,7 @@ static void ol_txrx_peer_detach(void *ppeer, uint32_t bitmap)
 	 * PEER_UNMAP message arrives to remove the other
 	 * reference, added by the PEER_MAP message.
 	 */
-	ol_txrx_peer_release_ref(peer, PEER_DEBUG_ID_OL_INTERNAL);
+	ol_txrx_peer_release_ref(peer, PEER_DEBUG_ID_OL_PEER_ATTACH);
 }
 
 /**
@@ -5808,6 +5813,11 @@ static void ol_txrx_offld_flush(void *data)
 	if (qdf_unlikely(!sched_ctx))
 		return;
 
+	if (qdf_unlikely(!pdev)) {
+		ol_txrx_err("TXRX module context is NULL");
+		return;
+	}
+
 	if (!ol_cfg_is_rx_thread_enabled(pdev->ctrl_pdev)) {
 		ol_txrx_offld_flush_handler(data, NULL, 0);
 	} else {
@@ -6087,119 +6097,6 @@ static uint16_t ol_txrx_get_vdev_id(struct cdp_vdev *pvdev)
 	struct ol_txrx_vdev_t *vdev = (struct ol_txrx_vdev_t *)pvdev;
 
 	return vdev->vdev_id;
-}
-
-/**
- * ol_txrx_get_last_mgmt_timestamp() - get timestamp of last mgmt frame
- * @pdev: pdev handle
- * @ppeer_addr: peer mac addr
- * @subtype: management frame type
- * @timestamp: last timestamp
- *
- * Return: true if timestamp is retrieved for valid peer else false
- */
-static bool
-ol_txrx_get_last_mgmt_timestamp(struct cdp_pdev *ppdev,
-				u8 *peer_addr,
-				u8 subtype,
-				qdf_time_t *timestamp)
-{
-	/*
-	 * Take the lock, find the peer based on peer mac addr.
-	 * If peer is valid, retrieve the timestamp for "subtype" mgmt frame.
-	 * release the lock
-	 */
-	union ol_txrx_align_mac_addr_t local_mac_addr_aligned, *mac_addr;
-	unsigned int index;
-	struct ol_txrx_peer_t *peer;
-	bool ret = false;
-	struct ol_txrx_pdev_t *pdev = (struct ol_txrx_pdev_t *)ppdev;
-
-	qdf_mem_copy(&local_mac_addr_aligned.raw[0],
-		     peer_addr, OL_TXRX_MAC_ADDR_LEN);
-	mac_addr = &local_mac_addr_aligned;
-
-	index = ol_txrx_peer_find_hash_index(pdev, mac_addr);
-	qdf_spin_lock_bh(&pdev->peer_ref_mutex);
-	TAILQ_FOREACH(peer, &pdev->peer_hash.bins[index], hash_list_elem) {
-		if (ol_txrx_peer_find_mac_addr_cmp(mac_addr, &peer->mac_addr) ==
-		    0 && (peer->valid)) {
-			/* found it */
-			switch (subtype) {
-			case IEEE80211_FC0_SUBTYPE_ASSOC_REQ:
-				*timestamp = peer->last_assoc_rcvd;
-				ret = true;
-				break;
-			case IEEE80211_FC0_SUBTYPE_DISASSOC:
-			case IEEE80211_FC0_SUBTYPE_DEAUTH:
-				*timestamp = peer->last_disassoc_rcvd;
-				ret = true;
-				break;
-			default:
-				break;
-			}
-			qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
-			return ret;
-		}
-	}
-	qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
-	return false;            /* failure */
-}
-
-/**
- * ol_txrx_update_last_mgmt_timestamp() - set timestamp of last mgmt frame
- * @pdev: pdev handle
- * @ppeer_addr: peer mac addr
- * @timestamp: time to be set
- * @subtype: management frame type
- *
- * Return: true if timestamp is updated for valid peer else false
- */
-static bool
-ol_txrx_update_last_mgmt_timestamp(struct cdp_pdev *ppdev, u8 *peer_addr,
-				   qdf_time_t timestamp, u8 subtype)
-{
-	/*
-	 * Take the lock, find the peer based on peer mac addr.
-	 * If peer is valid, update the timestamp for "subtype" mgmt frame.
-	 * release the lock
-	 */
-	union ol_txrx_align_mac_addr_t local_mac_addr_aligned, *mac_addr;
-	bool ret = false;
-	unsigned int index;
-	struct ol_txrx_peer_t *peer;
-	struct ol_txrx_pdev_t *pdev = (struct ol_txrx_pdev_t *)ppdev;
-
-	qdf_mem_copy(&local_mac_addr_aligned.raw[0],
-		     peer_addr, OL_TXRX_MAC_ADDR_LEN);
-	mac_addr = &local_mac_addr_aligned;
-
-	index = ol_txrx_peer_find_hash_index(pdev, mac_addr);
-	qdf_spin_lock_bh(&pdev->peer_ref_mutex);
-	TAILQ_FOREACH(peer, &pdev->peer_hash.bins[index], hash_list_elem) {
-		if (ol_txrx_peer_find_mac_addr_cmp(mac_addr, &peer->mac_addr) ==
-		    0 && (peer->valid)) {
-			/* found it */
-			switch (subtype) {
-			case IEEE80211_FC0_SUBTYPE_ASSOC_REQ:
-				peer->last_assoc_rcvd = timestamp;
-				ret = true;
-				break;
-			case IEEE80211_FC0_SUBTYPE_DISASSOC:
-			case IEEE80211_FC0_SUBTYPE_DEAUTH:
-				peer->last_disassoc_rcvd = timestamp;
-				ret = true;
-				break;
-			default:
-				break;
-			}
-			qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
-			return ret;
-		}
-	}
-	qdf_spin_unlock_bh(&pdev->peer_ref_mutex);
-
-	return false;		/* failure */
 }
 
 /**
@@ -6596,8 +6493,6 @@ static struct cdp_peer_ops ol_ops_peer = {
 	.update_last_real_peer = ol_txrx_update_last_real_peer,
 #endif /* CONFIG_HL_SUPPORT */
 	.peer_detach_force_delete = ol_txrx_peer_detach_force_delete,
-	.get_last_mgmt_timestamp = ol_txrx_get_last_mgmt_timestamp,
-	.update_last_mgmt_timestamp = ol_txrx_update_last_mgmt_timestamp,
 };
 
 static struct cdp_tx_delay_ops ol_ops_delay = {

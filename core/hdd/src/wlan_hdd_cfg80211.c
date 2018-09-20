@@ -1562,7 +1562,7 @@ int wlan_hdd_sap_cfg_dfs_override(struct hdd_adapter *adapter)
 	con_sap_config = &con_sap_adapter->session.ap.sap_config;
 	con_ch = con_sap_adapter->session.ap.operating_channel;
 
-	if (!wlan_reg_is_dfs_ch(hdd_ctx->hdd_pdev, con_ch))
+	if (!wlan_reg_is_dfs_ch(hdd_ctx->pdev, con_ch))
 		return 0;
 
 	hdd_debug("Only SCC AP-AP DFS Permitted (ch=%d, con_ch=%d)",
@@ -1882,10 +1882,10 @@ static int hdd_update_reg_chan_info(struct hdd_adapter *adapter,
 			bw_offset = 1 << BW_40_OFFSET_BIT;
 		else if (sap_config->acs_cfg.ch_width == CH_WIDTH_20MHZ)
 			bw_offset = 1 << BW_20_OFFSET_BIT;
-		icv->freq = wlan_reg_get_channel_freq(hdd_ctx->hdd_pdev, chan);
+		icv->freq = wlan_reg_get_channel_freq(hdd_ctx->pdev, chan);
 		icv->ieee_chan_number = chan;
 		icv->max_reg_power = wlan_reg_get_channel_reg_power(
-				hdd_ctx->hdd_pdev, chan);
+				hdd_ctx->pdev, chan);
 
 		/* filling demo values */
 		icv->max_radio_power = HDD_MAX_TX_POWER;
@@ -1898,14 +1898,14 @@ static int hdd_update_reg_chan_info(struct hdd_adapter *adapter,
 
 		if (WLAN_REG_IS_5GHZ_CH(chan)) {
 			ch_params.ch_width = sap_config->acs_cfg.ch_width;
-			wlan_reg_set_channel_params(hdd_ctx->hdd_pdev, chan,
-					0, &ch_params);
+			wlan_reg_set_channel_params(hdd_ctx->pdev, chan,
+						    0, &ch_params);
 			icv->vht_center_freq_seg0 = ch_params.center_freq_seg0;
 			icv->vht_center_freq_seg1 = ch_params.center_freq_seg1;
 		}
 
 		icv->flags = 0;
-		icv->flags = cds_get_vendor_reg_flags(hdd_ctx->hdd_pdev, chan,
+		icv->flags = cds_get_vendor_reg_flags(hdd_ctx->pdev, chan,
 				sap_config->acs_cfg.ch_width,
 				sap_config->acs_cfg.is_ht_enabled,
 				sap_config->acs_cfg.is_vht_enabled,
@@ -2076,7 +2076,6 @@ static void hdd_get_scan_band(struct hdd_context *hdd_ctx,
 		*band = BAND_ALL;
 	}
 }
-
 
 /**
  * hdd_get_freq_list: API to get Frequency list based on channel list
@@ -2394,6 +2393,8 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 	if (ret)
 		return ret;
 
+	hdd_debug("current country is %s", hdd_ctx->reg.alpha2);
+
 	if (!((adapter->device_mode == QDF_SAP_MODE) ||
 	      (adapter->device_mode == QDF_P2P_GO_MODE))) {
 		hdd_err("Invalid device mode %d", adapter->device_mode);
@@ -2548,11 +2549,11 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 
 	skip_etsi13_srd_chan =
 		!hdd_ctx->config->etsi13_srd_chan_in_master_mode &&
-		wlan_reg_is_etsi13_regdmn(hdd_ctx->hdd_pdev);
+		wlan_reg_is_etsi13_regdmn(hdd_ctx->pdev);
 
 	if (skip_etsi13_srd_chan) {
 		for (i = 0; i < sap_config->acs_cfg.ch_list_count; i++) {
-			if (wlan_reg_is_etsi13_srd_chan(hdd_ctx->hdd_pdev,
+			if (wlan_reg_is_etsi13_srd_chan(hdd_ctx->pdev,
 							sap_config->acs_cfg.
 							ch_list[i]))
 				sap_config->acs_cfg.ch_list[i] = 0;
@@ -2958,7 +2959,7 @@ __wlan_hdd_cfg80211_get_supported_features(struct wiphy *wiphy,
 		fset |= WIFI_FEATURE_EXTSCAN | WIFI_FEATURE_HAL_EPNO;
 	}
 #endif
-	if (wlan_hdd_nan_is_supported()) {
+	if (wlan_hdd_nan_is_supported(hdd_ctx)) {
 		hdd_debug("NAN is supported by firmware");
 		fset |= WIFI_FEATURE_NAN;
 	}
@@ -4105,7 +4106,7 @@ static bool wlan_hdd_check_dfs_channel_for_adapter(struct hdd_context *hdd_ctx,
 			 *  radios !!
 			 */
 			if (CHANNEL_STATE_DFS == wlan_reg_get_channel_state(
-						hdd_ctx->hdd_pdev,
+						hdd_ctx->pdev,
 						ap_ctx->operating_channel)) {
 				hdd_err("SAP running on DFS channel");
 				return true;
@@ -4123,7 +4124,7 @@ static bool wlan_hdd_check_dfs_channel_for_adapter(struct hdd_context *hdd_ctx,
 			 */
 			if (hdd_conn_is_connected(sta_ctx) &&
 				(CHANNEL_STATE_DFS ==
-				wlan_reg_get_channel_state(hdd_ctx->hdd_pdev,
+				wlan_reg_get_channel_state(hdd_ctx->pdev,
 					sta_ctx->conn_info.operationChannel))) {
 				hdd_err("client connected on DFS channel");
 				return true;
@@ -4184,8 +4185,8 @@ int wlan_hdd_enable_dfs_chan_scan(struct hdd_context *hdd_ctx,
 	hdd_abort_mac_scan_all_adapters(hdd_ctx);
 
 	/* pass dfs channel status to regulatory component */
-	status = ucfg_reg_enable_dfs_channels(hdd_ctx->hdd_pdev,
-			enable_dfs_channels);
+	status = ucfg_reg_enable_dfs_channels(hdd_ctx->pdev,
+					      enable_dfs_channels);
 
 	if (QDF_IS_STATUS_ERROR(status))
 		hdd_err("Failed to %s DFS channels",
@@ -4457,7 +4458,7 @@ static int hdd_get_sta_congestion(struct hdd_adapter *adapter,
 	QDF_STATUS status;
 	struct cca_stats cca_stats;
 
-	status = ucfg_mc_cp_stats_cca_stats_get(adapter->hdd_vdev, &cca_stats);
+	status = ucfg_mc_cp_stats_cca_stats_get(adapter->vdev, &cca_stats);
 	if (QDF_IS_STATUS_ERROR(status))
 		return -EINVAL;
 
@@ -5992,7 +5993,7 @@ void wlan_hdd_save_gtk_offload_params(struct hdd_adapter *adapter,
 	for (i = 0; i < 8; i++)
 		buf[7 - i] = replay_ctr[i];
 
-	status = pmo_ucfg_cache_gtk_offload_req(adapter->hdd_vdev, gtk_req);
+	status = pmo_ucfg_cache_gtk_offload_req(adapter->vdev, gtk_req);
 	if (status != QDF_STATUS_SUCCESS)
 		hdd_err("Failed to cache GTK Offload");
 
@@ -6441,9 +6442,9 @@ static int wlan_hdd_handle_restrict_offchan_config(struct hdd_adapter *adapter,
 		hdd_err("Invalid interface type:%d", dev_mode);
 		return -EINVAL;
 	}
-	status = wlan_objmgr_vdev_try_get_ref(adapter->hdd_vdev, WLAN_OSIF_ID);
+	status = wlan_objmgr_vdev_try_get_ref(adapter->vdev, WLAN_OSIF_ID);
 	if (status != QDF_STATUS_SUCCESS) {
-		hdd_err("Access hdd_vdev failed: %d", status);
+		hdd_err("Access vdev failed: %d", status);
 		return -EINVAL;
 	}
 	if (restrict_offchan == 1) {
@@ -6451,12 +6452,12 @@ static int wlan_hdd_handle_restrict_offchan_config(struct hdd_adapter *adapter,
 		policy_mgr_convert_device_mode_to_qdf_type(dev_mode);
 		int chan;
 
-		u32 vdev_id = wlan_vdev_get_id(adapter->hdd_vdev);
+		u32 vdev_id = wlan_vdev_get_id(adapter->vdev);
 
-		wlan_vdev_obj_lock(adapter->hdd_vdev);
-		wlan_vdev_mlme_cap_set(adapter->hdd_vdev,
+		wlan_vdev_obj_lock(adapter->vdev);
+		wlan_vdev_mlme_cap_set(adapter->vdev,
 				       WLAN_VDEV_C_RESTRICT_OFFCHAN);
-		wlan_vdev_obj_unlock(adapter->hdd_vdev);
+		wlan_vdev_obj_unlock(adapter->vdev);
 		chan = policy_mgr_get_channel(hdd_ctx->hdd_psoc, pmode,
 					      &vdev_id);
 		if (!chan ||
@@ -6466,10 +6467,10 @@ static int wlan_hdd_handle_restrict_offchan_config(struct hdd_adapter *adapter,
 		}
 		hdd_info("vdev %d mode %d dnbs enabled", vdev_id, dev_mode);
 	} else if (restrict_offchan == 0) {
-		wlan_vdev_obj_lock(adapter->hdd_vdev);
-		wlan_vdev_mlme_cap_clear(adapter->hdd_vdev,
+		wlan_vdev_obj_lock(adapter->vdev);
+		wlan_vdev_mlme_cap_clear(adapter->vdev,
 					 WLAN_VDEV_C_RESTRICT_OFFCHAN);
-		wlan_vdev_obj_unlock(adapter->hdd_vdev);
+		wlan_vdev_obj_unlock(adapter->vdev);
 		if (wlan_hdd_send_avoid_freq_for_dnbs(hdd_ctx, 0)) {
 			hdd_err("unable to clear avoid_freq");
 			ret_val = -EINVAL;
@@ -6479,7 +6480,7 @@ static int wlan_hdd_handle_restrict_offchan_config(struct hdd_adapter *adapter,
 		ret_val = -EINVAL;
 		hdd_err("Invalid RESTRICT_OFFCHAN setting");
 	}
-	wlan_objmgr_vdev_release_ref(adapter->hdd_vdev, WLAN_OSIF_ID);
+	wlan_objmgr_vdev_release_ref(adapter->vdev, WLAN_OSIF_ID);
 	return ret_val;
 }
 
@@ -6750,7 +6751,7 @@ __wlan_hdd_cfg80211_wifi_configuration_set(struct wiphy *wiphy,
 		modulated_dtim = nla_get_u32(
 			tb[QCA_WLAN_VENDOR_ATTR_CONFIG_MODULATED_DTIM]);
 
-		status = pmo_ucfg_config_modulated_dtim(adapter->hdd_vdev,
+		status = pmo_ucfg_config_modulated_dtim(adapter->vdev,
 							modulated_dtim);
 		if (QDF_STATUS_SUCCESS != status)
 			ret_val = -EPERM;
@@ -6766,7 +6767,7 @@ __wlan_hdd_cfg80211_wifi_configuration_set(struct wiphy *wiphy,
 			return -EINVAL;
 		}
 
-		status = pmo_ucfg_config_listen_interval(adapter->hdd_vdev,
+		status = pmo_ucfg_config_listen_interval(adapter->vdev,
 							 override_li);
 		if (status != QDF_STATUS_SUCCESS)
 			ret_val = -EPERM;
@@ -9729,7 +9730,7 @@ int wlan_hdd_sap_get_valid_channellist(struct hdd_adapter *adapter,
 	uint32_t chan_count;
 	uint8_t i;
 	QDF_STATUS status;
-	struct wlan_objmgr_pdev *pdev = hdd_ctx->hdd_pdev;
+	struct wlan_objmgr_pdev *pdev = hdd_ctx->pdev;
 	uint8_t tmp_chan;
 
 	sap_config = &adapter->session.ap.sap_config;
@@ -9812,8 +9813,8 @@ static int wlan_hdd_validate_and_get_pre_cac_ch(struct hdd_context *hdd_ctx,
 		policy_mgr_update_with_safe_channel_list(hdd_ctx->hdd_psoc,
 				channel_list, &len, pcl_weights, weight_len);
 		for (i = 0; i < len; i++) {
-			if (wlan_reg_is_dfs_ch(hdd_ctx->hdd_pdev,
-						channel_list[i])) {
+			if (wlan_reg_is_dfs_ch(hdd_ctx->pdev,
+					       channel_list[i])) {
 				*pre_cac_chan = channel_list[i];
 				break;
 			}
@@ -9829,7 +9830,7 @@ static int wlan_hdd_validate_and_get_pre_cac_ch(struct hdd_context *hdd_ctx,
 		 */
 		mac_handle = hdd_ctx->mac_handle;
 		if (!sme_is_channel_valid(mac_handle, channel) ||
-			!wlan_reg_is_dfs_ch(hdd_ctx->hdd_pdev, channel)) {
+			!wlan_reg_is_dfs_ch(hdd_ctx->pdev, channel)) {
 			hdd_err("Invalid channel for pre cac:%d", channel);
 			return -EINVAL;
 		}
@@ -9893,8 +9894,7 @@ int wlan_hdd_request_pre_cac(uint8_t channel)
 		return -EINVAL;
 	}
 
-	if (wlan_reg_is_dfs_ch(hdd_ctx->hdd_pdev,
-				hdd_ap_ctx->operating_channel)) {
+	if (wlan_reg_is_dfs_ch(hdd_ctx->pdev, hdd_ap_ctx->operating_channel)) {
 		hdd_err("SAP is already on DFS channel:%d",
 			hdd_ap_ctx->operating_channel);
 		return -EINVAL;
@@ -10619,10 +10619,10 @@ __wlan_hdd_cfg80211_sap_configuration_set(struct wiphy *wiphy,
 					ap_ctx->sap_config.ch_width_orig;
 		ap_ctx->bss_stop_reason = BSS_STOP_DUE_TO_VENDOR_CONFIG_CHAN;
 
-		wlan_reg_set_channel_params(hdd_ctx->hdd_pdev,
-				ap_ctx->sap_config.channel,
-				ap_ctx->sap_config.sec_ch,
-				&ap_ctx->sap_config.ch_params);
+		wlan_reg_set_channel_params(hdd_ctx->pdev,
+					    ap_ctx->sap_config.channel,
+					    ap_ctx->sap_config.sec_ch,
+					    &ap_ctx->sap_config.ch_params);
 
 		hdd_restart_sap(hostapd_adapter);
 	}
@@ -14975,7 +14975,7 @@ int wlan_hdd_cfg80211_update_band(struct hdd_context *hdd_ctx, struct wiphy *wip
 			struct ieee80211_supported_band *band = wiphy->bands[i];
 
 			channelEnabledState = wlan_reg_get_channel_state(
-					hdd_ctx->hdd_pdev,
+					hdd_ctx->pdev,
 					band->channels[j].hw_value);
 
 			if (HDD_NL80211_BAND_2GHZ == i &&
@@ -15945,7 +15945,7 @@ static int __wlan_hdd_cfg80211_change_bss(struct wiphy *wiphy,
 		if (!QDF_IS_STATUS_SUCCESS(qdf_ret_status))
 			ret = -EINVAL;
 
-		ucfg_ipa_set_ap_ibss_fwd(hdd_ctx->hdd_pdev,
+		ucfg_ipa_set_ap_ibss_fwd(hdd_ctx->pdev,
 					 adapter->session.ap.
 					 disable_intrabss_fwd);
 	}
@@ -16097,7 +16097,7 @@ static int __wlan_hdd_cfg80211_change_iface(struct wiphy *wiphy,
 	policy_mgr_clear_concurrency_mode(hdd_ctx->hdd_psoc,
 		adapter->device_mode);
 
-	hdd_notify_teardown_tdls_links(adapter->hdd_vdev);
+	hdd_notify_teardown_tdls_links(adapter->vdev);
 	if ((adapter->device_mode == QDF_STA_MODE) ||
 	    (adapter->device_mode == QDF_P2P_CLIENT_MODE) ||
 	    (adapter->device_mode == QDF_P2P_DEVICE_MODE) ||
@@ -16370,7 +16370,7 @@ static int __wlan_hdd_change_station(struct wiphy *wiphy,
 		   (adapter->device_mode == QDF_P2P_CLIENT_MODE)) {
 		if (params->sta_flags_set & BIT(NL80211_STA_FLAG_TDLS_PEER)) {
 #if defined(FEATURE_WLAN_TDLS)
-			ret = wlan_cfg80211_tdls_update_peer(hdd_ctx->hdd_pdev,
+			ret = wlan_cfg80211_tdls_update_peer(hdd_ctx->pdev,
 							     dev, mac, params);
 #endif
 		}
@@ -17598,8 +17598,8 @@ void hdd_select_cbmode(struct hdd_adapter *adapter, uint8_t operationChannel,
 	}
 
 	/* This call decides required channel bonding mode */
-	wlan_reg_set_channel_params(hdd_ctx->hdd_pdev, operationChannel,
-			sec_ch, ch_params);
+	wlan_reg_set_channel_params(hdd_ctx->pdev, operationChannel,
+				    sec_ch, ch_params);
 
 	if (cds_get_conparam() == QDF_GLOBAL_MONITOR_MODE)
 		hdd_mon_select_cbmode(adapter, operationChannel, ch_params);
@@ -17660,7 +17660,7 @@ bool wlan_hdd_handle_sap_sta_dfs_conc(struct hdd_adapter *adapter,
 	}
 
 	/* sap is on non-dfs channel, nothing to handle */
-	if (!wlan_reg_is_dfs_ch(hdd_ctx->hdd_pdev,
+	if (!wlan_reg_is_dfs_ch(hdd_ctx->pdev,
 				hdd_ap_ctx->operating_channel)) {
 		hdd_info("sap is on non-dfs channel, sta is allowed");
 		return true;
@@ -17687,8 +17687,8 @@ bool wlan_hdd_handle_sap_sta_dfs_conc(struct hdd_adapter *adapter,
 	 * better move SAP to STA's channel to make scc, so we have room
 	 * for 3port MCC scenario.
 	 */
-	if ((0 == channel) || wlan_reg_is_dfs_ch(hdd_ctx->hdd_pdev, channel) ||
-		!policy_mgr_is_safe_channel(hdd_ctx->hdd_psoc, channel))
+	if (!channel || wlan_reg_is_dfs_ch(hdd_ctx->pdev, channel) ||
+	    !policy_mgr_is_safe_channel(hdd_ctx->hdd_psoc, channel))
 		channel = policy_mgr_get_nondfs_preferred_channel(
 			hdd_ctx->hdd_psoc, PM_SAP_MODE, true);
 
@@ -17808,7 +17808,7 @@ static int wlan_hdd_cfg80211_connect_start(struct hdd_adapter *adapter,
 	/* Disable roaming on all other adapters before connect start */
 	wlan_hdd_disable_roaming(adapter);
 
-	hdd_notify_teardown_tdls_links(adapter->hdd_vdev);
+	hdd_notify_teardown_tdls_links(adapter->vdev);
 
 	qdf_mem_zero(&hdd_sta_ctx->conn_info.conn_flag,
 		     sizeof(hdd_sta_ctx->conn_info.conn_flag));
@@ -17941,7 +17941,7 @@ static int wlan_hdd_cfg80211_connect_start(struct hdd_adapter *adapter,
 			}
 		}
 #endif
-		pmo_ucfg_flush_gtk_offload_req(adapter->hdd_vdev);
+		pmo_ucfg_flush_gtk_offload_req(adapter->vdev);
 		roam_profile->csrPersona = adapter->device_mode;
 
 		if (operatingChannel) {
@@ -19978,16 +19978,17 @@ static int __wlan_hdd_cfg80211_disconnect(struct wiphy *wiphy,
 			reasonCode = eCSR_DISCONNECT_REASON_UNSPECIFIED;
 			break;
 		}
-		if (ucfg_scan_get_vdev_status(adapter->hdd_vdev) !=
+		if (ucfg_scan_get_vdev_status(adapter->vdev) !=
 				SCAN_NOT_IN_PROGRESS) {
 			hdd_debug("Disconnect is in progress, Aborting Scan");
-			wlan_abort_scan(hdd_ctx->hdd_pdev, INVAL_PDEV_ID,
-				adapter->session_id, INVALID_SCAN_ID, false);
+			wlan_abort_scan(hdd_ctx->pdev, INVAL_PDEV_ID,
+					adapter->session_id, INVALID_SCAN_ID,
+					false);
 		}
 		wlan_hdd_cleanup_remain_on_channel_ctx(adapter);
 		/* First clean up the tdls peers if any */
 		hdd_notify_sta_disconnect(adapter->session_id,
-			  false, true, adapter->hdd_vdev);
+			  false, true, adapter->vdev);
 
 		hdd_info("Disconnect from userspace; reason:%d (%s)",
 			 reason, hdd_ieee80211_reason_code_to_str(reason));
@@ -20907,7 +20908,7 @@ static int __wlan_hdd_cfg80211_add_station(struct wiphy *wiphy,
 
 	if (mask & BIT(NL80211_STA_FLAG_TDLS_PEER)) {
 		if (set & BIT(NL80211_STA_FLAG_TDLS_PEER))
-			status = wlan_cfg80211_tdls_add_peer(hdd_ctx->hdd_pdev,
+			status = wlan_cfg80211_tdls_add_peer(hdd_ctx->pdev,
 							     dev, mac);
 	}
 #endif
@@ -21507,7 +21508,7 @@ int __wlan_hdd_cfg80211_set_rekey_data(struct wiphy *wiphy,
 	wlan_hdd_copy_gtk_kek(gtk_req, data);
 	qdf_mem_copy(gtk_req->kck, data->kck, NL80211_KCK_LEN);
 	gtk_req->is_fils_connection = hdd_is_fils_connection(adapter);
-	status = pmo_ucfg_cache_gtk_offload_req(adapter->hdd_vdev, gtk_req);
+	status = pmo_ucfg_cache_gtk_offload_req(adapter->vdev, gtk_req);
 	if (status != QDF_STATUS_SUCCESS) {
 		hdd_err("Failed to cache GTK Offload");
 		result = qdf_status_to_os_return(status);
@@ -21839,7 +21840,7 @@ static int __wlan_hdd_cfg80211_testmode(struct wiphy *wiphy,
 			return -EINVAL;
 		}
 
-		err = wlan_cfg80211_ftm_testmode_cmd(hdd_ctx->hdd_pdev,
+		err = wlan_cfg80211_ftm_testmode_cmd(hdd_ctx->pdev,
 						     data, len);
 		break;
 	}
@@ -22181,8 +22182,8 @@ static int __wlan_hdd_cfg80211_set_mon_ch(struct wiphy *wiphy,
 		else if (chan_num >= 6 && chan_num <= 13)
 			sec_ch = chan_num - 4;
 	}
-	wlan_reg_set_channel_params(hdd_ctx->hdd_pdev, chan_num,
-			sec_ch, &ch_params);
+	wlan_reg_set_channel_params(hdd_ctx->pdev, chan_num,
+				    sec_ch, &ch_params);
 	if (wlan_hdd_change_hw_mode_for_given_chnl(adapter, chan_num,
 				POLICY_MGR_UPDATE_REASON_SET_OPER_CHAN)) {
 		hdd_err("Failed to change hw mode");
@@ -22561,7 +22562,7 @@ void wlan_hdd_init_chan_info(struct hdd_context *hdd_ctx)
 
 	hdd_ctx->chan_info = NULL;
 	if (!hdd_ctx->config->fEnableSNRMonitoring) {
-		hdd_info("SNR monitoring is disabled");
+		hdd_debug("SNR monitoring is disabled");
 		return;
 	}
 
@@ -22582,7 +22583,7 @@ void wlan_hdd_init_chan_info(struct hdd_context *hdd_ctx)
 
 	num_5g = QDF_ARRAY_SIZE(hdd_channels_5_ghz);
 	for (; (index - num_2g) < num_5g; index++) {
-		if (wlan_reg_is_dsrc_chan(hdd_ctx->hdd_pdev,
+		if (wlan_reg_is_dsrc_chan(hdd_ctx->pdev,
 		    hdd_channels_5_ghz[index - num_2g].hw_value))
 			continue;
 		hdd_ctx->chan_info[index].freq =

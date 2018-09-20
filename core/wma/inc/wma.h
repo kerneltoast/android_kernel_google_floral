@@ -184,7 +184,7 @@ enum ds_mode {
 #define WMA_CHAN_START_RESP          0
 #define WMA_CHAN_END_RESP            1
 
-#define WMA_BCN_BUF_MAX_SIZE 2500
+#define WMA_BCN_BUF_MAX_SIZE 512
 #define WMA_NOA_IE_SIZE(num_desc) (2 + (13 * (num_desc)))
 #define WMA_MAX_NOA_DESCRIPTORS 4
 
@@ -823,6 +823,7 @@ struct roam_synch_frame_ind {
  * @vdev_stop_wakelock: wakelock to protect vdev stop op with firmware
  * @vdev_set_key_wakelock: wakelock to protect vdev set key op with firmware
  * @channel: channel
+ * @roam_scan_stats_req: cached roam scan stats request
  *
  * It stores parameters per vdev in wma.
  */
@@ -912,6 +913,7 @@ struct wma_txrx_node {
 	struct roam_synch_frame_ind roam_synch_frame_ind;
 	bool is_waiting_for_key;
 	uint8_t channel;
+	struct sir_roam_scan_stats *roam_scan_stats_req;
 };
 
 /**
@@ -1967,6 +1969,18 @@ int wma_form_rx_packet(qdf_nbuf_t buf,
 QDF_STATUS wma_mgmt_unified_cmd_send(struct wlan_objmgr_vdev *vdev,
 				qdf_nbuf_t buf, uint32_t desc_id,
 				void *mgmt_tx_params);
+
+/**
+ * wma_mgmt_nbuf_unmap_cb() - dma unmap for pending mgmt pkts
+ * @pdev: objmgr pdev
+ * @buf: buffer
+ *
+ * This function does the dma unmap of the pending mgmt packet cleanup
+ *
+ * Return: None
+ */
+void wma_mgmt_nbuf_unmap_cb(struct wlan_objmgr_pdev *pdev,
+			    qdf_nbuf_t buf);
 
 /**
  * wma_chan_info_event_handler() - chan info event handler

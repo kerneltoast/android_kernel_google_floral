@@ -31,6 +31,8 @@
 #include <net/cfg80211.h>
 #include <linux/ieee80211.h>
 
+#define HDD_TIME_STRING_LEN 24
+
 /* Preprocessor Definitions and Constants */
 #ifdef FEATURE_WLAN_TDLS
 #define HDD_MAX_NUM_TDLS_STA          8
@@ -168,6 +170,9 @@ struct hdd_conn_flag {
  * @congestion: holds congestion percentage
  * @last_ssid: holds last ssid
  * @last_auth_type: holds last auth type
+ * @auth_time: last authentication established time
+ * @connect_time: last association established time
+ * @ch_width: channel width of operating channel
  */
 struct hdd_connection_info {
 	eConnectionState connState;
@@ -202,6 +207,9 @@ struct hdd_connection_info {
 	uint32_t cca;
 	tCsrSSIDInfo last_ssid;
 	eCsrAuthType last_auth_type;
+	char auth_time[HDD_TIME_STRING_LEN];
+	char connect_time[HDD_TIME_STRING_LEN];
+	enum phy_ch_width ch_width;
 };
 
 /* Forward declarations */

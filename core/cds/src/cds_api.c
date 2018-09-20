@@ -180,8 +180,6 @@ QDF_STATUS cds_init(void)
 	qdf_register_fw_down_callback(cds_is_fw_down);
 	qdf_register_ssr_protect_callbacks(cds_ssr_protect,
 					   cds_ssr_unprotect);
-	qdf_register_module_state_query_callback(
-				cds_is_module_state_transitioning);
 
 	gp_cds_context = &g_cds_context;
 
@@ -475,7 +473,6 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	cds_ctx = cds_get_context(QDF_MODULE_ID_QDF);
 	if (!cds_ctx) {
 		cds_alert("Trying to open CDS without a PreOpen");
-		QDF_ASSERT(0);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -488,15 +485,12 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	status = qdf_event_create(&gp_cds_context->wma_complete_event);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		cds_alert("Unable to init wma_complete_event");
-		QDF_ASSERT(0);
 		return status;
 	}
 
-	hdd_ctx = (struct hdd_context *)(gp_cds_context->hdd_context);
+	hdd_ctx = gp_cds_context->hdd_context;
 	if (!hdd_ctx || !hdd_ctx->config) {
-		/* Critical Error ...  Cannot proceed further */
 		cds_err("Hdd Context is Null");
-		QDF_ASSERT(0);
 
 		status = QDF_STATUS_E_FAILURE;
 		goto err_wma_complete_event;
@@ -513,9 +507,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 				&gp_cds_context->qdf_sched,
 				sizeof(cds_sched_context));
 	if (QDF_IS_STATUS_ERROR(status)) {
-		/* Critical Error ...  Cannot proceed further */
 		cds_alert("Failed to open CDS Scheduler");
-		QDF_ASSERT(0);
 		goto err_dispatcher_disable;
 	}
 
@@ -530,7 +522,6 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	cds_cfg = cds_get_ini_config();
 	if (!cds_cfg) {
 		cds_err("Cds config is NULL");
-		QDF_ASSERT(0);
 
 		status = QDF_STATUS_E_FAILURE;
 		goto err_sched_close;
@@ -577,9 +568,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	status = wma_open(psoc, hdd_update_tgt_cfg, cds_cfg,
 			  hdd_ctx->target_type);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		/* Critical Error ...  Cannot proceed further */
 		cds_alert("Failed to open WMA module");
-		QDF_ASSERT(0);
 		goto err_htc_close;
 	}
 
@@ -606,9 +595,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	status = htc_wait_target(HTCHandle);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		cds_alert("Failed to complete BMI phase. status: %d", status);
-
-		if (status != QDF_STATUS_E_NOMEM && !cds_is_fw_down())
-			QDF_BUG(0);
+		QDF_BUG(status == QDF_STATUS_E_NOMEM || cds_is_fw_down());
 
 		goto err_wma_close;
 	}
@@ -647,9 +634,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 			  gp_cds_context->hdd_context, cds_cfg);
 
 	if (QDF_STATUS_SUCCESS != status) {
-		/* Critical Error ...  Cannot proceed further */
 		cds_alert("Failed to open MAC");
-		QDF_ASSERT(0);
 		goto err_soc_detach;
 	}
 	gp_cds_context->mac_context = mac_handle;
@@ -657,27 +642,40 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	/* Now proceed to open the SME */
 	status = sme_open(mac_handle);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		/* Critical Error ...  Cannot proceed further */
 		cds_alert("Failed to open SME");
-		QDF_ASSERT(0);
 		goto err_mac_close;
 	}
 
 	cds_register_all_modules();
 
-	return dispatcher_psoc_open(psoc);
+	status = dispatcher_psoc_open(psoc);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		cds_alert("Failed to open PSOC Components");
+		goto deregister_modules;
+	}
+
+	return QDF_STATUS_SUCCESS;
+
+deregister_modules:
+	cds_deregister_all_modules();
+	sme_close(mac_handle);
 
 err_mac_close:
 	mac_close(mac_handle);
+	gp_cds_context->mac_context = NULL;
 
 err_soc_detach:
-	/* todo: add propper error handling */
+	cdp_soc_detach(gp_cds_context->dp_soc);
+	gp_cds_context->dp_soc = NULL;
+
+	ucfg_ocb_update_dp_handle(psoc, NULL);
+	pmo_ucfg_psoc_update_dp_handle(psoc, NULL);
+	wlan_psoc_set_dp_handle(psoc, NULL);
+
 err_wma_close:
 	cds_shutdown_notifier_purge();
 	wma_close();
 	wma_wmi_service_close();
-	pmo_ucfg_psoc_update_dp_handle(psoc, NULL);
-	wlan_psoc_set_dp_handle(psoc, NULL);
 
 err_htc_close:
 	if (gp_cds_context->htc_ctx) {
@@ -690,14 +688,12 @@ err_bmi_close:
 	bmi_cleanup(ol_ctx);
 
 err_sched_close:
-	if (QDF_IS_STATUS_ERROR(cds_sched_close())) {
-		cds_err("Failed to close CDS Scheduler");
-		QDF_ASSERT(false);
-	}
+	if (QDF_IS_STATUS_ERROR(cds_sched_close()))
+		QDF_DEBUG_PANIC("Failed to close CDS Scheduler");
 
 err_dispatcher_disable:
 	if (QDF_IS_STATUS_ERROR(dispatcher_disable()))
-		cds_err("Failed to disable dispatcher");
+		QDF_DEBUG_PANIC("Failed to disable dispatcher");
 
 err_wma_complete_event:
 	qdf_event_destroy(&gp_cds_context->wma_complete_event);
@@ -1773,29 +1769,36 @@ static void cds_trigger_recovery_handler(const char *func, const uint32_t line)
 	qdf_runtime_lock_t rtl;
 	qdf_device_t qdf;
 
-	if (cds_is_driver_unloading()) {
-		cds_err("Unloading in progress; ignoring recovery trigger");
-		return;
-	}
+	/* NOTE! This code path is delicate! Think very carefully before
+	 * modifying the content or order of the following. Please review any
+	 * potential changes with someone closely familiar with this feature.
+	 */
 
 	if (cds_is_driver_recovering()) {
-		cds_err("Recovery in progress; ignoring recovery trigger");
+		cds_info("WLAN recovery already in progress");
 		return;
 	}
 
 	if (cds_is_driver_in_bad_state()) {
-		cds_err("Driver is in bad state; ignoring recovery trigger");
+		cds_info("WLAN has already failed recovery");
 		return;
 	}
 
 	if (cds_is_fw_down()) {
-		cds_err("FW is down; ignoring recovery trigger");
+		cds_info("Firmware has already initiated recovery");
 		return;
 	}
 
+	/* if *wlan* recovery is disabled, crash here for debugging */
 	if (!cds_is_self_recovery_enabled()) {
-		QDF_DEBUG_PANIC("Recovery is not enabled (via %s:%d)",
+		QDF_DEBUG_PANIC("WLAN recovery is not enabled (via %s:%d)",
 				func, line);
+		return;
+	}
+
+	/* ignore recovery if we are unloading; it would be a waste anyway */
+	if (cds_is_driver_unloading()) {
+		cds_info("WLAN is unloading; ignore recovery");
 		return;
 	}
 
@@ -2458,6 +2461,7 @@ void cds_init_ini_config(struct cds_config_info *cfg)
 void cds_deinit_ini_config(void)
 {
 	struct cds_context *cds_ctx;
+	struct cds_config_info *cds_cfg;
 
 	cds_ctx = cds_get_context(QDF_MODULE_ID_QDF);
 	if (!cds_ctx) {
@@ -2465,10 +2469,11 @@ void cds_deinit_ini_config(void)
 		return;
 	}
 
-	if (cds_ctx->cds_cfg)
-		qdf_mem_free(cds_ctx->cds_cfg);
-
+	cds_cfg = cds_ctx->cds_cfg;
 	cds_ctx->cds_cfg = NULL;
+
+	if (cds_cfg)
+		qdf_mem_free(cds_cfg);
 }
 
 /**

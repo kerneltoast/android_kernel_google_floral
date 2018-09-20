@@ -977,12 +977,28 @@ QDF_STATUS
 sme_reset_bss_hotlist(mac_handle_t mac_handle,
 		      struct extscan_bssid_hotlist_reset_params *params);
 
-QDF_STATUS sme_set_significant_change(tHalHandle hHal,
-		tSirExtScanSetSigChangeReqParams *
-		pSetSignificantChangeReq);
-QDF_STATUS sme_reset_significant_change(tHalHandle hHal,
-		tSirExtScanResetSignificantChangeReqParams
-		*pResetReq);
+/**
+ * sme_set_significant_change() - SME API to set significant change
+ * @mac_handle: Opaque handle to the MAC context
+ * @params: extscan set significant change structure
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+sme_set_significant_change(mac_handle_t mac_handle,
+			   struct extscan_set_sig_changereq_params *params);
+
+/**
+ * sme_reset_significant_change() -  SME API to reset significant change
+ * @mac_handle: Opaque handle to the MAC context
+ * @params: extscan reset significant change structure
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+sme_reset_significant_change(mac_handle_t mac_handle,
+			     struct extscan_capabilities_reset_params *params);
+
 QDF_STATUS sme_get_cached_results(tHalHandle hHal,
 		tSirExtScanGetCachedResultsReqParams *
 		pCachedResultsReq);
@@ -2516,5 +2532,18 @@ static inline QDF_STATUS sme_deregister_twt_disable_complete_cb(tHalHandle hal)
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+/**
+ * sme_get_roam_scan_stats() - Send roam scan stats cmd to wma
+ * @hal: handle returned by mac_open
+ * @cb: call-back invoked for roam scan stats response
+ * @context: context of callback
+ * @vdev_id: vdev id
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+sme_get_roam_scan_stats(tHalHandle hal, roam_scan_stats_cb cb, void *context,
+			uint32_t vdev_id);
 
 #endif /* #if !defined( __SME_API_H ) */

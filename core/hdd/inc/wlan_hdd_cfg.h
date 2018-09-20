@@ -195,6 +195,25 @@ struct hdd_context;
 #define CFG_11D_SUPPORT_ENABLED_MAX            WNI_CFG_11D_ENABLED_STAMAX
 #define CFG_11D_SUPPORT_ENABLED_DEFAULT        WNI_CFG_11D_ENABLED_STADEF       /* Default is ON */
 
+/*
+ * <ini>
+ * enable_11d_in_world_mode - enable 11d in world mode
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini enables 11d in world mode, irrespective of value of
+ * g11dSupportEnabled
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+ #define CFG_ENABLE_11D_IN_WORLD_MODE_NAME "enable_11d_in_world_mode"
+ #define CFG_ENABLE_11D_IN_WORLD_MODE_MIN     (0)
+ #define CFG_ENABLE_11D_IN_WORLD_MODE_MAX     (1)
+ #define CFG_ENABLE_11D_IN_WORLD_MODE_DEFAULT (0)
+
 #define CFG_11H_SUPPORT_ENABLED_NAME           "g11hSupportEnabled"
 #define CFG_11H_SUPPORT_ENABLED_MIN            (0)
 #define CFG_11H_SUPPORT_ENABLED_MAX            (1)
@@ -791,6 +810,27 @@ enum hdd_dot11_mode {
 #define CFG_MAX_SCAN_COUNT_MIN            (1)
 #define CFG_MAX_SCAN_COUNT_MAX            (8)
 #define CFG_MAX_SCAN_COUNT_DEFAULT        (4)
+
+/*
+ * <ini>
+ * drop_bcn_on_chan_mismatch - drop the beacon for chan mismatch
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to decide drop the beacon or not if channel received
+ * in metadata doesn't match the one in beacon.
+ *
+ * Related: None
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DROP_BCN_ON_CHANNEL_MISMATCH      "drop_bcn_on_chan_mismatch"
+#define CFG_DROP_BCN_ON_CHANNEL_MISMATCH_MIN       (0)
+#define CFG_DROP_BCN_ON_CHANNEL_MISMATCH_MAX       (1)
+#define CFG_DROP_BCN_ON_CHANNEL_MISMATCH_DEFAULT   (1)
 
 /*
  * <ini>
@@ -14835,6 +14875,7 @@ struct hdd_config {
 	uint32_t active_dwell_2g;       /* in units of milliseconds */
 	uint32_t scan_probe_repeat_time;
 	uint32_t scan_num_probes;
+	bool drop_bcn_on_chan_mismatch;
 
 	uint32_t nInitialDwellTime;     /* in units of milliseconds */
 	bool initial_scan_no_dfs_chnl;
@@ -15527,6 +15568,7 @@ struct hdd_config {
 	uint32_t num_disallowed_aps;
 	bool oce_sta_enabled;
 	bool oce_sap_enabled;
+	bool enable_11d_in_world_mode;
 	/* 5G preference parameters for boosting RSSI */
 	bool                        enable_5g_band_pref;
 	int8_t                      rssi_boost_threshold_5g;

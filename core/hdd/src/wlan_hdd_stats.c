@@ -1418,7 +1418,7 @@ exit:
 int wlan_hdd_ll_stats_get(struct hdd_adapter *adapter, uint32_t req_id,
 			  uint32_t req_mask)
 {
-	int ret;
+	int errno;
 	tSirLLStatsGetReq get_req;
 	struct hdd_station_ctx *hddstactx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
@@ -1429,10 +1429,6 @@ int wlan_hdd_ll_stats_get(struct hdd_adapter *adapter, uint32_t req_id,
 		hdd_warn("Command not allowed in FTM mode");
 		return -EPERM;
 	}
-
-	ret = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != ret)
-		return -EINVAL;
 
 	if (hddstactx->hdd_reassoc_scenario) {
 		hdd_err("Roaming in progress, cannot process the request");
@@ -1449,15 +1445,15 @@ int wlan_hdd_ll_stats_get(struct hdd_adapter *adapter, uint32_t req_id,
 	get_req.staId = adapter->session_id;
 
 	rtnl_lock();
-	ret = wlan_hdd_send_ll_stats_req(hdd_ctx, &get_req);
+	errno = wlan_hdd_send_ll_stats_req(hdd_ctx, &get_req);
 	rtnl_unlock();
-	if (0 != ret)
+	if (errno)
 		hdd_err("Send LL stats req failed, id:%u, mask:%d, session:%d",
 			req_id, req_mask, adapter->session_id);
 
 	hdd_exit();
-	return ret;
 
+	return errno;
 }
 
 /**
@@ -4653,7 +4649,7 @@ static bool wlan_hdd_update_survey_info(struct wiphy *wiphy,
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	sme_get_operation_channel(hdd_ctx->mac_handle, &channel,
 				  adapter->session_id);
-	opfreq = wlan_reg_chan_to_freq(hdd_ctx->hdd_pdev, channel);
+	opfreq = wlan_reg_chan_to_freq(hdd_ctx->pdev, channel);
 
 	mutex_lock(&hdd_ctx->chan_info_lock);
 
@@ -5052,7 +5048,7 @@ QDF_STATUS wlan_hdd_get_rssi(struct hdd_adapter *adapter, int8_t *rssi_value)
 	}
 
 	rssi_info = wlan_cfg80211_mc_cp_stats_get_peer_rssi(
-			adapter->hdd_vdev,
+			adapter->vdev,
 			sta_ctx->conn_info.bssId.bytes,
 			&ret);
 	if (ret || !rssi_info) {
@@ -5756,7 +5752,7 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 	uint8_t mcs_rate_flags;
 	struct stats_event *stats;
 
-	stats = wlan_cfg80211_mc_cp_stats_get_station_stats(adapter->hdd_vdev,
+	stats = wlan_cfg80211_mc_cp_stats_get_station_stats(adapter->vdev,
 							    &ret);
 	if (ret || !stats) {
 		wlan_cfg80211_mc_cp_stats_free_stats_event(stats);
@@ -5797,7 +5793,7 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 
 	/* save class a stats to legacy location */
 	adapter->hdd_stats.class_a_stat.nss =
-		wlan_vdev_mlme_get_nss(adapter->hdd_vdev);
+		wlan_vdev_mlme_get_nss(adapter->vdev);
 	adapter->hdd_stats.class_a_stat.tx_rate = stats->tx_rate;
 	adapter->hdd_stats.class_a_stat.tx_rate_flags = stats->tx_rate_flags;
 	adapter->hdd_stats.class_a_stat.mcs_index =

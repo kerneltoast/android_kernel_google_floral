@@ -541,18 +541,6 @@ bool csr_nonscan_active_ll_remove_entry(struct sAniSirGlobal *mac_ctx,
 	return false;
 }
 
-bool csr_nonscan_pending_ll_remove_entry(struct sAniSirGlobal *mac_ctx,
-		tListElem *entry, bool inter_locked)
-{
-	tListElem *head;
-
-	head = csr_nonscan_pending_ll_next(mac_ctx, entry, inter_locked);
-	if (head == entry)
-		return true;
-
-	return false;
-}
-
 tListElem *csr_nonscan_active_ll_remove_head(struct sAniSirGlobal *mac_ctx,
 		bool inter_locked)
 {
@@ -1747,7 +1735,7 @@ uint32_t csr_translate_to_wni_cfg_dot11_mode(tpAniSirGlobal pMac,
 
 	switch (csrDot11Mode) {
 	case eCSR_CFG_DOT11_MODE_AUTO:
-		sme_warn("Warning: sees eCSR_CFG_DOT11_MODE_AUTO");
+		sme_debug("eCSR_CFG_DOT11_MODE_AUTO");
 		if (IS_FEATURE_SUPPORTED_BY_FW(DOT11AX))
 			ret = WNI_CFG_DOT11_MODE_11AX;
 		else if (IS_FEATURE_SUPPORTED_BY_FW(DOT11AC))

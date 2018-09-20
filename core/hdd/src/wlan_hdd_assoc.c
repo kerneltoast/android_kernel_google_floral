@@ -210,7 +210,7 @@ static inline void wlan_hdd_sae_callback(struct hdd_adapter *adapter,
 /**
  * hdd_conn_set_authenticated() - set authentication state
  * @adapter: pointer to the adapter
- * @authState: authentication state
+ * @auth_state: authentication state
  *
  * This function updates the global HDD station context
  * authentication state.
@@ -218,14 +218,26 @@ static inline void wlan_hdd_sae_callback(struct hdd_adapter *adapter,
  * Return: none
  */
 static void
-hdd_conn_set_authenticated(struct hdd_adapter *adapter, uint8_t authState)
+hdd_conn_set_authenticated(struct hdd_adapter *adapter, uint8_t auth_state)
 {
 	struct hdd_station_ctx *sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	char *auth_time;
+	uint32_t time_buffer_size;
 
 	/* save the new connection state */
 	hdd_debug("Authenticated state Changed from oldState:%d to State:%d",
-		   sta_ctx->conn_info.uIsAuthenticated, authState);
-	sta_ctx->conn_info.uIsAuthenticated = authState;
+		   sta_ctx->conn_info.uIsAuthenticated, auth_state);
+	sta_ctx->conn_info.uIsAuthenticated = auth_state;
+
+	auth_time = sta_ctx->conn_info.auth_time;
+	time_buffer_size = sizeof(sta_ctx->conn_info.auth_time);
+
+	if (auth_state)
+		qdf_get_time_of_the_day_in_hr_min_sec_usec(auth_time,
+							   time_buffer_size);
+	else
+		qdf_mem_set(auth_time, 0x00, time_buffer_size);
+
 }
 
 /**
@@ -242,6 +254,8 @@ void hdd_conn_set_connection_state(struct hdd_adapter *adapter,
 {
 	struct hdd_station_ctx *hdd_sta_ctx =
 		WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+	char *connect_time;
+	uint32_t time_buffer_size;
 
 	/* save the new connection state */
 	hdd_debug("Changed conn state from old:%d to new:%d for dev %s",
@@ -252,6 +266,15 @@ void hdd_conn_set_connection_state(struct hdd_adapter *adapter,
 					 hdd_sta_ctx->conn_info.connState,
 					 conn_state);
 	hdd_sta_ctx->conn_info.connState = conn_state;
+
+	connect_time = hdd_sta_ctx->conn_info.connect_time;
+	time_buffer_size = sizeof(hdd_sta_ctx->conn_info.connect_time);
+	if (conn_state == eConnectionState_Associated)
+		qdf_get_time_of_the_day_in_hr_min_sec_usec(connect_time,
+							   time_buffer_size);
+	else
+		qdf_mem_set(connect_time, 0x00, time_buffer_size);
+
 }
 
 /**
@@ -996,6 +1019,9 @@ hdd_conn_save_connect_info(struct hdd_adapter *adapter,
 
 			sta_ctx->conn_info.rate_flags =
 				roam_info->chan_info.rate_flags;
+
+			sta_ctx->conn_info.ch_width =
+				roam_info->chan_info.ch_width;
 		}
 		hdd_save_bss_info(adapter, roam_info);
 	}
@@ -1315,7 +1341,7 @@ static void hdd_send_association_event(struct net_device *dev,
 			/* Update tdls module about the disconnection event */
 			hdd_notify_sta_disconnect(adapter->session_id,
 						 true, false,
-						 adapter->hdd_vdev);
+						 adapter->vdev);
 		}
 #endif
 	if (eConnectionState_Associated == sta_ctx->conn_info.connState) {
@@ -1335,7 +1361,7 @@ static void hdd_send_association_event(struct net_device *dev,
 		memcpy(wrqu.ap_addr.sa_data, pCsrRoamInfo->pBssDesc->bssId,
 		       sizeof(pCsrRoamInfo->pBssDesc->bssId));
 
-		ucfg_p2p_status_connect(adapter->hdd_vdev);
+		ucfg_p2p_status_connect(adapter->vdev);
 
 		hdd_info("wlan: " MAC_ADDRESS_STR " connected to "
 			MAC_ADDRESS_STR "\n",
@@ -1376,7 +1402,7 @@ static void hdd_send_association_event(struct net_device *dev,
 		chan_info.reg_info_2 =
 			pCsrRoamInfo->chan_info.reg_info_2;
 
-		ret = hdd_objmgr_set_peer_mlme_state(adapter->hdd_vdev,
+		ret = hdd_objmgr_set_peer_mlme_state(adapter->vdev,
 						     WLAN_ASSOC_STATE);
 		if (ret)
 			hdd_err("Peer object %pM fail to set associated state",
@@ -1392,7 +1418,7 @@ static void hdd_send_association_event(struct net_device *dev,
 		hdd_notify_sta_connect(adapter->session_id,
 				       pCsrRoamInfo->tdls_chan_swit_prohibited,
 				       pCsrRoamInfo->tdls_prohibited,
-				       adapter->hdd_vdev);
+				       adapter->vdev);
 
 #ifdef MSM_PLATFORM
 		/* start timer in sta/p2p_cli */
@@ -1444,7 +1470,7 @@ static void hdd_send_association_event(struct net_device *dev,
 		hdd_notify_sta_disconnect(adapter->session_id,
 					  false,
 					  false,
-					  adapter->hdd_vdev);
+					  adapter->vdev);
 
 #ifdef MSM_PLATFORM
 		/* stop timer in sta/p2p_cli */
@@ -1682,7 +1708,7 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 
 	if (ucfg_ipa_is_enabled() &&
 	    (sta_ctx->conn_info.staId[0] != HDD_WLAN_INVALID_STA_ID))
-		ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev, adapter->dev,
+		ucfg_ipa_wlan_evt(hdd_ctx->pdev, adapter->dev,
 				  adapter->device_mode,
 				  sta_ctx->conn_info.staId[0],
 				  adapter->session_id,
@@ -1757,7 +1783,7 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 		}
 
 		/* update P2P connection status */
-		ucfg_p2p_status_disconnect(adapter->hdd_vdev);
+		ucfg_p2p_status_disconnect(adapter->vdev);
 	}
 
 	hdd_wmm_adapter_clear(adapter);
@@ -1832,8 +1858,9 @@ static QDF_STATUS hdd_dis_connect_handler(struct hdd_adapter *adapter,
 	if ((eConnectionState_Connecting != sta_ctx->conn_info.connState)) {
 		 hdd_conn_set_connection_state(adapter,
 					       eConnectionState_NotConnected);
+		 hdd_set_roaming_in_progress(false);
 	}
-	pmo_ucfg_flush_gtk_offload_req(adapter->hdd_vdev);
+	pmo_ucfg_flush_gtk_offload_req(adapter->vdev);
 
 	if ((QDF_STA_MODE == adapter->device_mode) ||
 	    (QDF_P2P_CLIENT_MODE == adapter->device_mode)) {
@@ -2109,7 +2136,7 @@ QDF_STATUS hdd_roam_register_sta(struct hdd_adapter *adapter,
 						);
 
 		hdd_conn_set_authenticated(adapter, true);
-		hdd_objmgr_set_peer_mlme_auth_state(adapter->hdd_vdev, true);
+		hdd_objmgr_set_peer_mlme_auth_state(adapter->vdev, true);
 	} else {
 		hdd_debug("ULA auth StaId= %d. Changing TL state to CONNECTED at Join time",
 			 sta_ctx->conn_info.staId[0]);
@@ -2123,7 +2150,7 @@ QDF_STATUS hdd_roam_register_sta(struct hdd_adapter *adapter,
 #endif
 						);
 		hdd_conn_set_authenticated(adapter, false);
-		hdd_objmgr_set_peer_mlme_auth_state(adapter->hdd_vdev, false);
+		hdd_objmgr_set_peer_mlme_auth_state(adapter->vdev, false);
 	}
 	return qdf_status;
 }
@@ -2458,7 +2485,7 @@ static int hdd_change_sta_state_authenticated(struct hdd_adapter *adapter,
 	status = hdd_change_peer_state(adapter, staid, OL_TXRX_PEER_STATE_AUTH,
 			hdd_is_roam_sync_in_progress(roaminfo));
 	hdd_conn_set_authenticated(adapter, true);
-	hdd_objmgr_set_peer_mlme_auth_state(adapter->hdd_vdev, true);
+	hdd_objmgr_set_peer_mlme_auth_state(adapter->vdev, true);
 
 	if ((QDF_STA_MODE == adapter->device_mode) ||
 	    (QDF_P2P_CLIENT_MODE == adapter->device_mode)) {
@@ -2831,7 +2858,7 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 			hdd_err("Wrong Staid: %d", roam_info->staId);
 
 		if (ucfg_ipa_is_enabled())
-			ucfg_ipa_wlan_evt(hdd_ctx->hdd_pdev, adapter->dev,
+			ucfg_ipa_wlan_evt(hdd_ctx->pdev, adapter->dev,
 					  adapter->device_mode,
 					  roam_info->staId,
 					  adapter->session_id,
@@ -3184,7 +3211,7 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 						);
 				hdd_conn_set_authenticated(adapter, false);
 				hdd_objmgr_set_peer_mlme_auth_state(
-							adapter->hdd_vdev,
+							adapter->vdev,
 							false);
 			} else {
 				hdd_debug("staId: %d Changing TL state to AUTHENTICATED",
@@ -3201,7 +3228,7 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 						);
 				hdd_conn_set_authenticated(adapter, true);
 				hdd_objmgr_set_peer_mlme_auth_state(
-							adapter->hdd_vdev,
+							adapter->vdev,
 							true);
 			}
 
@@ -3236,8 +3263,10 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 		hdd_debug("check for SAP restart");
 		policy_mgr_check_concurrent_intf_and_restart_sap(
 			hdd_ctx->hdd_psoc);
-		policy_mgr_checkn_update_hw_mode_single_mac_mode
-			(hdd_ctx->hdd_psoc, roam_info->pBssDesc->channelId);
+		if (roam_info->pBssDesc)
+			policy_mgr_checkn_update_hw_mode_single_mac_mode
+				(hdd_ctx->hdd_psoc,
+				 roam_info->pBssDesc->channelId);
 	} else {
 		bool connect_timeout = false;
 		/* do we need to change the HW mode */
