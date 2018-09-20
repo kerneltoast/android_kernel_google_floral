@@ -2225,6 +2225,7 @@ struct afe_port_data_cmd_rt_proxy_port_read_v2 {
 #define AFE_LINEAR_PCM_DATA_PACKED_60958 0x2
 #define AFE_NON_LINEAR_DATA_PACKED_60958 0x3
 #define AFE_GENERIC_COMPRESSED           0x8
+#define AFE_LINEAR_PCM_DATA_PACKED_16BIT 0X6
 
 /* This param id is used to configure I2S interface */
 #define AFE_PARAM_ID_I2S_CONFIG	0x0001020D
@@ -3521,6 +3522,10 @@ struct afe_abr_enc_cfg_t {
 	 * Information to set up IMC between decoder and encoder.
 	 */
 	struct afe_imc_dec_enc_info imc_info;
+	/*
+	 * Flag to indicate whether ABR is enabled.
+	 */
+	bool is_abr_enabled;
 } __packed;
 
 #define AFE_PARAM_ID_APTX_SYNC_MODE  0x00013205
@@ -4203,6 +4208,69 @@ union afe_port_config {
 	struct afe_enc_dec_imc_info_param_t       imc_info_param;
 	struct afe_param_id_cdc_dma_cfg_t         cdc_dma;
 } __packed;
+
+
+/*
+ * AFE event registration related APIs and corresponding payloads
+ */
+#define AFE_SVC_CMD_EVENT_CFG                        0x000100FE
+
+#define AFE_CMD_APPS_WAKEUP_IRQ_REGISTER_MINOR_VERSION          0x1
+
+/* Flag to indicate AFE to register APPS wakeup Interrupt */
+#define AFE_APPS_WAKEUP_IRQ_REGISTER_FLAG    1
+
+/* Flag to indicate AFE to de-register APPS wakeup Interrupt */
+#define AFE_APPS_WAKEUP_IRQ_DEREGISTER_FLAG  0
+
+/* Default interrupt trigger value. */
+#define DEFAULT_SETTINGS              0x00000001
+
+/* Interrupt is triggered only if the input signal at the source is high. */
+#define LEVEL_HIGH_TRIGGER             0x00000002
+
+/* Interrupt is triggered only if the input signal at the source is low. */
+#define LEVEL_LOW_TRIGGER              0x00000003
+
+/* Interrupt is triggered only if the input signal at the source transitions
+ *from low to high.
+ */
+#define RISING_EDGE_TRIGGER            0x00000004
+
+/* Interrupt is triggered only if the input signal at the source transitions
+ *from high  to low.
+ */
+#define FALLING_EDGE_TRIGGER           0x00000005
+
+/* Macro for invalid trigger type. This should not be used. */
+#define INVALID_TRIGGER                0x00000006
+
+#define AFE_EVENT_ID_MBHC_DETECTION_SW_WA           0x1
+
+/* @weakgroup weak_afe_svc_cmd_evt_cfg_payload
+ *
+ * This is payload of each event that is to be
+ * registered with AFE service.
+ */
+struct afe_svc_cmd_evt_cfg_payload {
+	struct apr_hdr hdr;
+
+	uint32_t event_id;
+/* Unique ID of the event.
+ *
+ *	@values
+ *	-# AFE_EVENT_ID_MBHC_DETECTION_SW_WA
+ */
+
+	uint32_t reg_flag;
+/* Flag for registering or de-registering an event.
+ *	@values
+ *	- #AFE_SVC_REGISTER_EVENT_FLAG
+ *	- #AFE_SVC_DEREGISTER_EVENT_FLAG
+ */
+} __packed;
+
+#define AFE_EVENT_MBHC_DETECTION_SW_WA                 0x0001010F
 
 #define AFE_PORT_CMD_DEVICE_START 0x000100E5
 

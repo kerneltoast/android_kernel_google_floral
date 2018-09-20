@@ -94,6 +94,7 @@ struct afe_ctl {
 	atomic_t state;
 	atomic_t status;
 	wait_queue_head_t wait[AFE_MAX_PORTS];
+	wait_queue_head_t wait_wakeup;
 	struct task_struct *task;
 	void (*tx_cb)(uint32_t opcode,
 		uint32_t token, uint32_t *payload, void *priv);
@@ -145,6 +146,7 @@ struct afe_ctl {
 	u32 island_mode[AFE_MAX_PORTS];
 	struct vad_config vad_cfg[AFE_MAX_PORTS];
 	struct work_struct afe_dc_work;
+	struct notifier_block event_notifier;
 };
 
 static atomic_t afe_ports_mad_type[SLIMBUS_PORT_LAST - SLIMBUS_0_RX];
@@ -367,6 +369,23 @@ static void afe_notify_dc_presence_work_fn(struct work_struct *work)
 		       __func__, event, ret);
 }
 
+static int afe_aud_event_notify(struct notifier_block *self,
+				unsigned long action, void *data)
+{
+	switch (action) {
+	case SWR_WAKE_IRQ_REGISTER:
+		afe_send_cmd_wakeup_register(data, true);
+		break;
+	case SWR_WAKE_IRQ_DEREGISTER:
+		afe_send_cmd_wakeup_register(data, false);
+		break;
+	default:
+		pr_err("%s: invalid event type: %lu\n", __func__, action);
+		return -EINVAL;
+	}
+
+	return 0;
+}
 
 static const char *const afe_event_port_text[] = {
 	"PORT=Primary",
@@ -569,6 +588,8 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 				return -EINVAL;
 		}
 		wake_up(&this_afe.wait[data->token]);
+	} else if (data->opcode == AFE_EVENT_MBHC_DETECTION_SW_WA) {
+		msm_aud_evt_notifier_call_chain(SWR_WAKE_IRQ_EVENT, NULL);
 	} else if (data->payload_size) {
 		uint32_t *payload;
 		uint16_t port_id = 0;
@@ -639,6 +660,10 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 				}
 				atomic_set(&this_afe.state, payload[1]);
 				wake_up(&this_afe.wait[data->token]);
+				break;
+			case AFE_SVC_CMD_EVENT_CFG:
+				atomic_set(&this_afe.state, payload[1]);
+				wake_up(&this_afe.wait_wakeup);
 				break;
 			default:
 				pr_err("%s: Unknown cmd 0x%x\n", __func__,
@@ -2267,7 +2292,7 @@ static struct cal_block_data *afe_find_cal(int cal_index, int port_id)
 			goto exit;
 		}
 	}
-	pr_err("%s: no matching cal_block found\n", __func__);
+	pr_debug("%s: no matching cal_block found\n", __func__);
 	cal_block = NULL;
 
 exit:
@@ -2675,7 +2700,8 @@ int afe_port_set_mad_type(u16 port_id, enum afe_mad_type mad_type)
 	int i;
 
 	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_TX ||
-		port_id == AFE_PORT_ID_INT3_MI2S_TX) {
+		port_id == AFE_PORT_ID_INT3_MI2S_TX ||
+		port_id == AFE_PORT_ID_TX_CODEC_DMA_TX_3) {
 		mad_type = MAD_SW_AUDIO;
 		return 0;
 	}
@@ -2703,7 +2729,8 @@ enum afe_mad_type afe_port_get_mad_type(u16 port_id)
 	int i;
 
 	if (port_id == AFE_PORT_ID_TERTIARY_MI2S_TX ||
-		port_id == AFE_PORT_ID_INT3_MI2S_TX)
+		port_id == AFE_PORT_ID_INT3_MI2S_TX ||
+		port_id == AFE_PORT_ID_TX_CODEC_DMA_TX_3)
 		return MAD_SW_AUDIO;
 
 	i = port_id - SLIMBUS_0_RX;
@@ -2860,6 +2887,40 @@ int afe_send_spdif_ch_status_cfg(struct afe_param_id_spdif_ch_status_cfg
 	return ret;
 }
 EXPORT_SYMBOL(afe_send_spdif_ch_status_cfg);
+
+int afe_send_cmd_wakeup_register(void *handle, bool enable)
+{
+	struct afe_svc_cmd_evt_cfg_payload wakeup_irq;
+	int ret;
+
+	pr_debug("%s: enter\n", __func__);
+
+	wakeup_irq.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+					    APR_HDR_LEN(APR_HDR_SIZE),
+					    APR_PKT_VER);
+	wakeup_irq.hdr.pkt_size = sizeof(wakeup_irq);
+	wakeup_irq.hdr.src_port = 0;
+	wakeup_irq.hdr.dest_port = 0;
+	wakeup_irq.hdr.token = 0x0;
+	wakeup_irq.hdr.opcode = AFE_SVC_CMD_EVENT_CFG;
+	wakeup_irq.event_id = AFE_EVENT_ID_MBHC_DETECTION_SW_WA;
+	wakeup_irq.reg_flag = enable;
+	pr_debug("%s: cmd device start opcode[0x%x] register:%d\n",
+		 __func__, wakeup_irq.hdr.opcode, wakeup_irq.reg_flag);
+
+	ret = afe_apr_send_pkt(&wakeup_irq, &this_afe.wait_wakeup);
+	if (ret) {
+		pr_err("%s: AFE wakeup command register %d failed %d\n",
+			__func__, enable, ret);
+	} else if (this_afe.task != current) {
+		this_afe.task = current;
+		pr_debug("task_name = %s pid = %d\n",
+			 this_afe.task->comm, this_afe.task->pid);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(afe_send_cmd_wakeup_register);
 
 static int afe_send_cmd_port_start(u16 port_id)
 {
@@ -3674,7 +3735,9 @@ static int q6afe_send_enc_config(u16 port_id,
 		goto exit;
 	}
 
-	if (format == ASM_MEDIA_FMT_LDAC || format == ASM_MEDIA_FMT_APTX_ADAPTIVE) {
+	if ((format == ASM_MEDIA_FMT_LDAC &&
+	     cfg->ldac_config.abr_config.is_abr_enabled) ||
+	     format == ASM_MEDIA_FMT_APTX_ADAPTIVE) {
 		pr_debug("%s:sending AFE_ENCODER_PARAM_ID_BIT_RATE_LEVEL_MAP to DSP payload",
 			__func__);
 		param_hdr.param_id = AFE_ENCODER_PARAM_ID_BIT_RATE_LEVEL_MAP;
@@ -4453,6 +4516,34 @@ int afe_get_port_index(u16 port_id)
 		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_1;
 	case AFE_PORT_ID_WSA_CODEC_DMA_TX_2:
 		return IDX_AFE_PORT_ID_WSA_CODEC_DMA_TX_2;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_0:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_0;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_0:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_0;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_1:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_1;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_1:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_1;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_2:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_2;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_2:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_2;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_3:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_3;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_3:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_3;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_4:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_4;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_4:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_4;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_5:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_5;
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_5:
+		return IDX_AFE_PORT_ID_TX_CODEC_DMA_TX_5;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_6:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_6;
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_7:
+		return IDX_AFE_PORT_ID_RX_CODEC_DMA_RX_7;
 	default:
 		pr_err("%s: port 0x%x\n", __func__, port_id);
 		return -EINVAL;
@@ -6580,6 +6671,20 @@ int afe_validate_port(u16 port_id)
 	case AFE_PORT_ID_WSA_CODEC_DMA_TX_2:
 	case AFE_PORT_ID_VA_CODEC_DMA_TX_0:
 	case AFE_PORT_ID_VA_CODEC_DMA_TX_1:
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_0:
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_0:
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_1:
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_1:
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_2:
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_2:
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_3:
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_3:
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_4:
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_4:
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_5:
+	case AFE_PORT_ID_TX_CODEC_DMA_TX_5:
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_6:
+	case AFE_PORT_ID_RX_CODEC_DMA_RX_7:
 	{
 		ret = 0;
 		break;
@@ -8018,6 +8123,7 @@ int __init afe_init(void)
 		this_afe.vad_cfg[i].pre_roll = 0;
 		init_waitqueue_head(&this_afe.wait[i]);
 	}
+	init_waitqueue_head(&this_afe.wait_wakeup);
 	wakeup_source_init(&wl.ws, "spkr-prot");
 	ret = afe_init_cal_data();
 	if (ret)
@@ -8041,6 +8147,9 @@ int __init afe_init(void)
 		  afe_notify_pri_spdif_fmt_update_work_fn);
 	INIT_WORK(&this_afe.afe_sec_spdif_work,
 		  afe_notify_sec_spdif_fmt_update_work_fn);
+
+	this_afe.event_notifier.notifier_call  = afe_aud_event_notify;
+	msm_aud_evt_blocking_register_client(&this_afe.event_notifier);
 
 	return 0;
 }

@@ -56,12 +56,11 @@ struct wcd937x_priv {
 	s32 dmic_4_5_clk_cnt;
 	/* mbhc module */
 	struct wcd937x_mbhc *mbhc;
-	struct blocking_notifier_head notifier;
 
 	u32 hph_mode;
 
 	struct irq_domain *virq;
-	struct wcd_irq_info *irq_info;
+	struct wcd_irq_info irq_info;
 	u32 rx_clk_cnt;
 	int num_irq_regs;
 
@@ -72,12 +71,19 @@ struct wcd937x_priv {
 	struct codec_port_info
 			rx_port_mapping[MAX_PORT][MAX_CH_PER_PORT];
 	struct regulator_bulk_data *supplies;
+
+	u32 version;
+	/* Entry for version info */
+	struct snd_info_entry *entry;
+	struct snd_info_entry *version_entry;
 };
 
 struct wcd937x_micbias_setting {
 	u8 ldoh_v;
 	u32 cfilt1_mv;
+	u32 micb1_mv;
 	u32 micb2_mv;
+	u32 micb3_mv;
 	u8 bias1_cfilt_sel;
 };
 
@@ -126,4 +132,6 @@ extern int wcd937x_mbhc_micb_adjust_voltage(struct snd_soc_codec *codec,
 extern int wcd937x_get_micb_vout_ctl_val(u32 micb_mv);
 extern int wcd937x_micbias_control(struct snd_soc_codec *codec, int micb_num,
 			int req, bool is_dapm);
+extern int wcd937x_info_create_codec_entry(struct snd_info_entry *codec_root,
+				    struct snd_soc_codec *codec);
 #endif

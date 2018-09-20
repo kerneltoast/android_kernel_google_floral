@@ -79,6 +79,8 @@ static struct wcd_mbhc_register
 			  WCD937X_MBHC_NEW_CTL_2, 0x03, 0, 0),
 	WCD_MBHC_REGISTER("WCD_MBHC_HS_COMP_RESULT",
 			  WCD937X_ANA_MBHC_RESULT_3, 0x08, 3, 0),
+	WCD_MBHC_REGISTER("WCD_MBHC_IN2P_CLAMP_STATE",
+			  WCD937X_ANA_MBHC_RESULT_3, 0x10, 4, 0),
 	WCD_MBHC_REGISTER("WCD_MBHC_MIC_SCHMT_RESULT",
 			  WCD937X_ANA_MBHC_RESULT_3, 0x20, 5, 0),
 	WCD_MBHC_REGISTER("WCD_MBHC_HPHL_SCHMT_RESULT",
@@ -169,7 +171,7 @@ static int wcd937x_mbhc_request_irq(struct snd_soc_codec *codec,
 {
 	struct wcd937x_priv *wcd937x = dev_get_drvdata(codec->dev);
 
-	return wcd_request_irq(wcd937x->irq_info, irq, name, handler, data);
+	return wcd_request_irq(&wcd937x->irq_info, irq, name, handler, data);
 }
 
 static void wcd937x_mbhc_irq_control(struct snd_soc_codec *codec,
@@ -178,9 +180,9 @@ static void wcd937x_mbhc_irq_control(struct snd_soc_codec *codec,
 	struct wcd937x_priv *wcd937x = dev_get_drvdata(codec->dev);
 
 	if (enable)
-		wcd_enable_irq(wcd937x->irq_info, irq);
+		wcd_enable_irq(&wcd937x->irq_info, irq);
 	else
-		wcd_disable_irq(wcd937x->irq_info, irq);
+		wcd_disable_irq(&wcd937x->irq_info, irq);
 }
 
 static int wcd937x_mbhc_free_irq(struct snd_soc_codec *codec,
@@ -188,7 +190,7 @@ static int wcd937x_mbhc_free_irq(struct snd_soc_codec *codec,
 {
 	struct wcd937x_priv *wcd937x = dev_get_drvdata(codec->dev);
 
-	wcd_free_irq(wcd937x->irq_info, irq, data);
+	wcd_free_irq(&wcd937x->irq_info, irq, data);
 
 	return 0;
 }
@@ -721,6 +723,65 @@ static void wcd937x_mbhc_moisture_config(struct wcd_mbhc *mbhc)
 			    0x0C, mbhc->moist_rref << 2);
 }
 
+static void wcd937x_mbhc_moisture_detect_en(struct wcd_mbhc *mbhc, bool enable)
+{
+	struct snd_soc_codec *codec = mbhc->codec;
+
+	if (enable)
+		snd_soc_update_bits(codec, WCD937X_MBHC_NEW_CTL_2,
+					0x0C, mbhc->moist_rref << 2);
+	else
+		snd_soc_update_bits(codec, WCD937X_MBHC_NEW_CTL_2,
+				    0x0C, R_OFF << 2);
+}
+
+static bool wcd937x_mbhc_get_moisture_status(struct wcd_mbhc *mbhc)
+{
+	struct snd_soc_codec *codec = mbhc->codec;
+	bool ret = false;
+
+	if ((mbhc->moist_rref == R_OFF) ||
+	    (mbhc->mbhc_cfg->enable_usbc_analog)) {
+		snd_soc_update_bits(codec, WCD937X_MBHC_NEW_CTL_2,
+				    0x0C, R_OFF << 2);
+		goto done;
+	}
+
+	/* Do not enable moisture detection if jack type is NC */
+	if (!mbhc->hphl_swh) {
+		dev_dbg(codec->dev, "%s: disable moisture detection for NC\n",
+			__func__);
+		snd_soc_update_bits(codec, WCD937X_MBHC_NEW_CTL_2,
+				    0x0C, R_OFF << 2);
+		goto done;
+	}
+
+	/* If moisture_en is already enabled, then skip to plug type
+	 * detection.
+	 */
+	if ((snd_soc_read(codec, WCD937X_MBHC_NEW_CTL_2) & 0x0C))
+		goto done;
+
+	wcd937x_mbhc_moisture_detect_en(mbhc, true);
+	/* Read moisture comparator status */
+	ret = ((snd_soc_read(codec, WCD937X_MBHC_NEW_FSM_STATUS)
+				& 0x20) ? 0 : 1);
+
+done:
+	return ret;
+
+}
+
+static void wcd937x_mbhc_moisture_polling_ctrl(struct wcd_mbhc *mbhc,
+						bool enable)
+{
+	struct snd_soc_codec *codec = mbhc->codec;
+
+	snd_soc_update_bits(codec,
+			WCD937X_MBHC_NEW_INT_MOISTURE_DET_POLLING_CTRL,
+			0x04, (enable << 2));
+}
+
 static const struct wcd_mbhc_cb mbhc_cb = {
 	.request_irq = wcd937x_mbhc_request_irq,
 	.irq_control = wcd937x_mbhc_irq_control,
@@ -742,6 +803,9 @@ static const struct wcd_mbhc_cb mbhc_cb = {
 	.mbhc_gnd_det_ctrl = wcd937x_mbhc_gnd_det_ctrl,
 	.hph_pull_down_ctrl = wcd937x_mbhc_hph_pull_down_ctrl,
 	.mbhc_moisture_config = wcd937x_mbhc_moisture_config,
+	.mbhc_get_moisture_status = wcd937x_mbhc_get_moisture_status,
+	.mbhc_moisture_polling_ctrl = wcd937x_mbhc_moisture_polling_ctrl,
+	.mbhc_moisture_detect_en = wcd937x_mbhc_moisture_detect_en,
 };
 
 static int wcd937x_get_hph_type(struct snd_kcontrol *kcontrol,
@@ -910,7 +974,7 @@ int wcd937x_mbhc_post_ssr_init(struct wcd937x_mbhc *mbhc,
 
 	wcd_mbhc_deinit(wcd_mbhc);
 	ret = wcd_mbhc_init(wcd_mbhc, codec, &mbhc_cb, &intr_ids,
-			    wcd_mbhc_registers, WCD937X_ZDET_SUPPORTED);
+			    wcd_mbhc_registers, false);
 	if (ret) {
 		dev_err(codec->dev, "%s: mbhc initialization failed\n",
 			__func__);
@@ -962,7 +1026,7 @@ int wcd937x_mbhc_init(struct wcd937x_mbhc **mbhc, struct snd_soc_codec *codec,
 
 	ret = wcd_mbhc_init(wcd_mbhc, codec, &mbhc_cb,
 				&intr_ids, wcd_mbhc_registers,
-				WCD937X_ZDET_SUPPORTED);
+				false);
 	if (ret) {
 		dev_err(codec->dev, "%s: mbhc initialization failed\n",
 			__func__);
