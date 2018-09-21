@@ -150,7 +150,7 @@ static INLINE void wmi_packed_arr_set_bits(A_UINT32 *arr, A_UINT32 entry_index,
 }
 
 /** 2 word representation of MAC addr */
-typedef struct {
+typedef struct _wmi_mac_addr {
     /** upper 4 bytes of  MAC address */
     A_UINT32 mac_addr31to0;
     /** lower 2 bytes of  MAC address */
@@ -176,6 +176,16 @@ typedef struct {
         ((c_macaddr)[3] << 24)); \
     (pwmi_mac_addr)->mac_addr47to32 = ((c_macaddr)[4] | ((c_macaddr)[5] << 8));\
    } while (0)
+
+/*
+ * The below function declarations are for implementations on some
+ * platforms of the above macros, but in function form, to save code
+ * memory by avoiding macro-inlining of a non-trivial amount of code.
+ * These function versions of the above macros may not be available
+ * on all host and target platforms.
+ */
+void wmi_mac_addr_to_char_array(wmi_mac_addr *pwmi_mac_addr, A_UINT8 *c_macaddr);
+void wmi_char_array_to_mac_addr(A_UINT8 *c_macaddr, wmi_mac_addr *pwmi_mac_addr);
 
 /*
  * wmi command groups.
@@ -244,6 +254,8 @@ typedef enum {
     WMI_GRP_11K_OFFLOAD,    /* 0x3d */
     WMI_GRP_TWT,            /* 0x3e TWT (Target Wake Time) for STA and AP */
     WMI_GRP_MOTION_DET,     /* 0x3f */
+    WMI_GRP_SPATIAL_REUSE,  /* 0x40 */
+    WMI_GRP_ESP,            /* 0x41 Estimate Service Parameters (802.11mc) */
 } WMI_GRP_ID;
 
 #define WMI_CMD_GRP_START_ID(grp_id) (((grp_id) << 12) | 0x1)
@@ -1139,6 +1151,9 @@ typedef enum {
     WMI_MOTION_DET_BASE_LINE_CONFIG_PARAM_CMDID,
     WMI_MOTION_DET_START_STOP_CMDID,
     WMI_MOTION_DET_BASE_LINE_START_STOP_CMDID,
+
+    /** WMI commands related to OBSS PD Spatial Reuse **/
+    WMI_PDEV_OBSS_PD_SPATIAL_REUSE_CMDID = WMI_CMD_GRP_START_ID(WMI_GRP_SPATIAL_REUSE),
 } WMI_CMD_ID;
 
 typedef enum {
@@ -1700,6 +1715,9 @@ typedef enum {
     /** WMI events related to motion detection */
     WMI_MOTION_DET_HOST_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_MOTION_DET),
     WMI_MOTION_DET_BASE_LINE_HOST_EVENTID,
+
+    /** WMI events related to Estimation of Service Parameters (802.11mc) */
+    WMI_ESP_ESTIMATE_EVENTID = WMI_EVT_GRP_START_ID(WMI_GRP_ESP),
 } WMI_EVT_ID;
 
 /* defines for OEM message sub-types */
@@ -2765,6 +2783,20 @@ typedef struct {
     #define WMI_RSRC_CFG_FLAG_EAPOL_REKEY_MINRATE_SUPPORT_ENABLE_S 14
     #define WMI_RSRC_CFG_FLAG_EAPOL_REKEY_MINRATE_SUPPORT_ENABLE_M 0x4000
 
+    #define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_VALID_S 15
+    #define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_VALID_M 0x8000
+
+    /*
+     * If the AC override valid bit is set then this field will specify the
+     * access category to use for EAPOL frames
+     * 0 - WMM_AC_BE
+     * 1 - WMM_AC_BK
+     * 2 - WMM_AC_VI
+     * 3 - WMM_AC_VO
+     */
+    #define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_S 16
+    #define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_M 0x30000
+
     A_UINT32 flag1;
 
     /** @brief smart_ant_cap - Smart Antenna capabilities information
@@ -2972,6 +3004,16 @@ typedef struct {
     WMI_RSRC_CFG_FLAG_SET((word32), EAPOL_REKEY_MINRATE_SUPPORT_ENABLE, (value))
 #define WMI_RSRC_CFG_FLAG_EAPOL_REKEY_MINRATE_SUPPORT_ENABLE_GET(word32) \
     WMI_RSRC_CFG_FLAG_GET((word32), EAPOL_REKEY_MINRATE_SUPPORT_ENABLE)
+
+#define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_VALID_SET(word32, value) \
+    WMI_RSRC_CFG_FLAG_SET((word32), EAPOL_AC_OVERRIDE_VALID, (value))
+#define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_VALID_GET(word32) \
+    WMI_RSRC_CFG_FLAG_GET((word32), EAPOL_AC_OVERRIDE_VALID)
+
+#define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_SET(word32, value) \
+    WMI_RSRC_CFG_FLAG_SET((word32), EAPOL_AC_OVERRIDE, (value))
+#define WMI_RSRC_CFG_FLAG_EAPOL_AC_OVERRIDE_GET(word32) \
+    WMI_RSRC_CFG_FLAG_GET((word32), EAPOL_AC_OVERRIDE)
 
 typedef struct {
     A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_init_cmd_fixed_param */
@@ -4156,6 +4198,14 @@ typedef struct {
     A_UINT32 vdev_id;
     A_UINT32 desc_id;  /* echoed in tx_compl_event */
     A_UINT32 chanfreq; /* MHz units */
+    /* WMI_MGMT_TX_SEND_CMDID is used for both pass by value and
+     * pass by reference WMI management frames.
+     *
+     * a) If the command is for pass by reference,
+     *    paddr_lo and padd_hi will hold the address of remote/host buffer
+     * b) If the command is for pass by value,
+     *    paddr_lo and paddr_hi will be NULL.
+     */
     A_UINT32 paddr_lo;
     A_UINT32 paddr_hi;
     A_UINT32 frame_len;
@@ -5079,6 +5129,28 @@ typedef enum {
     WMI_PDEV_PARAM_SET_UL_BSR_TRIG_INTERVAL,          /* 0xA2 */
     /** Use simplified equal RU allocation for DL and UL OFDMA */
     WMI_PDEV_PARAM_EQUAL_RU_ALLOCATION_ENABLE,        /* 0xA3 */
+    /** Enable/disable MWS-COEX 4G (LTE) Quick FTDM.
+     * 0 - Don't allow quick FTDM Policy (Default)
+     * 1 - Allow quick FTDM policy.
+     */
+    WMI_PDEV_PARAM_MWSCOEX_4G_ALLOW_QUICK_FTDM,       /* 0xA4 */
+    /** Set MWS-COEX 5G-NR power limit.
+     * 0:    Don't apply user specific power limit,
+     *       use internal power limit (Default)
+     * 1-2:  invalid value (ignored)
+     * 3-21: apply the specified value as the external power limit, in dBm
+     * >21:  invalid value (ignored)
+     */
+    WMI_PDEV_PARAM_MWSCOEX_SET_5GNR_PWR_LIMIT,        /* 0xA5 */
+    /** Set max msdus available for cong ctrl in target */
+    WMI_PDEV_PARAM_SET_CONG_CTRL_MAX_MSDUS,           /* 0xA6 */
+    /*
+     * Configures the Estimated Throughput Calculation indication (802.11mc) settings.
+     * The accompanying A_UINT32 parameter, in units of seconds, specifies how often FW needs to send the ESP estimation indication to the host.
+     * Value 0: Disable this feature
+     * Non zero Value: Periodicity (seconds)
+     */
+    WMI_PDEV_PARAM_ESP_INDICATION_PERIOD,             /* 0xA7 */
 } WMI_PDEV_PARAM;
 
 typedef struct {
@@ -5155,6 +5227,35 @@ typedef struct {
  * ARRAY_BYTE TLV of ctltable_data
  */
 } wmi_pdev_update_ctltable_request_fixed_param;
+
+#define WMI_ESP_ESTIMATE_GET_BE(airtime)         WMI_GET_BITS(airtime, 0, 8)
+#define WMI_ESP_ESTIMATE_SET_BE(airtime, value)  WMI_SET_BITS(airtime, 0, 8, value)
+
+#define WMI_ESP_ESTIMATE_GET_BK(airtime)         WMI_GET_BITS(airtime, 8, 8)
+#define WMI_ESP_ESTIMATE_SET_BK(airtime, value)  WMI_SET_BITS(airtime, 8, 8, value)
+
+#define WMI_ESP_ESTIMATE_GET_VI(airtime)         WMI_GET_BITS(airtime, 16, 8)
+#define WMI_ESP_ESTIMATE_SET_VI(airtime, value)  WMI_SET_BITS(airtime, 16, 8, value)
+
+#define WMI_ESP_ESTIMATE_GET_VO(airtime)         WMI_GET_BITS(airtime, 24, 8)
+#define WMI_ESP_ESTIMATE_SET_VO(airtime, value)  WMI_SET_BITS(airtime, 24, 8, value)
+
+typedef struct {
+    A_UINT32 tlv_header; /* TLV tag and len; tag equals WMITLV_TAG_STRUC_wmi_esp_estimate_event_fixed_param */
+    /** pdev_id for identifying the MAC
+     * See macros starting with WMI_PDEV_ID_ for values.
+     * In non-DBDC case host should set it to 0
+     */
+    A_UINT32 pdev_id;
+    /*
+     * Percentage of air time available for each AC
+     * BIT[0-7]   : AC_BE
+     * BIT[8-15]  : AC_BK
+     * BIT[16-23] : AC_VI
+     * BIT[24-31] : AC_VO
+     */
+    A_UINT32 ac_airtime_percentage;
+} wmi_esp_estimate_event_fixed_param;
 
 #define WMI_FAST_DIVERSITY_BIT_OFFSET 0
 #define WMI_SLOW_DIVERSITY_BIT_OFFSET 1
@@ -6276,6 +6377,8 @@ typedef struct {
     A_UINT32 pdev_id; /** pdev_id for identifying the MAC.  See macros starting with WMI_PDEV_ID_ for values. In non-DBDC case host should set it to 0. */
     /** number of beacon stats event structures (wmi_bcn_stats) */
     A_UINT32 num_bcn_stats;
+    /** number of extended peer stats event structures (wmi_peer_extd_stats) */
+    A_UINT32 num_peer_extd_stats;
 
 /* This TLV is followed by another TLV of array of bytes
  *   A_UINT8 data[];
@@ -6955,7 +7058,10 @@ typedef struct {
     A_UINT32 last_tx_rate_code;
     /** TX power used by peer - units are 0.5 dBm */
     A_INT32 last_tx_power;
-    A_UINT32 reserved[4]; /** for future use - add new peer stats here */
+
+    /* Total number of received multicast & broadcast data frames corresponding to this peer */
+    A_UINT32 rx_mc_bc_cnt; /* 1 in the MSB of rx_mc_bc_cnt represents a valid data */
+    A_UINT32 reserved[3]; /** for future use - add new peer stats here */
 } wmi_peer_extd_stats;
 
 typedef struct {
@@ -8622,6 +8728,12 @@ typedef enum {
     /** Uplink OFDMA PPDU bandwidth (0: 20MHz, 1: 40MHz, 2: 80Mhz, 3: 160MHz)*/
     WMI_VDEV_PARAM_UL_PPDU_BW,                            /* 0x8E */
 
+    /** Enable/Disable FW handling MU EDCA change from AP (1: En, 0:Dis)  */
+    WMI_VDEV_PARAM_MU_EDCA_FW_UPDATE_EN,                  /* 0x8F */
+
+    /** Update dot11ObssNbruToleranceTime in fw. Param value: seconds */
+    WMI_VDEV_PARAM_UPDATE_OBSS_RU_TOLERANCE_TIME,         /* 0x90 */
+
 
     /*=== ADD NEW VDEV PARAM TYPES ABOVE THIS LINE ===
      * The below vdev param types are used for prototyping, and are
@@ -8992,6 +9104,8 @@ typedef struct {
     A_UINT32 csa_event_bitmap;
     /** offset (in octets/bytes) of MBSSID IE in beacon frame */
     A_UINT32 mbssid_ie_offset;
+    /** offset (in octets/bytes) of ESP IE in beacon frame */
+    A_UINT32 esp_ie_offset;
 
 /*
  * The TLVs follows:
@@ -10154,6 +10268,9 @@ typedef struct {
 #define WMI_PEER_DYN_MIMOPS     0x00020000  /* Dynamic MIMO PS Enabled */
 #define WMI_PEER_STATIC_MIMOPS  0x00040000  /* Static MIMO PS enabled */
 #define WMI_PEER_SPATIAL_MUX    0x00200000  /* SM Enabled */
+#define WMI_PEER_TWT_REQ        0x00400000  /* TWT Requester Support bit in Extended Capabilities element */
+#define WMI_PEER_TWT_RESP       0x00800000  /* TWT Responder Support bit in Extended Capabilities element */
+#define WMI_PEER_MULTI_BSSID    0x01000000  /* Multiple BSSID Support bit in Extended Capabilities element */
 #define WMI_PEER_VHT            0x02000000  /* VHT Enabled */
 #define WMI_PEER_80MHZ          0x04000000  /* 80MHz enabld */
 #define WMI_PEER_PMF            0x08000000  /* Robust Management Frame Protection enabled */
@@ -11235,6 +11352,8 @@ typedef struct {
     A_UINT32 wmm_caps;
     A_UINT32 mcsset[ROAM_OFFLOAD_NUM_MCS_SET>>2]; /* since this 4 byte aligned, we don't declare it as tlv array */
     A_UINT32 handoff_delay_for_rx; /* In msec. Delay Hand-Off by this duration to receive pending Rx frames from current BSS */
+    A_UINT32 max_mlme_sw_retries; /* maximum number of software retries for preauth and reassoc req */
+    A_UINT32 no_ack_timeout; /* In msec. duration to wait before another SW retry made if no ack seen for previous frame */
 } wmi_roam_offload_tlv_param;
 
 
@@ -13371,6 +13490,12 @@ typedef enum
     WMI_VENDOR_OUI_ACTION_CCKM_1X1 = 2,       /* TX (only) CCKM rates with 1 chain only */
     WMI_VENDOR_OUI_ACTION_ALT_ITO = 3, /* inactivity time-out */
     WMI_VENDOR_OUI_ACTION_SWITCH_TO_11N_MODE = 4, /* Switch from 11ac to 11n mode to avoid IOT issues with ONM frame */
+    /* WMI_VENDOR_OUI_ACTION_CONNECTION_1X1_NUM_TX_RX_CHAINS_1
+     * Connect in 1x1 only and Use only one chain for both Tx and Rx
+     * to avoid IOT issues due to change in number of Tx and Rx chains
+     */
+    WMI_VENDOR_OUI_ACTION_CONNECTION_1X1_NUM_TX_RX_CHAINS_1 = 5,
+
     /* Add any action before this line */
     WMI_VENDOR_OUI_ACTION_MAX_ACTION_ID
 } wmi_vendor_oui_action_id;
@@ -20642,6 +20767,17 @@ typedef enum wmi_coex_config_type {
                                                  arg2-arg5: BT information parameters */
     WMI_COEX_CONFIG_SINK_WLAN_TDM       = 21, /* config interval (ms units) (arg1 BT, arg2 WLAN) for A2DP SINK + WLAN */
     WMI_COEX_CONFIG_COEX_ENABLE_MCC_TDM = 22, /* config disable/enable COEX TDM for MCC */
+    WMI_COEX_CONFIG_LOWRSSI_A2DPOPP_TDM = 23, /* config interval (ms units) (arg1 BT, arg2 WLAN) for STA + A2dp + OPP + LOWRSSI */
+    WMI_COEX_CONFIG_BTC_MODE            = 24, /* config BTC mode, arg1 mode: 0 TDD/1 FDD/2 Hybrid*/
+    WMI_COEX_CONFIG_ANTENNA_ISOLATION   = 25, /* config isolation between BT and WLAN antenna, arg1 isolation in db*/
+    WMI_COEX_CONFIG_BT_LOW_RSSI_THRESHOLD = 26,/*config BT low rssi threshold (dbm units)*/
+    WMI_COEX_CONFIG_BT_INTERFERENCE_LEVEL = 27,/*config bt interference level (dbm units)
+                                                 arg1 low - lower limit
+                                                 arg2 low - upper limit
+                                                 arg3 medium - lower limit
+                                                 arg4 medium - upper limit
+                                                 arg5 high - lower limit
+                                                 arg6 high - upper limit */
 } WMI_COEX_CONFIG_TYPE;
 
 typedef struct {
@@ -21936,6 +22072,8 @@ static INLINE A_UINT8 *wmi_id_to_name(A_UINT32 wmi_command)
         WMI_RETURN_STRING(WMI_MOTION_DET_BASE_LINE_CONFIG_PARAM_CMDID);
         WMI_RETURN_STRING(WMI_MOTION_DET_START_STOP_CMDID);
         WMI_RETURN_STRING(WMI_MOTION_DET_BASE_LINE_START_STOP_CMDID);
+        WMI_RETURN_STRING(WMI_SAR_LIMITS_CMDID);
+        WMI_RETURN_STRING(WMI_SAR_GET_LIMITS_CMDID);
     }
 
     return "Invalid WMI cmd";
@@ -23120,6 +23258,27 @@ typedef struct {
     A_UINT32 bl_min_corr_reserved; /** min corr value obtained during baselining
                                     * phase (in %); reserved for future */
 } wmi_motion_det_base_line_event;
+
+/* Below structures are related to OBSS_PD_SPATIAL Reuse */
+typedef struct {
+    /** TLV tag and len; tag equals
+    * WMITLV_TAG_STRUC_wmi_obss_set_cmd_fixed_param */
+    A_UINT32 tlv_header;
+    /** Enable/Disable Spatial Reuse */
+    A_UINT32 enable;
+    /*
+     * In the below fields, "OBSS level" refers to the power of the
+     * signals received from "Other BSS".
+     * Spatial reuse will only be permitted if the Other BSS's signal power
+     * is witin the min to max range specified by the below fields.
+     */
+    /** Minimum OBSS level to use */
+    A_INT32 obss_min; /* RSSI in dBm */
+    /** Maximum OBSS level to use */
+    A_INT32 obss_max; /* RSSI in dBm */
+    /** Vdev id*/
+    A_UINT32 vdev_id;
+} wmi_obss_spatial_reuse_set_cmd_fixed_param;
 
 
 /* ADD NEW DEFS HERE */
