@@ -633,9 +633,13 @@ static QDF_STATUS htc_issue_packets(HTC_TARGET *target,
 						("hif_send Failed status:%d\n",
 						 status));
 			}
-			qdf_nbuf_unmap(target->osdev,
-				GET_HTC_PACKET_NET_BUF_CONTEXT(pPacket),
-				QDF_DMA_TO_DEVICE);
+
+			/* only unmap if we mapped in this function */
+			if (IS_TX_CREDIT_FLOW_ENABLED(pEndpoint))
+				qdf_nbuf_unmap(target->osdev,
+					GET_HTC_PACKET_NET_BUF_CONTEXT(pPacket),
+					QDF_DMA_TO_DEVICE);
+
 			if (!pEndpoint->async_update) {
 				LOCK_HTC_TX(target);
 			}
@@ -1354,7 +1358,7 @@ static inline QDF_STATUS __htc_send_pkt(HTC_HANDLE HTCHandle,
 	HTC_ENDPOINT *pEndpoint;
 	HTC_PACKET_QUEUE pPktQueue;
 	qdf_nbuf_t netbuf;
-	HTC_FRAME_HDR *pHtcHdr;
+	HTC_FRAME_HDR *htc_hdr;
 	QDF_STATUS status;
 
 	AR_DEBUG_PRINTF(ATH_DEBUG_SEND,
@@ -1393,12 +1397,17 @@ static inline QDF_STATUS __htc_send_pkt(HTC_HANDLE HTCHandle,
 	/* provide room in each packet's netbuf for the HTC frame header */
 	netbuf = GET_HTC_PACKET_NET_BUF_CONTEXT(pPacket);
 	AR_DEBUG_ASSERT(netbuf);
+	if (!netbuf)
+		return QDF_STATUS_E_INVAL;
 
 	qdf_nbuf_push_head(netbuf, sizeof(HTC_FRAME_HDR));
 	/* setup HTC frame header */
-	pHtcHdr = (HTC_FRAME_HDR *) qdf_nbuf_get_frag_vaddr(netbuf, 0);
-	AR_DEBUG_ASSERT(pHtcHdr);
-	HTC_WRITE32(pHtcHdr,
+	htc_hdr = (HTC_FRAME_HDR *)qdf_nbuf_get_frag_vaddr(netbuf, 0);
+	AR_DEBUG_ASSERT(htc_hdr);
+	if (!htc_hdr)
+		return QDF_STATUS_E_INVAL;
+
+	HTC_WRITE32(htc_hdr,
 		    SM(pPacket->ActualLength,
 		       HTC_FRAME_HDR_PAYLOADLEN) |
 		    SM(pPacket->Endpoint,
@@ -1408,7 +1417,7 @@ static inline QDF_STATUS __htc_send_pkt(HTC_HANDLE HTCHandle,
 	pPacket->PktInfo.AsTx.SeqNo = pEndpoint->SeqNo;
 	pEndpoint->SeqNo++;
 
-	HTC_WRITE32(((uint32_t *) pHtcHdr) + 1,
+	HTC_WRITE32(((uint32_t *)htc_hdr) + 1,
 		    SM(pPacket->PktInfo.AsTx.SeqNo,
 		       HTC_FRAME_HDR_CONTROLBYTES1));
 
@@ -2056,6 +2065,33 @@ void htc_flush_endpoint_tx(HTC_TARGET *target, HTC_ENDPOINT *pEndpoint,
 		}
 	}
 	UNLOCK_HTC_TX(target);
+}
+
+/* flush pending entries in endpoint TX Lookup queue */
+void htc_flush_endpoint_txlookupQ(HTC_TARGET *target,
+				  HTC_ENDPOINT_ID endpoint_id,
+				  bool call_ep_callback)
+{
+	HTC_PACKET *packet;
+	HTC_ENDPOINT *endpoint;
+
+	endpoint = &target->endpoint[endpoint_id];
+
+	if (!endpoint && endpoint->service_id == 0)
+		return;
+
+	while (HTC_PACKET_QUEUE_DEPTH(&endpoint->TxLookupQueue)) {
+		packet = htc_packet_dequeue(&endpoint->TxLookupQueue);
+
+		if (packet) {
+			if (call_ep_callback == true) {
+				packet->Status = QDF_STATUS_E_CANCELED;
+				send_packet_completion(target, packet);
+			} else {
+				qdf_mem_free(packet);
+			}
+		}
+	}
 }
 
 /* HTC API to flush an endpoint's TX queue*/

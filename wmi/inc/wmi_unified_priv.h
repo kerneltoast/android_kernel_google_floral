@@ -465,7 +465,7 @@ QDF_STATUS (*send_set_passpoint_network_list_cmd)(wmi_unified_t wmi_handle,
 					struct wifi_passpoint_req_param *req);
 
 QDF_STATUS (*send_set_epno_network_list_cmd)(wmi_unified_t wmi_handle,
-		struct wifi_enhanched_pno_params *req);
+		struct wifi_enhanced_pno_params *req);
 
 QDF_STATUS (*send_extscan_get_capabilities_cmd)(wmi_unified_t wmi_handle,
 			  struct extscan_capabilities_params *pgetcapab);
@@ -482,6 +482,9 @@ QDF_STATUS (*send_extscan_start_change_monitor_cmd)(wmi_unified_t wmi_handle,
 
 QDF_STATUS (*send_extscan_stop_hotlist_monitor_cmd)(wmi_unified_t wmi_handle,
 		struct extscan_bssid_hotlist_reset_params *photlist_reset);
+
+QDF_STATUS (*send_extscan_start_hotlist_monitor_cmd)(wmi_unified_t wmi_handle,
+		struct extscan_bssid_hotlist_set_params *params);
 
 QDF_STATUS (*send_stop_extscan_cmd)(wmi_unified_t wmi_handle,
 		  struct extscan_stop_req_params *pstopcmd);
@@ -802,13 +805,28 @@ QDF_STATUS (*send_get_arp_stats_req_cmd)(wmi_unified_t wmi_handle,
 					 struct get_arp_stats *req_buf);
 
 QDF_STATUS (*send_get_buf_extscan_hotlist_cmd)(wmi_unified_t wmi_handle,
-				   struct ext_scan_setbssi_hotlist_params *
+				   struct ext_scan_setbssid_hotlist_params *
 				   photlist, int *buf_len);
 
-QDF_STATUS (*send_set_active_bpf_mode_cmd)(wmi_unified_t wmi_handle,
-				uint8_t vdev_id,
-				enum wmi_host_active_bpf_mode ucast_mode,
-				enum wmi_host_active_bpf_mode mcast_bcast_mode);
+#ifdef FEATURE_WLAN_APF
+QDF_STATUS
+(*send_set_active_apf_mode_cmd)(wmi_unified_t wmi_handle, uint8_t vdev_id,
+				enum wmi_host_active_apf_mode ucast_mode,
+				enum wmi_host_active_apf_mode mcast_bcast_mode);
+
+QDF_STATUS (*send_apf_enable_cmd)(wmi_unified_t wmi_handle, uint32_t vdev_id,
+				  bool enable);
+
+QDF_STATUS (*send_apf_write_work_memory_cmd)(wmi_unified_t wmi_handle,
+			struct wmi_apf_write_memory_params *apf_write_params);
+
+QDF_STATUS (*send_apf_read_work_memory_cmd)(wmi_unified_t wmi_handle,
+			struct wmi_apf_read_memory_params *apf_read_params);
+
+QDF_STATUS (*extract_apf_read_memory_resp_event)(wmi_unified_t wmi_handle,
+			void *evt_buf,
+			struct wmi_apf_read_memory_resp_event_params *resp);
+#endif /* FEATURE_WLAN_APF */
 
 QDF_STATUS (*send_pdev_get_tpc_config_cmd)(wmi_unified_t wmi_handle,
 		uint32_t param);
@@ -1369,6 +1387,11 @@ QDF_STATUS (*extract_encrypt_decrypt_resp_event)(wmi_unified_t wmi_handle,
 			struct disa_encrypt_decrypt_resp_params *resp);
 #endif
 
+#ifdef WLAN_FEATURE_ACTION_OUI
+QDF_STATUS (*send_action_oui_cmd)(wmi_unified_t wmi_handle,
+				  struct action_oui_request *req);
+#endif /* WLAN_FEATURE_ACTION_OUI */
+
 QDF_STATUS (*send_sar_limit_cmd)(wmi_unified_t wmi_handle,
 				struct sar_limit_cmd_params *params);
 
@@ -1377,6 +1400,10 @@ QDF_STATUS (*get_sar_limit_cmd)(wmi_unified_t wmi_handle);
 QDF_STATUS (*extract_sar_limit_event)(wmi_unified_t wmi_handle,
 				      uint8_t *evt_buf,
 				      struct sar_limit_event *event);
+
+QDF_STATUS (*extract_sar2_result_event)(void *handle,
+					uint8_t *event,
+					uint32_t len);
 
 QDF_STATUS (*send_peer_rx_reorder_queue_setup_cmd)(wmi_unified_t wmi_handle,
 		struct rx_reorder_queue_setup_params *param);
@@ -1409,6 +1436,11 @@ QDF_STATUS (*extract_dbr_ring_cap_service_ready_ext)(
 			wmi_unified_t wmi_handle,
 			uint8_t *evt_buf, uint8_t idx,
 			struct wlan_psoc_host_dbr_ring_caps *param);
+
+QDF_STATUS (*extract_sar_cap_service_ready_ext)(
+		wmi_unified_t wmi_handle,
+		uint8_t *evt_buf,
+		struct wlan_psoc_host_service_ext_param *ext_param);
 
 QDF_STATUS (*extract_dbr_buf_release_fixed)(
 			wmi_unified_t wmi_handle,

@@ -130,16 +130,7 @@ void policy_mgr_decr_session_set_pcl(struct wlan_objmgr_psoc *psoc,
 	 */
 	policy_mgr_set_pcl_for_existing_combo(psoc, PM_STA_MODE);
 	/* do we need to change the HW mode */
-	if (policy_mgr_need_opportunistic_upgrade(psoc)) {
-		/* let's start the timer */
-		qdf_mc_timer_stop(&pm_ctx->dbs_opportunistic_timer);
-		qdf_status = qdf_mc_timer_start(
-					&pm_ctx->dbs_opportunistic_timer,
-					DBS_OPPORTUNISTIC_TIME * 1000);
-		if (!QDF_IS_STATUS_SUCCESS(qdf_status))
-			policy_mgr_err("Failed to start dbs opportunistic timer");
-	}
-
+	policy_mgr_check_n_start_opportunistic_timer(psoc);
 	return;
 }
 
@@ -222,7 +213,7 @@ void policy_mgr_update_with_safe_channel_list(struct wlan_objmgr_psoc *psoc,
 				pm_ctx->unsafe_channel_list[j]) {
 				/* Found unsafe channel, update it */
 				is_unsafe = 1;
-				policy_mgr_warn("CH %d is not safe",
+				policy_mgr_debug("CH %d is not safe",
 					current_channel_list[i]);
 				break;
 			}
@@ -248,21 +239,14 @@ static QDF_STATUS policy_mgr_modify_pcl_based_on_enabled_channels(
 					uint32_t *pcl_len_org)
 {
 	uint32_t i, pcl_len = 0;
-	uint8_t pcl_list[QDF_MAX_NUM_CHAN];
-	uint8_t weight_list[QDF_MAX_NUM_CHAN];
 
 	for (i = 0; i < *pcl_len_org; i++) {
 		if (!wlan_reg_is_passive_or_disable_ch(
 			pm_ctx->pdev, pcl_list_org[i])) {
-			pcl_list[pcl_len] = pcl_list_org[i];
-			weight_list[pcl_len++] = weight_list_org[i];
+			pcl_list_org[pcl_len] = pcl_list_org[i];
+			weight_list_org[pcl_len++] = weight_list_org[i];
 		}
 	}
-
-	qdf_mem_zero(pcl_list_org, QDF_ARRAY_SIZE(pcl_list_org));
-	qdf_mem_zero(weight_list_org, QDF_ARRAY_SIZE(weight_list_org));
-	qdf_mem_copy(pcl_list_org, pcl_list, pcl_len);
-	qdf_mem_copy(weight_list_org, weight_list, pcl_len);
 	*pcl_len_org = pcl_len;
 
 	return QDF_STATUS_SUCCESS;
@@ -476,15 +460,15 @@ QDF_STATUS policy_mgr_get_pcl(struct wlan_objmgr_psoc *psoc,
 	enum policy_mgr_pcl_type pcl = PM_NONE;
 	enum policy_mgr_conc_priority_mode conc_system_pref = 0;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
-
+	enum QDF_OPMODE qdf_mode;
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
 		policy_mgr_err("context is NULL");
 		return status;
 	}
 
-	if (mode >= PM_MAX_NUM_OF_MODE) {
-		policy_mgr_err("requested mode:%d is not supported", mode);
+	if ((mode < 0) || (mode >= PM_MAX_NUM_OF_MODE)) {
+		policy_mgr_err("Invalid connection mode %d received", mode);
 		return status;
 	}
 
@@ -522,7 +506,13 @@ QDF_STATUS policy_mgr_get_pcl(struct wlan_objmgr_psoc *psoc,
 			policy_mgr_err("couldn't find index for 2nd connection pcl table");
 			return status;
 		}
-		if (policy_mgr_is_hw_dbs_capable(psoc) == true) {
+		qdf_mode = policy_mgr_get_qdf_mode_from_pm(mode);
+		if (qdf_mode == QDF_MAX_NO_OF_MODE)
+			return status;
+
+		if (policy_mgr_is_hw_dbs_capable(psoc) == true &&
+		    policy_mgr_is_dbs_allowed_for_concurrency(
+							psoc, qdf_mode)) {
 			pcl = (*second_connection_pcl_dbs_table)
 				[second_index][mode][conc_system_pref];
 		} else {
@@ -1392,13 +1382,14 @@ policy_mgr_get_nondfs_preferred_channel(struct wlan_objmgr_psoc *psoc,
 }
 
 static void policy_mgr_remove_dsrc_channels(uint8_t *chan_list,
-				uint32_t *num_channels)
+					    uint32_t *num_channels,
+					    struct wlan_objmgr_pdev *pdev)
 {
 	uint32_t num_chan_temp = 0;
 	int i;
 
 	for (i = 0; i < *num_channels; i++) {
-		if (!wlan_is_dsrc_channel(wlan_chan_to_freq(chan_list[i]))) {
+		if (!wlan_reg_is_dsrc_chan(pdev, chan_list[i])) {
 			chan_list[num_chan_temp] = chan_list[i];
 			num_chan_temp++;
 		}
@@ -1435,7 +1426,7 @@ QDF_STATUS policy_mgr_get_valid_chans(struct wlan_objmgr_psoc *psoc,
 		return status;
 	}
 
-	policy_mgr_remove_dsrc_channels(chan_list, list_len);
+	policy_mgr_remove_dsrc_channels(chan_list, list_len, pm_ctx->pdev);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1511,8 +1502,6 @@ QDF_STATUS policy_mgr_modify_sap_pcl_based_on_mandatory_channel(
 		uint32_t *pcl_len_org)
 {
 	uint32_t i, j, pcl_len = 0;
-	uint8_t pcl_list[QDF_MAX_NUM_CHAN];
-	uint8_t weight_list[QDF_MAX_NUM_CHAN];
 	bool found;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
 
@@ -1549,15 +1538,10 @@ QDF_STATUS policy_mgr_modify_sap_pcl_based_on_mandatory_channel(
 			}
 		}
 		if (found && (pcl_len < QDF_MAX_NUM_CHAN)) {
-			pcl_list[pcl_len] = pcl_list_org[i];
-			weight_list[pcl_len++] = weight_list_org[i];
+			pcl_list_org[pcl_len] = pcl_list_org[i];
+			weight_list_org[pcl_len++] = weight_list_org[i];
 		}
 	}
-
-	qdf_mem_zero(pcl_list_org, QDF_ARRAY_SIZE(pcl_list_org));
-	qdf_mem_zero(weight_list_org, QDF_ARRAY_SIZE(weight_list_org));
-	qdf_mem_copy(pcl_list_org, pcl_list, pcl_len);
-	qdf_mem_copy(weight_list_org, weight_list, pcl_len);
 	*pcl_len_org = pcl_len;
 
 	return QDF_STATUS_SUCCESS;
@@ -1653,9 +1637,9 @@ QDF_STATUS policy_mgr_get_valid_chan_weights(struct wlan_objmgr_psoc *psoc,
 		 * below!
 		 */
 		for (i = 0; i < weight->saved_num_chan; i++) {
-			if (policy_mgr_allow_concurrency(psoc, PM_STA_MODE,
-					weight->saved_chan_list[i],
-					HW_MODE_20_MHZ)) {
+			if (policy_mgr_is_concurrency_allowed
+				(psoc, PM_STA_MODE, weight->saved_chan_list[i],
+				HW_MODE_20_MHZ)) {
 				weight->weighed_valid_list[i] =
 					WEIGHT_OF_NON_PCL_CHANNELS;
 			}

@@ -524,8 +524,15 @@ util_scan_populate_bcn_ie_list(struct scan_cache_entry *scan_params)
 			break;
 		case WLAN_ELEMID_QBSS_LOAD:
 			if (ie->ie_len != sizeof(struct qbss_load_ie) -
-					  sizeof(struct ie_header))
-				return QDF_STATUS_E_INVAL;
+					  sizeof(struct ie_header)) {
+				/*
+				 * Expected QBSS IE length is 5Bytes; For some
+				 * old cisco AP, QBSS IE length is 4Bytes, which
+				 * doesn't match with latest spec, So ignore
+				 * QBSS IE in such case.
+				 */
+				break;
+			}
 			scan_params->ie_list.qbssload = (uint8_t *)ie;
 			break;
 		case WLAN_ELEMID_CHANSWITCHANN:
@@ -987,3 +994,22 @@ util_scan_entry_update_mlme_info(struct wlan_objmgr_pdev *pdev,
 
 	return scm_update_scan_mlme_info(pdev, scan_entry);
 }
+
+bool util_is_scan_completed(struct scan_event *event, bool *success)
+{
+	if ((event->type == SCAN_EVENT_TYPE_COMPLETED) ||
+	    (event->type == SCAN_EVENT_TYPE_DEQUEUED) ||
+	    (event->type == SCAN_EVENT_TYPE_START_FAILED)) {
+		if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
+		    (event->reason == SCAN_REASON_COMPLETED))
+			*success = true;
+		else
+			*success = false;
+
+		return true;
+	}
+
+	*success = false;
+	return false;
+}
+

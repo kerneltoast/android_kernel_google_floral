@@ -108,8 +108,8 @@ void hdd_notify_teardown_tdls_links(struct wlan_objmgr_vdev *vdev)
 		return;
 	}
 
-	cfg80211_info("Wait for tdls teardown completion. Timeout %u ms",
-		WAIT_TIME_FOR_TDLS_TEARDOWN_LINKS);
+	cfg80211_debug("Wait for tdls teardown completion. Timeout %u ms",
+		       WAIT_TIME_FOR_TDLS_TEARDOWN_LINKS);
 
 	rc = wait_for_completion_timeout(
 		&tdls_priv->tdls_teardown_comp,
@@ -120,12 +120,22 @@ void hdd_notify_teardown_tdls_links(struct wlan_objmgr_vdev *vdev)
 		return;
 	}
 
-	cfg80211_info("TDLS teardown completion status %ld ", rc);
+	cfg80211_debug("TDLS teardown completion status %ld ", rc);
 }
 
 void hdd_notify_tdls_reset_adapter(struct wlan_objmgr_vdev *vdev)
 {
 	ucfg_tdls_notify_reset_adapter(vdev);
+}
+
+static void hdd_notify_sta_connect_callback(struct wlan_objmgr_vdev *vdev)
+{
+	if (!vdev) {
+		cfg80211_err("vdev is NULL");
+		return;
+	}
+
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
 }
 
 void
@@ -134,14 +144,39 @@ hdd_notify_sta_connect(uint8_t session_id,
 		       bool tdls_prohibited,
 		       struct wlan_objmgr_vdev *vdev)
 {
-	struct tdls_sta_notify_params notify_info;
+	struct tdls_sta_notify_params notify_info = {0};
+	QDF_STATUS status;
+
+	if (!vdev) {
+		cfg80211_err("vdev is NULL");
+		return;
+	}
+	status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_TDLS_NB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		cfg80211_err("can't get vdev");
+		return;
+	}
 
 	notify_info.session_id = session_id;
 	notify_info.vdev = vdev;
 	notify_info.tdls_chan_swit_prohibited = tdls_chan_swit_prohibited;
 	notify_info.tdls_prohibited = tdls_prohibited;
-	ucfg_tdls_notify_sta_connect(&notify_info);
+	notify_info.callback = hdd_notify_sta_connect_callback;
+	status = ucfg_tdls_notify_sta_connect(&notify_info);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		cfg80211_err("ucfg_tdls_notify_sta_connect failed");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
+	}
+}
 
+static void hdd_notify_sta_disconnect_callback(struct wlan_objmgr_vdev *vdev)
+{
+	if (!vdev) {
+		cfg80211_err("vdev is NULL");
+		return;
+	}
+
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
 }
 
 void hdd_notify_sta_disconnect(uint8_t session_id,
@@ -149,14 +184,32 @@ void hdd_notify_sta_disconnect(uint8_t session_id,
 			       bool user_disconnect,
 			       struct wlan_objmgr_vdev *vdev)
 {
-	struct tdls_sta_notify_params notify_info;
+	struct tdls_sta_notify_params notify_info = {0};
+	QDF_STATUS status;
+
+	if (!vdev) {
+		cfg80211_err("vdev is NULL");
+		return;
+	}
+
+	status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_TDLS_NB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		cfg80211_err("can't get vdev");
+		return;
+	}
 
 	notify_info.session_id = session_id;
 	notify_info.lfr_roam = lfr_roam;
+	notify_info.tdls_chan_swit_prohibited = false;
+	notify_info.tdls_prohibited = false;
 	notify_info.vdev = vdev;
 	notify_info.user_disconnect = user_disconnect;
-	ucfg_tdls_notify_sta_disconnect(&notify_info);
-
+	notify_info.callback = hdd_notify_sta_disconnect_callback;
+	status = ucfg_tdls_notify_sta_disconnect(&notify_info);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		cfg80211_err("ucfg_tdls_notify_sta_disconnect failed");
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
+	}
 }
 int wlan_cfg80211_tdls_add_peer(struct wlan_objmgr_pdev *pdev,
 				struct net_device *dev, const uint8_t *mac)
@@ -670,8 +723,8 @@ int wlan_cfg80211_tdls_get_all_peers(struct wlan_objmgr_vdev *vdev,
 		goto error_get_tdls_peers;
 	}
 
-	cfg80211_info("Wait for tdls_user_cmd_comp. Timeout %u ms",
-		WAIT_TIME_FOR_TDLS_USER_CMD);
+	cfg80211_debug("Wait for tdls_user_cmd_comp. Timeout %u ms",
+		       WAIT_TIME_FOR_TDLS_USER_CMD);
 
 	rc = wait_for_completion_timeout(
 		&tdls_priv->tdls_user_cmd_comp,
@@ -776,8 +829,8 @@ int wlan_cfg80211_tdls_mgmt(struct wlan_objmgr_pdev *pdev,
 		goto error_mgmt_req;
 	}
 
-	cfg80211_info("Wait for tdls_mgmt_comp. Timeout %u ms",
-		WAIT_TIME_FOR_TDLS_MGMT);
+	cfg80211_debug("Wait for tdls_mgmt_comp. Timeout %u ms",
+		       WAIT_TIME_FOR_TDLS_MGMT);
 
 	rc = wait_for_completion_timeout(
 		&tdls_priv->tdls_mgmt_comp,
@@ -794,8 +847,8 @@ int wlan_cfg80211_tdls_mgmt(struct wlan_objmgr_pdev *pdev,
 		goto error_mgmt_req;
 	}
 
-	cfg80211_info("Mgmt Tx Completion status %ld TxCompletion %u",
-		rc, tdls_priv->mgmt_tx_completion_status);
+	cfg80211_debug("Mgmt Tx Completion status %ld TxCompletion %u",
+		       rc, tdls_priv->mgmt_tx_completion_status);
 
 	if (chk_frame.max_sta_failed) {
 		status = max_sta_failed;
@@ -867,7 +920,7 @@ wlan_cfg80211_tdls_indicate_discovery(struct tdls_osif_indication *ind)
 
 	osif_vdev = wlan_vdev_get_ospriv(ind->vdev);
 
-	cfg80211_info("Implicit TDLS, request Send Discovery request");
+	cfg80211_debug("Implicit TDLS, request Send Discovery request");
 	cfg80211_tdls_oper_request(osif_vdev->wdev->netdev,
 				   ind->peer_mac, NL80211_TDLS_DISCOVERY_REQ,
 				   false, GFP_KERNEL);
@@ -880,7 +933,7 @@ wlan_cfg80211_tdls_indicate_setup(struct tdls_osif_indication *ind)
 
 	osif_vdev = wlan_vdev_get_ospriv(ind->vdev);
 
-	cfg80211_info("Indication to request TDLS setup");
+	cfg80211_debug("Indication to request TDLS setup");
 	cfg80211_tdls_oper_request(osif_vdev->wdev->netdev,
 				   ind->peer_mac, NL80211_TDLS_SETUP, false,
 				   GFP_KERNEL);
@@ -893,7 +946,7 @@ wlan_cfg80211_tdls_indicate_teardown(struct tdls_osif_indication *ind)
 
 	osif_vdev = wlan_vdev_get_ospriv(ind->vdev);
 
-	cfg80211_info("Teardown reason %d", ind->reason);
+	cfg80211_debug("Teardown reason %d", ind->reason);
 	cfg80211_tdls_oper_request(osif_vdev->wdev->netdev,
 				   ind->peer_mac, NL80211_TDLS_TEARDOWN,
 				   ind->reason, GFP_KERNEL);

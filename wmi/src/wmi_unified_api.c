@@ -3157,22 +3157,66 @@ QDF_STATUS wmi_unified_roam_send_hlp_cmd(void *wmi_hdl,
 }
 #endif
 
-QDF_STATUS wmi_unified_set_active_bpf_mode_cmd(void *wmi_hdl,
-				uint8_t vdev_id,
-				enum wmi_host_active_bpf_mode ucast_mode,
-				enum wmi_host_active_bpf_mode mcast_bcast_mode)
+#ifdef FEATURE_WLAN_APF
+QDF_STATUS
+wmi_unified_set_active_apf_mode_cmd(wmi_unified_t wmi, uint8_t vdev_id,
+				    enum wmi_host_active_apf_mode ucast_mode,
+				    enum wmi_host_active_apf_mode
+							       mcast_bcast_mode)
 {
-	wmi_unified_t wmi = (wmi_unified_t)wmi_hdl;
-
-	if (!wmi->ops->send_set_active_bpf_mode_cmd) {
-		WMI_LOGD("send_set_active_bpf_mode_cmd op is NULL");
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	return wmi->ops->send_set_active_bpf_mode_cmd(wmi, vdev_id,
-						      ucast_mode,
-						      mcast_bcast_mode);
+	if (wmi->ops->send_set_active_apf_mode_cmd)
+		return wmi->ops->send_set_active_apf_mode_cmd(wmi, vdev_id,
+							      ucast_mode,
+							      mcast_bcast_mode);
+	return QDF_STATUS_E_FAILURE;
 }
+
+QDF_STATUS
+wmi_unified_send_apf_enable_cmd(wmi_unified_t wmi,
+				uint32_t vdev_id, bool enable)
+{
+	if (wmi->ops->send_apf_enable_cmd)
+		return wmi->ops->send_apf_enable_cmd(wmi, vdev_id, enable);
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_send_apf_write_work_memory_cmd(wmi_unified_t wmi,
+					   struct wmi_apf_write_memory_params
+								  *write_params)
+{
+	if (wmi->ops->send_apf_write_work_memory_cmd)
+		return wmi->ops->send_apf_write_work_memory_cmd(wmi,
+								write_params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_unified_send_apf_read_work_memory_cmd(wmi_unified_t wmi,
+					  struct wmi_apf_read_memory_params
+								   *read_params)
+{
+	if (wmi->ops->send_apf_read_work_memory_cmd)
+		return wmi->ops->send_apf_read_work_memory_cmd(wmi,
+							       read_params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+QDF_STATUS
+wmi_extract_apf_read_memory_resp_event(wmi_unified_t wmi, void *evt_buf,
+				struct wmi_apf_read_memory_resp_event_params
+								*read_mem_evt)
+{
+	if (wmi->ops->extract_apf_read_memory_resp_event)
+		return wmi->ops->extract_apf_read_memory_resp_event(wmi,
+								evt_buf,
+								read_mem_evt);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif /* FEATURE_WLAN_APF */
 
 /**
  *  wmi_unified_pdev_get_tpc_config_cmd_send() - WMI get tpc config function
@@ -6503,6 +6547,18 @@ QDF_STATUS wmi_unified_extract_sar_limit_event(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_extract_sar2_result_event(void *handle,
+						 uint8_t *event, uint32_t len)
+{
+	wmi_unified_t wmi_handle = handle;
+
+	if (wmi_handle->ops->extract_sar2_result_event)
+		return wmi_handle->ops->extract_sar2_result_event(wmi_handle,
+								  event,
+								  len);
+
+	return QDF_STATUS_E_FAILURE;
+}
 
 #ifdef WLAN_FEATURE_DISA
 QDF_STATUS wmi_unified_encrypt_decrypt_send_cmd(void *wmi_hdl,
@@ -6589,6 +6645,30 @@ QDF_STATUS wmi_extract_service_ready_ext(void *wmi_hdl, uint8_t *evt_buf,
 	if (wmi_handle->ops->extract_service_ready_ext)
 		return wmi_handle->ops->extract_service_ready_ext(wmi_handle,
 				evt_buf, param);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_extract_sar_cap_service_ready_ext() -
+ *	 extract sar cap from service ready event
+ * @wmi_handle: wmi handle
+ * @evt_buf: pointer to event buffer
+ * @ext_param: extended target info
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_extract_sar_cap_service_ready_ext(
+			void *wmi_hdl,
+			uint8_t *evt_buf,
+			struct wlan_psoc_host_service_ext_param *ext_param)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
+
+	if (wmi_handle->ops->extract_sar_cap_service_ready_ext)
+		return wmi_handle->ops->extract_sar_cap_service_ready_ext(
+				wmi_handle,
+				evt_buf, ext_param);
 
 	return QDF_STATUS_E_FAILURE;
 }
@@ -6952,6 +7032,21 @@ QDF_STATUS wmi_unified_send_dbs_scan_sel_params_cmd(void *wmi_hdl,
 
 	return QDF_STATUS_E_FAILURE;
 }
+
+#ifdef WLAN_FEATURE_ACTION_OUI
+QDF_STATUS
+wmi_unified_send_action_oui_cmd(void *wmi_hdl,
+				struct action_oui_request *req)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->send_action_oui_cmd)
+		return wmi_handle->ops->send_action_oui_cmd(wmi_handle,
+							    req);
+
+	return QDF_STATUS_E_FAILURE;
+}
+#endif
 
 /**
  * wmi_unified_send_limit_off_chan_cmd() - send wmi cmd of limit off channel

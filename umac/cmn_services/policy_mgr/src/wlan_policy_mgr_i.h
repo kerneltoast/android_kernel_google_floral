@@ -35,6 +35,7 @@
 
 #define PM_24_GHZ_CHANNEL_6   (6)
 #define PM_5_GHZ_CHANNEL_36   (36)
+#define CHANNEL_SWITCH_COMPLETE_TIMEOUT   (2000)
 
 /**
  * Policy Mgr hardware mode list bit-mask definitions.
@@ -265,7 +266,9 @@ struct policy_mgr_psoc_priv_obj {
 	uint8_t cur_conc_system_pref;
 	uint8_t sta_sap_scc_on_dfs_chan_allowed;
 	qdf_event_t opportunistic_update_done_evt;
+	qdf_event_t channel_switch_complete_evt;
 	send_mode_change_event_cb mode_change_cb;
+	uint32_t user_config_sap_channel;
 };
 
 /**
@@ -347,7 +350,8 @@ void policy_mgr_update_conc_list(struct wlan_objmgr_psoc *psoc,
 		enum policy_mgr_chain_mode chain_mask,
 		uint32_t original_nss,
 		uint32_t vdev_id,
-		bool in_use);
+		bool in_use,
+		bool update_conn);
 void policy_mgr_store_and_del_conn_info(struct wlan_objmgr_psoc *psoc,
 				enum policy_mgr_con_mode mode,
 				bool all_matching_cxn_to_del,
@@ -442,4 +446,24 @@ void policy_mgr_reg_chan_change_callback(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS policy_mgr_nss_update(struct wlan_objmgr_psoc *psoc,
 		uint8_t  new_nss, uint8_t next_action,
 		enum policy_mgr_conn_update_reason reason);
+
+/**
+ * policy_mgr_is_concurrency_allowed() - Check for allowed
+ * concurrency combination
+ * @psoc: PSOC object information
+ * @mode: new connection mode
+ * @channel: channel on which new connection is coming up
+ * @bw: Bandwidth requested by the connection (optional)
+ *
+ * When a new connection is about to come up check if current
+ * concurrency combination including the new connection is
+ * allowed or not based on the HW capability, but no need to
+ * invoke get_pcl
+ *
+ * Return: True/False
+ */
+bool policy_mgr_is_concurrency_allowed(struct wlan_objmgr_psoc *psoc,
+				       enum policy_mgr_con_mode mode,
+				       uint8_t channel,
+				       enum hw_mode_bandwidth bw);
 #endif

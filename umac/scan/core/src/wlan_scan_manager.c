@@ -40,8 +40,8 @@ scm_scan_free_scan_request_mem(struct scan_start_request *req)
 		QDF_ASSERT(0);
 		return QDF_STATUS_E_FAILURE;
 	}
-	scm_info("freed scan request: 0x%pK, scan_id: %d, requester: %d",
-		req, req->scan_req.scan_id, req->scan_req.scan_req_id);
+	scm_debug("freed scan request: 0x%pK, scan_id: %d, requester: %d",
+		  req, req->scan_req.scan_id, req->scan_req.scan_req_id);
 	/* Free vendor(extra) ie */
 	ie = req->scan_req.extraie.ptr;
 	if (ie) {
@@ -147,9 +147,9 @@ static void scm_scan_post_event(struct wlan_objmgr_vdev *vdev,
 	cb_handlers = &(pdev_ev_handler->cb_handlers[0]);
 	requesters = scan->requesters;
 
-	scm_info("vdev: %d, type: %d, reason: %d, freq: %d, req: %d, scanid: %d",
-		event->vdev_id, event->type, event->reason, event->chan_freq,
-		event->requester, event->scan_id);
+	scm_debug("vdev: %d, type: %d, reason: %d, freq: %d, req: %d, scanid: %d",
+		  event->vdev_id, event->type, event->reason, event->chan_freq,
+		  event->requester, event->scan_id);
 
 	listeners = qdf_mem_malloc(sizeof(*listeners));
 	if (!listeners) {
@@ -369,8 +369,9 @@ scm_scan_start_req(struct scheduler_msg *msg)
 {
 	struct wlan_serialization_command cmd = {0, };
 	enum wlan_serialization_status ser_cmd_status;
-	struct scan_start_request *req;
+	struct scan_start_request *req = NULL;
 	struct wlan_scan_obj *scan_obj;
+	struct scan_vdev_obj *scan_vdev_priv_obj;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (!msg) {
@@ -388,7 +389,8 @@ scm_scan_start_req(struct scheduler_msg *msg)
 	scan_obj = wlan_vdev_get_scan_obj(req->vdev);
 	if (!scan_obj) {
 		scm_debug("Couldn't find scan object");
-		return QDF_STATUS_E_NULL_VALUE;
+		status = QDF_STATUS_E_NULL_VALUE;
+		goto err;
 	}
 
 	cmd.cmd_type = WLAN_SER_CMD_SCAN;
@@ -405,12 +407,24 @@ scm_scan_start_req(struct scheduler_msg *msg)
 	if (scan_obj->disable_timeout)
 		cmd.cmd_timeout_duration = 0;
 
-	scm_info("req: 0x%pK, reqid: %d, scanid: %d, vdevid: %d",
-		req, req->scan_req.scan_req_id, req->scan_req.scan_id,
-		req->scan_req.vdev_id);
+	scm_debug("req: 0x%pK, reqid: %d, scanid: %d, vdevid: %d",
+		  req, req->scan_req.scan_req_id, req->scan_req.scan_id,
+		  req->scan_req.vdev_id);
 
+	scan_vdev_priv_obj = wlan_get_vdev_scan_obj(req->vdev);
+	if (!scan_vdev_priv_obj) {
+		scm_debug("Couldn't find scan priv object");
+		status = QDF_STATUS_E_NULL_VALUE;
+		goto err;
+	}
+	if (scan_vdev_priv_obj->is_vdev_delete_in_progress) {
+		scm_err("Can't allow scan on vdev_id:%d",
+			wlan_vdev_get_id(req->vdev));
+		status = QDF_STATUS_E_NULL_VALUE;
+		goto err;
+	}
 	ser_cmd_status = wlan_serialization_request(&cmd);
-	scm_info("wlan_serialization_request status:%d", ser_cmd_status);
+	scm_debug("wlan_serialization_request status:%d", ser_cmd_status);
 
 	switch (ser_cmd_status) {
 	case WLAN_SER_CMD_PENDING:
@@ -427,21 +441,22 @@ scm_scan_start_req(struct scheduler_msg *msg)
 		 */
 		scm_post_internal_scan_complete_event(req,
 				SCAN_REASON_INTERNAL_FAILURE);
-		/* cmd can't be serviced.
-		 * release vdev reference and free scan_start_request memory
-		 */
-		wlan_objmgr_vdev_release_ref(req->vdev, WLAN_SCAN_ID);
-		scm_scan_free_scan_request_mem(req);
-		break;
+		goto err;
 	default:
 		QDF_ASSERT(0);
 		status = QDF_STATUS_E_INVAL;
-		/* cmd can't be serviced.
-		 * release vdev reference and free scan_start_request memory
-		 */
+		goto err;
+	}
+
+	return status;
+err:
+	/*
+	 * cmd can't be serviced.
+	 * release vdev reference and free scan_start_request memory
+	 */
+	if (req) {
 		wlan_objmgr_vdev_release_ref(req->vdev, WLAN_SCAN_ID);
 		scm_scan_free_scan_request_mem(req);
-		break;
 	}
 
 	return status;
@@ -683,9 +698,9 @@ scm_scan_event_handler(struct scheduler_msg *msg)
 	vdev = event_info->vdev;
 	event = &(event_info->event);
 
-	scm_info("vdevid:%d, type:%d, reason:%d, freq:%d, reqstr:%d, scanid:%d",
-		event->vdev_id, event->type, event->reason, event->chan_freq,
-		event->requester, event->scan_id);
+	scm_debug("vdevid:%d, type:%d, reason:%d, freq:%d, reqstr:%d, scanid:%d",
+		  event->vdev_id, event->type, event->reason, event->chan_freq,
+		  event->requester, event->scan_id);
 	/*
 	 * NLO requests are never queued, so post NLO events
 	 * without checking for their presence in active queue.

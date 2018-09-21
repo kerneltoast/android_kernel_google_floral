@@ -3403,6 +3403,12 @@ enum qca_wlan_vendor_attr_config {
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_RSN_IE = 56,
 
+	/*
+	 * 8-bit unsigned value to trigger green Tx power saving.
+	 * 1-Enable, 0-Disable
+	 */
+	QCA_WLAN_VENDOR_ATTR_CONFIG_GTX = 57,
+
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_CONFIG_MAX =
@@ -3818,20 +3824,30 @@ enum qca_set_band {
  * enum set_reset_packet_filter - set packet filter control commands
  * @QCA_WLAN_SET_PACKET_FILTER: Set Packet Filter
  * @QCA_WLAN_GET_PACKET_FILTER: Get Packet filter
+ * @QCA_WLAN_WRITE_PACKET_FILTER: Write packet filter program/data
+ * @QCA_WLAN_READ_PACKET_FILTER: Read packet filter program/data
+ * @QCA_WLAN_ENABLE_PACKET_FILTER: Enable APF interpreter
+ * @QCA_WLAN_DISABLE_PACKET_FILTER: Disable APF interpreter
  */
 enum set_reset_packet_filter {
 	QCA_WLAN_SET_PACKET_FILTER = 1,
 	QCA_WLAN_GET_PACKET_FILTER = 2,
+	QCA_WLAN_WRITE_PACKET_FILTER = 3,
+	QCA_WLAN_READ_PACKET_FILTER = 4,
+	QCA_WLAN_ENABLE_PACKET_FILTER = 5,
+	QCA_WLAN_DISABLE_PACKET_FILTER = 6,
 };
 
 /**
- * enum qca_wlan_vendor_attr_packet_filter - BPF control commands
+ * enum qca_wlan_vendor_attr_packet_filter - APF control commands
  * @QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_INVALID: Invalid
  * @QCA_WLAN_VENDOR_ATTR_SET_RESET_PACKET_FILTER: Filter ID
  * @QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_VERSION: Filter Version
  * @QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_SIZE: Total Length
  * @QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_CURRENT_OFFSET: Current offset
- * @QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_PROGRAM: length of BPF instructions
+ * @QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_PROGRAM: length of APF instructions
+ * @QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_PROG_LENGTH: length of the program
+ *	section in packet filter buffer
  */
 enum qca_wlan_vendor_attr_packet_filter {
 	QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_INVALID = 0,
@@ -3841,6 +3857,7 @@ enum qca_wlan_vendor_attr_packet_filter {
 	QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_SIZE,
 	QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_CURRENT_OFFSET,
 	QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_PROGRAM,
+	QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_PROG_LENGTH,
 
 	/* keep last */
 	QCA_WLAN_VENDOR_ATTR_PACKET_FILTER_AFTER_LAST,
@@ -4866,6 +4883,8 @@ enum qca_wlan_vendor_tdls_trigger_mode {
  *	limit feature.
  * @QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT_USER: Select the SAR power
  *	limits configured by %QCA_NL80211_VENDOR_SUBCMD_SET_SAR.
+ * @QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT_V2_0: Select the SAR power
+ *	limits version 2.0 configured by %QCA_NL80211_VENDOR_SUBCMD_SET_SAR.
  *
  * This enumerates the valid set of values that may be supplied for
  * attribute %QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT in an instance of
@@ -4881,6 +4900,7 @@ enum qca_vendor_attr_sar_limits_selections {
 	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT_BDF4 = 4,
 	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT_NONE = 5,
 	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT_USER = 6,
+	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT_V2_0 = 7,
 };
 
 /**
@@ -4928,6 +4948,11 @@ enum qca_vendor_attr_sar_limits_spec_modulations {
  *	%QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_MODULATION and always
  *	contains as a payload the attribute
  *	%QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_POWER_LIMIT.
+ *	%QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_POWER_LIMIT_INDEX.
+ *	Either %QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_POWER_LIMIT or
+ *	%QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_POWER_LIMIT_INDEX is
+ *	needed based upon the value of
+ *	%QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SAR_ENABLE.
  *
  * @QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_BAND: Optional (u32) value to
  *	indicate for which band this specification applies. Valid
@@ -4950,8 +4975,15 @@ enum qca_vendor_attr_sar_limits_spec_modulations {
  *	modulation schemes.
  *
  * @QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_POWER_LIMIT: Required (u32)
- *	value to specify the actual power limit value in steps of 0.5
- *	dbm.
+ *	value to specify the actual power limit value in units of 0.5
+ *	dBm (i.e., a value of 11 represents 5.5 dBm).
+ *	This is required, when %QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT is
+ *	%QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT_USER.
+ *
+ * @QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_POWER_LIMIT_INDEX: Required (u32)
+ *	value to indicate SAR V2 indices (0 - 11) to select SAR V2 profiles.
+ *	This is required, when %QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT is
+ *	%QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SELECT_V2_0.
  *
  * These attributes are used with %QCA_NL80211_VENDOR_SUBCMD_SET_SAR_LIMITS
  * and %QCA_NL80211_VENDOR_SUBCMD_GET_SAR_LIMITS.
@@ -4965,6 +4997,7 @@ enum qca_vendor_attr_sar_limits {
 	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_CHAIN = 5,
 	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_MODULATION = 6,
 	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_POWER_LIMIT = 7,
+	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_SPEC_POWER_LIMIT_INDEX = 8,
 
 	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_AFTER_LAST,
 	QCA_WLAN_VENDOR_ATTR_SAR_LIMITS_MAX =

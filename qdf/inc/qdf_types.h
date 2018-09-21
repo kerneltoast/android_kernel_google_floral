@@ -356,6 +356,7 @@ typedef void (*qdf_timer_func_t)(void *);
  * @QDF_MODULE_ID_OCB: OCB module ID
  * @QDF_MODULE_ID_IPA: IPA module ID
  * @QDF_MODULE_ID_CP_STATS: Control Plane Statistics ID
+ * @QDF_MODULE_ID_ACTION_OUI: ACTION OUI module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  */
@@ -459,6 +460,7 @@ typedef enum {
 	QDF_MODULE_ID_OCB,
 	QDF_MODULE_ID_IPA,
 	QDF_MODULE_ID_CP_STATS,
+	QDF_MODULE_ID_ACTION_OUI,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -649,6 +651,8 @@ void qdf_vtrace_msg(QDF_MODULE_ID module, QDF_TRACE_LEVEL level,
  *	Exception Case-1: When STA is operating on DFS channel.
  *	Exception Case-2: When STA is operating on LTE-CoEx channel.
  *	Exception Case-3: When STA is operating on AP disabled channel.
+ * @QDF_MCC_TO_SCC_WITH_PREFERRED_BAND: Force SCC only in user preferred band.
+ * Allow MCC if STA is operating or comes up on other than user preferred band.
  *
  * @QDF_MCC_TO_SCC_SWITCH_MAX: max switch
  */
@@ -659,6 +663,7 @@ typedef enum {
 	QDF_MCC_TO_SCC_SWITCH_FORCE_WITHOUT_DISCONNECTION,
 	QDF_MCC_TO_SCC_SWITCH_WITH_FAVORITE_CHANNEL,
 	QDF_MCC_TO_SCC_SWITCH_FORCE_PREFERRED_WITHOUT_DISCONNECTION,
+	QDF_MCC_TO_SCC_WITH_PREFERRED_BAND,
 	QDF_MCC_TO_SCC_SWITCH_MAX
 } tQDF_MCC_TO_SCC_SWITCH_MODE;
 #endif

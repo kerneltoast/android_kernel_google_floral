@@ -73,7 +73,7 @@ QDF_STATUS wmi_unified_set_passpoint_network_list_cmd(void *wmi_hdl,
  *          error number otherwise
  */
 QDF_STATUS wmi_unified_set_epno_network_list_cmd(void *wmi_hdl,
-		struct wifi_enhanched_pno_params *req)
+		struct wifi_enhanced_pno_params *req)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;
 
@@ -192,6 +192,18 @@ QDF_STATUS wmi_unified_extscan_stop_hotlist_monitor_cmd(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS wmi_unified_extscan_start_hotlist_monitor_cmd(void *wmi_hdl,
+		struct extscan_bssid_hotlist_set_params *params)
+{
+	wmi_unified_t wmi_handle = wmi_hdl;
+
+	if (wmi_handle->ops->send_extscan_start_hotlist_monitor_cmd)
+		return wmi_handle->ops->send_extscan_start_hotlist_monitor_cmd(wmi_handle,
+									       params);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 /**
  * wmi_unified_stop_extscan_cmd() - stop extscan command to fw.
  * @wmi_hdl: wmi handle
@@ -246,7 +258,7 @@ QDF_STATUS wmi_unified_start_extscan_cmd(void *wmi_hdl,
  * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure.
  */
 QDF_STATUS wmi_unified_get_buf_extscan_hotlist_cmd(void *wmi_hdl,
-				   struct ext_scan_setbssi_hotlist_params *
+				   struct ext_scan_setbssid_hotlist_params *
 				   photlist, int *buf_len)
 {
 	wmi_unified_t wmi_handle = (wmi_unified_t) wmi_hdl;

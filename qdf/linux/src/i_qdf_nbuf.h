@@ -36,7 +36,6 @@
 #include <qdf_mem.h>
 #include <linux/tcp.h>
 #include <qdf_util.h>
-#include <qdf_nbuf.h>
 
 /*
  * Use socket buffer as the underlying implementation as skbuf .
@@ -245,7 +244,7 @@ struct qdf_nbuf_cb {
 						flag_chfrag_cont:1,
 						flag_chfrag_end:1,
 						flag_ext_header:1,
-						reserved:1;
+						flag_notify_comp:1;
 				} bits;
 				uint8_t u8;
 			} flags;
@@ -348,6 +347,8 @@ QDF_COMPILE_TIME_ASSERT(qdf_nbuf_cb_size,
 		((skb)->cb))->u.tx.flags.bits.flag_nbuf)
 #define QDF_NBUF_CB_TX_NUM_EXTRA_FRAGS(skb) \
 	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.flags.bits.num)
+#define QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_NOTIFY_COMP(skb) \
+	(((struct qdf_nbuf_cb *)((skb)->cb))->u.tx.flags.bits.flag_notify_comp)
 #define QDF_NBUF_CB_TX_EXTRA_FRAG_FLAGS_CHFRAG_START(skb) \
 	(((struct qdf_nbuf_cb *) \
 	((skb)->cb))->u.tx.flags.bits.flag_chfrag_start)
@@ -1646,42 +1647,6 @@ static inline size_t __qdf_nbuf_tcp_tso_size(struct sk_buff *skb)
  * Return: none
  */
 void __qdf_nbuf_init(__qdf_nbuf_t nbuf);
-
-/**
- * __qdf_nbuf_set_rx_info() - set rx info
- * @nbuf: sk buffer
- * @info: rx info
- * @len: length
- *
- * Return: none
- */
-static inline void
-__qdf_nbuf_set_rx_info(__qdf_nbuf_t nbuf, void *info, uint32_t len)
-{
-	/* Customer may have skb->cb size increased, e.g. to 96 bytes,
-	 * then len's large enough to save the rs status info struct
-	 */
-	uint8_t offset = sizeof(struct qdf_nbuf_cb);
-	uint32_t max = sizeof(((struct sk_buff *)0)->cb)-offset;
-
-	len = (len > max ? max : len);
-
-	memcpy(((uint8_t *)(nbuf->cb) + offset), info, len);
-}
-
-/**
- * __qdf_nbuf_get_rx_info() - get rx info
- * @nbuf: sk buffer
- *
- * Return: rx_info
- */
-static inline void *
-__qdf_nbuf_get_rx_info(__qdf_nbuf_t nbuf)
-{
-	uint8_t offset = sizeof(struct qdf_nbuf_cb);
-
-	return (void *)((uint8_t *)(nbuf->cb) + offset);
-}
 
 /*
  *  __qdf_nbuf_get_cb() - returns a pointer to skb->cb

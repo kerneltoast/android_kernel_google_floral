@@ -122,8 +122,15 @@ void dfs_init_precac_list(struct wlan_dfs *dfs);
  * @dfs: Pointer to wlan_dfs structure.
  * @precac_chan: Start thr precac timer in this channel.
  */
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD)
 void dfs_start_precac_timer(struct wlan_dfs *dfs,
-		uint8_t precac_chan);
+			    uint8_t precac_chan);
+#else
+static inline void dfs_start_precac_timer(struct wlan_dfs *dfs,
+					  uint8_t precac_chan)
+{
+}
+#endif
 
 /**
  * dfs_cancel_precac_timer() - Cancel the precac timer.
@@ -157,6 +164,18 @@ static inline void dfs_zero_cac_attach(struct wlan_dfs *dfs)
 void dfs_zero_cac_reset(struct wlan_dfs *dfs);
 #else
 static inline void dfs_zero_cac_reset(struct wlan_dfs *dfs)
+{
+}
+#endif
+
+/**
+ * dfs_zero_cac_timer_free() - Free Zero cac DFS variables.
+ * @dfs: Pointer to wlan_dfs structure.
+ */
+#if defined(WLAN_DFS_PARTIAL_OFFLOAD)
+void dfs_zero_cac_timer_free(struct wlan_dfs *dfs);
+#else
+static inline void dfs_zero_cac_timer_free(struct wlan_dfs *dfs)
 {
 }
 #endif

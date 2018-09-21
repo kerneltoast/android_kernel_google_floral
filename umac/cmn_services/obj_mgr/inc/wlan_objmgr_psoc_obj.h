@@ -1437,12 +1437,28 @@ QDF_STATUS wlan_objmgr_psoc_set_user_config(struct wlan_objmgr_psoc *psoc,
 		struct wlan_objmgr_psoc_user_config *user_config_data);
 
 /**
+ * wlan_objmgr_psoc_check_for_pdev_leaks() - Assert no pdevs attached to @psoc
+ * @psoc: The psoc to check
+ *
+ * Return: None
+ */
+void wlan_objmgr_psoc_check_for_pdev_leaks(struct wlan_objmgr_psoc *psoc);
+
+/**
  * wlan_objmgr_psoc_check_for_vdev_leaks() - Assert no vdevs attached to @psoc
  * @psoc: The psoc to check
  *
  * Return: None
  */
 void wlan_objmgr_psoc_check_for_vdev_leaks(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * wlan_objmgr_psoc_check_for_peer_leaks() - Assert no peers attached to @psoc
+ * @psoc: The psoc to check
+ *
+ * Return: None
+ */
+void wlan_objmgr_psoc_check_for_peer_leaks(struct wlan_objmgr_psoc *psoc);
 
 /**
 * wlan_objmgr_psoc_get_dual_mac_disable () - get user config

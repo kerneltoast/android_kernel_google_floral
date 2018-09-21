@@ -1827,12 +1827,13 @@ struct wifi_passpoint_network_param {
 /**
  * struct wifi_passpoint_req_param - passpoint request
  * @request_id: request identifier
- * @num_networks: number of networks
+ * @vdev_id: vdev that is the target of the request
+ * @num_networks: number of valid entries in @networks
  * @networks: passpoint networks
  */
 struct wifi_passpoint_req_param {
 	uint32_t request_id;
-	uint32_t session_id;
+	uint32_t vdev_id;
 	uint32_t num_networks;
 	struct wifi_passpoint_network_param networks[];
 };
@@ -2211,9 +2212,9 @@ struct wifi_epno_network_params {
 };
 
 /**
- * struct wifi_enhanched_pno_params - enhanced pno network params
+ * struct wifi_enhanced_pno_params - enhanced pno network params
  * @request_id: request id number
- * @session_id: session_id number
+ * @vdev_id: vdev id
  * @min_5ghz_rssi: minimum 5GHz RSSI for a BSSID to be considered
  * @min_24ghz_rssi: minimum 2.4GHz RSSI for a BSSID to be considered
  * @initial_score_max: maximum score that a network can have before bonuses
@@ -2225,9 +2226,9 @@ struct wifi_epno_network_params {
  * @num_networks: number of ssids
  * @networks: EPNO networks
  */
-struct wifi_enhanched_pno_params {
+struct wifi_enhanced_pno_params {
 	uint32_t    request_id;
-	uint32_t    session_id;
+	uint32_t    vdev_id;
 	uint32_t    min_5ghz_rssi;
 	uint32_t    min_24ghz_rssi;
 	uint32_t    initial_score_max;
@@ -2274,41 +2275,42 @@ enum wmi_extscan_report_events_type {
 /**
  * struct extscan_capabilities_params - ext scan capablities
  * @request_id: request_id
- * @session_id: session_id
+ * @vdev_id: vdev id
  */
 struct extscan_capabilities_params {
 	uint32_t request_id;
-	uint8_t session_id;
+	uint8_t vdev_id;
 };
 
 /**
- * struct extscan_capabilities_reset_params - ext scan capablities reset parameter
+ * struct extscan_capabilities_reset_params - ext scan capablities reset
+ *                                            parameter
  * @request_id: request_id
- * @session_id: session_id
+ * @vdev_id: vdev id
  */
 struct extscan_capabilities_reset_params {
 	uint32_t request_id;
-	uint8_t session_id;
+	uint8_t vdev_id;
 };
 
 /**
  * struct extscan_bssid_hotlist_reset_params - ext scan hotlist reset parameter
  * @request_id: request_id
- * @session_id: session_id
+ * @vdev_id: vdev id
  */
 struct extscan_bssid_hotlist_reset_params {
 	uint32_t request_id;
-	uint8_t session_id;
+	uint8_t vdev_id;
 };
 
 /**
  * struct extscan_stop_req_params - ext scan stop parameter
  * @request_id: request_id
- * @session_id: session_id
+ * @vdev_id: vdev id
  */
 struct extscan_stop_req_params {
 	uint32_t request_id;
-	uint8_t session_id;
+	uint8_t vdev_id;
 };
 
 /**
@@ -2325,8 +2327,8 @@ struct ap_threshold_params {
 
 /**
  * struct extscan_set_sig_changereq_params - ext scan channel parameter
- * @request_id: mac address
- * @session_id: low threshold
+ * @request_id: request_id
+ * @vdev_id: vdev id
  * @rssi_sample_size: Number of samples for averaging RSSI
  * @lostap_sample_size: Number of missed samples to confirm AP loss
  * @min_breaching: Number of APs breaching threshold required for firmware
@@ -2335,7 +2337,7 @@ struct ap_threshold_params {
  */
 struct extscan_set_sig_changereq_params {
 	uint32_t request_id;
-	uint8_t session_id;
+	uint8_t vdev_id;
 	uint32_t rssi_sample_size;
 	uint32_t lostap_sample_size;
 	uint32_t min_breaching;
@@ -2345,13 +2347,13 @@ struct extscan_set_sig_changereq_params {
 
 /**
  * struct extscan_cached_result_params - ext scan cached parameter
- * @request_id: mac address
- * @session_id: low threshold
+ * @request_id: request_id
+ * @vdev_id: vdev id
  * @flush: cached results flush
  */
 struct extscan_cached_result_params {
 	uint32_t request_id;
-	uint8_t session_id;
+	uint8_t vdev_id;
 	bool flush;
 };
 
@@ -2364,16 +2366,15 @@ struct extscan_cached_result_params {
 /**
  * struct wifi_scan_channelspec_params - wifi scan channel parameter
  * @channel: Frequency in MHz
- * @dwellTimeMs: dwell time
- * @flush: cached results flush
+ * @dwell_time_ms: dwell time in milliseconds
  * @passive: passive scan
- * @chnlClass: channel class
+ * @channel_class: channel class
  */
 struct wifi_scan_channelspec_params {
 	uint32_t channel;
-	uint32_t dwellTimeMs;
+	uint32_t dwell_time_ms;
 	bool passive;
-	uint8_t chnlClass;
+	uint8_t channel_class;
 };
 
 /**
@@ -2408,7 +2409,7 @@ enum wmi_wifi_band {
  *		low, the firmware should choose to generate results as fast as
  *		it can instead of failing the command byte
  *		for exponential backoff bucket this is the min_period
- * @reportEvents: 0 => normal reporting (reporting rssi history
+ * @report_events: 0 => normal reporting (reporting rssi history
  *		only, when rssi history buffer is % full)
  *		1 => same as 0 + report a scan completion event after scanning
  *		this bucket
@@ -2423,7 +2424,7 @@ enum wmi_wifi_band {
  *		new_period = old_period * exponent
  * @step_count: for exponential back off bucket, number of scans performed
  *		at a given period and until the exponent is applied
- * @numChannels: channels to scan; these may include DFS channels
+ * @num_channels: channels to scan; these may include DFS channels
  *		Note that a given channel may appear in multiple buckets
  * @min_dwell_time_active: per bucket minimum active dwell time
  * @max_dwell_time_active: per bucket maximum active dwell time
@@ -2435,29 +2436,30 @@ struct wifi_scan_bucket_params {
 	uint8_t         bucket;
 	enum wmi_wifi_band   band;
 	uint32_t        period;
-	uint32_t        reportEvents;
+	uint32_t        report_events;
 	uint32_t        max_period;
 	uint32_t        exponent;
 	uint32_t        step_count;
-	uint32_t        numChannels;
+	uint32_t        num_channels;
 	uint32_t        min_dwell_time_active;
 	uint32_t        max_dwell_time_active;
 	uint32_t        min_dwell_time_passive;
 	uint32_t        max_dwell_time_passive;
-	struct wifi_scan_channelspec_params channels[WMI_WLAN_EXTSCAN_MAX_CHANNELS];
+	struct wifi_scan_channelspec_params
+			channels[WMI_WLAN_EXTSCAN_MAX_CHANNELS];
 };
 
 /**
  * struct wifi_scan_cmd_req_params - wifi scan command request params
- * @basePeriod: base timer period
- * @maxAPperScan: max ap per scan
+ * @base_period: base timer period
+ * @max_ap_per_scan: max ap per scan
  * @report_threshold_percent: report threshold
  *	in %, when buffer is this much full, wake up host
  * @report_threshold_num_scans: report threshold number of scans
  *	in number of scans, wake up host after these many scans
- * @requestId: request id
- * @sessionId: session id
- * @numBuckets: number of buckets
+ * @request_id: request id
+ * @vdev_id: vdev that is the target of the request
+ * @num_buckets: number of buckets
  * @min_dwell_time_active: per bucket minimum active dwell time
  * @max_dwell_time_active: per bucket maximum active dwell time
  * @min_dwell_time_passive: per bucket minimum passive dwell time
@@ -2467,16 +2469,13 @@ struct wifi_scan_bucket_params {
  * @buckets: buckets array
  */
 struct wifi_scan_cmd_req_params {
-	uint32_t basePeriod;
-	uint32_t maxAPperScan;
-
+	uint32_t base_period;
+	uint32_t max_ap_per_scan;
 	uint32_t report_threshold_percent;
 	uint32_t report_threshold_num_scans;
-
-	uint32_t requestId;
-	uint8_t  sessionId;
-	uint32_t numBuckets;
-
+	uint32_t request_id;
+	uint8_t  vdev_id;
+	uint32_t num_buckets;
 	uint32_t min_dwell_time_active;
 	uint32_t max_dwell_time_active;
 	uint32_t min_dwell_time_passive;
@@ -3532,21 +3531,22 @@ struct wmi_roam_invoke_cmd {
 };
 
 /**
- * struct ext_scan_setbssi_hotlist_params - set hotlist request
- * @requestId: request identifier
- * @sessionId: session identifier
+ * struct extscan_bssid_hotlist_set_params - set hotlist request
+ * @request_id: request_id
+ * @vdev_id: vdev id
  * @lost_ap_sample_size: number of samples to confirm AP loss
- * @numAp: Number of hotlist APs
+ * @num_ap: Number of hotlist APs
  * @ap: hotlist APs
  */
-struct ext_scan_setbssi_hotlist_params {
-	uint32_t  requestId;
-	uint8_t   sessionId;
-
+struct extscan_bssid_hotlist_set_params {
+	uint32_t  request_id;
+	uint8_t   vdev_id;
 	uint32_t  lost_ap_sample_size;
-	uint32_t  numAp;
+	uint32_t  num_ap;
 	struct ap_threshold_params ap[WMI_WLAN_EXTSCAN_MAX_HOTLIST_APS];
 };
+/* legacy naming */
+#define ext_scan_setbssid_hotlist_params extscan_bssid_hotlist_set_params
 
 /**
  * struct host_mem_req - Host memory request paramseters request by target
@@ -5503,7 +5503,7 @@ typedef enum {
 	wmi_ap_ps_egap_info_event_id,
 	wmi_peer_assoc_conf_event_id,
 	wmi_vdev_delete_resp_event_id,
-	wmi_bpf_capability_info_event_id,
+	wmi_apf_capability_info_event_id,
 	wmi_vdev_encrypt_decrypt_data_rsp_event_id,
 	wmi_report_rx_aggr_failure_event_id,
 	wmi_pdev_chip_pwr_save_failure_detect_event_id,
@@ -5525,7 +5525,8 @@ typedef enum {
 	wmi_host_dfs_status_check_event_id,
 #endif
 	wmi_twt_enable_complete_event_id,
-
+	wmi_apf_get_vdev_work_memory_resp_event_id,
+	wmi_wlan_sar2_result_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -5908,7 +5909,7 @@ typedef enum {
 	wmi_service_sta_pmf_offload,
 	wmi_service_unified_wow_capability,
 	wmi_service_enterprise_mesh,
-	wmi_service_bpf_offload,
+	wmi_service_apf_offload,
 	wmi_service_sync_delete_cmds,
 	wmi_service_ratectrl_limit_max_min_rates,
 	wmi_service_nan_data,
@@ -5955,6 +5956,7 @@ typedef enum {
 	wmi_service_dual_beacon_on_single_mac_mcc_support,
 	wmi_service_twt_requestor,
 	wmi_service_twt_responder,
+	wmi_service_listen_interval_offload_support,
 
 	wmi_services_max,
 } wmi_conv_service_ids;
@@ -6065,7 +6067,7 @@ struct wmi_host_fw_abi_ver {
  * @num_packet_filters: maximum number of packet filter rules to support
  * @num_max_sta_vdevs: maximum number of concurrent station vdevs to support
  * @num_ns_ext_tuples_cfg:
- * @bpf_instruction_size:
+ * @apf_instruction_size:
  * @max_bssid_rx_filters:
  * @use_pdev_id:
  * @max_num_dbs_scan_duty_cycle: max dbs can duty cycle value
@@ -6140,7 +6142,7 @@ typedef struct {
 	uint32_t num_packet_filters;
 	uint32_t num_max_sta_vdevs;
 	uint32_t num_ns_ext_tuples_cfg;
-	uint32_t bpf_instruction_size;
+	uint32_t apf_instruction_size;
 	uint32_t max_bssid_rx_filters;
 	uint32_t use_pdev_id;
 	uint32_t max_num_dbs_scan_duty_cycle;
@@ -7943,16 +7945,16 @@ struct pdev_csa_switch_count_status {
 };
 
 /**
- * enum wmi_host_active-bpf_mode - FW_ACTIVE_BPF_MODE, replicated from FW header
- * @WMI_HOST_ACTIVE_BPF_DISABLED: BPF is disabled for all packets in active mode
- * @WMI_HOST_ACTIVE_BPF_ENABLED: BPF is enabled for all packets in active mode
- * @WMI_HOST_ACTIVE_BPF_ADAPTIVE: BPF is enabled for packets up to some
+ * enum wmi_host_active-apf_mode - FW_ACTIVE_APF_MODE, replicated from FW header
+ * @WMI_HOST_ACTIVE_APF_DISABLED: APF is disabled for all packets in active mode
+ * @WMI_HOST_ACTIVE_APF_ENABLED: APF is enabled for all packets in active mode
+ * @WMI_HOST_ACTIVE_APF_ADAPTIVE: APF is enabled for packets up to some
  *	threshold in active mode
  */
-enum wmi_host_active_bpf_mode {
-	WMI_HOST_ACTIVE_BPF_DISABLED =	(1 << 1),
-	WMI_HOST_ACTIVE_BPF_ENABLED =	(1 << 2),
-	WMI_HOST_ACTIVE_BPF_ADAPTIVE =	(1 << 3)
+enum wmi_host_active_apf_mode {
+	WMI_HOST_ACTIVE_APF_DISABLED =	(1 << 1),
+	WMI_HOST_ACTIVE_APF_ENABLED =	(1 << 2),
+	WMI_HOST_ACTIVE_APF_ADAPTIVE =	(1 << 3)
 };
 
 /**
@@ -8429,4 +8431,55 @@ struct wmi_host_congestion_stats {
 	uint32_t congestion;
 };
 #endif
+
+#ifdef FEATURE_WLAN_APF
+/**
+ * struct wmi_apf_write_memory_params - Android Packet Filter write memory
+ * params
+ * @vdev_id: VDEV on which APF memory is to be written
+ * @apf_version: APF version number
+ * @program_len: Length reserved for program in the APF work memory
+ * @addr_offset: Relative address in APF work memory to start writing
+ * @length: Size of the write
+ * @buf: Pointer to the buffer
+ */
+struct wmi_apf_write_memory_params {
+	uint8_t vdev_id;
+	uint32_t apf_version;
+	uint32_t program_len;
+	uint32_t addr_offset;
+	uint32_t length;
+	uint8_t *buf;
+};
+
+/**
+ * struct wmi_apf_read_memory_params - Android Packet Filter read memory params
+ * @vdev_id: vdev id
+ * @addr_offset: Relative address in APF work memory to read from
+ * @length: Size of the memory fetch
+ */
+struct wmi_apf_read_memory_params {
+	uint8_t vdev_id;
+	uint32_t addr_offset;
+	uint32_t length;
+};
+
+/**
+ * struct wmi_apf_read_memory_resp_event_params - Event containing read Android
+ *	Packet Filter memory response
+ * @vdev_id: vdev id
+ * @offset: Read memory offset
+ * @length: Read memory length
+ * @more_data: Indicates more data to come
+ * @data: Pointer to the data
+ */
+struct wmi_apf_read_memory_resp_event_params {
+	uint32_t vdev_id;
+	uint32_t offset;
+	uint32_t length;
+	bool more_data;
+	uint8_t *data;
+};
+#endif /* FEATURE_WLAN_APF */
+
 #endif /* _WMI_UNIFIED_PARAM_H_ */

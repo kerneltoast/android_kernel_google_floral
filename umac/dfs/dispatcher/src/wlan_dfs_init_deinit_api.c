@@ -58,7 +58,6 @@ void register_dfs_callbacks(void)
 	tmp_dfs_to_mlme->pdev_get_comp_private_obj =
 		wlan_pdev_get_dfs_obj;
 
-	tmp_dfs_to_mlme->dfs_channel_mark_radar = mlme_dfs_channel_mark_radar;
 	tmp_dfs_to_mlme->dfs_start_rcsa = mlme_dfs_start_rcsa;
 	tmp_dfs_to_mlme->mlme_mark_dfs = mlme_dfs_mark_dfs;
 	tmp_dfs_to_mlme->mlme_start_csa = mlme_dfs_start_csa;
@@ -338,9 +337,16 @@ QDF_STATUS wlan_dfs_pdev_obj_create_notification(struct wlan_objmgr_pdev *pdev,
 	global_dfs_to_mlme.pdev_component_obj_attach(pdev,
 		WLAN_UMAC_COMP_DFS, (void *)dfs, QDF_STATUS_SUCCESS);
 	dfs->dfs_pdev_obj = pdev;
-	dfs->dfs_is_offload_enabled = lmac_is_mode_dfs_offload(psoc);
+
+	if (!dfs_tx_ops->dfs_is_tgt_offload) {
+		dfs_err(dfs, WLAN_DEBUG_DFS_ALWAYS,
+			"dfs_is_tgt_offload is null");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	dfs->dfs_is_offload_enabled = dfs_tx_ops->dfs_is_tgt_offload(psoc);
 	dfs_info(dfs, WLAN_DEBUG_DFS_ALWAYS, "dfs_offload %d",
-			dfs->dfs_is_offload_enabled);
+		 dfs->dfs_is_offload_enabled);
 
 	dfs = wlan_pdev_get_dfs_obj(pdev);
 	if (dfs_attach(dfs) == 1) {
@@ -370,7 +376,6 @@ QDF_STATUS wlan_dfs_pdev_obj_destroy_notification(struct wlan_objmgr_pdev *pdev,
 				WLAN_UMAC_COMP_DFS,
 				(void *)dfs);
 
-		dfs_reset(dfs);
 		dfs_detach(dfs);
 		dfs->dfs_pdev_obj = NULL;
 		dfs_destroy_object(dfs);
@@ -442,12 +447,8 @@ static void dfs_scan_serialization_comp_info_cb(
 QDF_STATUS wifi_dfs_psoc_enable(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
-	bool dfs_offload;
 
-	dfs_offload = lmac_is_mode_dfs_offload(psoc);
-	dfs_info(NULL, WLAN_DEBUG_DFS_ALWAYS, "dfs_offload %d", dfs_offload);
-
-	status = tgt_dfs_reg_ev_handler(psoc, dfs_offload);
+	status = tgt_dfs_reg_ev_handler(psoc);
 	if (status != QDF_STATUS_SUCCESS) {
 		dfs_err(NULL, WLAN_DEBUG_DFS_ALWAYS,  "tgt_dfs_reg_ev_handler failed");
 		return QDF_STATUS_E_FAILURE;

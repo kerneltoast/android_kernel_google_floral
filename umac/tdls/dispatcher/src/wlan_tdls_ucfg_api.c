@@ -137,7 +137,7 @@ static QDF_STATUS tdls_global_init(struct tdls_soc_priv_obj *soc_obj)
 			soc_obj->max_num_tdls_sta = WLAN_TDLS_STA_MAX_NUM;
 
 	for (sta_idx = 0; sta_idx < soc_obj->max_num_tdls_sta; sta_idx++) {
-		soc_obj->tdls_conn_info[sta_idx].sta_id = 0;
+		soc_obj->tdls_conn_info[sta_idx].sta_id = INVALID_TDLS_PEER_ID;
 		soc_obj->tdls_conn_info[sta_idx].session_id = 255;
 		qdf_mem_zero(&soc_obj->tdls_conn_info[sta_idx].peer_mac,
 			     QDF_MAC_ADDR_SIZE);
@@ -627,16 +627,12 @@ QDF_STATUS ucfg_tdls_notify_sta_connect(
 	if (!notify)
 		return QDF_STATUS_E_NULL_VALUE;
 
-	notify->session_id = notify_info->session_id;
-	notify->tdls_chan_swit_prohibited =
-			notify_info->tdls_chan_swit_prohibited;
-	notify->tdls_prohibited = notify_info->tdls_prohibited;
-	notify->vdev = notify_info->vdev;
+	*notify = *notify_info;
 
 	msg.bodyptr = notify;
 	msg.callback = tdls_process_cmd;
 	msg.type = TDLS_NOTIFY_STA_CONNECTION;
-	scheduler_post_msg(QDF_MODULE_ID_OS_IF, &msg);
+	scheduler_post_msg(QDF_MODULE_ID_TARGET_IF, &msg);
 
 	tdls_debug("Exit ");
 	return QDF_STATUS_SUCCESS;
@@ -659,17 +655,12 @@ QDF_STATUS ucfg_tdls_notify_sta_disconnect(
 	if (!notify)
 		return QDF_STATUS_E_NULL_VALUE;
 
-	notify->session_id = notify_info->session_id;
-	notify->tdls_chan_swit_prohibited = false;
-	notify->tdls_prohibited = false;
-	notify->vdev = notify_info->vdev;
-	notify->lfr_roam = notify_info->lfr_roam;
-	notify->user_disconnect = notify_info->user_disconnect;
+	*notify = *notify_info;
 
 	msg.bodyptr = notify;
 	msg.callback = tdls_process_cmd;
 	msg.type = TDLS_NOTIFY_STA_DISCONNECTION;
-	scheduler_post_msg(QDF_MODULE_ID_OS_IF, &msg);
+	scheduler_post_msg(QDF_MODULE_ID_TARGET_IF, &msg);
 
 	tdls_debug("Exit ");
 

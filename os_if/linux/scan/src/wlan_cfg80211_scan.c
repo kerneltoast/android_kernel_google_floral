@@ -95,8 +95,8 @@ static void wlan_fill_scan_rand_attrs(struct wlan_objmgr_vdev *vdev,
 	*randomize = true;
 	memcpy(addr, mac_addr, QDF_MAC_ADDR_SIZE);
 	memcpy(mask, mac_addr_mask, QDF_MAC_ADDR_SIZE);
-	cfg80211_info("Random mac addr: %pM and Random mac mask: %pM",
-		      addr, mask);
+	cfg80211_debug("Random mac addr: %pM and Random mac mask: %pM",
+		       addr, mask);
 }
 
 /**
@@ -234,7 +234,7 @@ static void wlan_cfg80211_pno_callback(struct wlan_objmgr_vdev *vdev,
 	if (event->type != SCAN_EVENT_TYPE_NLO_COMPLETE)
 		return;
 
-	cfg80211_info("vdev id = %d", event->vdev_id);
+	cfg80211_debug("vdev id = %d", event->vdev_id);
 
 	pdev = wlan_vdev_get_pdev(vdev);
 	if (!pdev) {
@@ -444,7 +444,7 @@ int wlan_cfg80211_sched_scan_start(struct wlan_objmgr_pdev *pdev,
 
 		for (i = 0; i < request->n_channels; i++) {
 			channel = request->channels[i]->hw_value;
-			if (wlan_is_dsrc_channel(wlan_chan_to_freq(channel)))
+			if (wlan_reg_is_dsrc_chan(pdev, channel))
 				continue;
 
 			if (ap_or_go_present) {
@@ -706,7 +706,7 @@ static QDF_STATUS wlan_scan_request_dequeue(
 	struct pdev_osif_priv *osif_ctx;
 	struct osif_scan_pdev *scan_priv;
 
-	cfg80211_info("Dequeue Scan id: %d", scan_id);
+	cfg80211_debug("Dequeue Scan id: %d", scan_id);
 
 	if ((source == NULL) || (req == NULL)) {
 		cfg80211_err("source or request is NULL");
@@ -747,9 +747,10 @@ static QDF_STATUS wlan_scan_request_dequeue(
 				*dev = scan_req->dev;
 				qdf_mem_free(scan_req);
 				qdf_mutex_release(&scan_priv->scan_req_q_lock);
-				cfg80211_info("removed Scan id: %d, req = %pK, pending scans %d",
-				      scan_id, req,
-				      qdf_list_size(&scan_priv->scan_req_q));
+				cfg80211_debug("removed Scan id: %d, req = %pK, pending scans %d",
+					       scan_id, req,
+					       qdf_list_size(&scan_priv->
+							     scan_req_q));
 				return QDF_STATUS_SUCCESS;
 			} else {
 				qdf_mutex_release(&scan_priv->scan_req_q_lock);
@@ -903,7 +904,7 @@ static void wlan_cfg80211_scan_done_callback(
 					void *args)
 {
 	struct cfg80211_scan_request *req = NULL;
-	bool aborted = false;
+	bool success = false;
 	uint32_t scan_id = event->scan_id;
 	uint8_t source = NL_SCAN;
 	struct wlan_objmgr_pdev *pdev;
@@ -911,39 +912,14 @@ static void wlan_cfg80211_scan_done_callback(
 	struct net_device *netdev = NULL;
 	QDF_STATUS status;
 
-	if ((event->type != SCAN_EVENT_TYPE_COMPLETED) &&
-	    (event->type != SCAN_EVENT_TYPE_DEQUEUED) &&
-	    (event->type != SCAN_EVENT_TYPE_START_FAILED))
+	if (!util_is_scan_completed(event, &success))
 		return;
 
-	cfg80211_info("scan ID = %d vdev id = %d, event type %s(%d) reason = %s(%d)",
-		scan_id, event->vdev_id,
-		util_scan_get_ev_type_name(event->type),
-		event->type,
-		util_scan_get_ev_reason_name(event->reason),
-		event->reason);
-
-	/*
-	 * cfg80211_scan_done informing NL80211 about completion
-	 * of scanning
-	 */
-	if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
-	    ((event->reason == SCAN_REASON_CANCELLED) ||
-	     (event->reason == SCAN_REASON_TIMEDOUT) ||
-	     (event->reason == SCAN_REASON_INTERNAL_FAILURE))) {
-		aborted = true;
-	} else if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
-		   (event->reason == SCAN_REASON_COMPLETED))
-		aborted = false;
-	else if ((event->type == SCAN_EVENT_TYPE_DEQUEUED) &&
-		 (event->reason == SCAN_REASON_CANCELLED))
-		aborted = true;
-	else if ((event->type == SCAN_EVENT_TYPE_START_FAILED) &&
-		 (event->reason == SCAN_REASON_COMPLETED))
-		aborted = true;
-	else
-		/* cfg80211 is not interested on all other scan events */
-		return;
+	cfg80211_debug("scan ID = %d vdev id = %d, event type %s(%d) reason = %s(%d)",
+		       scan_id, event->vdev_id,
+		       util_scan_get_ev_type_name(event->type), event->type,
+		       util_scan_get_ev_reason_name(event->reason),
+		       event->reason);
 
 	pdev = wlan_vdev_get_pdev(vdev);
 	status = wlan_scan_request_dequeue(
@@ -975,9 +951,9 @@ static void wlan_cfg80211_scan_done_callback(
 	 * scan done event will be posted
 	 */
 	if (NL_SCAN == source)
-		wlan_cfg80211_scan_done(netdev, req, aborted);
+		wlan_cfg80211_scan_done(netdev, req, !success);
 	else
-		wlan_vendor_scan_callback(req, aborted);
+		wlan_vendor_scan_callback(req, !success);
 
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_OSIF_ID);
 allow_suspend:
@@ -1341,7 +1317,7 @@ int wlan_cfg80211_scan(struct wlan_objmgr_pdev *pdev,
 		for (i = 0; i < request->n_channels; i++) {
 			channel = request->channels[i]->hw_value;
 			c_freq = wlan_reg_chan_to_freq(pdev, channel);
-			if (wlan_is_dsrc_channel(c_freq))
+			if (wlan_reg_is_dsrc_chan(pdev, channel))
 				continue;
 #ifdef WLAN_POLICY_MGR_ENABLE
 			if (ap_or_go_present) {
@@ -1556,7 +1532,7 @@ QDF_STATUS wlan_abort_scan(struct wlan_objmgr_pdev *pdev,
 	req->cancel_req.vdev_id = vdev_id;
 	if (scan_id != INVAL_SCAN_ID)
 		req->cancel_req.req_type = WLAN_SCAN_CANCEL_SINGLE;
-	if (vdev_id == INVAL_VDEV_ID)
+	else if (vdev_id == INVAL_VDEV_ID)
 		req->cancel_req.req_type = WLAN_SCAN_CANCEL_PDEV_ALL;
 	else
 		req->cancel_req.req_type = WLAN_SCAN_CANCEL_VDEV_ALL;
@@ -1611,7 +1587,7 @@ int wlan_vendor_abort_scan(struct wlan_objmgr_pdev *pdev,
 			return ret;
 		if (ucfg_scan_get_pdev_status(pdev) !=
 		   SCAN_NOT_IN_PROGRESS)
-			wlan_abort_scan(pdev, pdev_id,
+			wlan_abort_scan(pdev, INVAL_PDEV_ID,
 					INVAL_VDEV_ID, scan_id, true);
 	}
 	return 0;
@@ -1819,9 +1795,8 @@ void wlan_cfg80211_inform_bss_frame(struct wlan_objmgr_pdev *pdev,
 	qdf_mem_copy(bss_data.per_chain_snr, scan_params->per_chain_snr,
 		     WLAN_MGMT_TXRX_HOST_MAX_ANTENNA);
 
-	cfg80211_info("BSSID: %pM Channel:%d RSSI:%d",
-		bss_data.mgmt->bssid, bss_data.chan->center_freq,
-		(int)(bss_data.rssi / 100));
+	cfg80211_debug("BSSID: %pM Channel:%d RSSI:%d", bss_data.mgmt->bssid,
+		       bss_data.chan->center_freq, (int)(bss_data.rssi / 100));
 
 	bss = wlan_cfg80211_inform_bss_frame_data(wiphy, &bss_data);
 	if (!bss)

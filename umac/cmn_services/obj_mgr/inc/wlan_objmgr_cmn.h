@@ -59,6 +59,8 @@
 #define obj_mgr_debug(format, args...) \
 		obj_mgr_logfl(QDF_TRACE_LEVEL_DEBUG, format, ## args)
 
+#define obj_mgr_log_level(level, format, args...)\
+		obj_mgr_logfl(level, format, ## args)
 
 /**
  * enum WLAN_OBJ_STATE - State of Object
@@ -219,6 +221,7 @@ typedef void (*wlan_objmgr_peer_status_handler)(
  * @WLAN_GREEN_AP_ID:           Green AP operations
  * @WLAN_WIFI_POS_OSIF_ID:      wifi positioning (OSID)
  * @WLAN_WIFI_POS_TGT_IF_ID:    wifi positioning (Target IF)
+ * @WLAN_ACTION_OUI_ID:         action oui operations
  * @WLAN_REF_ID_MAX:            Max id used to generate ref count tracking array
  */
  /* New value added to the enum must also be reflected in function
@@ -267,6 +270,7 @@ typedef enum {
 	WLAN_GREEN_AP_ID      = 39,
 	WLAN_WIFI_POS_OSIF_ID = 40,
 	WLAN_WIFI_POS_TGT_IF_ID = 41,
+	WLAN_ACTION_OUI_ID      = 43,
 	WLAN_REF_ID_MAX,
 } wlan_objmgr_ref_dbgid;
 
@@ -322,6 +326,7 @@ static inline char *string_from_dbgid(wlan_objmgr_ref_dbgid id)
 					"WLAN_GREEN_AP_ID",
 					"WLAN_WIFI_POS_OSIF_ID",
 					"WLAN_WIFI_POS_TGT_IF_ID",
+					[43] = "WLAN_ACTION_OUI_ID",
 					"WLAN_REF_ID_MAX"};
 
 	return (char *)strings[id];

@@ -222,7 +222,7 @@ wlan_serialization_request(struct wlan_serialization_command *cmd)
 		return WLAN_SER_CMD_DENIED_UNSPECIFIED;
 	}
 
-	ser_soc_obj = wlan_serialization_get_obj(cmd);
+	ser_soc_obj = wlan_serialization_get_psoc_obj(cmd);
 	if (!ser_soc_obj) {
 		serialization_err("ser_soc_obj is invalid");
 		return WLAN_SER_CMD_DENIED_UNSPECIFIED;
@@ -260,6 +260,7 @@ wlan_serialization_request(struct wlan_serialization_command *cmd)
 				cmd, is_active_cmd_allowed, &cmd_list);
 	if (WLAN_SER_CMD_ACTIVE == serialization_status)
 		wlan_serialization_activate_cmd(cmd_list, ser_pdev_obj);
+
 	return serialization_status;
 }
 
@@ -303,13 +304,8 @@ wlan_serialization_pdev_scan_status(struct wlan_objmgr_pdev *pdev)
 	struct wlan_serialization_pdev_priv_obj *ser_pdev_obj =
 		wlan_serialization_get_pdev_priv_obj(pdev);
 
-	cmd_in_active =
-	wlan_serialization_is_cmd_in_pdev_list(
-			pdev, &ser_pdev_obj->active_scan_list);
-
-	cmd_in_pending =
-	wlan_serialization_is_cmd_in_pdev_list(
-			pdev, &ser_pdev_obj->pending_scan_list);
+	cmd_in_active = !qdf_list_empty(&ser_pdev_obj->active_scan_list);
+	cmd_in_pending = !qdf_list_empty(&ser_pdev_obj->pending_scan_list);
 
 	return wlan_serialization_is_cmd_in_active_pending(
 			cmd_in_active, cmd_in_pending);
@@ -325,7 +321,6 @@ wlan_serialization_get_scan_cmd_using_scan_id(
 	struct wlan_objmgr_vdev *vdev;
 	struct wlan_objmgr_pdev *pdev;
 	struct wlan_serialization_pdev_priv_obj *ser_pdev_obj;
-	struct wlan_serialization_command_list *cmd_list = NULL;
 	struct wlan_serialization_command *cmd = NULL;
 	qdf_list_node_t *nnode = NULL;
 	qdf_list_t *queue;
@@ -356,6 +351,63 @@ wlan_serialization_get_scan_cmd_using_scan_id(
 		queue = &ser_pdev_obj->active_scan_list;
 	else
 		queue = &ser_pdev_obj->pending_scan_list;
+	qlen = wlan_serialization_list_size(queue, ser_pdev_obj);
+	while (qlen--) {
+		if (QDF_STATUS_SUCCESS != wlan_serialization_get_cmd_from_queue(
+						queue, &nnode, ser_pdev_obj)) {
+			serialization_debug("Node not found");
+			break;
+		}
+		if (wlan_serialization_match_cmd_scan_id(nnode, &cmd, scan_id,
+							 vdev, ser_pdev_obj)) {
+			serialization_debug("Cmd matched with the scan_id");
+			break;
+		}
+	}
+release_vdev_ref:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_SERIALIZATION_ID);
+
+	return cmd;
+}
+
+void *wlan_serialization_get_active_cmd(struct wlan_objmgr_psoc *psoc,
+				      uint8_t vdev_id,
+				      enum wlan_serialization_cmd_type cmd_type)
+{
+	uint32_t qlen;
+	struct wlan_objmgr_vdev *vdev;
+	struct wlan_objmgr_pdev *pdev;
+	struct wlan_serialization_pdev_priv_obj *ser_pdev_obj;
+	struct wlan_serialization_command_list *cmd_list = NULL;
+	void *umac_cmd = NULL;
+	qdf_list_node_t *nnode = NULL;
+	qdf_list_t *queue;
+
+	if (!psoc) {
+		serialization_err("invalid psoc");
+		return umac_cmd;
+	}
+	vdev = wlan_objmgr_get_vdev_by_id_from_psoc(psoc, vdev_id,
+						    WLAN_SERIALIZATION_ID);
+	if (!vdev) {
+		serialization_err("invalid vdev");
+		return umac_cmd;
+	}
+
+	pdev = wlan_vdev_get_pdev(vdev);
+	if (!pdev) {
+		serialization_err("invalid pdev");
+		goto release_vdev_ref;
+	}
+
+	ser_pdev_obj = wlan_serialization_get_pdev_priv_obj(pdev);
+	if (!ser_pdev_obj) {
+		serialization_err("invalid ser_pdev_obj");
+		goto release_vdev_ref;
+	}
+
+	queue = &ser_pdev_obj->active_list;
+
 	qlen = qdf_list_size(queue);
 	if (!qlen) {
 		serialization_err("Empty Queue");
@@ -363,20 +415,23 @@ wlan_serialization_get_scan_cmd_using_scan_id(
 	}
 	while (qlen--) {
 		if (QDF_STATUS_SUCCESS != wlan_serialization_get_cmd_from_queue(
-							queue, &nnode)) {
+							queue, &nnode,
+							ser_pdev_obj)) {
 			serialization_err("unsuccessful attempt");
 			break;
 		}
 		cmd_list = qdf_container_of(nnode,
-				struct wlan_serialization_command_list, node);
-		if ((cmd_list->cmd.cmd_id == scan_id) &&
-				(cmd_list->cmd.vdev == vdev)) {
-			serialization_debug("cmd_id[%d] matched", scan_id);
-			cmd = &cmd_list->cmd;
+					 struct wlan_serialization_command_list,
+					 node);
+		if (cmd_list->cmd.cmd_type == cmd_type &&
+		    cmd_list->cmd.vdev == vdev) {
+			serialization_debug("cmd_type[%d] matched", cmd_type);
+			umac_cmd = cmd_list->cmd.umac_cmd;
 			break;
 		}
 	}
 release_vdev_ref:
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_SERIALIZATION_ID);
-	return cmd;
+
+	return umac_cmd;
 }

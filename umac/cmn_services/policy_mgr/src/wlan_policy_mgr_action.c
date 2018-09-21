@@ -90,6 +90,29 @@ void policy_mgr_hw_mode_transition_cb(uint32_t old_hw_mode_index,
 	return;
 }
 
+QDF_STATUS policy_mgr_check_n_start_opportunistic_timer(
+		struct wlan_objmgr_psoc *psoc)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("PM ctx not valid. Oppurtunistic timer cannot start");
+		return QDF_STATUS_E_FAILURE;
+	}
+	if (policy_mgr_need_opportunistic_upgrade(psoc)) {
+	/* let's start the timer */
+	qdf_mc_timer_stop(&pm_ctx->dbs_opportunistic_timer);
+	status = qdf_mc_timer_start(
+				&pm_ctx->dbs_opportunistic_timer,
+				DBS_OPPORTUNISTIC_TIME * 1000);
+	if (!QDF_IS_STATUS_SUCCESS(status))
+		policy_mgr_err("Failed to start dbs opportunistic timer");
+	}
+	return status;
+}
+
 QDF_STATUS policy_mgr_pdev_set_hw_mode(struct wlan_objmgr_psoc *psoc,
 		uint32_t session_id,
 		enum hw_mode_ss_config mac0_ss,
@@ -308,7 +331,7 @@ QDF_STATUS policy_mgr_update_connection_info(struct wlan_objmgr_psoc *psoc,
 			policy_mgr_get_bw(conn_table_entry.chan_width),
 			conn_table_entry.mac_id,
 			chain_mask,
-			nss, vdev_id, true);
+			nss, vdev_id, true, true);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -357,12 +380,11 @@ QDF_STATUS policy_mgr_update_and_wait_for_connection_update(
  *
  * Return: true if dbs is allowed for STA+STA or STA+P2P else false
  */
-static bool policy_mgr_is_dbs_allowed_for_concurrency(
-		struct wlan_objmgr_psoc *psoc, uint32_t session_id)
+bool policy_mgr_is_dbs_allowed_for_concurrency(
+		struct wlan_objmgr_psoc *psoc, enum QDF_OPMODE new_conn_mode)
 {
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
 	uint32_t count, dbs_for_sta_sta, dbs_for_sta_p2p;
-	enum QDF_OPMODE new_conn_mode = QDF_MAX_NO_OF_MODE;
 	bool ret = true;
 
 	pm_ctx = policy_mgr_get_context(psoc);
@@ -372,9 +394,6 @@ static bool policy_mgr_is_dbs_allowed_for_concurrency(
 	}
 
 	count = policy_mgr_get_connection_count(psoc);
-	if (pm_ctx->hdd_cbacks.hdd_get_device_mode)
-		new_conn_mode = pm_ctx->hdd_cbacks.
-					hdd_get_device_mode(session_id);
 
 	if (count != 1 || new_conn_mode == QDF_MAX_NO_OF_MODE)
 		return ret;
@@ -419,6 +438,76 @@ static bool policy_mgr_is_dbs_allowed_for_concurrency(
 	return ret;
 }
 
+static bool policy_mgr_is_chnl_in_diff_band(struct wlan_objmgr_psoc *psoc,
+					    uint8_t channel)
+{
+	uint8_t i, pm_chnl;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return false;
+	}
+
+	/*
+	 * check given channel against already existing connections'
+	 * channels. if they differ then channels are in different bands
+	 */
+	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
+	for (i = 0; i < MAX_NUMBER_OF_CONC_CONNECTIONS; i++) {
+		pm_chnl = pm_conc_connection_list[i].chan;
+		if (pm_conc_connection_list[i].in_use)
+			if (!WLAN_REG_IS_SAME_BAND_CHANNELS(channel, pm_chnl)) {
+				qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
+				policy_mgr_debug("channel is in diff band");
+				return true;
+			}
+	}
+	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
+
+	return false;
+}
+
+bool policy_mgr_is_hwmode_set_for_given_chnl(struct wlan_objmgr_psoc *psoc,
+					     uint8_t channel)
+{
+	enum policy_mgr_band band;
+	bool is_hwmode_dbs, is_2x2_dbs;
+
+	if (policy_mgr_is_hw_dbs_capable(psoc) == false)
+		return true;
+
+	if (WLAN_REG_IS_24GHZ_CH(channel))
+		band = POLICY_MGR_BAND_24;
+	else
+		band = POLICY_MGR_BAND_5;
+
+	is_hwmode_dbs = policy_mgr_is_current_hwmode_dbs(psoc);
+	is_2x2_dbs = policy_mgr_is_hw_dbs_2x2_capable(psoc);
+	/*
+	 * If HW supports 2x2 chains in DBS HW mode and if DBS HW mode is not
+	 * yet set then this is the right time to block the connection.
+	 */
+	if ((band == POLICY_MGR_BAND_24) && is_2x2_dbs && !is_hwmode_dbs) {
+		policy_mgr_err("HW mode is not yet in DBS!!!!!");
+		return false;
+	}
+
+	/*
+	 * If HW supports 1x1 chains DBS HW mode and if first connection is
+	 * 2G or 5G band and if second connection is coming up in diffrent
+	 * band than the first connection and if current HW mode is not yet
+	 * set in DBS then this is the right time to block the connection.
+	 */
+	if (policy_mgr_is_chnl_in_diff_band(psoc, channel) && !is_hwmode_dbs) {
+		policy_mgr_err("Given channel & existing conn is diff band & HW mode is not yet in DBS !!!!");
+		return false;
+	}
+
+	return true;
+}
+
 QDF_STATUS policy_mgr_current_connections_update(struct wlan_objmgr_psoc *psoc,
 		uint32_t session_id,
 		uint8_t channel,
@@ -430,6 +519,8 @@ QDF_STATUS policy_mgr_current_connections_update(struct wlan_objmgr_psoc *psoc,
 	enum policy_mgr_two_connection_mode third_index = 0;
 	enum policy_mgr_band band;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+	enum QDF_OPMODE new_conn_mode = QDF_MAX_NO_OF_MODE;
 
 	if (policy_mgr_is_hw_dbs_capable(psoc) == false) {
 		policy_mgr_err("driver isn't dbs capable, no further action needed");
@@ -483,6 +574,16 @@ QDF_STATUS policy_mgr_current_connections_update(struct wlan_objmgr_psoc *psoc,
 		break;
 	}
 
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid context");
+		goto done;
+	}
+
+	if (pm_ctx->hdd_cbacks.hdd_get_device_mode)
+		new_conn_mode = pm_ctx->hdd_cbacks.
+					hdd_get_device_mode(session_id);
+
 	/*
 	 * Based on channel_select_logic_conc ini, hw mode is set
 	 * when second connection is about to come up that results
@@ -493,10 +594,10 @@ QDF_STATUS policy_mgr_current_connections_update(struct wlan_objmgr_psoc *psoc,
 	 *  mode change is not required.
 	 */
 	if (policy_mgr_is_current_hwmode_dbs(psoc) &&
-		!policy_mgr_is_dbs_allowed_for_concurrency(psoc, session_id))
+		!policy_mgr_is_dbs_allowed_for_concurrency(psoc, new_conn_mode))
 		next_action = PM_SINGLE_MAC;
 	else if (!policy_mgr_is_current_hwmode_dbs(psoc) &&
-		!policy_mgr_is_dbs_allowed_for_concurrency(psoc, session_id))
+		!policy_mgr_is_dbs_allowed_for_concurrency(psoc, new_conn_mode))
 		next_action = PM_NOP;
 
 	if (PM_NOP != next_action)
@@ -680,6 +781,19 @@ QDF_STATUS policy_mgr_handle_conc_multiport(struct wlan_objmgr_psoc *psoc,
 }
 
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
+void policy_mgr_update_user_config_sap_chan(
+			struct wlan_objmgr_psoc *psoc, uint32_t channel)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid pm context and failed to update the user config sap channel");
+		return;
+	}
+	pm_ctx->user_config_sap_channel = channel;
+}
+
 /**
  * policy_mgr_is_restart_sap_allowed() - Check if restart SAP
  * allowed during SCC -> MCC switch
@@ -705,7 +819,7 @@ static bool policy_mgr_is_restart_sap_allowed(
 		QDF_MCC_TO_SCC_SWITCH_FORCE_PREFERRED_WITHOUT_DISCONNECTION) &&
 		((policy_mgr_get_concurrency_mode(psoc) & sta_go_bit_mask)
 			== sta_go_bit_mask)))) {
-		policy_mgr_err("MCC switch disabled or not concurrent STA/SAP, STA/GO");
+		policy_mgr_debug("MCC switch disabled or not concurrent STA/SAP, STA/GO");
 		return false;
 	}
 
@@ -740,6 +854,42 @@ bool policy_mgr_is_safe_channel(struct wlan_objmgr_psoc *psoc,
 	}
 
 	return is_safe;
+}
+
+bool policy_mgr_is_sap_restart_required_after_sta_disconnect(
+			struct wlan_objmgr_psoc *psoc, uint8_t *intf_ch)
+{
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+	uint8_t sap_chan = policy_mgr_mode_specific_get_channel(psoc,
+								PM_SAP_MODE);
+	bool sta_sap_scc_on_dfs_chan =
+		policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(psoc);
+
+	*intf_ch = 0;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid pm context");
+		return false;
+	}
+
+	policy_mgr_debug("sta_sap_scc_on_dfs_chan %u, sap_chan %u",
+			 sta_sap_scc_on_dfs_chan, sap_chan);
+
+	if ((!sta_sap_scc_on_dfs_chan ||
+	     !(sap_chan && WLAN_REG_IS_5GHZ_CH(sap_chan) &&
+	       (wlan_reg_get_channel_state(pm_ctx->pdev, sap_chan) ==
+			CHANNEL_STATE_DFS))) &&
+	    (!policy_mgr_sta_sap_scc_on_lte_coex_chan(psoc) ||
+	      policy_mgr_is_safe_channel(psoc, sap_chan))) {
+		return false;
+	}
+
+	*intf_ch = pm_ctx->user_config_sap_channel;
+	policy_mgr_debug("Standalone SAP is not allowed on DFS channel, Move it to channel %u",
+			 *intf_ch);
+
+	return true;
 }
 
 /**
@@ -803,6 +953,14 @@ void policy_mgr_check_sta_ap_concurrent_ch_intf(void *data)
 		goto end;
 	}
 
+	policy_mgr_debug("wait if channel switch is already in progress");
+	status = qdf_wait_single_event(
+				&pm_ctx->channel_switch_complete_evt,
+				CHANNEL_SWITCH_COMPLETE_TIMEOUT);
+
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		policy_mgr_err("wait for event failed, still continue with channel switch");
+	}
 	if (!pm_ctx->hdd_cbacks.wlan_hdd_get_channel_for_sap_restart) {
 		policy_mgr_err("SAP restart get channel callback in NULL");
 		goto end;
@@ -857,6 +1015,7 @@ QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
 	uint8_t channel = *con_ch;
 	uint8_t temp_channel = 0;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
+	bool sta_sap_scc_on_dfs_chan;
 
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
@@ -885,11 +1044,15 @@ QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
 	else if (!channel)
 		channel = sap_ch;
 
+	sta_sap_scc_on_dfs_chan =
+		policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(psoc);
+
 	if (policy_mgr_valid_sta_channel_check(psoc, channel)) {
 		if (wlan_reg_is_dfs_ch(pm_ctx->pdev, channel) ||
-			wlan_reg_is_passive_or_disable_ch(
+		    wlan_reg_is_passive_or_disable_ch(
 				pm_ctx->pdev, channel) ||
-			!policy_mgr_is_safe_channel(psoc, channel)) {
+		    !(policy_mgr_sta_sap_scc_on_lte_coex_chan(psoc) ||
+		      policy_mgr_is_safe_channel(psoc, channel))) {
 			if (policy_mgr_is_hw_dbs_capable(psoc)) {
 				temp_channel =
 				policy_mgr_get_alternate_channel_for_sap(psoc);
@@ -911,6 +1074,11 @@ QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
 					return QDF_STATUS_E_FAILURE;
 				}
 			} else {
+				if (wlan_reg_is_dfs_ch(pm_ctx->pdev, channel) &&
+				    sta_sap_scc_on_dfs_chan) {
+					policy_mgr_debug("STA SAP SCC is allowed on DFS channel");
+					goto update_chan;
+				}
 				policy_mgr_warn("Can't have concurrency on %d",
 					channel);
 				return QDF_STATUS_E_FAILURE;
@@ -918,6 +1086,7 @@ QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
 		}
 	}
 
+update_chan:
 	if (channel != sap_ch)
 		*con_ch = channel;
 
@@ -943,11 +1112,30 @@ void policy_mgr_check_concurrent_intf_and_restart_sap(
 	uint8_t operating_channel[MAX_NUMBER_OF_CONC_CONNECTIONS] = {0};
 	uint8_t vdev_id[MAX_NUMBER_OF_CONC_CONNECTIONS] = {0};
 	uint32_t cc_count = 0;
+	bool restart_sap = false;
+	uint8_t sap_ch;
 
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
 		policy_mgr_err("Invalid context");
 		return;
+	}
+	if (policy_mgr_get_connection_count(psoc) == 1) {
+		/*
+		 * If STA+SAP sessions are on DFS channel and STA+SAP SCC is
+		 * enabled on DFS channel then move the SAP out of DFS channel
+		 * as soon as STA gets disconnect.
+		 * If STA+SAP sessions are on unsafe channel and STA+SAP SCC is
+		 * enabled on unsafe channel then move the SAP to safe channel
+		 * as soon as STA disconnected.
+		 */
+		if (policy_mgr_is_sap_restart_required_after_sta_disconnect(
+							psoc, &sap_ch)) {
+			policy_mgr_debug("move the SAP to configured channel %u",
+					 sap_ch);
+			restart_sap = true;
+			goto sap_restart;
+		}
 	}
 
 	/*
@@ -972,9 +1160,20 @@ void policy_mgr_check_concurrent_intf_and_restart_sap(
 		return;
 	}
 
-	if ((mcc_to_scc_switch != QDF_MCC_TO_SCC_SWITCH_DISABLE) &&
-		policy_mgr_valid_sta_channel_check(psoc, operating_channel[0])
-		&& !pm_ctx->sta_ap_intf_check_work_info) {
+sap_restart:
+	/*
+	 * If sta_sap_scc_on_dfs_chan is true then standalone SAP is not
+	 * allowed on DFS channel. SAP is allowed on DFS channel only when STA
+	 * is already connected on that channel.
+	 * In following condition restart_sap will be true if
+	 * sta_sap_scc_on_dfs_chan is true and SAP is on DFS channel.
+	 * This scenario can come if STA+SAP are operating on DFS channel and
+	 * STA gets disconnected.
+	 */
+	if (restart_sap ||
+	    ((mcc_to_scc_switch != QDF_MCC_TO_SCC_SWITCH_DISABLE) &&
+	    policy_mgr_valid_sta_channel_check(psoc, operating_channel[0]) &&
+	    !pm_ctx->sta_ap_intf_check_work_info)) {
 		struct sta_ap_intf_check_work_ctx *work_info;
 		work_info = qdf_mem_malloc(
 			sizeof(struct sta_ap_intf_check_work_ctx));
@@ -1086,6 +1285,52 @@ QDF_STATUS policy_mgr_set_connection_update(struct wlan_objmgr_psoc *psoc)
 
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		policy_mgr_err("set event failed");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS policy_mgr_set_chan_switch_complete_evt(
+		struct wlan_objmgr_psoc *psoc)
+{
+	QDF_STATUS status;
+	struct policy_mgr_psoc_priv_obj *policy_mgr_context;
+
+	policy_mgr_context = policy_mgr_get_context(psoc);
+
+	if (!policy_mgr_context) {
+		policy_mgr_err("Invalid context");
+		return QDF_STATUS_E_FAILURE;
+	}
+	status = qdf_event_set(
+			&policy_mgr_context->channel_switch_complete_evt);
+
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		policy_mgr_err("set event failed");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS policy_mgr_reset_chan_switch_complete_evt(
+		struct wlan_objmgr_psoc *psoc)
+{
+	QDF_STATUS status;
+	struct policy_mgr_psoc_priv_obj *policy_mgr_context;
+
+	policy_mgr_context = policy_mgr_get_context(psoc);
+
+	if (!policy_mgr_context) {
+		policy_mgr_err("Invalid context");
+		return QDF_STATUS_E_FAILURE;
+	}
+	status = qdf_event_reset(
+			&policy_mgr_context->channel_switch_complete_evt);
+
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		policy_mgr_err("reset event failed");
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -1220,22 +1465,30 @@ void policy_mgr_checkn_update_hw_mode_single_mac_mode(
 		return;
 	}
 
+	if (QDF_TIMER_STATE_RUNNING ==
+		pm_ctx->dbs_opportunistic_timer.state)
+		qdf_mc_timer_stop(&pm_ctx->dbs_opportunistic_timer);
+
 	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 	for (i = 0; i < MAX_NUMBER_OF_CONC_CONNECTIONS; i++) {
-		if (pm_conc_connection_list[i].in_use)
+		if (pm_conc_connection_list[i].in_use) {
 			if (!WLAN_REG_IS_SAME_BAND_CHANNELS(channel,
 				pm_conc_connection_list[i].chan)) {
 				qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 				policy_mgr_debug("DBS required");
 				return;
 			}
+			if (policy_mgr_is_hw_dbs_2x2_capable(psoc) &&
+			    (WLAN_REG_IS_24GHZ_CH(channel) ||
+			    WLAN_REG_IS_24GHZ_CH
+				(pm_conc_connection_list[i].chan))) {
+				qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
+				policy_mgr_debug("DBS required");
+				return;
+			}
+		}
 	}
 	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
-
-	if (QDF_TIMER_STATE_RUNNING ==
-		pm_ctx->dbs_opportunistic_timer.state)
-		qdf_mc_timer_stop(&pm_ctx->dbs_opportunistic_timer);
-
 	pm_dbs_opportunistic_timer_handler((void *)psoc);
 }
 
@@ -1388,7 +1641,7 @@ QDF_STATUS policy_mgr_update_connection_info_utfw(
 	policy_mgr_update_conc_list(psoc, conn_index,
 			policy_mgr_get_mode(type, sub_type),
 			channelid, HW_MODE_20_MHZ,
-			mac_id, chain_mask, 0, vdev_id, true);
+			mac_id, chain_mask, 0, vdev_id, true, true);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1400,6 +1653,8 @@ QDF_STATUS policy_mgr_incr_connection_count_utfw(struct wlan_objmgr_psoc *psoc,
 {
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 	uint32_t conn_index = 0;
+	bool update_conn = true;
+	enum policy_mgr_con_mode mode;
 
 	conn_index = policy_mgr_get_connection_count(psoc);
 	if (MAX_NUMBER_OF_CONC_CONNECTIONS <= conn_index) {
@@ -1410,10 +1665,15 @@ QDF_STATUS policy_mgr_incr_connection_count_utfw(struct wlan_objmgr_psoc *psoc,
 	}
 	policy_mgr_debug("--> filling entry at index[%d]", conn_index);
 
+	mode = policy_mgr_get_mode(type, sub_type);
+	if (mode == PM_STA_MODE || mode == PM_P2P_CLIENT_MODE)
+		update_conn = false;
+
 	policy_mgr_update_conc_list(psoc, conn_index,
-				policy_mgr_get_mode(type, sub_type),
+				mode,
 				channelid, HW_MODE_20_MHZ,
-				mac_id, chain_mask, 0, vdev_id, true);
+				mac_id, chain_mask, 0, vdev_id, true,
+				update_conn);
 
 	return QDF_STATUS_SUCCESS;
 }

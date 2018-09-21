@@ -80,12 +80,18 @@ struct wlan_regulatory_psoc_priv_obj {
 	struct wlan_psoc_host_hal_reg_capabilities_ext
 			reg_cap[PSOC_MAX_PHY_REG_CAP];
 	bool force_ssc_disable_indoor_channel;
+	bool enable_srd_chan_in_master_mode;
 	qdf_spinlock_t cbk_list_lock;
 };
 
 struct wlan_regulatory_pdev_priv_obj {
 	struct regulatory_channel cur_chan_list[NUM_CHANNELS];
 	struct regulatory_channel mas_chan_list[NUM_CHANNELS];
+#ifdef DISABLE_CHANNEL_LIST
+	struct regulatory_channel cache_disable_chan_list[NUM_CHANNELS];
+	uint32_t num_cache_channels;
+	bool disable_cached_channels;
+#endif
 	char default_country[REG_ALPHA2_LEN + 1];
 	uint16_t def_region_domain;
 	uint16_t def_country_code;

@@ -379,7 +379,7 @@ bool policy_mgr_is_any_dfs_beaconing_session_present(
 
 /**
  * policy_mgr_allow_concurrency() - Check for allowed concurrency
- * combination
+ * combination consulting the PCL
  * @psoc: PSOC object information
  * @mode:	new connection mode
  * @channel: channel on which new connection is coming up
@@ -507,6 +507,19 @@ QDF_STATUS policy_mgr_decr_connection_count(struct wlan_objmgr_psoc *psoc,
 QDF_STATUS policy_mgr_current_connections_update(struct wlan_objmgr_psoc *psoc,
 		uint32_t session_id, uint8_t channel,
 		enum policy_mgr_conn_update_reason);
+
+/**
+ * policy_mgr_is_dbs_allowed_for_concurrency() - If dbs is allowed for current
+ * concurreny
+ * @new_conn_mode: new connection mode
+ *
+ * When a new connection is about to come up, check if dbs is allowed for
+ * STA+STA or STA+P2P
+ *
+ * Return: true if dbs is allowed for STA+STA or STA+P2P else false
+ */
+bool policy_mgr_is_dbs_allowed_for_concurrency(
+		struct wlan_objmgr_psoc *psoc, enum QDF_OPMODE new_conn_mode);
 
 /**
  * policy_mgr_is_ibss_conn_exist() - to check if IBSS connection already present
@@ -676,6 +689,32 @@ static inline QDF_STATUS policy_mgr_decr_connection_count_utfw(
  */
 enum policy_mgr_con_mode policy_mgr_convert_device_mode_to_qdf_type(
 		enum QDF_OPMODE device_mode);
+
+/**
+ * policy_mgr_get_qdf_mode_from_pm - provides the
+ * type translation from policy manager type
+ * to generic connection mode type
+ * @device_mode: policy manager mode type
+ *
+ *
+ * This function provides the type translation
+ *
+ * Return: QDF_OPMODE enum
+ */
+enum QDF_OPMODE policy_mgr_get_qdf_mode_from_pm(
+			enum policy_mgr_con_mode device_mode);
+
+/**
+ * policy_mgr_check_n_start_opportunistic_timer - check single mac upgrade
+ * needed or not, if needed start the oppurtunistic timer.
+ * @psoc: pointer to SOC
+ *
+ * This function starts the oppurtunistic timer if hw_mode change is needed
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS policy_mgr_check_n_start_opportunistic_timer(
+		struct wlan_objmgr_psoc *psoc);
 
 /**
  * policy_mgr_pdev_set_hw_mode() - Set HW mode command to FW
@@ -1118,6 +1157,28 @@ QDF_STATUS policy_mgr_reset_connection_update(struct wlan_objmgr_psoc *psoc);
  * Return: QDF_STATUS
  */
 QDF_STATUS policy_mgr_set_connection_update(struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_set_chan_switch_complete_evt() - set channel
+ * switch completion event
+ * @psoc: PSOC object information
+ * Sets the channel switch completion event.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS policy_mgr_set_chan_switch_complete_evt(
+		struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_reset_chan_switch_complete_evt() - reset channel
+ * switch completion event
+ * @psoc: PSOC object information
+ * Resets the channel switch completion event.
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS policy_mgr_reset_chan_switch_complete_evt(
+		struct wlan_objmgr_psoc *psoc);
 
 /**
  * policy_mgr_set_opportunistic_update() - Set opportunistic
@@ -2275,6 +2336,24 @@ bool policy_mgr_is_sta_connected_2g(struct wlan_objmgr_psoc *psoc);
  */
 void policy_mgr_trim_acs_channel_list(struct wlan_objmgr_psoc *psoc,
 		uint8_t *org_ch_list, uint8_t *org_ch_list_count);
+
+/**
+ * policy_mgr_is_hwmode_set_for_given_chnl() - to check for given channel
+ * if the hw mode is properly set.
+ * @psoc: pointer to psoc
+ * @channel: given channel
+ *
+ * If HW mode is properly set for given channel then it returns true else
+ * it returns false.
+ * For example, when 2x2 DBS is supported and if the first connection is
+ * coming up on 2G band then driver expects DBS HW mode to be set first
+ * before the connection can be established. Driver can call this API to
+ * find-out if HW mode is set properly.
+ *
+ * Return: true if HW mode is set properly else false
+ */
+bool policy_mgr_is_hwmode_set_for_given_chnl(struct wlan_objmgr_psoc *psoc,
+					     uint8_t channel);
 /*
  * policy_mgr_get_connection_info() - Get info of all active connections
  * @info: Pointer to connection info
@@ -2335,5 +2414,65 @@ bool policy_mgr_dual_beacon_on_single_mac_scc_capable(
  */
 bool policy_mgr_dual_beacon_on_single_mac_mcc_capable(
 	struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_sta_sap_scc_on_lte_coex_chan() - get capability that
+ * whether support sta sap scc on lte coex chan
+ * @psoc: pointer to soc
+ *
+ *  Return: bool: capable
+ */
+bool policy_mgr_sta_sap_scc_on_lte_coex_chan(
+	struct wlan_objmgr_psoc *psoc);
+
+/**
+ * policy_mgr_valid_channel_for_channel_switch() - check for valid channel for
+ * channel switch.
+ * @psoc: poniter to psoc
+ * @channel: channel to be validated.
+ * This function validates whether the given channel is valid for channel
+ * switch.
+ *
+ * Return: true or false
+ */
+bool policy_mgr_is_valid_for_channel_switch(struct wlan_objmgr_psoc *psoc,
+					    uint8_t channel);
+
+/**
+ * policy_mgr_update_user_config_sap_chan() - Update user configured channel
+ * @psoc: poniter to psoc
+ * @channel: channel to be upated
+ *
+ * Return: void
+ **/
+void policy_mgr_update_user_config_sap_chan(
+			struct wlan_objmgr_psoc *psoc, uint32_t channel);
+
+/**
+ * policy_mgr_is_sap_restart_required_after_sta_disconnect() - is sap restart
+ * required
+ * after sta disconnection
+ * @psoc: psoc object data
+ * @intf_ch: sap channel
+ *
+ * Check if SAP should be moved to a non dfs channel after STA disconnection.
+ * This API applicable only for STA+SAP SCC and ini 'sta_sap_scc_on_dfs_chan'
+ * or 'sta_sap_scc_on_lte_coex_chan' is enabled.
+ *
+ * Return: true if sap restart is required, otherwise false
+ */
+bool policy_mgr_is_sap_restart_required_after_sta_disconnect(
+			struct wlan_objmgr_psoc *psoc, uint8_t *intf_ch);
+
+/**
+ * policy_mgr_is_sta_sap_scc() - check whether SAP is doing SCC with
+ * STA
+ * @psoc: poniter to psoc
+ * @sap_ch: operating channel of SAP
+ * This function checks whether SAP is doing SCC with STA
+ *
+ * Return: true or false
+ */
+bool policy_mgr_is_sta_sap_scc(struct wlan_objmgr_psoc *psoc, uint8_t sap_ch);
 
 #endif /* __WLAN_POLICY_MGR_API_H */

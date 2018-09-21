@@ -33,6 +33,7 @@
 #include "wlan_objmgr_psoc_obj.h"
 #include "wlan_objmgr_pdev_obj.h"
 #include "wlan_objmgr_vdev_obj.h"
+#include "wlan_objmgr_peer_obj.h"
 #include "wlan_utility.h"
 
 /* NLA policy */
@@ -130,11 +131,24 @@ vendor_attr_policy[QCA_WLAN_VENDOR_ATTR_NDP_PARAMS_MAX + 1] = {
 						.type = NLA_U32,
 						.len = sizeof(uint32_t)
 	},
+	[QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR] = {
+						.type = NLA_UNSPEC,
+						.len = QDF_IPV6_ADDR_SIZE
+	},
+	[QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PORT] = {
+						.type = NLA_U16,
+						.len = sizeof(uint16_t)
+	},
+	[QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL] = {
+						.type = NLA_U8,
+						.len = sizeof(uint8_t)
+	},
 };
 
 static int os_if_nan_process_ndi_create(struct wlan_objmgr_psoc *psoc,
 					struct nlattr **tb)
 {
+	int ret;
 	char *iface_name;
 	QDF_STATUS status;
 	uint16_t transaction_id;
@@ -169,21 +183,24 @@ static int os_if_nan_process_ndi_create(struct wlan_objmgr_psoc *psoc,
 		return -EINVAL;
 	}
 
-	nan_vdev = cb_obj.ndi_open(iface_name);
-
-	if (!nan_vdev) {
+	ret = cb_obj.ndi_open(iface_name);
+	if (ret) {
 		cfg80211_err("ndi_open failed");
-		return -EINVAL;
+		return ret;
 	}
 
-	/*
-	 * Create transaction id is required to be saved since the firmware
-	 * does not honor the transaction id for create request
-	 */
-	ucfg_nan_set_ndp_create_transaction_id(nan_vdev, transaction_id);
-	ucfg_nan_set_ndi_state(nan_vdev, NAN_DATA_NDI_CREATING_STATE);
+	return cb_obj.ndi_start(iface_name, transaction_id);
+}
 
-	return cb_obj.ndi_start(wlan_vdev_get_id(nan_vdev));
+static void os_if_nan_vdev_delete_peer(struct wlan_objmgr_psoc *psoc,
+				       void *peer, void *nan_vdev)
+{
+	/* if peer belongs to nan vdev */
+	if (nan_vdev == wlan_peer_get_vdev(peer)) {
+		cfg80211_debug("deleting peer: %pM",
+			       wlan_peer_get_macaddr(peer));
+		wlan_objmgr_peer_obj_delete(peer);
+	}
 }
 
 static int os_if_nan_process_ndi_delete(struct wlan_objmgr_psoc *psoc,
@@ -219,6 +236,12 @@ static int os_if_nan_process_ndi_delete(struct wlan_objmgr_psoc *psoc,
 		nla_get_u16(tb[QCA_WLAN_VENDOR_ATTR_NDP_TRANSACTION_ID]);
 	vdev_id = wlan_vdev_get_id(nan_vdev);
 	num_peers = ucfg_nan_get_active_peers(nan_vdev);
+
+	/* delete all peer for this interface first */
+	wlan_objmgr_iterate_obj_list(psoc, WLAN_PEER_OP,
+				     os_if_nan_vdev_delete_peer,
+				     nan_vdev, 1, WLAN_NAN_ID);
+
 	/*
 	 * wlan_util_get_vdev_by_ifname increments ref count
 	 * decrement here since vdev returned by that api is not used any more
@@ -347,7 +370,8 @@ static int os_if_nan_process_ndp_initiator_req(struct wlan_objmgr_psoc *psoc,
 
 	if (nan_vdev->vdev_mlme.vdev_opmode != QDF_NDI_MODE) {
 		cfg80211_err("Interface found is not NDI");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto initiator_req_failed;
 	}
 
 	state = ucfg_nan_get_ndi_state(nan_vdev);
@@ -416,6 +440,15 @@ static int os_if_nan_process_ndp_initiator_req(struct wlan_objmgr_psoc *psoc,
 			nla_get_u32(tb[QCA_WLAN_VENDOR_ATTR_NDP_CONFIG_QOS]);
 	}
 
+	if (tb[QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR]) {
+		req.is_ipv6_addr_present = true;
+		qdf_mem_copy(req.ipv6_addr,
+			     nla_data(tb[QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR]),
+			     QDF_IPV6_ADDR_SIZE);
+	}
+	cfg80211_debug("ipv6 addr present: %d, addr: %pI6",
+		       req.is_ipv6_addr_present, req.ipv6_addr);
+
 	if (os_if_nan_parse_security_params(tb, &req.ncs_sk_type, &req.pmk,
 			&req.passphrase, &req.service_name)) {
 		cfg80211_err("inconsistent security params in request.");
@@ -428,10 +461,12 @@ static int os_if_nan_process_ndp_initiator_req(struct wlan_objmgr_psoc *psoc,
 		req.service_instance_id, req.ndp_info.ndp_app_info_len,
 		req.ncs_sk_type, req.peer_discovery_mac_addr.bytes);
 
+	req.vdev = nan_vdev;
 	status = ucfg_nan_req_processor(nan_vdev, &req, NDP_INITIATOR_REQ);
 	ret = qdf_status_to_os_return(status);
 initiator_req_failed:
-	wlan_objmgr_vdev_release_ref(nan_vdev, WLAN_NAN_ID);
+	if (ret)
+		wlan_objmgr_vdev_release_ref(nan_vdev, WLAN_NAN_ID);
 
 	return ret;
 }
@@ -467,33 +502,32 @@ static int os_if_nan_process_ndp_responder_req(struct wlan_objmgr_psoc *psoc,
 
 	if (!tb[QCA_WLAN_VENDOR_ATTR_NDP_RESPONSE_CODE]) {
 		cfg80211_err("ndp_rsp is unavailable");
-		ret = -EINVAL;
-		goto responder_req_failed;
+		return -EINVAL;
 	}
 	req.ndp_rsp = nla_get_u32(tb[QCA_WLAN_VENDOR_ATTR_NDP_RESPONSE_CODE]);
 
 	if (req.ndp_rsp == NAN_DATAPATH_RESPONSE_ACCEPT) {
-		if (tb[QCA_WLAN_VENDOR_ATTR_NDP_IFACE_STR]) {
-			iface_name =
-				nla_data(
-					tb[QCA_WLAN_VENDOR_ATTR_NDP_IFACE_STR]);
+		if (!tb[QCA_WLAN_VENDOR_ATTR_NDP_IFACE_STR]) {
+			cfg80211_err("Interface not provided");
+			return -ENODEV;
+		}
+		iface_name = nla_data(tb[QCA_WLAN_VENDOR_ATTR_NDP_IFACE_STR]);
 
-			/* Check for an existing NAN interface */
-			nan_vdev = wlan_util_get_vdev_by_ifname(psoc,
-					iface_name, WLAN_NAN_ID);
-			if (!nan_vdev) {
-				cfg80211_err("NAN data iface %s not available",
-					iface_name);
-				return -ENODEV;
-			}
+		/* Check for an existing NAN interface */
+		nan_vdev = wlan_util_get_vdev_by_ifname(psoc, iface_name,
+							WLAN_NAN_ID);
+		if (!nan_vdev) {
+			cfg80211_err("NAN data iface %s not available",
+				     iface_name);
+			return -ENODEV;
+		}
 
-			if (nan_vdev->vdev_mlme.vdev_opmode != QDF_NDI_MODE) {
-				cfg80211_err("Interface found is not NDI");
-				return -ENODEV;
-			}
+		if (nan_vdev->vdev_mlme.vdev_opmode != QDF_NDI_MODE) {
+			cfg80211_err("Interface found is not NDI");
+			ret = -ENODEV;
+			goto responder_req_failed;
 		}
 	} else {
-
 		/*
 		 * If the data indication is rejected, the userspace
 		 * may not send the iface name. Use the first NDI
@@ -518,8 +552,6 @@ static int os_if_nan_process_ndp_responder_req(struct wlan_objmgr_psoc *psoc,
 		ret = -EAGAIN;
 		goto responder_req_failed;
 	}
-
-	req.vdev = nan_vdev;
 
 	if (!tb[QCA_WLAN_VENDOR_ATTR_NDP_TRANSACTION_ID]) {
 		cfg80211_err("Transaction ID is unavailable");
@@ -556,6 +588,28 @@ static int os_if_nan_process_ndp_responder_req(struct wlan_objmgr_psoc *psoc,
 		cfg80211_debug("NDP config data is unavailable");
 	}
 
+	if (tb[QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR]) {
+		req.is_ipv6_addr_present = true;
+		qdf_mem_copy(req.ipv6_addr,
+			     nla_data(tb[QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR]),
+			     QDF_IPV6_ADDR_SIZE);
+	}
+	if (tb[QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PORT]) {
+		req.is_port_present = true;
+		req.port = nla_get_u16(
+			tb[QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PORT]);
+	}
+	if (tb[QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL]) {
+		req.is_protocol_present = true;
+		req.protocol = nla_get_u8(
+			tb[QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL]);
+	}
+	cfg80211_debug("ipv6 addr present: %d, addr: %pI6",
+		       req.is_ipv6_addr_present, req.ipv6_addr);
+	cfg80211_debug("port %d,  present: %d", req.port, req.is_port_present);
+	cfg80211_debug("protocol %d,  present: %d",
+		       req.protocol, req.is_protocol_present);
+
 	if (os_if_nan_parse_security_params(tb, &req.ncs_sk_type, &req.pmk,
 			&req.passphrase, &req.service_name)) {
 		cfg80211_err("inconsistent security params in request.");
@@ -568,11 +622,13 @@ static int os_if_nan_process_ndp_responder_req(struct wlan_objmgr_psoc *psoc,
 		req.ndp_instance_id, req.ndp_info.ndp_app_info_len,
 		req.ncs_sk_type);
 
+	req.vdev = nan_vdev;
 	status = ucfg_nan_req_processor(nan_vdev, &req, NDP_RESPONDER_REQ);
 	ret = qdf_status_to_os_return(status);
 
 responder_req_failed:
-	wlan_objmgr_vdev_release_ref(nan_vdev, WLAN_NAN_ID);
+	if (ret)
+		wlan_objmgr_vdev_release_ref(nan_vdev, WLAN_NAN_ID);
 
 	return ret;
 
@@ -629,9 +685,11 @@ static int os_if_nan_process_ndp_end_req(struct wlan_objmgr_psoc *psoc,
 		return -EINVAL;
 	}
 
+	req.vdev = nan_vdev;
 	status = ucfg_nan_req_processor(nan_vdev, &req, NDP_END_REQ);
 	ret = qdf_status_to_os_return(status);
-	wlan_objmgr_vdev_release_ref(nan_vdev, WLAN_NAN_ID);
+	if (ret)
+		wlan_objmgr_vdev_release_ref(nan_vdev, WLAN_NAN_ID);
 
 	return ret;
 }
@@ -882,6 +940,9 @@ static inline uint32_t osif_ndp_get_ndp_req_ind_len(
 			QCA_WLAN_VENDOR_ATTR_NDP_NDI_MAC_ADDR].len);
 	data_len += nla_total_size(vendor_attr_policy[
 			QCA_WLAN_VENDOR_ATTR_NDP_PEER_DISCOVERY_MAC_ADDR].len);
+	if (event->is_ipv6_addr_present)
+		data_len += nla_total_size(vendor_attr_policy[
+				QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR].len);
 	if (event->scid.scid_len)
 		data_len += nla_total_size(event->scid.scid_len);
 	if (event->ndp_info.ndp_app_info_len)
@@ -907,6 +968,7 @@ static inline uint32_t osif_ndp_get_ndp_req_ind_len(
  * QCA_WLAN_VENDOR_ATTR_NDP_CONFIG_QOS (4 bytes)
  * QCA_WLAN_VENDOR_ATTR_NDP_CSID(4 bytes)
  * QCA_WLAN_VENDOR_ATTR_NDP_SCID(scid_len in size)
+ * QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR (16 bytes)
  *
  * Return: none
  */
@@ -1021,6 +1083,14 @@ static void os_if_ndp_indication_handler(struct wlan_objmgr_vdev *vdev,
 				   event->scid.scid, event->scid.scid_len);
 	}
 
+	if (event->is_ipv6_addr_present) {
+		if (nla_put(vendor_event, QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR,
+			    QDF_IPV6_ADDR_SIZE, event->ipv6_addr))
+			goto ndp_indication_nla_failed;
+	}
+	cfg80211_debug("ipv6 addr present: %d, addr: %pI6",
+		       event->is_ipv6_addr_present, event->ipv6_addr);
+
 	cfg80211_vendor_event(vendor_event, GFP_ATOMIC);
 	return;
 ndp_indication_nla_failed:
@@ -1050,6 +1120,16 @@ static inline uint32_t osif_ndp_get_ndp_confirm_ind_len(
 	if (ndp_confirm->ndp_info.ndp_app_info_len)
 		data_len +=
 			nla_total_size(ndp_confirm->ndp_info.ndp_app_info_len);
+
+	if (ndp_confirm->is_ipv6_addr_present)
+		data_len += nla_total_size(vendor_attr_policy[
+			QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR].len);
+	if (ndp_confirm->is_port_present)
+		data_len += nla_total_size(vendor_attr_policy[
+			QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PORT].len);
+	if (ndp_confirm->is_protocol_present)
+		data_len += nla_total_size(vendor_attr_policy[
+			QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL].len);
 
 	/* ch_info is a nested array of following attributes */
 	ch_info_len += nla_total_size(
@@ -1121,6 +1201,9 @@ static QDF_STATUS os_if_ndp_confirm_pack_ch_info(struct sk_buff *event,
  * QCA_WLAN_VENDOR_ATTR_NDP_APP_INFO (ndp_app_info_len size)
  * QCA_WLAN_VENDOR_ATTR_NDP_RESPONSE_CODE (4 bytes)
  * QCA_WLAN_VENDOR_ATTR_NDP_DRV_RETURN_VALUE (4 bytes)
+ * QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR (16 bytes)
+ * QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PORT (2 bytes)
+ * QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL (1 byte)
  *
  * Return: none
  */
@@ -1225,6 +1308,29 @@ os_if_ndp_confirm_ind_handler(struct wlan_objmgr_vdev *vdev,
 	status = os_if_ndp_confirm_pack_ch_info(vendor_event, ndp_confirm);
 	if (QDF_IS_STATUS_ERROR(status))
 		goto ndp_confirm_nla_failed;
+
+	if (ndp_confirm->is_ipv6_addr_present) {
+		if (nla_put(vendor_event, QCA_WLAN_VENDOR_ATTR_NDP_IPV6_ADDR,
+			    QDF_IPV6_ADDR_SIZE, ndp_confirm->ipv6_addr))
+			goto ndp_confirm_nla_failed;
+	}
+	if (ndp_confirm->is_port_present)
+		if (nla_put_u16(vendor_event,
+				QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PORT,
+				ndp_confirm->port))
+			goto ndp_confirm_nla_failed;
+	if (ndp_confirm->is_protocol_present)
+		if (nla_put_u8(vendor_event,
+			       QCA_WLAN_VENDOR_ATTR_NDP_TRANSPORT_PROTOCOL,
+			       ndp_confirm->protocol))
+			goto ndp_confirm_nla_failed;
+	cfg80211_debug("ipv6 addr present: %d, addr: %pI6",
+		       ndp_confirm->is_ipv6_addr_present,
+		       ndp_confirm->ipv6_addr);
+	cfg80211_debug("port %d,  present: %d",
+		       ndp_confirm->port, ndp_confirm->is_port_present);
+	cfg80211_debug("protocol %d,  present: %d",
+		       ndp_confirm->protocol, ndp_confirm->is_protocol_present);
 
 	cfg80211_vendor_event(vendor_event, GFP_ATOMIC);
 	cfg80211_debug("NDP confim sent, ndp instance id: %d, peer addr: %pM rsp_code: %d, reason_code: %d",
@@ -1459,9 +1565,9 @@ static void os_if_new_peer_ind_handler(struct wlan_objmgr_vdev *vdev,
 		return;
 	}
 
-	cfg80211_debug("session_id: %d, peer_mac: %pM, sta_id: %d",
-		peer_ind->session_id, peer_ind->peer_mac_addr.bytes,
-		peer_ind->sta_id);
+	cfg80211_debug("vdev_id: %d, peer_mac: %pM, sta_id: %d",
+		       vdev_id, peer_ind->peer_mac_addr.bytes,
+		       peer_ind->sta_id);
 	ret = cb_obj.new_peer_ind(vdev_id, peer_ind->sta_id,
 				&peer_ind->peer_mac_addr,
 				(active_peers == 0 ? true : false));
@@ -1501,9 +1607,9 @@ static void os_if_peer_departed_ind_handler(struct wlan_objmgr_vdev *vdev,
 		cfg80211_err("Invalid new NDP peer params");
 		return;
 	}
-	cfg80211_debug("session_id: %d, peer_mac: %pM, sta_id: %d",
-		peer_ind->session_id, peer_ind->peer_mac_addr.bytes,
-		peer_ind->sta_id);
+	cfg80211_debug("vdev_id: %d, peer_mac: %pM, sta_id: %d",
+		       vdev_id, peer_ind->peer_mac_addr.bytes,
+		       peer_ind->sta_id);
 	active_peers--;
 	ucfg_nan_set_active_peers(vdev, active_peers);
 	cb_obj.peer_departed_ind(vdev_id, peer_ind->sta_id,

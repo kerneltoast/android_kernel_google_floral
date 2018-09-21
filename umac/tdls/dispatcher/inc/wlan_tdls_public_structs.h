@@ -74,8 +74,9 @@
 #define TDLS_TEARDOWN_PEER_UNREACHABLE   25
 #define TDLS_TEARDOWN_PEER_UNSPEC_REASON 26
 
+#define INVALID_TDLS_PEER_ID 0xFF
 #define TDLS_STA_INDEX_CHECK(sta_id) \
-	(((sta_id) >= 1) && ((sta_id) < 0xFF))
+	(((sta_id) >= 0) && ((sta_id) < 0xFF))
 /**
  * enum tdls_conc_cap - tdls concurrency support
  * @TDLS_SUPPORTED_ONLY_ON_STA: only support sta tdls
@@ -562,6 +563,9 @@ typedef QDF_STATUS
 				      uint32_t vdev_param,
 				      bool is_link_up);
 
+/* This callback is to release vdev ref for tdls sta notify msg */
+typedef void (*tdls_sta_notify_callback)(struct wlan_objmgr_vdev *vdev);
+
 /**
  * struct tdls_start_params - tdls start params
  * @config: tdls user config
@@ -1040,6 +1044,7 @@ struct tdls_sta_notify_params {
 	bool lfr_roam;
 	bool user_disconnect;
 	uint8_t session_id;
+	tdls_sta_notify_callback callback;
 };
 
 /**

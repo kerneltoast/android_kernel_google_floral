@@ -43,7 +43,9 @@
 #ifdef WLAN_FEATURE_DISA
 #include "wlan_disa_public_struct.h"
 #endif
-
+#ifdef WLAN_FEATURE_ACTION_OUI
+#include "wlan_action_oui_public_struct.h"
+#endif
 #ifdef WLAN_FEATURE_NAN_CONVERGENCE
 #include "nan_public_structs.h"
 #endif
@@ -404,10 +406,6 @@ QDF_STATUS wmi_unified_vdev_create_send(void *wmi_hdl,
 
 QDF_STATUS wmi_unified_vdev_delete_send(void *wmi_hdl,
 					  uint8_t if_id);
-
-QDF_STATUS wmi_unified_vdev_restart_send(void *wmi_hdl,
-				uint8_t macaddr[IEEE80211_ADDR_LEN],
-				struct vdev_start_params *param);
 
 QDF_STATUS wmi_unified_vdev_stop_send(void *wmi_hdl,
 					uint8_t vdev_id);
@@ -1096,18 +1094,75 @@ QDF_STATUS wmi_unified_roam_scan_offload_rssi_change_cmd(void *wmi_hdl,
 QDF_STATUS wmi_unified_set_per_roam_config(void *wmi_hdl,
 		struct wmi_per_roam_config_req *req_buf);
 
+#ifdef FEATURE_WLAN_APF
 /**
- * wmi_unified_set_active_bpf_mode_cmd() - config active BPF mode in FW
- * @wmi_hdl: the WMI handle
+ * wmi_unified_set_active_apf_mode_cmd() - config active APF mode in FW
+ * @wmi: the WMI handle
  * @vdev_id: the Id of the vdev to apply the configuration to
- * @ucast_mode: the active BPF mode to configure for unicast packets
- * @mcast_bcast_mode: the active BPF mode to configure for multicast/broadcast
+ * @ucast_mode: the active APF mode to configure for unicast packets
+ * @mcast_bcast_mode: the active APF mode to configure for multicast/broadcast
  *	packets
  */
-QDF_STATUS wmi_unified_set_active_bpf_mode_cmd(void *wmi_hdl,
-				uint8_t vdev_id,
-				enum wmi_host_active_bpf_mode ucast_mode,
-				enum wmi_host_active_bpf_mode mcast_bcast_mode);
+QDF_STATUS
+wmi_unified_set_active_apf_mode_cmd(wmi_unified_t wmi, uint8_t vdev_id,
+				    enum wmi_host_active_apf_mode ucast_mode,
+				    enum wmi_host_active_apf_mode
+							      mcast_bcast_mode);
+
+/**
+ * wmi_unified_send_apf_enable_cmd() - send apf enable/disable cmd
+ * @wmi: wmi handle
+ * @vdev_id: VDEV id
+ * @enable: true: enable, false: disable
+ *
+ * This function passes the apf enable command to fw
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_apf_enable_cmd(wmi_unified_t wmi,
+					   uint32_t vdev_id, bool enable);
+
+/**
+ * wmi_unified_send_apf_write_work_memory_cmd() - send cmd to write into the APF
+ *	work memory.
+ * @wmi: wmi handle
+ * @write_params: parameters and buffer pointer for the write
+ *
+ * This function passes the write apf work mem command to fw
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_apf_write_work_memory_cmd(wmi_unified_t wmi,
+			struct wmi_apf_write_memory_params *write_params);
+
+/**
+ * wmi_unified_send_apf_read_work_memory_cmd() - send cmd to read part of APF
+ *	work memory
+ * @wmi: wmi handle
+ * @read_params: contains relative address and length to read from
+ *
+ * This function passes the read apf work mem command to fw
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_send_apf_read_work_memory_cmd(wmi_unified_t wmi,
+				struct wmi_apf_read_memory_params *read_params);
+
+/**
+ * wmi_extract_apf_read_memory_resp_event() - exctract read mem resp event
+ * @wmi: wmi handle
+ * @evt_buf: Pointer to the event buffer
+ * @resp: pointer to memory to extract event parameters into
+ *
+ * This function exctracts read mem response event into the given structure ptr
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_extract_apf_read_memory_resp_event(wmi_unified_t wmi, void *evt_buf,
+				struct wmi_apf_read_memory_resp_event_params
+								*read_mem_evt);
+#endif /* FEATURE_WLAN_APF */
 
 QDF_STATUS wmi_unified_stats_request_send(void *wmi_hdl,
 				uint8_t macaddr[IEEE80211_ADDR_LEN],
@@ -1729,6 +1784,31 @@ QDF_STATUS wmi_unified_extract_sar_limit_event(void *wmi_hdl,
 					       uint8_t *evt_buf,
 					       struct sar_limit_event *event);
 
+/**
+ * wmi_unified_extract_sar2_result_event() - extract SAR limits from FW event
+ * @handle: wmi handle
+ * @event: event buffer received from firmware
+ * @len: length of the event buffer
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_unified_extract_sar2_result_event(void *handle,
+						 uint8_t *event, uint32_t len);
+
+/**
+ * wmi_extract_sar_cap_service_ready_ext() - extract SAR cap from
+ *					     FW service ready event
+ * @wmi_hdl: wmi handle
+ * @evt_buf: event buffer received from firmware
+ * @ext_param: extended target info
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+QDF_STATUS wmi_extract_sar_cap_service_ready_ext(
+			void *wmi_hdl,
+			uint8_t *evt_buf,
+			struct wlan_psoc_host_service_ext_param *ext_param);
+
 QDF_STATUS wmi_unified_send_adapt_dwelltime_params_cmd(void *wmi_hdl,
 				   struct wmi_adaptive_dwelltime_params *
 				   wmi_param);
@@ -1853,6 +1933,20 @@ QDF_STATUS wmi_unified_dfs_phyerr_offload_dis_cmd(void *wmi_hdl,
 
 QDF_STATUS wmi_unified_set_country_cmd_send(void *wmi_hdl,
 				struct set_country *param);
+
+#ifdef WLAN_FEATURE_ACTION_OUI
+/**
+ * wmi_unified_send_action_oui_cmd() - send action oui cmd to fw
+ * @wmi_hdl: wma handle
+ * @req: wmi action oui message to be send
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS
+wmi_unified_send_action_oui_cmd(void *wmi_hdl,
+				struct action_oui_request *req);
+#endif /* WLAN_FEATURE_ACTION_OUI */
+
 /*
  * wmi_unified_set_del_pmkid_cache() - set delete PMKID
  * @wmi_hdl: wma handle
@@ -2274,4 +2368,8 @@ wmi_unified_dfs_send_avg_params_cmd(void *wmi_hdl,
 QDF_STATUS wmi_extract_dfs_status_from_fw(void *wmi_hdl, void *evt_buf,
 					  uint32_t  *dfs_status_check);
 #endif
+
+void wmi_process_fw_event_worker_thread_ctx(struct wmi_unified *wmi_handle,
+					    HTC_PACKET *htc_packet);
+
 #endif /* _WMI_UNIFIED_API_H_ */

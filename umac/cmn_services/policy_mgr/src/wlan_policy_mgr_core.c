@@ -526,6 +526,8 @@ QDF_STATUS policy_mgr_get_old_and_new_hw_index(
  * @chain_mask: Chain mask
  * @vdev_id: vdev id
  * @in_use: Flag to indicate if the index is in use or not
+ * @update_conn: Flag to indicate if mode change event should
+ *  be sent or not
  *
  * Updates the index value of the concurrent connection list
  *
@@ -540,7 +542,8 @@ void policy_mgr_update_conc_list(struct wlan_objmgr_psoc *psoc,
 		enum policy_mgr_chain_mode chain_mask,
 		uint32_t original_nss,
 		uint32_t vdev_id,
-		bool in_use)
+		bool in_use,
+		bool update_conn)
 {
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
 	bool mcc_mode;
@@ -568,7 +571,13 @@ void policy_mgr_update_conc_list(struct wlan_objmgr_psoc *psoc,
 	pm_conc_connection_list[conn_index].in_use = in_use;
 	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 
-	if (pm_ctx->mode_change_cb)
+	/*
+	 * For STA and P2P client mode, the mode change event sent as part
+	 * of the callback causes delay in processing M1 frame at supplicant
+	 * resulting in cert test case failure. The mode change event is sent
+	 * as part of add key for STA and P2P client mode.
+	 */
+	if (pm_ctx->mode_change_cb && update_conn)
 		pm_ctx->mode_change_cb();
 
 	policy_mgr_dump_connection_status_info(psoc);
@@ -1206,7 +1215,6 @@ void policy_mgr_pdev_set_pcl(struct wlan_objmgr_psoc *psoc,
 		policy_mgr_debug("Set PCL to FW for mode:%d", mode);
 }
 
-
 /**
  * policy_mgr_set_pcl_for_existing_combo() - Set PCL for existing connection
  * @mode: Connection mode of type 'policy_mgr_con_mode'
@@ -1230,26 +1238,9 @@ void policy_mgr_set_pcl_for_existing_combo(
 		return;
 	}
 
-	switch (mode) {
-	case PM_STA_MODE:
-		pcl_mode = QDF_STA_MODE;
-		break;
-	case PM_SAP_MODE:
-		pcl_mode = QDF_SAP_MODE;
-		break;
-	case PM_P2P_CLIENT_MODE:
-		pcl_mode = QDF_P2P_CLIENT_MODE;
-		break;
-	case PM_P2P_GO_MODE:
-		pcl_mode = QDF_P2P_GO_MODE;
-		break;
-	case PM_IBSS_MODE:
-		pcl_mode = QDF_IBSS_MODE;
-		break;
-	default:
-		policy_mgr_err("Invalid mode to set PCL");
+	pcl_mode = policy_mgr_get_qdf_mode_from_pm(mode);
+	if (pcl_mode == QDF_MAX_NO_OF_MODE)
 		return;
-	};
 	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 	if (policy_mgr_mode_specific_connection_count(psoc, mode, NULL) > 0) {
 		/* Check, store and temp delete the mode's parameter */
@@ -1733,7 +1724,7 @@ void policy_mgr_set_weight_of_dfs_passive_channels_to_zero(
 {
 	uint8_t i;
 	uint32_t orig_channel_count = 0;
-	bool mcc_to_scc_mode;
+	bool sta_sap_scc_on_dfs_chan;
 	uint32_t sap_count;
 	enum channel_state channel_state;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
@@ -1744,13 +1735,14 @@ void policy_mgr_set_weight_of_dfs_passive_channels_to_zero(
 		return;
 	}
 
-	mcc_to_scc_mode = policy_mgr_is_force_scc(psoc);
+	sta_sap_scc_on_dfs_chan =
+		policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(psoc);
 	sap_count = policy_mgr_mode_specific_connection_count(psoc,
 			PM_SAP_MODE, NULL);
-	policy_mgr_debug("mcc_to_scc_mode %u, sap_count %u", mcc_to_scc_mode,
-			sap_count);
+	policy_mgr_debug("sta_sap_scc_on_dfs_chan %u, sap_count %u",
+			 sta_sap_scc_on_dfs_chan, sap_count);
 
-	if (!mcc_to_scc_mode || !sap_count)
+	if (!sta_sap_scc_on_dfs_chan || !sap_count)
 		return;
 
 	if (len)
@@ -1808,8 +1800,10 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 	uint8_t channel_list_5[QDF_MAX_NUM_CHAN] = {0};
 	uint8_t sbs_channel_list[QDF_MAX_NUM_CHAN] = {0};
 	bool skip_dfs_channel = false;
+	bool is_etsi13_srd_chan_allowed_in_mas_mode = true;
 	uint32_t i = 0, j = 0;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
+	bool sta_sap_scc_on_dfs_chan;
 
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
@@ -1844,11 +1838,20 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 	 * if you have atleast one STA connection then don't fill DFS channels
 	 * in the preferred channel list
 	 */
-	if (((mode == PM_SAP_MODE) || (mode == PM_P2P_GO_MODE)) &&
-	    (policy_mgr_mode_specific_connection_count(
-		psoc, PM_STA_MODE, NULL) > 0)) {
-		policy_mgr_debug("STA present, skip DFS channels from pcl for SAP/Go");
-		skip_dfs_channel = true;
+	sta_sap_scc_on_dfs_chan =
+		policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(psoc);
+	policy_mgr_debug("sta_sap_scc_on_dfs_chan %u", sta_sap_scc_on_dfs_chan);
+	if ((mode == PM_SAP_MODE) || (mode == PM_P2P_GO_MODE)) {
+		if ((policy_mgr_mode_specific_connection_count(psoc,
+							       PM_STA_MODE,
+							       NULL) > 0) &&
+		    (!sta_sap_scc_on_dfs_chan)) {
+			policy_mgr_debug("skip DFS ch from pcl for SAP/Go");
+			skip_dfs_channel = true;
+		}
+		is_etsi13_srd_chan_allowed_in_mas_mode =
+			wlan_reg_is_etsi13_srd_chan_allowed_master_mode(pm_ctx->
+									pdev);
 	}
 
 	/* Let's divide the list in 2.4 & 5 Ghz lists */
@@ -1878,6 +1881,12 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 		if ((true == skip_dfs_channel) &&
 		    wlan_reg_is_dfs_ch(pm_ctx->pdev,
 				       channel_list[chan_index])) {
+			chan_index++;
+			continue;
+		}
+		if (!is_etsi13_srd_chan_allowed_in_mas_mode &&
+		    wlan_reg_is_etsi13_srd_chan(pm_ctx->pdev,
+						channel_list[chan_index])) {
 			chan_index++;
 			continue;
 		}
@@ -2218,9 +2227,11 @@ QDF_STATUS policy_mgr_get_channel_list(struct wlan_objmgr_psoc *psoc,
 		policy_mgr_debug("pcl len (%d) and weight list len mismatch (%d)",
 			*len, i);
 
-	/* check the channel avoidance list */
-	policy_mgr_update_with_safe_channel_list(psoc, pcl_channels, len,
-				pcl_weights, weight_len);
+	/* check the channel avoidance list for beaconing entities */
+	if ((mode == PM_SAP_MODE) || (mode == PM_P2P_GO_MODE))
+		policy_mgr_update_with_safe_channel_list(psoc, pcl_channels,
+							 len, pcl_weights,
+							 weight_len);
 
 	policy_mgr_set_weight_of_dfs_passive_channels_to_zero(psoc,
 			pcl_channels, len, pcl_weights, weight_len);
