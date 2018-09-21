@@ -157,6 +157,8 @@ sapSafeChannelType safe_channels[NUM_CHANNELS] = {
 	{157, true},
 	{161, true},
 	{165, true},
+	{169, true},
+	{173, true},
 };
 #endif
 
@@ -419,11 +421,6 @@ void sap_update_unsafe_channel_list(tHalHandle hal, struct sap_context *sap_ctx)
 		return;
 	}
 	mac_ctx = PMAC_STRUCT(hal);
-	if (!mac_ctx) {
-		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_FATAL,
-			  "mac_ctx is NULL");
-		return;
-	}
 
 	/* Flush, default set all channel safe */
 	for (i = 0; i < NUM_CHANNELS; i++) {
@@ -595,6 +592,8 @@ static bool sap_chan_sel_init(tHalHandle halHandle,
 	uint32_t dfs_master_cap_enabled;
 	bool include_dfs_ch = true;
 	uint8_t chan_num;
+	bool sta_sap_scc_on_dfs_chan =
+		policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(pMac->psoc);
 
 	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH, "In %s",
 		  __func__);
@@ -604,8 +603,9 @@ static bool sap_chan_sel_init(tHalHandle halHandle,
 
 	/* Allocate memory for weight computation of 2.4GHz */
 	pSpectCh =
-		(tSapSpectChInfo *) qdf_mem_malloc((pSpectInfoParams->numSpectChans)
-						   * sizeof(*pSpectCh));
+		(tSapSpectChInfo *)qdf_mem_malloc(
+					(pSpectInfoParams->numSpectChans) *
+					sizeof(*pSpectCh));
 
 	if (pSpectCh == NULL) {
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
@@ -634,9 +634,18 @@ static bool sap_chan_sel_init(tHalHandle halHandle,
 	     channelnum++, pChans++, pSpectCh++) {
 		chSafe = true;
 
+		pSpectCh->chNum = *pChans;
+		/* Initialise for all channels */
+		pSpectCh->rssiAgr = SOFTAP_MIN_RSSI;
+		/* Initialise 20MHz for all the Channels */
+		pSpectCh->channelWidth = SOFTAP_HT20_CHANNELWIDTH;
+		/* Initialise max ACS weight for all channels */
+		pSpectCh->weight = SAP_ACS_WEIGHT_MAX;
+
 		/* check if the channel is in NOL blacklist */
-		if (sap_dfs_is_channel_in_nol_list(sap_ctx, *pChans,
-						   PHY_SINGLE_CHANNEL_CENTERED)) {
+		if (sap_dfs_is_channel_in_nol_list(
+					sap_ctx, *pChans,
+					PHY_SINGLE_CHANNEL_CENTERED)) {
 			QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH,
 				  "In %s, Ch %d is in NOL list", __func__,
 				  *pChans);
@@ -644,13 +653,14 @@ static bool sap_chan_sel_init(tHalHandle halHandle,
 			continue;
 		}
 
-		if (include_dfs_ch == false) {
+		if (!include_dfs_ch || sta_sap_scc_on_dfs_chan) {
 			if (wlan_reg_is_dfs_ch(pMac->pdev, *pChans)) {
 				chSafe = false;
 				QDF_TRACE(QDF_MODULE_ID_SAP,
 					  QDF_TRACE_LEVEL_INFO_HIGH,
-					  "In %s, DFS Ch %d not considered for ACS",
-					  __func__, *pChans);
+					  "In %s, DFS Ch %d not considered for ACS. include_dfs_ch %u, sta_sap_scc_on_dfs_chan %d",
+					  __func__, *pChans, include_dfs_ch,
+					  sta_sap_scc_on_dfs_chan);
 				continue;
 			}
 		}
@@ -676,16 +686,15 @@ static bool sap_chan_sel_init(tHalHandle halHandle,
 		}
 
 		/* Skip DSRC channels */
-		if (WLAN_REG_IS_11P_CH(*pChans))
+		if (wlan_reg_is_dsrc_chan(pMac->pdev, *pChans))
+			continue;
+
+		if (!pMac->sap.enable_etsi13_srd_chan_support &&
+		    wlan_reg_is_etsi13_srd_chan(pMac->pdev, *pChans))
 			continue;
 
 		if (true == chSafe) {
-			pSpectCh->chNum = *pChans;
 			pSpectCh->valid = true;
-			pSpectCh->rssiAgr = SOFTAP_MIN_RSSI;    /* Initialise for all channels */
-			pSpectCh->channelWidth = SOFTAP_HT20_CHANNELWIDTH;      /* Initialise 20MHz for all the Channels */
-			/* Initialise max ACS weight for all channels */
-			pSpectCh->weight = SAP_ACS_WEIGHT_MAX;
 			for (chan_num = 0; chan_num < sap_ctx->num_of_channel;
 			     chan_num++) {
 				if (pSpectCh->chNum !=
@@ -1521,6 +1530,8 @@ static void sap_compute_spect_weight(tSapChSelSpectInfo *pSpectInfoParams,
 	int8_t rssi = 0;
 	uint8_t chn_num = 0;
 	uint8_t channel_id = 0;
+	uint8_t i;
+	bool found = false;
 
 	tCsrScanResultInfo *pScanResult;
 	tSapSpectChInfo *pSpectCh = pSpectInfoParams->pSpectCh;
@@ -1571,7 +1582,7 @@ static void sap_compute_spect_weight(tSapChSelSpectInfo *pSpectInfoParams,
 		if ((sir_parse_beacon_ie
 		     (pMac, pBeaconStruct, (uint8_t *)
 		      (pScanResult->BssDescriptor.ieFields),
-		      ieLen)) == eSIR_SUCCESS)
+		      ieLen)) == QDF_STATUS_SUCCESS)
 			sap_upd_chan_spec_params(
 				pBeaconStruct,
 				&channelWidth,
@@ -1584,15 +1595,31 @@ static void sap_compute_spect_weight(tSapChSelSpectInfo *pSpectInfoParams,
 		     chn_num++) {
 
 			/*
-			 *  if the Beacon has channel ID, use it other wise we will
-			 *  rely on the channelIdSelf
+			 * If the Beacon has channel ID, use it other wise we
+			 * will rely on the channelIdSelf
 			 */
 			if (pScanResult->BssDescriptor.channelId == 0)
 				channel_id =
-					pScanResult->BssDescriptor.channelIdSelf;
+				      pScanResult->BssDescriptor.channelIdSelf;
 			else
 				channel_id =
-					pScanResult->BssDescriptor.channelId;
+				      pScanResult->BssDescriptor.channelId;
+
+			/*
+			 * Check if channel is present in scan channel list or
+			 * not. If not present, then continue as no need to
+			 * process the beacon on this channel.
+			 */
+			for (i = 0; i < sap_ctx->num_of_channel; i++) {
+				if (channel_id ==
+				    sap_ctx->channelList[i]) {
+					found = true;
+					break;
+				}
+			}
+
+			if (!found)
+				continue;
 
 			if (pSpectCh && (channel_id == pSpectCh->chNum)) {
 				if (pSpectCh->rssiAgr <
@@ -2086,7 +2113,7 @@ static void sap_sort_chl_weight_vht160(tSapChSelSpectInfo *pSpectInfoParams)
 
 	/*
 	 * Assign max weight(SAP_ACS_WEIGHT_MAX * 8) to 2.4 Ghz channels
-	 * and channel 132-165 as they cannot be part of a 160Mhz channel
+	 * and channel 132-173 as they cannot be part of a 160Mhz channel
 	 * bonding.
 	 */
 	pSpectInfo = pSpectInfoParams->pSpectCh;
@@ -2094,7 +2121,7 @@ static void sap_sort_chl_weight_vht160(tSapChSelSpectInfo *pSpectInfoParams)
 		if ((pSpectInfo[j].chNum >= WLAN_REG_CH_NUM(CHAN_ENUM_1) &&
 		     pSpectInfo[j].chNum <= WLAN_REG_CH_NUM(CHAN_ENUM_14)) ||
 		    (pSpectInfo[j].chNum >= WLAN_REG_CH_NUM(CHAN_ENUM_132) &&
-		     pSpectInfo[j].chNum <= WLAN_REG_CH_NUM(CHAN_ENUM_165)))
+		     pSpectInfo[j].chNum <= WLAN_REG_CH_NUM(CHAN_ENUM_173)))
 			pSpectInfo[j].weight = SAP_ACS_WEIGHT_MAX * 8;
 	}
 
@@ -2155,7 +2182,7 @@ static void sap_allocate_max_weight_ht40_5_g(
 	spect_info = spect_info_params->pSpectCh;
 	for (j = 0; j < spect_info_params->numSpectChans; j++) {
 		if ((spect_info[j].chNum >= WLAN_REG_CH_NUM(CHAN_ENUM_36) &&
-		     spect_info[j].chNum <= WLAN_REG_CH_NUM(CHAN_ENUM_165)))
+		     spect_info[j].chNum <= WLAN_REG_CH_NUM(CHAN_ENUM_173)))
 			spect_info[j].weight = SAP_ACS_WEIGHT_MAX * 2;
 	}
 }

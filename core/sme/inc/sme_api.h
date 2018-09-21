@@ -52,22 +52,20 @@
 #define SME_GLOBAL_CLASSD_STATS   (1 << eCsrGlobalClassDStats)
 #define SME_PER_CHAIN_RSSI_STATS  (1 << csr_per_chain_rssi_stats)
 
-#define sme_log(level, args...) QDF_TRACE(QDF_MODULE_ID_SME, level, ## args)
-#define sme_logfl(level, format, args...) sme_log(level, FL(format), ## args)
+#define sme_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_SME, params)
+#define sme_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_SME, params)
+#define sme_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_SME, params)
+#define sme_info(params...) QDF_TRACE_INFO(QDF_MODULE_ID_SME, params)
+#define sme_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_SME, params)
 
-#define sme_alert(format, args...) \
-		sme_logfl(QDF_TRACE_LEVEL_FATAL, format, ## args)
-#define sme_err(format, args...) \
-		sme_logfl(QDF_TRACE_LEVEL_ERROR, format, ## args)
-#define sme_warn(format, args...) \
-		sme_logfl(QDF_TRACE_LEVEL_WARN, format, ## args)
-#define sme_info(format, args...) \
-		sme_logfl(QDF_TRACE_LEVEL_INFO, format, ## args)
-#define sme_debug(format, args...) \
-		sme_logfl(QDF_TRACE_LEVEL_DEBUG, format, ## args)
+#define sme_alert_rl(params...) QDF_TRACE_FATAL_RL(QDF_MODULE_ID_SME, params)
+#define sme_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_SME, params)
+#define sme_warn_rl(params...) QDF_TRACE_WARN_RL(QDF_MODULE_ID_SME, params)
+#define sme_info_rl(params...) QDF_TRACE_INFO_RL(QDF_MODULE_ID_SME, params)
+#define sme_debug_rl(params...) QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_SME, params)
 
-#define SME_ENTER() sme_logfl(QDF_TRACE_LEVEL_DEBUG, "enter")
-#define SME_EXIT() sme_logfl(QDF_TRACE_LEVEL_DEBUG, "exit")
+#define SME_ENTER() sme_debug("enter")
+#define SME_EXIT() sme_debug("exit")
 
 #define SME_SESSION_ID_ANY        50
 #define SME_SESSION_ID_BROADCAST  0xFF
@@ -235,6 +233,8 @@ struct sme_5g_band_pref_params {
  * struct sme_session_params: Session creation params passed by HDD layer
  * @session_open_cb: callback to be registered with SME for opening the session
  * @session_close_cb: callback to be registered with SME for closing the session
+ * @callback: callback to be invoked for roaming events
+ * @callback_ctx: user-supplied context to be passed back on roaming events
  * @self_mac_addr: Self mac address
  * @sme_session_id: SME session id
  * @type_of_persona: person type
@@ -243,7 +243,7 @@ struct sme_5g_band_pref_params {
 struct sme_session_params {
 	csr_session_open_cb  session_open_cb;
 	csr_session_close_cb session_close_cb;
-	csr_roam_completeCallback callback;
+	csr_roam_complete_cb callback;
 	void *callback_ctx;
 	uint8_t *self_mac_addr;
 	uint8_t sme_session_id;
@@ -288,7 +288,22 @@ QDF_STATUS sme_init_chan_list(tHalHandle hal, uint8_t *alpha2,
 		enum country_src cc_src);
 QDF_STATUS sme_close(tHalHandle hHal);
 QDF_STATUS sme_start(tHalHandle hHal);
-QDF_STATUS sme_stop(tHalHandle hHal, tHalStopType stopType);
+
+/**
+ * sme_stop() - Stop all SME modules and put them at idle state
+ * @mac_handle: Opaque handle to the MAC context
+ *
+ * The function stops each module in SME. Upon return, all modules are
+ * at idle state ready to start.
+ *
+ * This is a synchronous call
+ *
+ * Return: QDF_STATUS_SUCCESS if SME is stopped.  Other status means
+ *         SME failed to stop one or more modules but caller should
+ *         still consider SME is stopped.
+ */
+QDF_STATUS sme_stop(mac_handle_t mac_handle);
+
 /*
  * sme_open_session() - Open a session for given persona
  *
@@ -342,7 +357,21 @@ QDF_STATUS sme_hdd_ready_ind(tHalHandle hHal);
  */
 QDF_STATUS sme_ser_cmd_callback(void *buf,
 				enum wlan_serialization_cb_reason reason);
-QDF_STATUS sme_process_msg(tHalHandle hHal, struct scheduler_msg *pMsg);
+
+/*
+ * sme_process_msg() - The main message processor for SME.
+ * @mac: The global mac context
+ * @msg: The message to be processed.
+ *
+ * This function is called by a message dispatcher when to process a message
+ * targeted for SME.
+ * This is a synchronous call
+ *
+ * Return: QDF_STATUS_SUCCESS - SME successfully processed the message.
+ * Other status means SME failed to process the message to HAL.
+ */
+QDF_STATUS sme_process_msg(tpAniSirGlobal pMac, struct scheduler_msg *pMsg);
+
 QDF_STATUS sme_mc_process_handler(struct scheduler_msg *msg);
 QDF_STATUS sme_scan_get_result(tHalHandle hHal, uint8_t sessionId,
 		tCsrScanResultFilter *pFilter,
@@ -379,8 +408,18 @@ QDF_STATUS sme_roam_reassoc(tHalHandle hHal, uint8_t sessionId,
 		tCsrRoamModifyProfileFields modProfileFields,
 		uint32_t *pRoamId, bool fForce);
 QDF_STATUS sme_roam_connect_to_last_profile(tHalHandle hHal, uint8_t sessionId);
-QDF_STATUS sme_roam_disconnect(tHalHandle hHal, uint8_t sessionId,
-		eCsrRoamDisconnectReason reason);
+
+/**
+ * sme_roam_disconnect() - API to request CSR to disconnect
+ * @hal: HAL context
+ * @session: SME session identifier
+ * @reason: Reason to disconnect
+ *
+ * Return: QDF Status success or failure
+ */
+QDF_STATUS sme_roam_disconnect(tHalHandle hal, uint8_t session,
+			       eCsrRoamDisconnectReason reason);
+
 void sme_dhcp_done_ind(tHalHandle hal, uint8_t session_id);
 QDF_STATUS sme_roam_stop_bss(tHalHandle hHal, uint8_t sessionId);
 QDF_STATUS sme_roam_get_associated_stas(tHalHandle hHal, uint8_t sessionId,
@@ -401,6 +440,7 @@ QDF_STATUS sme_roam_set_pmkid_cache(tHalHandle hHal, uint8_t sessionId,
 		uint32_t numItems,
 		bool update_entire_cache);
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
 /**
  * sme_get_pmk_info(): A wrapper function to request CSR to save PMK
  * @hal: Global structure
@@ -412,7 +452,6 @@ QDF_STATUS sme_roam_set_pmkid_cache(tHalHandle hHal, uint8_t sessionId,
 void sme_get_pmk_info(tHalHandle hal, uint8_t session_id,
 		      tPmkidCacheInfo *pmk_cache);
 
-#ifdef WLAN_FEATURE_ROAM_OFFLOAD
 QDF_STATUS sme_roam_set_psk_pmk(tHalHandle hHal, uint8_t sessionId,
 		uint8_t *pPSK_PMK, size_t pmk_len);
 #endif
@@ -499,9 +538,6 @@ QDF_STATUS sme_get_modify_profile_fields(tHalHandle hHal, uint8_t sessionId,
 extern QDF_STATUS sme_set_host_power_save(tHalHandle hHal, bool psMode);
 
 void sme_set_dhcp_till_power_active_flag(tHalHandle hHal, uint8_t flag);
-extern QDF_STATUS sme_register11d_scan_done_callback(tHalHandle hHal,
-		csr_scan_completeCallback);
-void sme_deregister11d_scan_done_callback(tHalHandle hHal);
 
 #ifdef FEATURE_OEM_DATA_SUPPORT
 extern QDF_STATUS sme_register_oem_data_rsp_callback(tHalHandle h_hal,
@@ -663,15 +699,6 @@ QDF_STATUS sme_update_is_mawc_ini_feature_enabled(tHalHandle hHal,
 		const bool MAWCEnabled);
 QDF_STATUS sme_stop_roaming(tHalHandle hHal, uint8_t sessionId, uint8_t reason);
 
-/**
- * sme_indicate_disconnect_inprogress() - Indicate to csr that disconnect is in
- * progress
- * @hal: The handle returned by mac_open
- * @session_id: sessionId on which disconenct has started
- *
- * Return: void
- */
-void sme_indicate_disconnect_inprogress(tHalHandle hal, uint8_t session_id);
 QDF_STATUS sme_start_roaming(tHalHandle hHal, uint8_t sessionId,
 		uint8_t reason);
 QDF_STATUS sme_update_enable_fast_roam_in_concurrency(tHalHandle hHal,
@@ -908,7 +935,6 @@ QDF_STATUS sme_send_unit_test_cmd(uint32_t vdev_id, uint32_t module_id,
 void sme_stats_ext_deregister_callback(tHalHandle hhal);
 QDF_STATUS sme_stats_ext_request(uint8_t session_id,
 		tpStatsExtRequestReq input);
-QDF_STATUS sme_stats_ext_event(tHalHandle hHal, void *pMsg);
 #endif
 QDF_STATUS sme_update_dfs_scan_mode(tHalHandle hHal,
 		uint8_t sessionId,
@@ -963,11 +989,13 @@ QDF_STATUS sme_ll_stats_clear_req(tHalHandle hHal,
 		tSirLLStatsClearReq * pclearStatsReq);
 QDF_STATUS sme_ll_stats_set_req(tHalHandle hHal,
 		tSirLLStatsSetReq *psetStatsReq);
-QDF_STATUS sme_ll_stats_get_req(tHalHandle hHal,
-		tSirLLStatsGetReq *pgetStatsReq);
-QDF_STATUS sme_set_link_layer_stats_ind_cb(tHalHandle hHal,
-		void (*callbackRoutine)(void *callbackCtx,
-				int indType, void *pRsp));
+QDF_STATUS sme_ll_stats_get_req(mac_handle_t mac_handle,
+				tSirLLStatsGetReq *get_stats_req,
+				void *context);
+QDF_STATUS sme_set_link_layer_stats_ind_cb(mac_handle_t mac_handle,
+					   void (*callback_routine)(
+					   void *callback_ctx, int ind_type,
+					   void *rsp, void *cookie));
 QDF_STATUS sme_set_link_layer_ext_cb(tHalHandle hal,
 		     void (*ll_stats_ext_cb)(hdd_handle_t callback_ctx,
 					     tSirLLStatsResults * rsp));
@@ -989,9 +1017,9 @@ QDF_STATUS sme_update_roam_key_mgmt_offload_enabled(tHalHandle hal_ctx,
 #ifdef WLAN_FEATURE_NAN
 QDF_STATUS sme_nan_event(tHalHandle hHal, void *pMsg);
 #endif /* WLAN_FEATURE_NAN */
-QDF_STATUS sme_get_link_status(tHalHandle hHal,
-		tCsrLinkStatusCallback callback,
-		void *pContext, uint8_t sessionId);
+QDF_STATUS sme_get_link_status(mac_handle_t mac_handle,
+			       csr_link_status_callback callback,
+			       void *context, uint8_t session_id);
 QDF_STATUS sme_get_temperature(tHalHandle hHal,
 		void *tempContext,
 		void (*pCallbackfn)(int temperature,
@@ -1013,12 +1041,6 @@ QDF_STATUS sme_set_mas(uint32_t val);
 QDF_STATUS sme_set_miracast(tHalHandle hal, uint8_t filter_type);
 QDF_STATUS sme_ext_change_channel(tHalHandle hHal, uint32_t channel,
 					  uint8_t session_id);
-
-QDF_STATUS sme_configure_modulated_dtim(tHalHandle hal, uint8_t session_id,
-				      uint32_t modulated_dtim);
-
-QDF_STATUS sme_override_listen_interval(tHalHandle h_hal, uint8_t session_id,
-		uint32_t override_li);
 
 QDF_STATUS sme_configure_stats_avg_factor(tHalHandle hal, uint8_t session_id,
 					  uint16_t stats_avg_factor);
@@ -1170,6 +1192,11 @@ QDF_STATUS sme_register_for_dcc_stats_event(tHalHandle hHal, void *context,
 					    ocb_callback callback);
 QDF_STATUS sme_deregister_for_dcc_stats_event(tHalHandle hHal);
 
+static inline void
+sme_set_etsi13_srd_ch_in_master_mode(tHalHandle hal,
+				     bool etsi13_srd_chan_support)
+{
+}
 #else
 static inline void sme_set_dot11p_config(tHalHandle hal, bool enable_dot11p)
 {
@@ -1244,7 +1271,20 @@ static inline QDF_STATUS sme_deregister_for_dcc_stats_event(tHalHandle hHal)
 {
 	return QDF_STATUS_SUCCESS;
 }
+
+/**
+ * sme_set_etsi13_srd_ch_in_master_mode() - master mode UNI-III band ch support
+ * @hal: HAL pointer
+ * @srd_chan_support: ETSI SRD channel support
+ *
+ * This function set master ETSI SRD channel support
+ *
+ * Return: None
+ */
+void sme_set_etsi13_srd_ch_in_master_mode(tHalHandle hal,
+					  bool etsi13_srd_chan_support);
 #endif
+
 void sme_add_set_thermal_level_callback(tHalHandle hal,
 		sme_set_thermal_level_callback callback);
 
@@ -1299,8 +1339,9 @@ QDF_STATUS sme_add_beacon_filter(tHalHandle hal,
 				uint32_t session_id, uint32_t *ie_map);
 QDF_STATUS sme_remove_beacon_filter(tHalHandle hal, uint32_t session_id);
 
+#ifdef FEATURE_WLAN_APF
 /**
- * sme_get_bpf_offload_capabilities() - Get BPF offload capabilities
+ * sme_get_apf_capabilities() - Get APF capabilities
  * @hal: Global HAL handle
  * @callback: Callback function to be called with the result
  * @context: Opaque context to be used by the caller to associate the
@@ -1311,12 +1352,66 @@ QDF_STATUS sme_remove_beacon_filter(tHalHandle hal, uint32_t session_id);
  *
  * Return: QDF_STATUS enumeration
  */
-QDF_STATUS sme_get_bpf_offload_capabilities(tHalHandle hal,
-					    bpf_get_offload_cb callback,
-					    void *context);
+QDF_STATUS sme_get_apf_capabilities(tHalHandle hal,
+				    apf_get_offload_cb callback,
+				    void *context);
 
-QDF_STATUS sme_set_bpf_instructions(tHalHandle hal,
-				struct sir_bpf_set_offload *);
+/**
+ * sme_set_apf_instructions() - Set APF apf filter instructions.
+ * @hal: HAL handle
+ * @apf_set_offload: struct to set apf filter instructions.
+ *
+ * APFv2 (Legacy APF) API to set the APF packet filter.
+ *
+ * Return: QDF_STATUS enumeration.
+ */
+QDF_STATUS sme_set_apf_instructions(tHalHandle hal,
+				    struct sir_apf_set_offload
+							*apf_set_offload);
+
+/**
+ * sme_set_apf_enable_disable - Send apf enable/disable cmd
+ * @hal: global hal handle
+ * @vdev_id: vdev id
+ * @apf_enable: true: Enable APF Int., false: Disable APF Int.
+ *
+ * API to either enable or disable the APF interpreter.
+ *
+ * Return: QDF_STATUS enumeration.
+ */
+QDF_STATUS sme_set_apf_enable_disable(tHalHandle hal, uint8_t vdev_id,
+				      bool apf_enable);
+
+/**
+ * sme_apf_write_work_memory - Write into the apf work memory
+ * @hal: global hal handle
+ * @write_params: APF parameters for the write operation
+ *
+ * API for writing into the APF work memory.
+ *
+ * Return: QDF_STATUS enumeration.
+ */
+QDF_STATUS sme_apf_write_work_memory(tHalHandle hal,
+				    struct wmi_apf_write_memory_params
+								*write_params);
+
+/**
+ * sme_apf_read_work_memory - Read part of apf work memory
+ * @hal: global hal handle
+ * @read_params: APF parameters for the get operation
+ * @callback: callback to handle the the read response
+ *
+ * API for issuing a APF read memory request.
+ *
+ * Return: QDF_STATUS enumeration.
+ */
+QDF_STATUS
+sme_apf_read_work_memory(tHalHandle hal,
+			 struct wmi_apf_read_memory_params *read_params,
+			 apf_read_mem_cb callback);
+
+#endif /* FEATURE_WLAN_APF */
+
 uint32_t sme_get_wni_dot11_mode(tHalHandle hal);
 QDF_STATUS sme_create_mon_session(tHalHandle hal_handle, uint8_t *bssid);
 QDF_STATUS sme_set_adaptive_dwelltime_config(tHalHandle hal,
@@ -1472,13 +1567,13 @@ QDF_STATUS sme_update_sta_inactivity_timeout(tHalHandle hal_handle,
 
 /**
  * sme_set_lost_link_info_cb() - plug in callback function for receiving
- * @hal: HAL handle
+ * @mac_handle: Opaque handle to the MAC context
  * @cb: callback function
  *
  * Return: HAL status
  */
-QDF_STATUS sme_set_lost_link_info_cb(tHalHandle hal,
-		void (*cb)(void *, struct sir_lost_link_info *));
+QDF_STATUS sme_set_lost_link_info_cb(mac_handle_t mac_handle,
+				     lost_link_info_cb cb);
 
 /**
  * sme_update_new_channel_event() - update new channel event for sapFsm
@@ -1595,14 +1690,14 @@ QDF_STATUS sme_fast_reassoc(tHalHandle hal, struct csr_roam_profile *profile,
 			    uint8_t vdev_id, const tSirMacAddr connected_bssid);
 #endif
 /**
- * sme_congestion_register_callback(): registers congestion callback
+ * sme_congestion_register_callback() - registers congestion callback
  * @hal: handler for HAL
  * @congestion_cb: congestion callback
  *
  * Return: QDF_STATUS
  */
 QDF_STATUS sme_congestion_register_callback(tHalHandle hal,
-	void (*congestion_cb)(void *, uint32_t congestion, uint32_t vdev_id));
+					    congestion_cb congestion_cb);
 
 /**
  * sme_register_tx_queue_cb(): Register tx queue callback
@@ -1627,15 +1722,15 @@ QDF_STATUS sme_deregister_tx_queue_cb(tHalHandle hal);
 
 /**
  * sme_rso_cmd_status_cb() - Set RSO cmd status callback
- * @hal: HAL Handle
- * @cb: HDD Callback to rso comman status read
+ * @mac_handle: Opaque handle for the MAC context
+ * @cb: HDD Callback to rso command status read
  *
  * This function is used to save HDD RSO Command status callback in MAC
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS sme_rso_cmd_status_cb(tHalHandle hal,
-		void (*cb)(void *, struct rso_cmd_status *));
+QDF_STATUS sme_rso_cmd_status_cb(mac_handle_t mac_handle,
+				 rso_cmd_status_cb cb);
 
 /**
  * sme_register_set_connection_info_cb() - Register connection
@@ -1723,9 +1818,9 @@ QDF_STATUS sme_set_rx_set_blocksize(tHalHandle hal,
  */
 QDF_STATUS sme_get_rcpi(tHalHandle hal, struct sme_rcpi_req *rcpi);
 
-/*
+/**
  * sme_set_chip_pwr_save_fail_cb() - set chip power save failure callback
- * @hal: global hal handle
+ * @mac_handle: opaque handle to the MAC context
  * @cb: callback function pointer
  *
  * This function stores the chip power save failure callback function.
@@ -1733,8 +1828,8 @@ QDF_STATUS sme_get_rcpi(tHalHandle hal, struct sme_rcpi_req *rcpi);
  * Return: QDF_STATUS enumeration.
  */
 
-QDF_STATUS sme_set_chip_pwr_save_fail_cb(tHalHandle hal, void (*cb)(void *,
-				 struct chip_pwr_save_fail_detected_params *));
+QDF_STATUS sme_set_chip_pwr_save_fail_cb(mac_handle_t mac_handle,
+					 pwr_save_fail_cb cb);
 /**
  * sme_cli_set_command() - SME wrapper API over WMA "set" command
  * processor cmd
@@ -1751,13 +1846,13 @@ int sme_cli_set_command(int vdev_id, int param_id, int sval, int vpdev);
 
 /**
  * sme_set_bt_activity_info_cb - set the callback handler for bt events
- * @hal: handle returned by mac_open
+ * @mac_handle: handle returned by mac_open
  * @cb: callback handler
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS sme_set_bt_activity_info_cb(tHalHandle hal,
-				void (*cb)(void *, uint32_t profile_info));
+QDF_STATUS sme_set_bt_activity_info_cb(mac_handle_t mac_handle,
+				       bt_activity_info_cb cb);
 
 /**
  * sme_set_smps_cfg() - set SMPS config params
@@ -1878,15 +1973,15 @@ void sme_display_disconnect_stats(tHalHandle hal, uint8_t session_id);
 
 /**
  * sme_process_msg_callback() - process callback message from LIM
- * @hal: global hal handle
+ * @mac: global mac context
  * @msg: scheduler message
  *
  * This function process the callback messages from LIM.
  *
  * Return: QDF_STATUS enumeration.
  */
-QDF_STATUS sme_process_msg_callback(tHalHandle hal,
-				struct scheduler_msg *msg);
+QDF_STATUS sme_process_msg_callback(tpAniSirGlobal mac,
+				    struct scheduler_msg *msg);
 
 /**
  * sme_set_bmiss_bcnt() - set bmiss config parameters
@@ -2336,6 +2431,70 @@ void sme_set_amsdu(tHalHandle hal, bool enable);
  * Return: return mcs index
  */
 uint8_t sme_get_mcs_idx(uint16_t max_rate, uint8_t rate_flags,
-			uint8_t nss, uint8_t *mcs_rate_flags);
+			uint8_t *nss, uint8_t *mcs_rate_flags);
+
+#ifdef WLAN_SUPPORT_TWT
+/**
+ * sme_register_twt_enable_complete_cb() - TWT enable registrar
+ * @hal: HAL handle
+ * @twt_enable_cb: Function callback to handle enable event
+ * @hdd_ctx: Global HDD Context
+ *
+ * Return: QDF Status
+ */
+QDF_STATUS sme_register_twt_enable_complete_cb(tHalHandle hal,
+		void (*twt_enable_cb)(void *hdd_ctx,
+		struct wmi_twt_enable_complete_event_param *params));
+
+/**
+ * sme_register_twt_disable_complete_cb - TWT disable registrar
+ * @hal: HAL handle
+ * @twt_disable_cb: Function callback to handle disable event
+ *
+ * Return: QDF Status
+ */
+QDF_STATUS sme_register_twt_disable_complete_cb(tHalHandle hal,
+			void (*twt_disable_cb)(void *hdd_ctx));
+
+/**
+ * sme_deregister_twt_enable_complete_cb() - TWT enable deregistrar
+ * @hal: HAL handle
+ *
+ * Return: QDF Status
+ */
+QDF_STATUS sme_deregister_twt_enable_complete_cb(tHalHandle hal);
+
+/**
+ * sme_deregister_twt_disable_complete_cb - TWT disable deregistrar
+ * @hal: HAL handle
+ *
+ * Return: QDF Status
+ */
+QDF_STATUS sme_deregister_twt_disable_complete_cb(tHalHandle hal);
+
+#else
+static inline QDF_STATUS sme_register_twt_enable_complete_cb(tHalHandle hal,
+		void (*twt_enable_cb)(void *hdd_ctx,
+		struct wmi_twt_enable_complete_event_param *params))
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS sme_register_twt_disable_complete_cb(tHalHandle hal,
+					void (*twt_disable_cb)(void *hdd_ctx))
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS sme_deregister_twt_enable_complete_cb(tHalHandle hal)
+{
+	return QDF_STATUS_SUCCESS;
+}
+
+static inline QDF_STATUS sme_deregister_twt_disable_complete_cb(tHalHandle hal)
+{
+	return QDF_STATUS_SUCCESS;
+}
+#endif
 
 #endif /* #if !defined( __SME_API_H ) */

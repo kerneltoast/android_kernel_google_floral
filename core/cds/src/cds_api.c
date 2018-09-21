@@ -22,7 +22,6 @@
  * Connectivity driver services APIs
  */
 
-#include "cds_sched.h"
 #include <cds_api.h>
 #include "sir_types.h"
 #include "sir_api.h"
@@ -34,12 +33,12 @@
 #include "cds_reg_service.h"
 #include "wma_types.h"
 #include "wlan_hdd_main.h"
+#include "wlan_hdd_power.h"
 #include "wlan_hdd_tsf.h"
 #include <linux/vmalloc.h>
 
 #include "pld_common.h"
 #include "sap_api.h"
-#include "qdf_trace.h"
 #include "bmi.h"
 #include "ol_fw.h"
 #include "ol_if_athvar.h"
@@ -56,10 +55,8 @@
 #include <cdp_txrx_misc.h>
 #include <dispatcher_init_deinit.h>
 #include <cdp_txrx_handle.h>
-#include "qdf_cpuhp.h"
 #include "target_type.h"
 #include "wlan_ocb_ucfg_api.h"
-#include "qdf_platform.h"
 #include "wlan_ipa_ucfg_api.h"
 
 #ifdef ENABLE_SMMU_S1_TRANSLATION
@@ -171,6 +168,10 @@ QDF_STATUS cds_init(void)
 	qdf_cpuhp_init();
 	qdf_register_self_recovery_callback(cds_trigger_recovery);
 	qdf_register_fw_down_callback(cds_is_fw_down);
+	qdf_register_ssr_protect_callbacks(cds_ssr_protect,
+					   cds_ssr_unprotect);
+	qdf_register_module_state_query_callback(
+				cds_is_module_state_transitioning);
 
 	gp_cds_context = &g_cds_context;
 
@@ -449,7 +450,6 @@ cds_set_ac_specs_params(struct cds_config_info *cds_cfg)
 QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS status;
-	tSirRetStatus sirStatus = eSIR_SUCCESS;
 	struct cds_config_info *cds_cfg;
 	qdf_device_t qdf_ctx;
 	struct htc_init_info htcInfo;
@@ -458,6 +458,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	void *HTCHandle;
 	struct hdd_context *hdd_ctx;
 	struct cds_context *cds_ctx;
+	mac_handle_t mac_handle;
 
 	cds_debug("Opening CDS");
 
@@ -632,21 +633,19 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	bmi_target_ready(scn, gp_cds_context->cfg_ctx);
 
 	/* Now proceed to open the MAC */
-	sirStatus =
-		mac_open(psoc, &(gp_cds_context->mac_context),
-			gp_cds_context->hdd_context, cds_cfg);
+	status = mac_open(psoc, &mac_handle,
+			  gp_cds_context->hdd_context, cds_cfg);
 
-	if (eSIR_SUCCESS != sirStatus) {
+	if (QDF_STATUS_SUCCESS != status) {
 		/* Critical Error ...  Cannot proceed further */
 		cds_alert("Failed to open MAC");
 		QDF_ASSERT(0);
-
-		status = QDF_STATUS_E_FAILURE;
 		goto err_soc_detach;
 	}
+	gp_cds_context->mac_context = mac_handle;
 
 	/* Now proceed to open the SME */
-	status = sme_open(gp_cds_context->mac_context);
+	status = sme_open(mac_handle);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		/* Critical Error ...  Cannot proceed further */
 		cds_alert("Failed to open SME");
@@ -659,7 +658,7 @@ QDF_STATUS cds_open(struct wlan_objmgr_psoc *psoc)
 	return dispatcher_psoc_open(psoc);
 
 err_mac_close:
-	mac_close(gp_cds_context->mac_context);
+	mac_close(mac_handle);
 
 err_soc_detach:
 	/* todo: add propper error handling */
@@ -832,18 +831,10 @@ exit_with_status:
 	return status;
 }
 
-/**
- * cds_enable() - start/enable cds module
- * @psoc: Psoc pointer
- * @cds_context: CDS context
- *
- * Return: QDF status
- */
 QDF_STATUS cds_enable(struct wlan_objmgr_psoc *psoc)
 {
 	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
-	tSirRetStatus sirStatus = eSIR_SUCCESS;
-	tHalMacStartParameters halStartParams;
+	struct mac_start_params mac_params;
 
 	/* We support only one instance for now ... */
 	if (!gp_cds_context) {
@@ -870,14 +861,11 @@ QDF_STATUS cds_enable(struct wlan_objmgr_psoc *psoc)
 	cds_info("wma correctly started");
 
 	/* Start the MAC */
-	qdf_mem_zero(&halStartParams,
-		     sizeof(tHalMacStartParameters));
+	qdf_mem_zero(&mac_params, sizeof(mac_params));
+	mac_params.driver_type = QDF_DRIVER_TYPE_PRODUCTION;
+	qdf_status = mac_start(gp_cds_context->mac_context, &mac_params);
 
-	/* Start the MAC */
-	sirStatus =
-		mac_start(gp_cds_context->mac_context, &halStartParams);
-
-	if (eSIR_SUCCESS != sirStatus) {
+	if (QDF_STATUS_SUCCESS != qdf_status) {
 		cds_alert("Failed to start MAC");
 		goto err_wma_stop;
 	}
@@ -922,14 +910,14 @@ err_soc_target_detach:
 	/* NOOP */
 
 err_sme_stop:
-	sme_stop(gp_cds_context->mac_context, HAL_STOP_TYPE_SYS_RESET);
+	sme_stop(gp_cds_context->mac_context);
 
 err_mac_stop:
-	mac_stop(gp_cds_context->mac_context, HAL_STOP_TYPE_SYS_RESET);
+	mac_stop(gp_cds_context->mac_context);
 
 err_wma_stop:
 	qdf_event_reset(&gp_cds_context->wma_complete_event);
-	qdf_status = wma_stop(HAL_STOP_TYPE_RF_KILL);
+	qdf_status = wma_stop();
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 		cds_err("Failed to stop wma");
 		QDF_ASSERT(QDF_IS_STATUS_SUCCESS(qdf_status));
@@ -976,7 +964,7 @@ QDF_STATUS cds_disable(struct wlan_objmgr_psoc *psoc)
 		dispatcher_psoc_disable(psoc);
 	}
 
-	qdf_status = wma_stop(HAL_STOP_TYPE_RF_KILL);
+	qdf_status = wma_stop();
 
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 		cds_err("Failed to stop wma");
@@ -2727,50 +2715,46 @@ void cds_incr_arp_stats_tx_tgt_acked(void)
 #ifdef ENABLE_SMMU_S1_TRANSLATION
 QDF_STATUS cds_smmu_mem_map_setup(qdf_device_t osdev, bool ipa_present)
 {
-	int attr = 0;
-	bool ipa_smmu_enable = false;
-	struct dma_iommu_mapping *mapping = pld_smmu_get_mapping(osdev->dev);
+	struct dma_iommu_mapping *mapping;
+	bool ipa_smmu_enabled;
+	bool wlan_smmu_enabled;
 
-	osdev->smmu_s1_enabled = false;
+	mapping = pld_smmu_get_mapping(osdev->dev);
+	if (mapping) {
+		int attr = 0;
+		int errno = iommu_domain_get_attr(mapping->domain,
+						  DOMAIN_ATTR_S1_BYPASS, &attr);
 
-	if (ipa_present) {
-		ipa_smmu_enable = qdf_get_ipa_smmu_enabled();
-		if (ipa_smmu_enable)
-			cds_info("SMMU enabled from IPA side");
-		else
-			cds_info("SMMU not enabled from IPA side");
-	}
-
-	if (mapping && ((iommu_domain_get_attr(mapping->domain,
-			 DOMAIN_ATTR_S1_BYPASS, &attr) == 0) &&
-			 !attr)) {
-		cds_info("SMMU enabled from WLAN side");
-
-		if (ipa_present) {
-			if (ipa_smmu_enable) {
-				cds_info("SMMU enabled from both IPA and WLAN side");
-				osdev->smmu_s1_enabled = true;
-			} else {
-				cds_err("SMMU mismatch: IPA: disable, WLAN: enable");
-				return QDF_STATUS_E_FAILURE;
-			}
-		} else {
-			osdev->smmu_s1_enabled = true;
-		}
-
+		wlan_smmu_enabled = !errno && !attr;
 	} else {
-		cds_info("No SMMU mapping present or SMMU disabled from WLAN side");
-
-		if (ipa_present) {
-			if (ipa_smmu_enable) {
-				cds_err("SMMU mismatch: IPA: enable, WLAN: disable");
-				return QDF_STATUS_E_FAILURE;
-			} else {
-				cds_info("SMMU disabled from both IPA and WLAN side");
-			}
-		}
+		cds_info("No SMMU mapping present");
+		wlan_smmu_enabled = false;
 	}
+
+	if (!wlan_smmu_enabled) {
+		osdev->smmu_s1_enabled = false;
+		goto exit_with_success;
+	}
+
+	if (!ipa_present) {
+		osdev->smmu_s1_enabled = true;
+		goto exit_with_success;
+	}
+
+	ipa_smmu_enabled = qdf_get_ipa_smmu_enabled();
+
+	osdev->smmu_s1_enabled = ipa_smmu_enabled && wlan_smmu_enabled;
+	if (ipa_smmu_enabled != wlan_smmu_enabled) {
+		cds_err("SMMU mismatch; IPA:%s, WLAN:%s",
+			ipa_smmu_enabled ? "enabled" : "disabled",
+			wlan_smmu_enabled ? "enabled" : "disabled");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+exit_with_success:
 	osdev->iommu_mapping = mapping;
+
+	cds_info("SMMU S1 %s", osdev->smmu_s1_enabled ? "enabled" : "disabled");
 
 	return QDF_STATUS_SUCCESS;
 }

@@ -412,7 +412,8 @@ typedef struct sSirSmeReadyReq {
 	uint16_t transactionId;
 	void *csr_roam_synch_cb;
 	void *pe_roam_synch_cb;
-	void *sme_msg_cb;
+	QDF_STATUS (*sme_msg_cb)(tpAniSirGlobal mac,
+				 struct scheduler_msg *msg);
 } tSirSmeReadyReq, *tpSirSmeReadyReq;
 
 /**
@@ -443,13 +444,14 @@ struct sir_set_dual_mac_cfg {
  * struct sir_antenna_mode_param - antenna mode param
  * @num_tx_chains: Number of TX chains
  * @num_rx_chains: Number of RX chains
- * @reason: Reason for setting antenna mode
  * @set_antenna_mode_resp: callback to set antenna mode command
+ * @set_antenna_mode_ctx: callback context to set antenna mode command
  */
 struct sir_antenna_mode_param {
 	uint32_t num_tx_chains;
 	uint32_t num_rx_chains;
 	void *set_antenna_mode_resp;
+	void *set_antenna_mode_ctx;
 };
 
 /**
@@ -1072,6 +1074,10 @@ typedef struct sSirSmeJoinReq {
 	/* Pls make this as last variable in struct */
 	bool force_24ghz_in_ht20;
 	bool force_rsne_override;
+	bool supported_nss_1x1;
+	uint8_t vdev_nss;
+	uint8_t nss;
+	bool nss_forced_1x1;
 	tSirBssDescription bssDescription;
 	/*
 	 * WARNING: Pls make bssDescription as last variable in struct
@@ -2412,12 +2418,8 @@ typedef struct sSirUpdateAPWPARSNIEsReq {
 #define SIR_ROAM_SCAN_MAX_PB_REQ_SIZE    450
 /* Occupied channel list remains static */
 #define CHANNEL_LIST_STATIC                   1
-/* Occupied channel list can be learnt after init */
-#define CHANNEL_LIST_DYNAMIC_INIT             2
-/* Occupied channel list can be learnt after flush */
-#define CHANNEL_LIST_DYNAMIC_FLUSH            3
-/* Occupied channel list can be learnt after update */
-#define CHANNEL_LIST_DYNAMIC_UPDATE           4
+/* Occupied channel list can be dynamic */
+#define CHANNEL_LIST_DYNAMIC                  2
 #define SIR_ROAM_SCAN_24G_DEFAULT_CH     1
 #define SIR_ROAM_SCAN_5G_DEFAULT_CH      36
 #define SIR_ROAM_SCAN_RESERVED_BYTES     61
@@ -3651,6 +3653,7 @@ typedef struct sSirChanChangeRequest {
 	uint8_t center_freq_seg_1;
 	uint8_t bssid[QDF_MAC_ADDR_SIZE];
 	uint32_t dot11mode;
+	tSirNwType nw_type;
 	tSirMacRateSet operational_rateset;
 	tSirMacRateSet extended_rateset;
 	uint32_t cac_duration_ms;
@@ -4826,137 +4829,26 @@ typedef struct {
 	tSirWifiRateStat rateStats[0];
 } tSirWifiPeerInfo, *tpSirWifiPeerInfo;
 
-/**
- * struct wifi_iface_offload_stat - Wifi Iface offload statistics
- * @type: type of offload stats (enum wmi_offload_stats_type)
- * @rx_count: Number of (MSDUs) frames Received
- * @drp_count: Number of frames Dropped
- * @fwd_count:
- *  Number of frames for which FW Responded (Valid for ARP and NS only).(or)
- *  Number of frames forwarded to Host (Valid for stats type except ARP and NS).
- */
-struct wifi_iface_offload_stat {
-	wmi_offload_stats_type type;
-	uint32_t rx_count;
-	uint32_t drp_count;
-	uint32_t fwd_count;
-};
-
-/* per access category statistics */
-typedef struct {
-	/* tSirWifiTrafficAc */
-	/* access category (VI, VO, BE, BK) */
-	uint32_t ac;
-	/* number of successfully transmitted unicast data pkts (ACK rcvd) */
-	uint32_t txMpdu;
-	/* number of received unicast mpdus */
-	uint32_t rxMpdu;
-	/* number of successfully transmitted multicast data packets */
-	/* STA case: implies ACK received from AP for the unicast */
-	/* packet in which mcast pkt was sent */
-	uint32_t txMcast;
-	/* number of received multicast data packets */
-	uint32_t rxMcast;
-	/* number of received unicast a-mpdus */
-	uint32_t rxAmpdu;
-	/* number of transmitted unicast a-mpdus */
-	uint32_t txAmpdu;
-	/* number of data pkt losses (no ACK) */
-	uint32_t mpduLost;
-	/* total number of data pkt retries */
-	uint32_t retries;
-	/* number of short data pkt retries */
-	uint32_t retriesShort;
-	/* number of long data pkt retries */
-	uint32_t retriesLong;
-	/* data pkt min contention time (usecs) */
-	uint32_t contentionTimeMin;
-	/* data pkt max contention time (usecs) */
-	uint32_t contentionTimeMax;
-	/* data pkt avg contention time (usecs) */
-	uint32_t contentionTimeAvg;
-	/* num of data pkts used for contention statistics */
-	uint32_t contentionNumSamples;
-} tSirWifiWmmAcStat, *tpSirWifiWmmAcStat;
-
 /* Interface statistics - corresponding to 2nd most
  * LSB in wifi statistics bitmap  for getting statistics
  */
 typedef struct {
 	/* current state of the interface */
 	tSirWifiInterfaceInfo info;
-	/* access point beacon received count from connected AP */
-	uint32_t beaconRx;
-	/* access point mgmt frames received count from */
-	/* connected AP (including Beacon) */
-	uint32_t mgmtRx;
-	/* action frames received count */
-	uint32_t mgmtActionRx;
-	/* action frames transmit count */
-	uint32_t mgmtActionTx;
-	/* access Point Beacon and Management frames RSSI (averaged) */
-	uint32_t rssiMgmt;
-	/* access Point Data Frames RSSI (averaged) from connected AP */
-	uint32_t rssiData;
-	/* access Point ACK RSSI (averaged) from connected AP */
-	uint32_t rssiAck;
-	/* number of peers */
-	uint32_t num_peers;
-	/*
-	 * Indicates how many peer_stats events will be sent depending on the
-	 * num_peers.
-	 */
-	uint32_t num_peer_events;
-	/* number of ac */
-	uint32_t num_ac;
-	/* Roaming Stat */
-	uint32_t roam_state;
-	/*
-	 * Average Beacon spread offset is the averaged time delay between TBTT
-	 * and beacon TSF. Upper 32 bits of averaged 64 bit beacon spread offset
-	 */
-	uint32_t avg_bcn_spread_offset_high;
-	/* Lower 32 bits of averaged 64 bit beacon spread offset */
-	uint32_t avg_bcn_spread_offset_low;
-	/*
-	 * Takes value of 1 if AP leaks packets after sending an ACK for PM=1
-	 * otherwise 0
-	 */
-	uint32_t is_leaky_ap;
-	/*
-	 * Average number of frames received from AP after receiving the ACK
-	 * for a frame with PM = 1
-	 */
-	uint32_t avg_rx_frms_leaked;
-	/*
-	 *  Rx leak watch window currently in force to minimize data loss
-	 *  because of leaky AP. Rx leak window is the
-	 *  time driver waits before shutting down the radio or switching
-	 *  the channel and after receiving an ACK for
-	 *  a data frame with PM bit set.
-	 */
-	uint32_t rx_leak_window;
+
 	uint32_t rts_succ_cnt;
 	uint32_t rts_fail_cnt;
 	uint32_t ppdu_succ_cnt;
 	uint32_t ppdu_fail_cnt;
 
-	uint32_t tx_rts_succ_cnt;
-	uint32_t tx_rts_fail_cnt;
-	uint32_t tx_ppdu_succ_cnt;
-	uint32_t tx_ppdu_fail_cnt;
-	uint32_t connected_duration;
-	uint32_t disconnected_duration;
-	uint32_t rtt_ranging_duration;
-	uint32_t rtt_responder_duration;
-	uint32_t num_probes_tx;
-	uint32_t num_beacon_miss;
+	/* link statistics */
+	wmi_iface_link_stats link_stats;
 
 	/* per ac data packet statistics */
-	tSirWifiWmmAcStat AccessclassStats[WIFI_AC_MAX];
+	wmi_wmm_ac_stats ac_stats[WIFI_AC_MAX];
 
 	uint32_t num_offload_stats;
-	struct wifi_iface_offload_stat offload_stat[WMI_OFFLOAD_STATS_TYPE_MAX];
+	wmi_iface_offload_stats offload_stats[WMI_OFFLOAD_STATS_TYPE_MAX];
 } tSirWifiIfaceStat, *tpSirWifiIfaceStat;
 
 /* Peer statistics - corresponding to 3rd most LSB in
@@ -5679,7 +5571,7 @@ typedef void (*hw_mode_transition_cb)(uint32_t old_hw_mode_index,
 		uint32_t new_hw_mode_index,
 		uint32_t num_vdev_mac_entries,
 		struct policy_mgr_vdev_mac_map *vdev_mac_map);
-typedef void (*antenna_mode_cb)(uint32_t status);
+typedef void (*antenna_mode_cb)(uint32_t status, void *context);
 
 /**
  * struct sir_nss_update_request
@@ -6164,17 +6056,17 @@ struct obss_scanparam {
 };
 
 /**
- * struct sir_bpf_set_offload - set bpf filter instructions
+ * struct sir_apf_set_offload - set apf filter instructions
  * @session_id: session identifier
- * @version: host bpf version
- * @filter_id: Filter ID for BPF filter
+ * @version: host apf version
+ * @filter_id: Filter ID for APF filter
  * @total_length: The total length of the full instruction
  *                total_length equal to 0 means reset
  * @current_offset: current offset, 0 means start a new setting
  * @current_length: Length of current @program
- * @program: BPF instructions
+ * @program: APF instructions
  */
-struct sir_bpf_set_offload {
+struct sir_apf_set_offload {
 	uint8_t  session_id;
 	uint32_t version;
 	uint32_t filter_id;
@@ -6185,18 +6077,18 @@ struct sir_bpf_set_offload {
 };
 
 /**
- * struct sir_bpf_offload_capabilities - get bpf Capabilities
- * @bpf_version: fw's implement version
- * @max_bpf_filters: max filters that fw supports
- * @max_bytes_for_bpf_inst: the max bytes that can be used as bpf instructions
- * @remaining_bytes_for_bpf_inst: remaining bytes for bpf instructions
+ * struct sir_apf_offload_capabilities - get apf Capabilities
+ * @apf_version: fw's implement version
+ * @max_apf_filters: max filters that fw supports
+ * @max_bytes_for_apf_inst: the max bytes that can be used as apf instructions
+ * @remaining_bytes_for_apf_inst: remaining bytes for apf instructions
  *
  */
-struct sir_bpf_get_offload {
-	uint32_t bpf_version;
-	uint32_t max_bpf_filters;
-	uint32_t max_bytes_for_bpf_inst;
-	uint32_t remaining_bytes_for_bpf_inst;
+struct sir_apf_get_offload {
+	uint32_t apf_version;
+	uint32_t max_apf_filters;
+	uint32_t max_bytes_for_apf_inst;
+	uint32_t remaining_bytes_for_apf_inst;
 };
 
 #ifndef QCA_SUPPORT_CP_STATS

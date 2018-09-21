@@ -18,7 +18,7 @@
 
 #include <wlan_qct_sys.h>
 #include <cds_api.h>
-#include <sir_types.h>           /* needed for tSirRetStatus */
+#include <sir_types.h>
 #include <sir_params.h>          /* needed for tSirMbMsg */
 #include <sir_api.h>             /* needed for SIR_... message types */
 #include <wni_api.h>             /* needed for WNI_... message types */
@@ -111,8 +111,7 @@ QDF_STATUS umac_stop(void)
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status))
 		qdf_status = QDF_STATUS_E_BADMSG;
 
-	qdf_status = qdf_wait_for_event_completion(&g_stop_evt,
-			SYS_STOP_TIMEOUT);
+	qdf_status = qdf_wait_single_event(&g_stop_evt, SYS_STOP_TIMEOUT);
 	QDF_ASSERT(QDF_IS_STATUS_SUCCESS(qdf_status));
 
 	qdf_status = qdf_event_destroy(&g_stop_evt);
@@ -163,11 +162,9 @@ static QDF_STATUS sys_mc_process_msg(struct scheduler_msg *pMsg)
 					"%s: Invalid hHal", __func__);
 				break;
 			}
-			qdf_status = sme_stop(hHal,
-					      HAL_STOP_TYPE_SYS_DEEP_SLEEP);
+			qdf_status = sme_stop(hHal);
 			QDF_ASSERT(QDF_IS_STATUS_SUCCESS(qdf_status));
-			qdf_status = mac_stop(hHal,
-					      HAL_STOP_TYPE_SYS_DEEP_SLEEP);
+			qdf_status = mac_stop(hHal);
 			QDF_ASSERT(QDF_IS_STATUS_SUCCESS(qdf_status));
 			((sys_rsp_cb) pMsg->callback)(pMsg->bodyptr);
 			qdf_status = QDF_STATUS_SUCCESS;

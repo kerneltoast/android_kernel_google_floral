@@ -59,10 +59,6 @@ typedef struct tagComebackTimerInfo {
 /* Maximum Number of WEP KEYS */
 #define MAX_WEP_KEYS 4
 
-/* Maximum allowable size of a beacon frame */
-#define SCH_MAX_BEACON_SIZE    512
-
-#define SCH_MAX_PROBE_RESP_SIZE 512
 #define SCH_PROTECTION_RESET_TIME 4000
 
 /*--------------------------------------------------------------------------
@@ -503,6 +499,7 @@ typedef struct sPESession       /* Added to Support BT-AMP */
 	/* flag to indicate country code in beacon */
 	uint8_t country_info_present;
 	uint8_t nss;
+	bool nss_forced_1x1;
 	bool add_bss_failed;
 	/* To hold OBSS Scan IE Parameters */
 	struct obss_scanparam obss_ht40_scanparam;
@@ -555,6 +552,10 @@ typedef struct sPESession       /* Added to Support BT-AMP */
 	enum wmi_obss_color_collision_evt_type obss_color_collision_dec_evt;
 	bool is_session_obss_color_collision_det_enabled;
 	int8_t def_max_tx_pwr;
+#ifdef WLAN_SUPPORT_TWT
+	uint8_t peer_twt_requestor;
+	uint8_t peer_twt_responder;
+#endif
 } tPESession, *tpPESession;
 
 /*-------------------------------------------------------------------------

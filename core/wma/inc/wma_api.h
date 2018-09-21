@@ -102,7 +102,14 @@ QDF_STATUS wma_mc_process_handler(struct scheduler_msg *msg);
 
 QDF_STATUS wma_start(void);
 
-QDF_STATUS wma_stop(uint8_t reason);
+/**
+ * wma_stop() - wma stop function.
+ *
+ * Performs all of the operations required to stop the WMA layer
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF Error on failure
+ */
+QDF_STATUS wma_stop(void);
 
 QDF_STATUS wma_close(void);
 
@@ -161,8 +168,8 @@ void *wma_get_beacon_buffer_by_vdev_id(uint8_t vdev_id, uint32_t *buffer_size);
 
 bool wma_get_fw_wlan_feat_caps(enum cap_bitmap feature);
 void wma_set_fw_wlan_feat_caps(enum cap_bitmap feature);
-tSirRetStatus wma_post_ctrl_msg(tpAniSirGlobal pMac,
-				struct scheduler_msg *pMsg);
+
+QDF_STATUS wma_post_ctrl_msg(tpAniSirGlobal pMac, struct scheduler_msg *pMsg);
 
 void wma_register_wow_wakeup_events(WMA_HANDLE handle, uint8_t vdev_id,
 					uint8_t vdev_type, uint8_t sub_type);
@@ -304,8 +311,6 @@ QDF_STATUS wma_set_sar_limit(WMA_HANDLE handle,
  */
 QDF_STATUS wma_set_qpower_config(uint8_t vdev_id, uint8_t qpower);
 
-bool wma_is_service_enabled(uint32_t service_type);
-
 #ifdef FEATURE_WLAN_D0WOW
 static inline bool wma_d0_wow_is_supported(void)
 {
@@ -381,5 +386,5 @@ void wma_wmi_stop(void);
  *  Return: mcs index
  */
 uint8_t wma_get_mcs_idx(uint16_t max_rate, uint8_t rate_flags,
-			uint8_t nss, uint8_t *mcs_rate_flag);
+			uint8_t *nss, uint8_t *mcs_rate_flag);
 #endif

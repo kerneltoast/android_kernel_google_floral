@@ -83,6 +83,9 @@ CONFIG_QCACLD_FEATURE_GREEN_AP := y
 #Flag to enable Android Packet Filtering
 CONFIG_QCACLD_FEATURE_APF := y
 
+#Flag to enable SARv1 -> SARv2 conversion
+CONFIG_WLAN_FEATURE_SARV1_TO_SARV2 := n
+
 ifeq ($(CONFIG_ARCH_MSM8998), y)
 CONFIG_QCACLD_FEATURE_METERING := y
 endif
@@ -109,6 +112,9 @@ endif
 
 #Flag to enable Fast Transition (11r) feature
 CONFIG_QCOM_VOWIFI_11R := y
+
+#Flag to enable disable ACTION OUI feature
+CONFIG_WLAN_FEATURE_ACTION_OUI := y
 
 #Flag to enable FILS Feature (11ai)
 CONFIG_WLAN_FEATURE_FILS := y
@@ -437,6 +443,12 @@ CONFIG_ENABLE_SMMU_S1_TRANSLATION := y
 endif
 endif
 
+ifeq ($(CONFIG_ARCH_SM8150), y)
+ifeq ($(CONFIG_IPA_OFFLOAD), y)
+CONFIG_ENABLE_SMMU_S1_TRANSLATION := y
+endif
+endif
+
 ifeq ($(CONFIG_ARCH_SDX20), y)
 ifeq ($(CONFIG_QCA_WIFI_SDIO), y)
 ifeq ($(CONFIG_WCNSS_SKB_PRE_ALLOC), y)
@@ -474,6 +486,9 @@ CONFIG_WLAN_DFS_MASTER_ENABLE := y
 
 #Flag to enable nud tracking feature
 CONFIG_WLAN_NUD_TRACKING := y
+
+#Flag to enable set and get disable channel list feature
+CONFIG_DISABLE_CHANNEL_LIST :=y
 
 CONFIG_WIFI_POS_CONVERGED := y
 ifneq ($(CONFIG_WIFI_POS_CONVERGED), y)
@@ -514,6 +529,7 @@ CONFIG_WLAN_CONV_SPECTRAL_ENABLE := y
 CONFIG_WLAN_SPECTRAL_ENABLE := y
 CONFIG_WMI_CMD_STRINGS := y
 CONFIG_FEATURE_MONITOR_MODE_SUPPORT := y
+CONFIG_WLAN_FEATURE_TWT := y
 
 ifeq ($(CONFIG_HELIUMPLUS), y)
 ifneq ($(CONFIG_FORCE_ALLOC_FROM_DMA_ZONE), y)
@@ -525,6 +541,7 @@ endif
 ifeq ($(CONFIG_SLUB_DEBUG_ON), y)
 	CONFIG_FEATURE_UNIT_TEST_SUSPEND := y
 	CONFIG_LEAK_DETECTION := y
+	CONFIG_UNIT_TEST := y
 endif
 
 # enable unit-test suspend for napier builds

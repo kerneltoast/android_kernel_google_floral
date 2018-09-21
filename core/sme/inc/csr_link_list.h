@@ -48,11 +48,7 @@ typedef struct tagDblLinkList {
 	tListElem ListHead;
 	qdf_mutex_t Lock;
 	uint32_t Count;
-	hdd_handle_t hHdd;
 	tListFlag Flag;
-	/*command debugging */
-	uint32_t cmdTimeoutDuration;       /* command timeout duration */
-	qdf_mc_timer_t *cmdTimeoutTimer;   /*command timeout Timer */
 } tDblLinkList;
 
 /*
@@ -73,7 +69,7 @@ typedef struct tagDblLinkList {
 #define csrIsListEmpty(pHead) ((pHead)->next == (pHead))
 
 uint32_t csr_ll_count(tDblLinkList *pList);
-QDF_STATUS csr_ll_open(hdd_handle_t hHdd, tDblLinkList *pList);
+QDF_STATUS csr_ll_open(tDblLinkList *pList);
 void csr_ll_close(tDblLinkList *pList);
 void csr_ll_lock(tDblLinkList *pList);
 void csr_ll_unlock(tDblLinkList *pList);

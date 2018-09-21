@@ -430,8 +430,8 @@
 #define WMA_REMOVE_BCN_FILTER_CMDID          SIR_HAL_REMOVE_BCN_FILTER_CMDID
 #define WMA_SET_ADAPT_DWELLTIME_CONF_PARAMS  SIR_HAL_SET_ADAPT_DWELLTIME_PARAMS
 
-#define WDA_BPF_GET_CAPABILITIES_REQ         SIR_HAL_BPF_GET_CAPABILITIES_REQ
-#define WDA_BPF_SET_INSTRUCTIONS_REQ         SIR_HAL_BPF_SET_INSTRUCTIONS_REQ
+#define WDA_APF_GET_CAPABILITIES_REQ         SIR_HAL_APF_GET_CAPABILITIES_REQ
+#define WDA_APF_SET_INSTRUCTIONS_REQ         SIR_HAL_APF_SET_INSTRUCTIONS_REQ
 
 #define WMA_SET_PDEV_IE_REQ                  SIR_HAL_SET_PDEV_IE_REQ
 #define WMA_UPDATE_WEP_DEFAULT_KEY           SIR_HAL_UPDATE_WEP_DEFAULT_KEY
@@ -671,10 +671,9 @@ enum rateid {
 	RATEID_DEFAULT
 };
 
-tSirRetStatus wma_post_ctrl_msg(tpAniSirGlobal pMac,
-				struct scheduler_msg *pMsg);
+QDF_STATUS wma_post_ctrl_msg(tpAniSirGlobal pMac, struct scheduler_msg *pMsg);
 
-tSirRetStatus u_mac_post_ctrl_msg(void *pSirGlobal, tSirMbMsg *pMb);
+QDF_STATUS u_mac_post_ctrl_msg(void *pSirGlobal, tSirMbMsg *pMb);
 
 QDF_STATUS wma_set_idle_ps_config(void *wma_ptr, uint32_t idle_ps);
 QDF_STATUS wma_get_snr(tAniGetSnrReq *psnr_req);

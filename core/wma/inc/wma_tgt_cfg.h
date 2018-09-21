@@ -19,6 +19,8 @@
 #ifndef WMA_TGT_CFG_H
 #define WMA_TGT_CFG_H
 
+#include "wma_sar_public_structs.h"
+
 /**
  * struct wma_tgt_services - target services
  * @sta_power_save: sta power save
@@ -37,6 +39,8 @@
  * @en_roam_offload: enable roam offload
  * @en_11ax: enable 11ax
  * @is_fw_mawc_capable: Motion Aided Wireless Connectivity feature
+ * @twt_requestor: TWT requestor capability
+ * @twt_responder: TWT responder capability
  */
 struct wma_tgt_services {
 	uint32_t sta_power_save;
@@ -65,6 +69,8 @@ struct wma_tgt_services {
 	bool is_fils_roaming_supported;
 	bool is_fw_mawc_capable;
 	bool is_11k_offload_supported;
+	bool twt_requestor;
+	bool twt_responder;
 };
 
 /**
@@ -173,6 +179,7 @@ struct board_info {
  * @rcpi_enabled: for checking rcpi support
  * @obss_detection_offloaded: obss detection offloaded to firmware
  * @obss_color_collision_offloaded: obss color collision offloaded to firmware
+ * @sar_version: Version of SAR supported by firmware
  */
 struct wma_tgt_cfg {
 	uint32_t target_fw_version;
@@ -190,7 +197,7 @@ struct wma_tgt_cfg {
 #endif
 	uint8_t ap_arpns_support;
 	uint32_t fine_time_measurement_cap;
-	bool bpf_enabled;
+	bool apf_enabled;
 #ifdef FEATURE_WLAN_RA_FILTERING
 	bool is_ra_rate_limit_enabled;
 #endif
@@ -211,5 +218,6 @@ struct wma_tgt_cfg {
 	bool obss_color_collision_offloaded;
 	uint32_t hw_bd_id;
 	struct board_info hw_bd_info;
+	enum sar_version sar_version;
 };
 #endif /* WMA_TGT_CFG_H */

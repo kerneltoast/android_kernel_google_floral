@@ -54,7 +54,6 @@ HDD_OBJS := 	$(HDD_SRC_DIR)/wlan_hdd_assoc.o \
 		$(HDD_SRC_DIR)/wlan_hdd_packet_filter.o \
 		$(HDD_SRC_DIR)/wlan_hdd_power.o \
 		$(HDD_SRC_DIR)/wlan_hdd_regulatory.o \
-		$(HDD_SRC_DIR)/wlan_hdd_request_manager.o \
 		$(HDD_SRC_DIR)/wlan_hdd_scan.o \
 		$(HDD_SRC_DIR)/wlan_hdd_softap_tx_rx.o \
 		$(HDD_SRC_DIR)/wlan_hdd_stats.o \
@@ -144,6 +143,10 @@ endif
 
 ifeq ($(CONFIG_WLAN_FEATURE_11AX), y)
 HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_he.o
+endif
+
+ifeq ($(CONFIG_WLAN_FEATURE_TWT), y)
+HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_twt.o
 endif
 
 ifeq ($(CONFIG_LITHIUM), y)
@@ -701,6 +704,19 @@ IPA_OBJS :=	$(IPA_DIR)/dispatcher/src/wlan_ipa_ucfg_api.o \
 		$(IPA_DIR)/core/src/wlan_ipa_rm.o
 endif
 
+########## ACTION OUI ##########
+
+ACTION_OUI_DIR := components/action_oui
+ACTION_OUI_INC := -I$(WLAN_ROOT)/$(ACTION_OUI_DIR)/core/inc \
+		  -I$(WLAN_ROOT)/$(ACTION_OUI_DIR)/dispatcher/inc
+
+ifeq ($(CONFIG_WLAN_FEATURE_ACTION_OUI), y)
+ACTION_OUI_OBJS := $(ACTION_OUI_DIR)/core/src/wlan_action_oui_main.o \
+		$(ACTION_OUI_DIR)/core/src/wlan_action_oui_parse.o \
+		$(ACTION_OUI_DIR)/dispatcher/src/wlan_action_oui_tgt_api.o \
+		$(ACTION_OUI_DIR)/dispatcher/src/wlan_action_oui_ucfg_api.o
+endif
+
 ########## CLD TARGET_IF #######
 CLD_TARGET_IF_DIR := components/target_if
 
@@ -734,6 +750,11 @@ endif
 ifeq ($(CONFIG_IPA_OFFLOAD), y)
 CLD_TARGET_IF_INC += -I$(WLAN_ROOT)/$(CLD_TARGET_IF_DIR)/ipa/inc
 CLD_TARGET_IF_OBJ += $(CLD_TARGET_IF_DIR)/ipa/src/target_if_ipa.o
+endif
+
+ifeq ($(CONFIG_WLAN_FEATURE_ACTION_OUI), y)
+CLD_TARGET_IF_INC += -I$(WLAN_ROOT)/$(CLD_TARGET_IF_DIR)/action_oui/inc
+CLD_TARGET_IF_OBJ += $(CLD_TARGET_IF_DIR)/action_oui/src/target_if_action_oui.o
 endif
 
 ############## UMAC P2P ###########
@@ -840,6 +861,10 @@ ifeq ($(CONFIG_QCACLD_FEATURE_APF), y)
 WMI_OBJS += $(WMI_OBJ_DIR)/wmi_unified_apf_tlv.o
 endif
 
+ifeq ($(CONFIG_WLAN_FEATURE_ACTION_OUI), y)
+WMI_OBJS += $(WMI_OBJ_DIR)/wmi_unified_action_oui_tlv.o
+endif
+
 ifeq ($(CONFIG_WLAN_FEATURE_DSRC), y)
 ifeq ($(CONFIG_OCB_UT_FRAMEWORK), y)
 WMI_OBJS += $(WMI_OBJ_DIR)/wmi_unified_ocb_ut.o
@@ -848,6 +873,11 @@ endif
 
 ifeq ($(CONFIG_WLAN_DFS_MASTER_ENABLE), y)
 WMI_OBJS += $(WMI_OBJ_DIR)/wmi_unified_dfs_api.o
+endif
+
+ifeq ($(CONFIG_WLAN_FEATURE_TWT), y)
+WMI_OBJS += $(WMI_OBJ_DIR)/wmi_unified_twt_api.o
+WMI_OBJS += $(WMI_OBJ_DIR)/wmi_unified_twt_tlv.o
 endif
 
 ifeq ($(CONFIG_FEATURE_WLAN_EXTSCAN), y)
@@ -1261,7 +1291,9 @@ endif
 ifeq ($(CONFIG_WLAN_FEATURE_11AX), y)
 WMA_OBJS+=	$(WMA_SRC_DIR)/wma_he.o
 endif
-
+ifeq ($(CONFIG_WLAN_FEATURE_TWT), y)
+WMA_OBJS +=	$(WMA_SRC_DIR)/wma_twt.o
+endif
 ############## PLD ##########
 PLD_DIR := core/pld
 PLD_INC_DIR := $(PLD_DIR)/inc
@@ -1376,6 +1408,7 @@ INCS +=		$(HOST_DIAG_LOG_INC)
 endif
 
 INCS +=		$(DISA_INC)
+INCS +=		$(ACTION_OUI_INC)
 
 INCS +=		$(UMAC_DISP_INC)
 INCS +=		$(UMAC_SCAN_INC)
@@ -1462,6 +1495,10 @@ ifeq ($(CONFIG_WLAN_FEATURE_DISA), y)
 OBJS +=		$(DISA_OBJS)
 endif
 
+ifeq ($(CONFIG_WLAN_FEATURE_ACTION_OUI), y)
+OBJS +=		$(ACTION_OUI_OBJS)
+endif
+
 OBJS +=		$(UMAC_DISP_OBJS)
 OBJS +=		$(UMAC_SCAN_OBJS)
 OBJS +=		$(UMAC_COMMON_OBJS)
@@ -1511,6 +1548,7 @@ cppflags-$(CONFIG_CONVERGED_TDLS_ENABLE) += -DCONVERGED_TDLS_ENABLE
 cppflags-$(CONFIG_WLAN_CONV_SPECTRAL_ENABLE) += -DWLAN_CONV_SPECTRAL_ENABLE
 cppflags-$(CONFIG_WMI_CMD_STRINGS) += -DWMI_CMD_STRINGS
 cppflags-$(CONFIG_FEATURE_MONITOR_MODE_SUPPORT) += -DFEATURE_MONITOR_MODE_SUPPORT
+cppflags-$(CONFIG_WLAN_FEATURE_TWT) += -DWLAN_SUPPORT_TWT
 
 cppflags-$(CONFIG_WLAN_DISABLE_EXPORT_SYMBOL) += -DWLAN_DISABLE_EXPORT_SYMBOL
 cppflags-$(CONFIG_WIFI_POS_CONVERGED) += -DWIFI_POS_CONVERGED
@@ -1589,6 +1627,7 @@ cppflags-y +=	-DTRACE_RECORD \
 		-DHDD_TRACE_RECORD
 endif
 endif
+cppflags-$(CONFIG_UNIT_TEST) += -DWLAN_UNIT_TEST
 cppflags-$(CONFIG_WLAN_DEBUG_CRASH_INJECT) += -DCONFIG_WLAN_DEBUG_CRASH_INJECT
 cppflags-$(CONFIG_FEATURE_UNIT_TEST_SUSPEND) += -DWLAN_SUSPEND_RESUME_TEST
 
@@ -1598,6 +1637,7 @@ cppflags-y += \
 	-DCONFIG_LEAK_DETECTION \
 	-DMEMORY_DEBUG \
 	-DNBUF_MEMORY_DEBUG \
+	-DNBUF_MAP_UNMAP_DEBUG \
 	-DTIMER_MANAGER
 endif
 
@@ -1755,6 +1795,9 @@ cppflags-y += -DANI_BIG_BYTE_ENDIAN
 cppflags-y += -DBIG_ENDIAN_HOST
 endif
 
+#Enable MWS COEX support for 4G quick TDM and 5G NR pwr limit
+cppflags-y += -DMWS_COEX
+
 #Enable TX reclaim support
 cppflags-$(CONFIG_TX_CREDIT_RECLAIM_SUPPORT) += -DTX_CREDIT_RECLAIM_SUPPORT
 
@@ -1815,9 +1858,9 @@ cppflags-$(CONFIG_WLAN_ENABLE_SOCIAL_CHANNELS_5G_ONLY) += -DWLAN_ENABLE_SOCIAL_C
 #Green AP feature
 cppflags-$(CONFIG_QCACLD_FEATURE_GREEN_AP) += -DWLAN_SUPPORT_GREEN_AP
 
-ifeq ($(CONFIG_QCACLD_FEATURE_APF), y)
 cppflags-$(CONFIG_QCACLD_FEATURE_APF) += -DFEATURE_WLAN_APF
-endif
+
+cppflags-$(CONFIG_WLAN_FEATURE_SARV1_TO_SARV2) += -DWLAN_FEATURE_SARV1_TO_SARV2
 
 #Stats & Quota Metering feature
 ifeq ($(CONFIG_IPA_OFFLOAD), y)
@@ -1876,6 +1919,8 @@ cppflags-$(CONFIG_WLAN_OFFLOAD_PACKETS) += -DWLAN_FEATURE_OFFLOAD_PACKETS
 
 cppflags-$(CONFIG_WLAN_FEATURE_DISA) += -DWLAN_FEATURE_DISA
 
+cppflags-$(CONFIG_WLAN_FEATURE_ACTION_OUI) += -DWLAN_FEATURE_ACTION_OUI
+
 cppflags-$(CONFIG_WLAN_FEATURE_FIPS) += -DWLAN_FEATURE_FIPS
 
 cppflags-$(CONFIG_LFR_SUBNET_DETECTION) += -DFEATURE_LFR_SUBNET_DETECTION
@@ -1915,6 +1960,9 @@ cppflags-y += -DATH_SUPPORT_WRAP=0
 cppflags-y += -DQCA_HOST2FW_RXBUF_RING
 #endof dummy flags
 
+# Enable lock of serialization component to avoid race condition issues
+cppflags-y += -DWLAN_CMD_SERIALIZATION_LOCKING
+
 ccflags-$(CONFIG_ENABLE_SIZE_OPTIMIZE) += -Os
 
 # DFS component
@@ -1936,6 +1984,9 @@ cppflags-$(CONFIG_ENABLE_SMMU_S1_TRANSLATION) += -DENABLE_SMMU_S1_TRANSLATION
 
 #Flag to enable NUD tracking
 cppflags-$(CONFIG_WLAN_NUD_TRACKING) += -DWLAN_NUD_TRACKING
+
+#Flag to enable set and get disable channel list feature
+cppflags-$(CONFIG_DISABLE_CHANNEL_LIST) += -DDISABLE_CHANNEL_LIST
 
 # configure log buffer size
 ifdef CONFIG_CFG_NUM_DP_TRACE_RECORD

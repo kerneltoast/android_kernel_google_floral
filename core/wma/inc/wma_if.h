@@ -309,6 +309,10 @@ typedef struct {
 #endif
 	uint8_t stbc_capable;
 	uint8_t max_amsdu_num;
+#ifdef WLAN_SUPPORT_TWT
+	uint8_t twt_requestor;
+	uint8_t twt_responder;
+#endif
 } tAddStaParams, *tpAddStaParams;
 
 /**
@@ -718,7 +722,7 @@ typedef struct sBeaconGenParams {
  */
 typedef struct {
 	tSirMacAddr bssId;
-	uint8_t *beacon;
+	uint8_t beacon[SIR_MAX_BEACON_SIZE];
 	uint32_t beaconLength;
 	uint32_t timIeOffset;
 	uint16_t p2pIeOffset;
@@ -729,13 +733,13 @@ typedef struct {
 /**
  * struct tSendProbeRespParams - send probe response parameters
  * @bssId: BSSID
- * @pProbeRespTemplate: probe response template
+ * @probeRespTemplate: probe response template
  * @probeRespTemplateLen: probe response template length
  * @ucProxyProbeReqValidIEBmap: valid IE bitmap
  */
 typedef struct sSendProbeRespParams {
 	tSirMacAddr bssId;
-	uint8_t *pProbeRespTemplate;
+	uint8_t probeRespTemplate[SIR_MAX_PROBE_RESP_SIZE];
 	uint32_t probeRespTemplateLen;
 	uint32_t ucProxyProbeReqValidIEBmap[8];
 } tSendProbeRespParams, *tpSendProbeRespParams;
@@ -1017,8 +1021,8 @@ typedef struct {
 } tAggrAddTsParams, *tpAggrAddTsParams;
 
 
-typedef tSirRetStatus (*tHalMsgCallback)(tpAniSirGlobal pMac, uint32_t mesgId,
-					 void *mesgParam);
+typedef QDF_STATUS (*tHalMsgCallback)(tpAniSirGlobal pMac, uint32_t mesgId,
+				      void *mesgParam);
 
 /**
  * struct tEdcaParams - EDCA parameters

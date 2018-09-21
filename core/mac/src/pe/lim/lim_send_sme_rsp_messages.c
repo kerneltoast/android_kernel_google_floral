@@ -663,7 +663,7 @@ lim_send_sme_start_bss_rsp(tpAniSirGlobal pMac,
 			if (cfg_get_capability_info
 				    (pMac, &pSirSmeRsp->bssDescription.capabilityInfo,
 				    psessionEntry)
-			    != eSIR_SUCCESS)
+			    != QDF_STATUS_SUCCESS)
 				pe_err("could not retrieve Capabilities value");
 
 			lim_get_phy_mode(pMac,
@@ -840,7 +840,7 @@ lim_send_sme_disassoc_ntf(tpAniSirGlobal pMac,
 #endif
 		) {
 			if (lim_add_sta(pMac, sta_ds, false, session) !=
-					eSIR_SUCCESS)
+					QDF_STATUS_SUCCESS)
 					pe_err("could not Add STA with assocId: %d",
 					sta_ds->assocId);
 		}
@@ -1413,7 +1413,7 @@ lim_send_sme_wm_status_change_ntf(tpAniSirGlobal mac_ctx,
 	}
 
 	MTRACE(mac_trace(mac_ctx, TRACE_CODE_TX_SME_MSG, session_id, msg.type));
-	if (eSIR_SUCCESS != lim_sys_process_mmh_msg_api(mac_ctx, &msg, ePROT)) {
+	if (QDF_STATUS_SUCCESS != lim_sys_process_mmh_msg_api(mac_ctx, &msg, ePROT)) {
 		qdf_mem_free(wm_status_change_ntf);
 		pe_err("lim_sys_process_mmh_msg_api failed");
 	}
@@ -1619,7 +1619,7 @@ lim_send_sme_delts_ind(tpAniSirGlobal pMac, tpSirDeltsReqInfo delts, uint16_t ai
 	}
 
 	rsp->messageType = eWNI_SME_DELTS_IND;
-	rsp->rc = eSIR_SUCCESS;
+	rsp->rc = QDF_STATUS_SUCCESS;
 	rsp->aid = aid;
 	qdf_mem_copy((uint8_t *) &rsp->rsp, (uint8_t *) delts, sizeof(*delts));
 
@@ -1954,12 +1954,19 @@ void lim_handle_csa_offload_msg(tpAniSirGlobal mac_ctx,
 		return;
 	}
 
+	csa_offload_ind = qdf_mem_malloc(sizeof(tSmeCsaOffloadInd));
+	if (NULL == csa_offload_ind) {
+		pe_err("memalloc fail eWNI_SME_CSA_OFFLOAD_EVENT");
+		goto err;
+	}
+
 	session_entry =
 		pe_find_session_by_bssid(mac_ctx,
 			csa_params->bssId, &session_id);
 	if (!session_entry) {
 		pe_err("Session does not exists for %pM",
 				csa_params->bssId);
+		qdf_mem_free(csa_offload_ind);
 		goto err;
 	}
 
@@ -1968,11 +1975,13 @@ void lim_handle_csa_offload_msg(tpAniSirGlobal mac_ctx,
 
 	if (!sta_ds) {
 		pe_err("sta_ds does not exist");
+		qdf_mem_free(csa_offload_ind);
 		goto err;
 	}
 
 	if (!LIM_IS_STA_ROLE(session_entry)) {
 		pe_debug("Invalid role to handle CSA");
+		qdf_mem_free(csa_offload_ind);
 		goto err;
 	}
 
@@ -2146,15 +2155,19 @@ void lim_handle_csa_offload_msg(tpAniSirGlobal mac_ctx,
 		(session_entry->ch_width ==
 		 session_entry->gLimChannelSwitch.ch_width)) {
 		pe_debug("Ignore CSA, no change in ch and bw");
+		qdf_mem_free(csa_offload_ind);
 		goto err;
 	}
 
+	if (WLAN_REG_IS_24GHZ_CH(csa_params->channel) &&
+	    (session_entry->dot11mode == WNI_CFG_DOT11_MODE_11A))
+		session_entry->dot11mode = WNI_CFG_DOT11_MODE_11G;
+	else if (WLAN_REG_IS_5GHZ_CH(csa_params->channel) &&
+		 ((session_entry->dot11mode == WNI_CFG_DOT11_MODE_11G) ||
+		 (session_entry->dot11mode == WNI_CFG_DOT11_MODE_11G_ONLY)))
+		session_entry->dot11mode = WNI_CFG_DOT11_MODE_11A;
+
 	lim_prepare_for11h_channel_switch(mac_ctx, session_entry);
-	csa_offload_ind = qdf_mem_malloc(sizeof(tSmeCsaOffloadInd));
-	if (NULL == csa_offload_ind) {
-		pe_err("memalloc fail eWNI_SME_CSA_OFFLOAD_EVENT");
-		goto err;
-	}
 
 	csa_offload_ind->mesgType = eWNI_SME_CSA_OFFLOAD_EVENT;
 	csa_offload_ind->mesgLen = sizeof(tSmeCsaOffloadInd);
@@ -2169,7 +2182,7 @@ void lim_handle_csa_offload_msg(tpAniSirGlobal mac_ctx,
 #ifdef FEATURE_WLAN_DIAG_SUPPORT
 	lim_diag_event_report(mac_ctx,
 			WLAN_PE_DIAG_SWITCH_CHL_IND_EVENT, session_entry,
-			eSIR_SUCCESS, eSIR_SUCCESS);
+			QDF_STATUS_SUCCESS, QDF_STATUS_SUCCESS);
 #endif
 	lim_sys_process_mmh_msg_api(mac_ctx, &mmh_msg, ePROT);
 
@@ -2285,7 +2298,7 @@ lim_send_dfs_chan_sw_ie_update(tpAniSirGlobal pMac, tpPESession psessionEntry)
 {
 
 	/* Update the beacon template and send to FW */
-	if (sch_set_fixed_beacon_fields(pMac, psessionEntry) != eSIR_SUCCESS) {
+	if (sch_set_fixed_beacon_fields(pMac, psessionEntry) != QDF_STATUS_SUCCESS) {
 		pe_err("Unable to set CSA IE in beacon");
 		return;
 	}
@@ -2398,7 +2411,7 @@ lim_send_bss_color_change_ie_update(tpAniSirGlobal mac_ctx,
 						tpPESession session)
 {
 	/* Update the beacon template and send to FW */
-	if (sch_set_fixed_beacon_fields(mac_ctx, session) != eSIR_SUCCESS) {
+	if (sch_set_fixed_beacon_fields(mac_ctx, session) != QDF_STATUS_SUCCESS) {
 		pe_err("Unable to set BSS color change IE in beacon");
 	       return;
 	}

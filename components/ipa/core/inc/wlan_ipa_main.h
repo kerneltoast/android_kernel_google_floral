@@ -44,6 +44,12 @@
 #define ipa_debug(format, args...) \
 		ipa_logfl(QDF_TRACE_LEVEL_DEBUG, format, ## args)
 
+#define ipa_fatal_rl(params...) QDF_TRACE_FATAL_RL(QDF_MODULE_ID_IPA, params)
+#define ipa_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_IPA, params)
+#define ipa_warn_rl(params...) QDF_TRACE_WARN_RL(QDF_MODULE_ID_IPA, params)
+#define ipa_info_rl(params...) QDF_TRACE_INFO_RL(QDF_MODULE_ID_IPA, params)
+#define ipa_debug_rl(params...) QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_IPA, params)
+
 #define IPA_ENTER() ipa_debug("enter")
 #define IPA_EXIT() ipa_debug("exit")
 
@@ -367,5 +373,28 @@ int ipa_uc_smmu_map(bool map, uint32_t num_buf, qdf_mem_info_t *buf_arr);
  * Return: true if FW WDI activated, false otherwise
  */
 bool ipa_is_fw_wdi_activated(struct wlan_objmgr_pdev *pdev);
+
+/**
+ * ipa_uc_disconnect_ap() - send ap disconnect event
+ * @pdev: pdev obj
+ * @net_dev: Interface net device
+ *
+ * Send disconnect ap event to IPA driver
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS ipa_uc_disconnect_ap(struct wlan_objmgr_pdev *pdev,
+				qdf_netdev_t net_dev);
+
+/**
+ * ipa_cleanup_dev_iface() - Clean up net dev IPA interface
+ * @pdev: pdev obj
+ * @net_dev: Interface net device
+ *
+ *
+ * Return: None
+ */
+void ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
+			   qdf_netdev_t net_dev);
 #endif /* IPA_OFFLOAD */
 #endif /* end  of _WLAN_IPA_MAIN_H_ */

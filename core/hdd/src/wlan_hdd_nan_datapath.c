@@ -67,10 +67,10 @@ void hdd_nan_datapath_target_config(struct hdd_context *hdd_ctx,
 	hdd_ctx->nan_datapath_enabled =
 		hdd_ctx->config->enable_nan_datapath &&
 			cfg->nan_datapath_enabled;
-	hdd_info("enable_nan_datapath: final: %d, host: %d, fw: %d",
-		hdd_ctx->nan_datapath_enabled,
-		hdd_ctx->config->enable_nan_datapath,
-		cfg->nan_datapath_enabled);
+	hdd_debug("final: %d, host: %d, fw: %d",
+		  hdd_ctx->nan_datapath_enabled,
+		  hdd_ctx->config->enable_nan_datapath,
+		  cfg->nan_datapath_enabled);
 }
 
 /**
@@ -164,9 +164,10 @@ static bool hdd_is_ndp_allowed(struct hdd_context *hdd_ctx)
 static int hdd_ndi_start_bss(struct hdd_adapter *adapter,
 				uint8_t operating_channel)
 {
-	int ret;
+	QDF_STATUS status;
 	uint32_t roam_id;
 	struct csr_roam_profile *roam_profile;
+	mac_handle_t mac_handle;
 
 	hdd_enter();
 
@@ -205,14 +206,15 @@ static int hdd_ndi_start_bss(struct hdd_adapter *adapter,
 	roam_profile->EncryptionType.numEntries = 1;
 	roam_profile->EncryptionType.encryptionType[0] = eCSR_ENCRYPT_TYPE_NONE;
 
-	ret = sme_roam_connect(WLAN_HDD_GET_HAL_CTX(adapter),
-		adapter->session_id, roam_profile, &roam_id);
-	if (QDF_STATUS_SUCCESS != ret) {
+	mac_handle = hdd_adapter_get_mac_handle(adapter);
+	status = sme_roam_connect(mac_handle, adapter->session_id,
+				  roam_profile, &roam_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
 		hdd_err("NDI sme_RoamConnect session %d failed with status %d -> NotConnected",
-			adapter->session_id, ret);
+			adapter->session_id, status);
 		/* change back to NotConnected */
 		hdd_conn_set_connection_state(adapter,
-			eConnectionState_NotConnected);
+					      eConnectionState_NotConnected);
 	} else {
 		hdd_info("sme_RoamConnect issued successfully for NDI");
 	}
@@ -222,7 +224,7 @@ static int hdd_ndi_start_bss(struct hdd_adapter *adapter,
 
 	hdd_exit();
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -410,7 +412,8 @@ int hdd_init_nan_data_mode(struct hdd_adapter *adapter)
 	struct net_device *wlan_dev = adapter->dev;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 	QDF_STATUS status;
-	int32_t ret_val = 0;
+	int32_t ret_val;
+	mac_handle_t mac_handle;
 
 	ret_val = hdd_vdev_create(adapter, hdd_sme_roam_callback, adapter);
 	if (ret_val) {
@@ -418,10 +421,12 @@ int hdd_init_nan_data_mode(struct hdd_adapter *adapter)
 		return ret_val;
 	}
 
+	mac_handle = hdd_ctx->mac_handle;
+
 	/* Configure self HT/VHT capabilities */
-	sme_set_curr_device_mode(hdd_ctx->hHal, adapter->device_mode);
-	sme_set_pdev_ht_vht_ies(hdd_ctx->hHal, hdd_ctx->config->enable2x2);
-	sme_set_vdev_ies_per_band(hdd_ctx->hHal, adapter->session_id);
+	sme_set_curr_device_mode(mac_handle, adapter->device_mode);
+	sme_set_pdev_ht_vht_ies(mac_handle, hdd_ctx->config->enable2x2);
+	sme_set_vdev_ies_per_band(mac_handle, adapter->session_id);
 
 	hdd_roam_profile_init(adapter);
 	hdd_register_wext(wlan_dev);
@@ -467,7 +472,7 @@ error_init_txrx:
 	return ret_val;
 }
 
-struct wlan_objmgr_vdev *hdd_ndi_open(char *iface_name)
+int hdd_ndi_open(char *iface_name)
 {
 	struct hdd_adapter *adapter;
 	struct qdf_mac_addr random_ndi_mac;
@@ -475,23 +480,22 @@ struct wlan_objmgr_vdev *hdd_ndi_open(char *iface_name)
 	uint8_t *ndi_mac_addr;
 
 	hdd_enter();
-
 	if (!hdd_ctx) {
 		hdd_err("hdd_ctx null");
-		return NULL;
+		return -EINVAL;
 	}
 
 	if (hdd_ctx->config->is_ndi_mac_randomized) {
 		if (hdd_get_random_nan_mac_addr(hdd_ctx, &random_ndi_mac)) {
 			hdd_err("get random mac address failed");
-			return NULL;
+			return -EFAULT;
 		}
 		ndi_mac_addr = &random_ndi_mac.bytes[0];
 	} else {
 		ndi_mac_addr = wlan_hdd_get_intf_addr(hdd_ctx);
 		if (!ndi_mac_addr) {
 			hdd_err("get intf address failed");
-			return NULL;
+			return -EFAULT;
 		}
 	}
 
@@ -499,32 +503,50 @@ struct wlan_objmgr_vdev *hdd_ndi_open(char *iface_name)
 				   ndi_mac_addr, NET_NAME_UNKNOWN, true);
 	if (!adapter) {
 		hdd_err("hdd_open_adapter failed");
-		return NULL;
+		return -EINVAL;
 	}
 
 	hdd_exit();
-	return adapter->hdd_vdev;
+	return 0;
 }
 
-int hdd_ndi_start(uint8_t vdev_id)
+int hdd_ndi_start(char *iface_name, uint16_t transaction_id)
 {
+	int ret;
 	uint8_t op_channel;
+	QDF_STATUS status;
 	struct hdd_adapter *adapter;
 	struct hdd_context *hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
 
 	hdd_enter();
-
 	if (!hdd_ctx) {
 		hdd_err("hdd_ctx is null");
 		return -EINVAL;
 	}
 
 	op_channel = hdd_ctx->config->nan_datapath_ndi_channel;
-	adapter = hdd_get_adapter_by_vdev(hdd_ctx, vdev_id);
+	adapter = hdd_get_adapter_by_iface_name(hdd_ctx, iface_name);
 	if (!adapter) {
 		hdd_err("adapter is null");
 		return -EINVAL;
 	}
+
+	/* create nan vdev */
+	status = hdd_init_nan_data_mode(adapter);
+	if (QDF_STATUS_SUCCESS != status) {
+		hdd_err("failed to init nan data intf, status :%d", status);
+		ret = -EFAULT;
+		goto err_handler;
+	}
+
+	/*
+	 * Create transaction id is required to be saved since the firmware
+	 * does not honor the transaction id for create request
+	 */
+	ucfg_nan_set_ndp_create_transaction_id(adapter->hdd_vdev,
+					       transaction_id);
+	ucfg_nan_set_ndi_state(adapter->hdd_vdev,
+			       NAN_DATA_NDI_CREATING_STATE);
 
 	/*
 	 * The NAN data interface has been created at this point.
@@ -539,16 +561,21 @@ int hdd_ndi_start(uint8_t vdev_id)
 		/* start NDI on the default 2.4 GHz social channel */
 		op_channel = NAN_SOCIAL_CHANNEL_2_4GHZ;
 	}
+
 	if (hdd_ndi_start_bss(adapter, op_channel)) {
 		hdd_err("NDI start bss failed");
-		/* Start BSS failed, delete the interface */
-		hdd_close_ndi(adapter);
-		hdd_exit();
-		return -EINVAL;
+		ret = -EFAULT;
+		goto err_handler;
 	}
 
 	hdd_exit();
 	return 0;
+
+err_handler:
+
+	/* Start BSS failed, delete the interface */
+	hdd_close_ndi(adapter);
+	return ret;
 }
 
 int hdd_ndi_delete(uint8_t vdev_id, char *iface_name, uint16_t transaction_id)
@@ -640,11 +667,6 @@ void hdd_ndi_drv_ndi_create_rsp_handler(uint8_t vdev_id,
 	hdd_roam_register_sta(adapter, &roam_info,
 				sta_ctx->broadcast_staid,
 				&bc_mac_addr, &tmp_bss_descp);
-	if (hdd_objmgr_add_peer_object(adapter->hdd_vdev,
-				 QDF_NDI_MODE, bc_mac_addr.bytes, false))
-		hdd_err("Peer object "MAC_ADDRESS_STR" add fails!",
-			MAC_ADDR_ARRAY(bc_mac_addr.bytes));
-
 	hdd_ctx->sta_to_adapter[sta_ctx->broadcast_staid] = adapter;
 }
 
@@ -763,10 +785,6 @@ int hdd_ndp_new_peer_handler(uint8_t vdev_id, uint16_t sta_id,
 	/* this function is called for each new peer */
 	hdd_roam_register_sta(adapter, &roam_info, sta_id,
 				peer_mac_addr, &tmp_bss_descp);
-	if (hdd_objmgr_add_peer_object(adapter->hdd_vdev,
-			 QDF_NDI_MODE, peer_mac_addr->bytes, false))
-		hdd_err("Peer object "MAC_ADDRESS_STR" add fails!",
-			MAC_ADDR_ARRAY(peer_mac_addr->bytes));
 	hdd_ctx->sta_to_adapter[sta_id] = adapter;
 	/* perform following steps for first new peer ind */
 	if (fist_peer) {

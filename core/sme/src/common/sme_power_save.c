@@ -341,6 +341,10 @@ QDF_STATUS sme_enable_sta_ps_check(tpAniSirGlobal mac_ctx, uint32_t session_id)
 {
 	struct ps_global_info *ps_global_info = &mac_ctx->sme.ps_global_info;
 
+	QDF_BUG(session_id < CSR_ROAM_SESSION_MAX);
+	if (session_id >= CSR_ROAM_SESSION_MAX)
+		return QDF_STATUS_E_INVAL;
+
 	/* Check if Sta Ps is enabled. */
 	if (!ps_global_info->ps_enabled) {
 		sme_debug("Cannot initiate PS. PS is disabled in ini");
@@ -356,8 +360,8 @@ QDF_STATUS sme_enable_sta_ps_check(tpAniSirGlobal mac_ctx, uint32_t session_id)
 			  session_id);
 		return QDF_STATUS_E_FAILURE;
 	}
-	return QDF_STATUS_SUCCESS;
 
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -390,6 +394,10 @@ QDF_STATUS sme_ps_timer_flush_sync(tHalHandle hal, uint8_t session_id)
 	QDF_TIMER_STATE tstate;
 	struct sEnablePsParams *req;
 	t_wma_handle *wma;
+
+	QDF_BUG(session_id < CSR_ROAM_SESSION_MAX);
+	if (session_id >= CSR_ROAM_SESSION_MAX)
+		return QDF_STATUS_E_INVAL;
 
 	status = sme_enable_sta_ps_check(mac_ctx, session_id);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -574,14 +582,10 @@ void sme_set_tspec_uapsd_mask_per_session(tpAniSirGlobal mac_ctx,
  * sme_ps_start_uapsd(): function to start UAPSD.
  * @hal_ctx: global hal_handle
  * @session_id: session id
- * @uapsd_start_ind_cb: uapsd start indiation cb
- * @callback_context: callback context
  *
  * Return: QDF_STATUS
  */
-QDF_STATUS sme_ps_start_uapsd(tHalHandle hal_ctx, uint32_t session_id,
-		uapsd_start_indication_cb uapsd_start_ind_cb,
-		void *callback_context)
+QDF_STATUS sme_ps_start_uapsd(tHalHandle hal_ctx, uint32_t session_id)
 {
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
@@ -714,8 +718,8 @@ QDF_STATUS sme_set_ps_ns_offload(tHalHandle hal_ctx,
  * @return None
  */
 
-tSirRetStatus sme_post_pe_message(tpAniSirGlobal mac_ctx,
-				  struct scheduler_msg *msg)
+QDF_STATUS sme_post_pe_message(tpAniSirGlobal mac_ctx,
+			       struct scheduler_msg *msg)
 {
 	QDF_STATUS qdf_status;
 
@@ -724,10 +728,10 @@ tSirRetStatus sme_post_pe_message(tpAniSirGlobal mac_ctx,
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 		sme_err("scheduler_post_msg failed with status: %d",
 			qdf_status);
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 QDF_STATUS sme_ps_enable_auto_ps_timer(tHalHandle hal_ctx,

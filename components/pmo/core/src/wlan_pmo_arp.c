@@ -64,14 +64,12 @@ static QDF_STATUS pmo_core_cache_arp_in_vdev_priv(
 	/* cache arp request */
 	qdf_spin_lock_bh(&vdev_ctx->pmo_vdev_lock);
 	qdf_mem_copy(&vdev_ctx->vdev_arp_req, request,
-		sizeof(vdev_ctx->vdev_arp_req));
+		     sizeof(vdev_ctx->vdev_arp_req));
 	qdf_spin_unlock_bh(&vdev_ctx->pmo_vdev_lock);
-	pmo_debug("arp offload ipv4 addr: %d.%d.%d.%d enable: %d",
-		request->host_ipv4_addr[0],
-		request->host_ipv4_addr[1],
-		request->host_ipv4_addr[2],
-		request->host_ipv4_addr[3],
-		request->enable);
+
+	pmo_debug("cached arp offload; addr:" QDF_IPV4_ADDR_STR ", enable:%d",
+		  QDF_IPV4_ADDR_ARRAY(request->host_ipv4_addr),
+		  request->enable);
 
 free_req:
 	qdf_mem_free(request);
@@ -107,7 +105,7 @@ pmo_core_do_enable_arp_offload(struct wlan_objmgr_vdev *vdev,
 			       uint8_t vdev_id,
 			       enum pmo_offload_trigger trigger)
 {
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	QDF_STATUS status;
 	struct pmo_psoc_priv_obj *psoc_ctx;
 	struct pmo_vdev_priv_obj *vdev_ctx;
 
@@ -127,7 +125,7 @@ pmo_core_do_enable_arp_offload(struct wlan_objmgr_vdev *vdev,
 		if (!psoc_ctx->psoc_cfg.active_mode_offload) {
 			pmo_debug("active offload is disabled, skip in mode %d",
 				  trigger);
-			status = QDF_STATUS_E_INVAL;
+			status = QDF_STATUS_SUCCESS;
 			goto out;
 		}
 		/* enable arp when active offload is true (ipv4 notifier) */
@@ -137,7 +135,7 @@ pmo_core_do_enable_arp_offload(struct wlan_objmgr_vdev *vdev,
 		if (psoc_ctx->psoc_cfg.active_mode_offload) {
 			pmo_debug("active offload is enabled, skip in mode %d",
 				  trigger);
-			status = QDF_STATUS_E_INVAL;
+			status = QDF_STATUS_SUCCESS;
 			goto out;
 		}
 		/* enable arp when active offload is false (apps suspend) */
@@ -177,7 +175,7 @@ static QDF_STATUS pmo_core_do_disable_arp_offload(struct wlan_objmgr_vdev *vdev,
 		if (psoc_ctx->psoc_cfg.active_mode_offload) {
 			pmo_debug("active offload is enabled, skip in mode: %d",
 				trigger);
-			status = QDF_STATUS_E_INVAL;
+			status = QDF_STATUS_SUCCESS;
 			goto out;
 		}
 		/* disable arp on apps resume when active offload is disable */

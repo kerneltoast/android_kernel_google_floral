@@ -37,6 +37,7 @@
 
 #include "rrm_global.h"
 #include <wlan_scan_ucfg_api.h>
+#include <wlan_scan_utils_api.h>
 #include <wlan_utility.h>
 
 /* Roam score for a neighbor AP will be calculated based on the below
@@ -269,7 +270,7 @@ static QDF_STATUS sme_ese_send_beacon_req_scan_results(
 	uint8_t msrmnt_status, uint8_t bss_count)
 {
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
-	tSirRetStatus fill_ie_status;
+	QDF_STATUS fill_ie_status;
 	tpSirBssDescription bss_desc = NULL;
 	uint32_t ie_len = 0;
 	uint32_t out_ie_len = 0;
@@ -347,7 +348,7 @@ static QDF_STATUS sme_ese_send_beacon_req_scan_results(
 						&(bcn_report->bcnRepBssInfo[j].
 						pBuf),
 						&out_ie_len);
-			if (eSIR_FAILURE == fill_ie_status)
+			if (QDF_STATUS_E_FAILURE == fill_ie_status)
 				continue;
 			bcn_report->bcnRepBssInfo[j].ieLen = out_ie_len;
 
@@ -408,6 +409,7 @@ static QDF_STATUS sme_rrm_send_scan_result(tpAniSirGlobal mac_ctx,
 					   uint8_t *chan_list,
 					   uint8_t measurementdone)
 {
+	mac_handle_t mac_handle = MAC_HANDLE(mac_ctx);
 	tCsrScanResultFilter filter;
 	tScanResultHandle result_handle;
 	tCsrScanResultInfo *scan_results, *next_result;
@@ -417,6 +419,8 @@ static QDF_STATUS sme_rrm_send_scan_result(tpAniSirGlobal mac_ctx,
 	tpRrmSMEContext rrm_ctx = &mac_ctx->rrm.rrmSmeContext;
 	uint32_t session_id;
 	struct csr_roam_info *roam_info;
+	tSirScanType scan_type;
+	struct csr_roam_session *session;
 
 	qdf_mem_zero(&filter, sizeof(filter));
 	qdf_mem_zero(scanresults_arr,
@@ -455,8 +459,8 @@ static QDF_STATUS sme_rrm_send_scan_result(tpAniSirGlobal mac_ctx,
 		sme_debug("BSSID mismatch, using current session_id");
 		session_id = mac_ctx->roam.roamSession->sessionId;
 	}
-	status = sme_scan_get_result(mac_ctx, (uint8_t) session_id,
-					&filter, &result_handle);
+	status = sme_scan_get_result(mac_handle, (uint8_t)session_id,
+				     &filter, &result_handle);
 
 	if (filter.SSIDs.SSIDList)
 		qdf_mem_free(filter.SSIDs.SSIDList);
@@ -489,7 +493,7 @@ static QDF_STATUS sme_rrm_send_scan_result(tpAniSirGlobal mac_ctx,
 					NULL, measurementdone, 0);
 		return status;
 	}
-	scan_results = sme_scan_result_get_first(mac_ctx, result_handle);
+	scan_results = sme_scan_result_get_first(mac_handle, result_handle);
 	if (NULL == scan_results && measurementdone) {
 #ifdef FEATURE_WLAN_ESE
 		if (eRRM_MSG_SOURCE_ESE_UPLOAD == rrm_ctx->msgSource) {
@@ -508,16 +512,50 @@ static QDF_STATUS sme_rrm_send_scan_result(tpAniSirGlobal mac_ctx,
 
 	roam_info = qdf_mem_malloc(sizeof(*roam_info));
 	if (NULL == roam_info) {
-		sme_err("vos_mem_malloc failed");
+		sme_err("malloc failed");
 		status = QDF_STATUS_E_NOMEM;
 		goto rrm_send_scan_results_done;
 	}
 
+	session = CSR_GET_SESSION(mac_ctx, session_id);
+	if ((!session) ||  (!csr_is_conn_state_connected_infra(
+	    mac_ctx, session_id)) ||
+	    (NULL == session->pConnectBssDesc)) {
+		sme_err("Invaild session");
+		status = QDF_STATUS_E_FAILURE;
+		goto rrm_send_scan_results_done;
+	}
+
+	if (eRRM_MSG_SOURCE_ESE_UPLOAD == rrm_ctx->msgSource ||
+	    eRRM_MSG_SOURCE_LEGACY_ESE == rrm_ctx->msgSource)
+		scan_type = rrm_ctx->measMode[rrm_ctx->currentIndex];
+	else
+		scan_type = rrm_ctx->measMode[0];
+
 	while (scan_results) {
-		next_result = sme_scan_result_get_next(mac_ctx, result_handle);
+		/*
+		 * In passive scan, sta listens beacon. Connected AP beacon
+		 * is offloaded to firmware. Firmware will discard
+		 * connected AP beacon except that special IE exists.
+		 * Connected AP beacon will not be sent to host. Hence, timer
+		 * of connected AP in scan results is not updated and can
+		 * not meet "pScanResult->timer >= RRM_scan_timer".
+		 */
+		uint8_t is_conn_bss_found = false;
+
+		if ((scan_type == eSIR_PASSIVE_SCAN) &&
+		     (!qdf_mem_cmp(scan_results->BssDescriptor.bssId,
+		      session->pConnectBssDesc->bssId,
+		      sizeof(struct qdf_mac_addr)))) {
+			is_conn_bss_found = true;
+			sme_debug("Connected BSS in scan results");
+		}
+		next_result = sme_scan_result_get_next(mac_handle,
+						       result_handle);
 		sme_debug("Scan res timer:%lu, rrm scan timer:%llu",
 				scan_results->timer, rrm_scan_timer);
-		if (scan_results->timer >= rrm_scan_timer) {
+		if ((scan_results->timer >= rrm_scan_timer) ||
+		    (is_conn_bss_found == true)) {
 			roam_info->pBssDesc = &scan_results->BssDescriptor;
 			csr_roam_call_callback(mac_ctx, session_id, roam_info,
 						0, eCSR_ROAM_UPDATE_SCAN_RESULT,
@@ -631,7 +669,7 @@ static void sme_rrm_scan_event_callback(struct wlan_objmgr_vdev *vdev,
 	uint8_t session_id;
 	eCsrScanStatus scan_status = eCSR_SCAN_FAILURE;
 	tHalHandle hal_handle;
-
+	bool success = false;
 	session_id = wlan_vdev_get_id(vdev);
 	scan_id = event->scan_id;
 	hal_handle = cds_get_context(QDF_MODULE_ID_SME);
@@ -640,21 +678,12 @@ static void sme_rrm_scan_event_callback(struct wlan_objmgr_vdev *vdev,
 			  FL("invalid h_hal"));
 		return;
 	}
-	if ((event->type != SCAN_EVENT_TYPE_COMPLETED) &&
-	    (event->type != SCAN_EVENT_TYPE_DEQUEUED) &&
-	    (event->type != SCAN_EVENT_TYPE_START_FAILED))
+
+	if (!util_is_scan_completed(event, &success))
 		return;
 
-	if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
-		((event->reason == SCAN_REASON_CANCELLED) ||
-		(event->reason == SCAN_REASON_TIMEDOUT) ||
-		(event->reason == SCAN_REASON_INTERNAL_FAILURE)))
-		scan_status = eCSR_SCAN_FAILURE;
-	else if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
-			(event->reason == SCAN_REASON_COMPLETED))
+	if (success)
 		scan_status = eCSR_SCAN_SUCCESS;
-	else
-		return;
 
 	sme_rrm_scan_request_callback(hal_handle, session_id,
 					scan_id, scan_status);
@@ -687,6 +716,7 @@ static QDF_STATUS sme_rrm_issue_scan_req(tpAniSirGlobal mac_ctx)
 
 	if ((sme_rrm_ctx->currentIndex) >=
 			sme_rrm_ctx->channelList.numOfChannels) {
+		sme_rrm_send_beacon_report_xmit_ind(mac_ctx, NULL, true, 0);
 		sme_debug("done with the complete ch lt. finish and fee now");
 		goto free_ch_lst;
 	}
@@ -721,6 +751,8 @@ static QDF_STATUS sme_rrm_issue_scan_req(tpAniSirGlobal mac_ctx)
 		ucfg_scan_init_default_params(vdev, req);
 		req->scan_req.dwell_time_active = 0;
 		req->scan_req.scan_id = ucfg_scan_get_scan_id(mac_ctx->psoc);
+		req->scan_req.scan_f_passive =
+				(scan_type == eSIR_ACTIVE_SCAN) ? false : true;
 		req->scan_req.vdev_id = wlan_vdev_get_id(vdev);
 		req->scan_req.scan_req_id = sme_rrm_ctx->req_id;
 		qdf_mem_copy(&req->scan_req.bssid_list[0], sme_rrm_ctx->bssId,
@@ -728,7 +760,7 @@ static QDF_STATUS sme_rrm_issue_scan_req(tpAniSirGlobal mac_ctx)
 		req->scan_req.num_bssid = 1;
 		if (sme_rrm_ctx->ssId.length) {
 			req->scan_req.num_ssids = 1;
-			qdf_mem_copy(&req->scan_req.ssid[0],
+			qdf_mem_copy(&req->scan_req.ssid[0].ssid,
 					sme_rrm_ctx->ssId.ssId,
 					sme_rrm_ctx->ssId.length);
 			req->scan_req.ssid[0].length = sme_rrm_ctx->ssId.length;
@@ -1415,8 +1447,7 @@ QDF_STATUS rrm_open(tpAniSirGlobal pMac)
 
 	pSmeRrmContext->neighborReqControlInfo.isNeighborRspPending = false;
 
-	qdf_ret_status =
-		csr_ll_open(pMac->hHdd, &pSmeRrmContext->neighborReportCache);
+	qdf_ret_status = csr_ll_open(&pSmeRrmContext->neighborReportCache);
 	if (QDF_STATUS_SUCCESS != qdf_ret_status) {
 		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
 			  "rrm_open: Fail to open neighbor cache result");

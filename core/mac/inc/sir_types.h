@@ -27,8 +27,8 @@
 #ifndef __SIR_TYPES_H
 #define __SIR_TYPES_H
 
+#include <qdf_status.h>
 #include <qdf_types.h>
-
 
 /**
  * typedef mac_handle_t - MAC Handle
@@ -42,10 +42,12 @@
  * pointer through this handle.
  */
 /*
- * NOTE WELL: an upcoming change will replace the void * with an
- * opaque pointer just as is currently done with hdd_handle_t
+ * NOTE WELL: struct opaque_mac_handle is not defined anywhere. This
+ * reference is used to help ensure that a mac_handle_t is never used
+ * where a different handle type is expected
  */
-typedef void *mac_handle_t;
+struct opaque_mac_handle;
+typedef struct opaque_mac_handle *mac_handle_t;
 
 /* retain legacy name until all instances have been replaced */
 typedef mac_handle_t tHalHandle;
@@ -68,34 +70,6 @@ typedef mac_handle_t tHalHandle;
  */
 struct opaque_hdd_handle;
 typedef struct opaque_hdd_handle *hdd_handle_t;
-
-/* ********************************************** *
-*                                                *
-*     SIRIUS ERROR Codes / Return Codes          *
-*                                                *
-* ********************************************** */
-
-/* / Return status type */
-typedef enum eSirRetStatus {
-	eSIR_SUCCESS,
-	eSIR_FAILURE,
-	eSIR_MEM_ALLOC_FAILED,
-	eSIR_HAL_STA_DOES_NOT_EXIST,
-	eSIR_HAL_INPUT_INVALID,
-	eSIR_LIM_IGNORE_BEACON,
-	eSIR_LIM_INVALID_STA,
-	eSIR_LIM_MAX_STA_REACHED_ERROR,
-	eSIR_CFG_INVALID_ID,
-	eSIR_CFG_INVALID_LEN,
-	eSIR_IGNORE_IE,
-} tSirRetStatus;
-
-#define IS_SIR_STATUS_SUCCESS(status) (eSIR_SUCCESS == status)
-typedef enum {
-	HAL_STOP_TYPE_SYS_RESET,
-	HAL_STOP_TYPE_SYS_DEEP_SLEEP,
-	HAL_STOP_TYPE_RF_KILL,
-} tHalStopType;
 
 #define HAL_NUM_ASSOC_STA           32
 #define HAL_NUM_STA                 41

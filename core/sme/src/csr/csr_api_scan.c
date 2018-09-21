@@ -118,8 +118,8 @@ static QDF_STATUS csr_ll_scan_purge_result(tpAniSirGlobal pMac,
 
 QDF_STATUS csr_scan_open(tpAniSirGlobal mac_ctx)
 {
-	csr_ll_open(mac_ctx->hHdd, &mac_ctx->scan.channelPowerInfoList24);
-	csr_ll_open(mac_ctx->hHdd, &mac_ctx->scan.channelPowerInfoList5G);
+	csr_ll_open(&mac_ctx->scan.channelPowerInfoList24);
+	csr_ll_open(&mac_ctx->scan.channelPowerInfoList5G);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -150,6 +150,18 @@ QDF_STATUS csr_scan_handle_search_for_ssid(tpAniSirGlobal mac_ctx,
 	profile = session->scan_info.profile;
 	sme_debug("session %d", session_id);
 	do {
+		/* If this scan is for HDD reassociate */
+		if (mac_ctx->roam.neighborRoamInfo[session_id].
+				uOsRequestedHandoff) {
+			/* notify LFR state m/c */
+			status = csr_neighbor_roam_sssid_scan_done
+				(mac_ctx, session_id, QDF_STATUS_SUCCESS);
+			if (!QDF_IS_STATUS_SUCCESS(status))
+				csr_neighbor_roam_start_lfr_scan(mac_ctx,
+								 session_id);
+			status = QDF_STATUS_SUCCESS;
+			break;
+		}
 		/*
 		 * If there is roam command waiting, ignore this roam because
 		 * the newer roam command is the one to execute
@@ -251,6 +263,17 @@ QDF_STATUS csr_scan_handle_search_for_ssid_failure(tpAniSirGlobal mac_ctx,
 		sme_err("session %d not found", session_id);
 		return QDF_STATUS_E_FAILURE;
 	}
+
+	/* If this scan is for HDD reassociate */
+	if (mac_ctx->roam.neighborRoamInfo[session_id].uOsRequestedHandoff) {
+		/* notify LFR state m/c */
+		status = csr_neighbor_roam_sssid_scan_done
+				(mac_ctx, session_id, QDF_STATUS_E_FAILURE);
+		if (!QDF_IS_STATUS_SUCCESS(status))
+			csr_neighbor_roam_start_lfr_scan(mac_ctx, session_id);
+		return QDF_STATUS_SUCCESS;
+	}
+
 	profile = session->scan_info.profile;
 
 	/*
@@ -1274,18 +1297,15 @@ void csr_scan_callback(struct wlan_objmgr_vdev *vdev,
 	struct csr_roam_session *session;
 	uint32_t session_id = 0;
 	uint8_t chan = 0;
+	bool success = false;
 
 	mac_ctx = (tpAniSirGlobal)arg;
-	if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
-			((event->reason == SCAN_REASON_CANCELLED) ||
-			(event->reason == SCAN_REASON_TIMEDOUT) ||
-			(event->reason == SCAN_REASON_INTERNAL_FAILURE)))
-		scan_status = eCSR_SCAN_FAILURE;
-	else if ((event->type == SCAN_EVENT_TYPE_COMPLETED) &&
-			(event->reason == SCAN_REASON_COMPLETED))
-		scan_status = eCSR_SCAN_SUCCESS;
-	else
+
+	if (!util_is_scan_completed(event, &success))
 		return;
+
+	if (success)
+		scan_status = eCSR_SCAN_SUCCESS;
 
 	session_id = wlan_vdev_get_id(vdev);
 	if (!CSR_IS_SESSION_VALID(mac_ctx, session_id)) {
@@ -1727,14 +1747,14 @@ static void csr_set_cfg_country_code(tpAniSirGlobal pMac, uint8_t *countryCode)
 QDF_STATUS csr_get_country_code(tpAniSirGlobal pMac, uint8_t *pBuf,
 				uint8_t *pbLen)
 {
-	tSirRetStatus status;
+	QDF_STATUS status;
 	uint32_t len;
 
 	if (pBuf && pbLen && (*pbLen >= WNI_CFG_COUNTRY_CODE_LEN)) {
 		len = *pbLen;
 		status = wlan_cfg_get_str(pMac, WNI_CFG_COUNTRY_CODE, pBuf,
 					&len);
-		if (status == eSIR_SUCCESS) {
+		if (status == QDF_STATUS_SUCCESS) {
 			*pbLen = (uint8_t) len;
 			return QDF_STATUS_SUCCESS;
 		}
@@ -1753,7 +1773,7 @@ void csr_set_cfg_scan_control_list(tpAniSirGlobal pMac, uint8_t *countryCode,
 
 	pControlList = qdf_mem_malloc(WNI_CFG_SCAN_CONTROL_LIST_LEN);
 	if (pControlList != NULL) {
-		if (IS_SIR_STATUS_SUCCESS(wlan_cfg_get_str(pMac,
+		if (QDF_IS_STATUS_SUCCESS(wlan_cfg_get_str(pMac,
 					WNI_CFG_SCAN_CONTROL_LIST,
 					pControlList, &len))) {
 			for (i = 0; i < pChannelList->numChannels; i++) {
@@ -1844,7 +1864,7 @@ QDF_STATUS csr_remove_nonscan_cmd_from_pending_list(tpAniSirGlobal pMac,
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 
 	qdf_mem_zero(&localList, sizeof(tDblLinkList));
-	if (!QDF_IS_STATUS_SUCCESS(csr_ll_open(pMac->hHdd, &localList))) {
+	if (!QDF_IS_STATUS_SUCCESS(csr_ll_open(&localList))) {
 		sme_err("failed to open list");
 		return status;
 	}
@@ -2080,6 +2100,98 @@ csr_get_bssdescr_from_scan_handle(tScanResultHandle result_handle,
 				sizeof(tSirBssDescription));
 	}
 	return bss_descr;
+}
+
+uint8_t
+csr_get_channel_for_hw_mode_change(tpAniSirGlobal mac_ctx,
+				   tScanResultHandle result_handle,
+				   uint32_t session_id)
+{
+	tListElem *next_element = NULL;
+	struct tag_csrscan_result *scan_result = NULL;
+	struct scan_result_list *bss_list =
+				(struct scan_result_list *)result_handle;
+	uint8_t channel_id = 0;
+
+	if (NULL == bss_list) {
+		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
+			  FL("Empty bss_list"));
+		goto end;
+	}
+
+	if (policy_mgr_is_hw_dbs_capable(mac_ctx->psoc) == false) {
+		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,
+			  FL("driver isn't dbs capable"));
+		goto end;
+	}
+
+	if (policy_mgr_is_current_hwmode_dbs(mac_ctx->psoc)) {
+		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,
+			  FL("driver is already in DBS"));
+		goto end;
+	}
+
+	if (!policy_mgr_is_dbs_allowed_for_concurrency(mac_ctx->psoc,
+						       QDF_STA_MODE)) {
+		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,
+			  FL("DBS is not allowed for this concurrency combo"));
+		goto end;
+	}
+
+	if (!policy_mgr_is_hw_dbs_2x2_capable(mac_ctx->psoc) &&
+	    !policy_mgr_get_connection_count(mac_ctx->psoc)) {
+		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_DEBUG,
+			  FL("1x1 DBS HW with no prior connection"));
+		goto end;
+	}
+
+	if (csr_ll_is_list_empty(&bss_list->List, LL_ACCESS_NOLOCK)) {
+		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
+			  FL("bss_list->List is empty"));
+		qdf_mem_free(bss_list);
+		goto end;
+	}
+
+	next_element = csr_ll_peek_head(&bss_list->List, LL_ACCESS_NOLOCK);
+	while (next_element) {
+		scan_result = GET_BASE_ADDR(next_element,
+					    struct tag_csrscan_result,
+					    Link);
+		if (policy_mgr_is_hw_dbs_2x2_capable(mac_ctx->psoc)) {
+			if (WLAN_REG_IS_24GHZ_CH
+				(scan_result->Result.BssDescriptor.channelId)) {
+				channel_id =
+					scan_result->
+					Result.BssDescriptor.channelId;
+				break;
+			}
+		} else {
+			if (WLAN_REG_IS_24GHZ_CH
+				(scan_result->Result.BssDescriptor.channelId) &&
+			    policy_mgr_is_any_mode_active_on_band_along_with_session
+				(mac_ctx->psoc,
+				 session_id, POLICY_MGR_BAND_5)) {
+				channel_id =
+					scan_result->
+					Result.BssDescriptor.channelId;
+				break;
+			}
+			if (WLAN_REG_IS_5GHZ_CH
+				(scan_result->Result.BssDescriptor.channelId) &&
+			    policy_mgr_is_any_mode_active_on_band_along_with_session
+				(mac_ctx->psoc,
+				 session_id, POLICY_MGR_BAND_24)) {
+				channel_id =
+					scan_result->
+					Result.BssDescriptor.channelId;
+				break;
+			}
+		}
+		next_element = csr_ll_next(&bss_list->List, next_element,
+					   LL_ACCESS_NOLOCK);
+	}
+end:
+	return channel_id;
 }
 
 static enum wlan_auth_type csr_covert_auth_type_new(eCsrAuthType auth)
@@ -2861,7 +2973,7 @@ QDF_STATUS csr_scan_get_result(tpAniSirGlobal mac_ctx,
 		goto error;
 	}
 
-	csr_ll_open(mac_ctx->hHdd, &ret_list->List);
+	csr_ll_open(&ret_list->List);
 	ret_list->pCurEntry = NULL;
 	status = csr_parse_scan_list(mac_ctx,
 		ret_list, list);

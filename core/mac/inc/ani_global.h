@@ -726,7 +726,6 @@ typedef struct sAniSirLim {
 	/* //////////////////////////////  HT RELATED           ////////////////////////////////////////// */
 
 #ifdef FEATURE_WLAN_TDLS
-	uint8_t gLimAddStaTdls;
 	uint8_t gLimTdlsLinkMode;
 	/* //////////////////////////////  TDLS RELATED         ////////////////////////////////////////// */
 #endif
@@ -759,7 +758,7 @@ typedef struct sAniSirLim {
 	uint8_t gLimDfsChanSwTxCount;
 	uint8_t gLimDfsTargetChanNum;
 	QDF_STATUS(*sme_msg_callback)
-		(tHalHandle hal, struct scheduler_msg *msg);
+		(tpAniSirGlobal mac, struct scheduler_msg *msg);
 	uint8_t retry_packet_cnt;
 	uint8_t beacon_probe_rsp_cnt_per_scan;
 	wlan_scan_requester req_id;
@@ -779,12 +778,6 @@ typedef struct sRrmContext {
 	tRrmSMEContext rrmSmeContext;
 	tRrmPEContext rrmPEContext;
 } tRrmContext, *tpRrmContext;
-
-typedef struct sHalMacStartParameters {
-	/* parameters for the Firmware */
-	enum qdf_driver_type driverType;
-
-} tHalMacStartParameters;
 
 /**
  * enum auth_tx_ack_status - Indicate TX status of AUTH
@@ -857,7 +850,7 @@ typedef struct sAniSirGlobal {
 	tAniSirSys sys;
 
 	/* PAL/HDD handle */
-	hdd_handle_t hHdd;
+	hdd_handle_t hdd_handle;
 
 
 	tSmeStruct sme;
@@ -896,6 +889,7 @@ typedef struct sAniSirGlobal {
 	uint8_t hw_dbs_capable;
 	uint32_t sta_sap_scc_on_dfs_chan;
 	sir_mgmt_frame_ind_callback mgmt_frame_ind_cb;
+	qdf_atomic_t global_cmd_id;
 	struct wlan_objmgr_psoc *psoc;
 	struct wlan_objmgr_pdev *pdev;
 	void (*chan_info_cb)(struct scan_chan_info *chan_info);

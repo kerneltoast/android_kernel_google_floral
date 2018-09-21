@@ -92,6 +92,8 @@
 #include <net/neighbour.h>
 #include <net/netevent.h>
 #include "wlan_hdd_nud_tracking.h"
+#include "wlan_hdd_twt.h"
+#include "wma_sar_public_structs.h"
 
 /*
  * Preprocessor definitions and constants
@@ -209,15 +211,13 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
 #define WLAN_WAIT_TIME_ANTENNA_MODE_REQ 3000
 #define WLAN_WAIT_TIME_SET_DUAL_MAC_CFG 1500
 
-#define WLAN_WAIT_TIME_BPF     1000
+#define WLAN_WAIT_TIME_APF     1000
 
 /* Maximum time(ms) to wait for RSO CMD status event */
 #define WAIT_TIME_RSO_CMD_STATUS 2000
 
 /* rcpi request timeout in milli seconds */
 #define WLAN_WAIT_TIME_RCPI 500
-
-#define MAX_NUMBER_OF_ADAPTERS 4
 
 #define MAX_CFG_STRING_LEN  255
 
@@ -1197,8 +1197,6 @@ struct hdd_adapter {
 
 	/* TODO Move this to sta Ctx */
 	struct wireless_dev wdev;
-	struct cfg80211_scan_request *request;
-	struct cfg80211_scan_request *vendor_request;
 
 	/** ops checks if Opportunistic Power Save is Enable or Not
 	 * ctw stores ctWindow value once we receive Opps command from
@@ -1333,6 +1331,8 @@ struct hdd_adapter {
 	struct delayed_work acs_pending_work;
 
 	struct work_struct scan_block_work;
+	qdf_list_t blocked_scan_request_q;
+	qdf_mutex_t blocked_scan_request_q_lock;
 #ifdef MSM_PLATFORM
 	unsigned long prev_rx_packets;
 	unsigned long prev_tx_packets;
@@ -1407,12 +1407,12 @@ struct hdd_adapter {
 
 	/* rcpi information */
 	struct rcpi_info rcpi;
+	bool send_mode_change;
 };
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(adapter) (&(adapter)->session.station)
 #define WLAN_HDD_GET_AP_CTX_PTR(adapter) (&(adapter)->session.ap)
 #define WLAN_HDD_GET_CTX(adapter) ((adapter)->hdd_ctx)
-#define WLAN_HDD_GET_HAL_CTX(adapter)  ((adapter)->hdd_ctx->hHal)
 #define WLAN_HDD_GET_HOSTAP_STATE_PTR(adapter) \
 				(&(adapter)->session.ap.hostapd_state)
 #define WLAN_HDD_GET_SAP_CTX_PTR(adapter) ((adapter)->session.ap.sap_context)
@@ -1632,17 +1632,42 @@ enum RX_OFFLOAD {
  */
 #define HDD_MAX_ADAPTERS (WLAN_MAX_STA_COUNT + QDF_MAX_NO_OF_SAP_MODE + 2)
 
+#ifdef DISABLE_CHANNEL_LIST
+
+/**
+ * struct hdd_cache_channel_info - Structure of the channel info
+ * which needs to be cached
+ * @channel_num: channel number
+ * @reg_status: Current regulatory status of the channel
+ * Enable
+ * Disable
+ * DFS
+ * Invalid
+ * @wiphy_status: Current wiphy status
+ */
+struct hdd_cache_channel_info {
+	uint32_t channel_num;
+	enum channel_state reg_status;
+	uint32_t wiphy_status;
+};
+
+/**
+ * struct hdd_cache_channels - Structure of the channels to be cached
+ * @num_channels: Number of channels to be cached
+ * @channel_info: Structure of the channel info
+ */
+struct hdd_cache_channels {
+	uint32_t num_channels;
+	struct hdd_cache_channel_info *channel_info;
+};
+#endif
+
 /** Adapter structure definition */
 struct hdd_context {
 	struct wlan_objmgr_psoc *hdd_psoc;
 	struct wlan_objmgr_pdev *hdd_pdev;
-
-	/** HAL handle...*/
-	tHalHandle hHal;
-
+	mac_handle_t mac_handle;
 	struct wiphy *wiphy;
-	/* TODO Remove this from here. */
-
 	qdf_spinlock_t hdd_adapter_lock;
 	qdf_list_t hdd_adapters; /* List of adapters */
 
@@ -1712,7 +1737,8 @@ struct hdd_context {
 	int cur_vote_level;
 	spinlock_t bus_bw_lock;
 	int cur_rx_level;
-	uint64_t prev_rx;
+	uint64_t prev_no_rx_offload_pkts;
+	uint64_t prev_rx_offload_pkts;
 	int cur_tx_level;
 	uint64_t prev_tx;
 #endif
@@ -1774,8 +1800,6 @@ struct hdd_context {
 #ifdef WLAN_FEATURE_EXTWOW_SUPPORT
 	bool is_extwow_app_type1_param_set;
 	bool is_extwow_app_type2_param_set;
-	bool ext_wow_should_suspend;
-	struct completion ready_to_extwow;
 #endif
 
 	/* Time since boot up to extscan start (in micro seconds) */
@@ -1815,11 +1839,13 @@ struct hdd_context {
 	 */
 	uint32_t fine_time_meas_cap_target;
 	uint32_t rx_high_ind_cnt;
+	/* For Rx thread non GRO/LRO packet accounting */
+	uint64_t no_rx_offload_pkt_cnt;
 	/* completion variable to indicate set antenna mode complete*/
 	struct completion set_antenna_mode_cmpl;
 	/* Current number of TX X RX chains being used */
 	enum antenna_mode current_antenna_mode;
-	bool bpf_enabled;
+	bool apf_enabled;
 
 	/* the radio index assigned by cnss_logger */
 	int radio_index;
@@ -1897,6 +1923,14 @@ struct hdd_context {
 	/* defining the board related information */
 	uint32_t hw_bd_id;
 	struct board_info hw_bd_info;
+#ifdef WLAN_SUPPORT_TWT
+	enum twt_status twt_state;
+#endif
+#ifdef DISABLE_CHANNEL_LIST
+	struct hdd_cache_channels *original_channels;
+	qdf_mutex_t cache_channel_lock;
+#endif
+	enum sar_version sar_version;
 };
 
 /**
@@ -2044,7 +2078,7 @@ struct hdd_adapter *hdd_get_adapter_by_macaddr(struct hdd_context *hdd_ctx,
 					  tSirMacAddr macAddr);
 
 int hdd_vdev_create(struct hdd_adapter *adapter,
-		    csr_roam_completeCallback callback, void *ctx);
+		    csr_roam_complete_cb callback, void *ctx);
 int hdd_vdev_destroy(struct hdd_adapter *adapter);
 int hdd_vdev_ready(struct hdd_adapter *adapter);
 
@@ -2103,7 +2137,17 @@ void hdd_prevent_suspend_timeout(uint32_t timeout, uint32_t reason);
 
 void wlan_hdd_cfg80211_update_wiphy_caps(struct wiphy *wiphy);
 QDF_STATUS hdd_set_ibss_power_save_params(struct hdd_adapter *adapter);
-int wlan_hdd_validate_context(struct hdd_context *hdd_ctx);
+
+/**
+ * wlan_hdd_validate_context() - check the HDD context
+ * @hdd_ctx: Global HDD context pointer
+ *
+ * Return: 0 if the context is valid. Error code otherwise
+ */
+#define wlan_hdd_validate_context(hdd_ctx) \
+	__wlan_hdd_validate_context(hdd_ctx, __func__)
+
+int __wlan_hdd_validate_context(struct hdd_context *hdd_ctx, const char *func);
 
 /**
  * hdd_validate_adapter() - Validate the given adapter
@@ -2113,15 +2157,21 @@ int wlan_hdd_validate_context(struct hdd_context *hdd_ctx);
  *
  * Return: Errno
  */
-int hdd_validate_adapter(struct hdd_adapter *adapter);
+#define hdd_validate_adapter(adapter) \
+	__hdd_validate_adapter(adapter, __func__)
+
+int __hdd_validate_adapter(struct hdd_adapter *adapter, const char *func);
 
 /**
- * wlan_hdd_validate_context_in_loading() - check the HDD context in loading
- * @hdd_ctx:	HDD context pointer
+ * wlan_hdd_validate_session_id() - ensure the given session Id is valid
+ * @session_id: the session Id to validate
  *
- * Return: 0 if the context is valid. Error code otherwise
+ * Return: Errno
  */
-int wlan_hdd_validate_context_in_loading(struct hdd_context *hdd_ctx);
+#define wlan_hdd_validate_session_id(session_id) \
+	__wlan_hdd_validate_session_id(session_id, __func__)
+
+int __wlan_hdd_validate_session_id(uint8_t session_id, const char *func);
 
 bool hdd_is_valid_mac_address(const uint8_t *pMacAddr);
 QDF_STATUS hdd_issta_p2p_clientconnected(struct hdd_context *hdd_ctx);
@@ -2177,14 +2227,14 @@ void hdd_bus_bw_compute_timer_try_stop(struct hdd_context *hdd_ctx);
 int hdd_bus_bandwidth_init(struct hdd_context *hdd_ctx);
 
 /**
- * hdd_bus_bandwidth_destroy() - Destroy bus bandwidth data structures.
+ * hdd_bus_bandwidth_deinit() - De-initialize bus bandwidth data structures.
  * @hdd_ctx: HDD context
  *
- * Destroy bus bandwidth related data structures like timer.
+ * De-initialize bus bandwidth related data structures like timer.
  *
  * Return: None.
  */
-void hdd_bus_bandwidth_destroy(struct hdd_context *hdd_ctx);
+void hdd_bus_bandwidth_deinit(struct hdd_context *hdd_ctx);
 
 /**
  * hdd_bus_bw_cancel_work() - Cancel the bus_bw_work worker
@@ -2228,7 +2278,7 @@ int hdd_bus_bandwidth_init(struct hdd_context *hdd_ctx)
 }
 
 static inline
-void hdd_bus_bandwidth_destroy(struct hdd_context *hdd_ctx)
+void hdd_bus_bandwidth_deinit(struct hdd_context *hdd_ctx)
 {
 }
 
@@ -2450,7 +2500,8 @@ wlan_hdd_check_custom_con_channel_rules(struct hdd_adapter *sta_adapter,
 void wlan_hdd_stop_sap(struct hdd_adapter *ap_adapter);
 void wlan_hdd_start_sap(struct hdd_adapter *ap_adapter, bool reinit);
 
-void wlan_hdd_soc_set_antenna_mode_cb(enum set_antenna_mode_status status);
+void wlan_hdd_soc_set_antenna_mode_cb(enum set_antenna_mode_status status,
+				      void *context);
 
 #ifdef QCA_CONFIG_SMP
 int wlan_hdd_get_cpu(void);
@@ -2495,8 +2546,20 @@ hdd_get_adapter_by_sme_session_id(struct hdd_context *hdd_ctx,
 struct hdd_adapter *hdd_get_adapter_by_iface_name(struct hdd_context *hdd_ctx,
 					     const char *iface_name);
 enum phy_ch_width hdd_map_nl_chan_width(enum nl80211_chan_width ch_width);
-uint8_t wlan_hdd_find_opclass(tHalHandle hal, uint8_t channel,
-			uint8_t bw_offset);
+
+/**
+ * wlan_hdd_find_opclass() - Find operating class for a channel
+ * @mac_handle: global MAC handle
+ * @channel: channel id
+ * @bw_offset: bandwidth offset
+ *
+ * Function invokes sme api to find the operating class
+ *
+ * Return: operating class
+ */
+uint8_t wlan_hdd_find_opclass(mac_handle_t mac_handle, uint8_t channel,
+			      uint8_t bw_offset);
+
 int hdd_update_config(struct hdd_context *hdd_ctx);
 
 /**
@@ -2564,7 +2627,7 @@ static inline void hdd_set_tso_flags(struct hdd_context *hdd_ctx,
 	     * We want to enable TSO only if IP/UDP/TCP TX checksum flag is
 	     * enabled.
 	     */
-		hdd_info("TSO Enabled");
+		hdd_debug("TSO Enabled");
 		wlan_dev->features |=
 			 NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM |
 			 NETIF_F_TSO | NETIF_F_TSO6 | NETIF_F_SG;
@@ -2622,7 +2685,6 @@ QDF_STATUS hdd_sme_close_session_callback(uint8_t session_id);
 
 int hdd_reassoc(struct hdd_adapter *adapter, const uint8_t *bssid,
 		uint8_t channel, const handoff_src src);
-void hdd_svc_fw_shutdown_ind(struct device *dev);
 int hdd_register_cb(struct hdd_context *hdd_ctx);
 void hdd_deregister_cb(struct hdd_context *hdd_ctx);
 int hdd_start_station_adapter(struct hdd_adapter *adapter);
@@ -2727,14 +2789,6 @@ hdd_wlan_nla_put_u64(struct sk_buff *skb, int attrtype, u64 value)
 	return nla_put_u64_64bit(skb, attrtype, value, NL80211_ATTR_PAD);
 }
 #endif
-
-static inline int wlan_hdd_validate_session_id(u8 session_id)
-{
-	if (session_id != HDD_SESSION_ID_INVALID)
-		return 0;
-
-	return -EINVAL;
-}
 
 /**
  * hdd_roam_profile() - Get adapter's roam profile
@@ -2997,7 +3051,7 @@ void hdd_start_complete(int ret);
 /**
  * hdd_chip_pwr_save_fail_detected_cb() - chip power save failure detected
  * callback
- * @hddctx: HDD context
+ * @hdd_handle: HDD handle
  * @data: chip power save failure detected data
  *
  * This function reads the chip power save failure detected data and fill in
@@ -3008,7 +3062,7 @@ void hdd_start_complete(int ret);
  * Return: none
  */
 
-void hdd_chip_pwr_save_fail_detected_cb(void *hddctx,
+void hdd_chip_pwr_save_fail_detected_cb(hdd_handle_t hdd_handle,
 				struct chip_pwr_save_fail_detected_params
 				*data);
 
@@ -3270,5 +3324,54 @@ void hdd_update_hw_sw_info(struct hdd_context *hdd_ctx);
  * Return: None
  */
 void hdd_get_nud_stats_cb(void *data, struct rsp_stats *rsp, void *context);
+
+/**
+ * hdd_context_get_mac_handle() - get mac handle from hdd context
+ * @hdd_ctx: Global HDD context pointer
+ *
+ * Retrieves the global MAC handle from the HDD context
+ *
+ * Return: The global MAC handle (which may be NULL)
+ */
+static inline
+mac_handle_t hdd_context_get_mac_handle(struct hdd_context *hdd_ctx)
+{
+	return hdd_ctx ? hdd_ctx->mac_handle : NULL;
+}
+
+/**
+ * hdd_adapter_get_mac_handle() - get mac handle from hdd adapter
+ * @adapter: HDD adapter pointer
+ *
+ * Retrieves the global MAC handle given an HDD adapter
+ *
+ * Return: The global MAC handle (which may be NULL)
+ */
+static inline
+mac_handle_t hdd_adapter_get_mac_handle(struct hdd_adapter *adapter)
+{
+	return adapter ?
+		hdd_context_get_mac_handle(adapter->hdd_ctx) : NULL;
+}
+
+/**
+ * hdd_handle_to_context() - turn an HDD handle into an HDD context
+ * @hdd_handle: HDD handle to be converted
+ *
+ * Return: HDD context referenced by @hdd_handle
+ */
+static inline
+struct hdd_context *hdd_handle_to_context(hdd_handle_t hdd_handle)
+{
+	return (struct hdd_context *)hdd_handle;
+}
+
+/**
+ * wlan_hdd_free_cache_channels() - Free the cache channels list
+ * @hdd_ctx: Pointer to HDD context
+ *
+ * Return: None
+ */
+void wlan_hdd_free_cache_channels(struct hdd_context *hdd_ctx);
 
 #endif /* end #if !defined(WLAN_HDD_MAIN_H) */

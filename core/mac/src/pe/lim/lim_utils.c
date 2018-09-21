@@ -509,7 +509,7 @@ void lim_print_msg_name(tpAniSirGlobal pMac, uint16_t logLevel, uint32_t msgType
  *
  * @Return: Status of operation
  */
-tSirRetStatus lim_init_mlm(tpAniSirGlobal pMac)
+QDF_STATUS lim_init_mlm(tpAniSirGlobal pMac)
 {
 	uint32_t retVal;
 
@@ -528,11 +528,11 @@ tSirRetStatus lim_init_mlm(tpAniSirGlobal pMac)
 	retVal = lim_create_timers(pMac);
 	if (retVal != TX_SUCCESS) {
 		pe_err("lim_create_timers Failed");
-		return eSIR_SUCCESS;
+		return QDF_STATUS_SUCCESS;
 	}
 
 	pMac->lim.gLimTimersCreated = 1;
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 } /*** end lim_init_mlm() ***/
 
 void lim_deactivate_timers(tpAniSirGlobal mac_ctx)
@@ -991,13 +991,13 @@ struct scheduler_msg *lim_read_deferred_msg_q(tpAniSirGlobal pMac)
 	return msg;
 }
 
-tSirRetStatus
+QDF_STATUS
 lim_sys_process_mmh_msg_api(tpAniSirGlobal pMac,
 			    struct scheduler_msg *pMsg, uint8_t qType)
 {
 	/* FIXME */
 	sys_process_mmh_msg(pMac, pMsg);
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /*
@@ -1460,7 +1460,7 @@ lim_update_short_preamble(tpAniSirGlobal mac_ctx, tSirMacAddr peer_mac_addr,
 	pe_debug("Disabling short preamble");
 
 	if (lim_enable_short_preamble(mac_ctx, false, beaconparams,
-					psession_entry) != eSIR_SUCCESS)
+					psession_entry) != QDF_STATUS_SUCCESS)
 		pe_err("Cannot enable long preamble");
 }
 
@@ -2002,7 +2002,7 @@ void lim_process_channel_switch_timeout(tpAniSirGlobal pMac)
 	if (!lim_is_channel_valid_for_channel_switch(pMac, channel)) {
 		/* We need to restore pre-channelSwitch state on the STA */
 		if (lim_restore_pre_channel_switch_state(pMac, psessionEntry) !=
-		    eSIR_SUCCESS) {
+		    QDF_STATUS_SUCCESS) {
 			pe_err("Could not restore pre-channelSwitch (11h) state, resetting the system");
 			return;
 		}
@@ -2052,7 +2052,7 @@ void lim_process_channel_switch_timeout(tpAniSirGlobal pMac)
 	default:
 		pe_err("incorrect state");
 		if (lim_restore_pre_channel_switch_state(pMac, psessionEntry) !=
-		    eSIR_SUCCESS) {
+		    QDF_STATUS_SUCCESS) {
 			pe_err("Could not restore pre-channelSwitch (11h) state, resetting the system");
 		}
 		return; /* Please note, this is 'return' and not 'break' */
@@ -2139,7 +2139,7 @@ lim_update_channel_switch(struct sAniSirGlobal *mac_ctx,
 						newCenterChanFreq1;
 		}
 	}
-	if (eSIR_SUCCESS != lim_start_channel_switch(mac_ctx, psession_entry))
+	if (QDF_STATUS_SUCCESS != lim_start_channel_switch(mac_ctx, psession_entry))
 		pe_warn("Could not start Channel Switch");
 
 	pe_debug("session: %d primary chl: %d ch_width: %d count: %d (%d ticks)",
@@ -2182,13 +2182,13 @@ void lim_cancel_dot11h_channel_switch(tpAniSirGlobal pMac,
 		       psessionEntry->peSessionId, eLIM_CHANNEL_SWITCH_TIMER));
 
 	if (tx_timer_deactivate(&pMac->lim.limTimers.gLimChannelSwitchTimer) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("tx_timer_deactivate failed!");
 	}
 
 	/* We need to restore pre-channelSwitch state on the STA */
 	if (lim_restore_pre_channel_switch_state(pMac, psessionEntry) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("LIM: Could not restore pre-channelSwitch (11h) state, resetting the system");
 	}
 }
@@ -2553,7 +2553,7 @@ void lim_switch_channel_cback(tpAniSirGlobal pMac, QDF_STATUS status,
 
 	/* We need to restore pre-channelSwitch state on the STA */
 	if (lim_restore_pre_channel_switch_state(pMac, psessionEntry) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("Could not restore pre-channelSwitch (11h) state, resetting the system");
 		return;
 	}
@@ -2743,7 +2743,7 @@ uint8_t lim_get_ht_capability(tpAniSirGlobal pMac,
 	/* */
 	if (htCap >= eHT_ANTENNA_SELECTION && htCap < eHT_SI_GRANULARITY) {
 		/* Get Antenna Seletion HT Capabilities */
-		if (eSIR_SUCCESS !=
+		if (QDF_STATUS_SUCCESS !=
 		    wlan_cfg_get_int(pMac, WNI_CFG_AS_CAP, &cfgValue))
 			cfgValue = 0;
 		ptr = (uint8_t *) &macASCapabilityInfo;
@@ -2752,7 +2752,7 @@ uint8_t lim_get_ht_capability(tpAniSirGlobal pMac,
 		if (htCap >= eHT_TX_BEAMFORMING &&
 		    htCap < eHT_ANTENNA_SELECTION) {
 			/* Get Transmit Beam Forming HT Capabilities */
-			if (eSIR_SUCCESS !=
+			if (QDF_STATUS_SUCCESS !=
 			    wlan_cfg_get_int(pMac, WNI_CFG_TX_BF_CAP, &cfgValue))
 				cfgValue = 0;
 			ptr = (uint8_t *) &macTxBFCapabilityInfo;
@@ -2760,7 +2760,7 @@ uint8_t lim_get_ht_capability(tpAniSirGlobal pMac,
 		} else {
 			if (htCap >= eHT_PCO && htCap < eHT_TX_BEAMFORMING) {
 				/* Get Extended HT Capabilities */
-				if (eSIR_SUCCESS !=
+				if (QDF_STATUS_SUCCESS !=
 				    wlan_cfg_get_int(pMac,
 						     WNI_CFG_EXT_HT_CAP_INFO,
 						     &cfgValue))
@@ -2771,7 +2771,7 @@ uint8_t lim_get_ht_capability(tpAniSirGlobal pMac,
 			} else {
 				if (htCap < eHT_MAX_RX_AMPDU_FACTOR) {
 					/* Get HT Capabilities */
-					if (eSIR_SUCCESS !=
+					if (QDF_STATUS_SUCCESS !=
 					    wlan_cfg_get_int(pMac,
 							     WNI_CFG_HT_CAP_INFO,
 							     &cfgValue))
@@ -3109,14 +3109,14 @@ disable_11a_end:
  *
  * @Return: success of failure of operation
  */
-tSirRetStatus
+QDF_STATUS
 lim_update_11a_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 			 uint8_t overlap, tpUpdateBeaconParams bcn_prms,
 			 tpPESession session)
 {
 	if (NULL == session) {
 		pe_err("session is NULL");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 	/* overlapping protection configuration check. */
 	if (!overlap) {
@@ -3125,7 +3125,7 @@ lim_update_11a_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 		    (!session->cfgProtection.fromlla)) {
 			/* protection disabled. */
 			pe_warn("protection from 11a is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		}
 	}
 
@@ -3134,7 +3134,7 @@ lim_update_11a_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 	else
 		lim_disable_11a_protection(mac_ctx, overlap, bcn_prms, session);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -3355,9 +3355,9 @@ lim_handle_11g_protection_for_11bcoexist(tpAniSirGlobal mac_ctx,
  *
  * based on config setting enables\disables 11g protection.
  *
- * Return: Success - eSIR_SUCCESS - Success, Error number - Failure
+ * Return: Success - QDF_STATUS_SUCCESS - Success, Error number - Failure
  */
-tSirRetStatus
+QDF_STATUS
 lim_enable11g_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 			 uint8_t overlap, tpUpdateBeaconParams beaconparams,
 			 tpPESession session_entry)
@@ -3370,12 +3370,12 @@ lim_enable11g_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 			!session_entry->cfgProtection.fromllb) {
 			/* protection disabled. */
 			pe_debug("protection from 11b is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		} else if (!LIM_IS_AP_ROLE(session_entry)) {
 			if (!mac_ctx->lim.cfgProtection.fromllb) {
 				/* protection disabled. */
 				pe_debug("protection from 11b is disabled");
-				return eSIR_SUCCESS;
+				return QDF_STATUS_SUCCESS;
 			}
 		}
 	}
@@ -3387,7 +3387,7 @@ lim_enable11g_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 		lim_handle_11g_protection_for_11bcoexist(mac_ctx, beaconparams,
 					overlap, session_entry);
 	}
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /** -------------------------------------------------------------
@@ -3398,14 +3398,14 @@ lim_enable11g_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
    \param      tpUpdateBeaconParams pBeaconParams
    \return      None
    -------------------------------------------------------------*/
-tSirRetStatus
+QDF_STATUS
 lim_enable_ht_protection_from11g(tpAniSirGlobal pMac, uint8_t enable,
 				 uint8_t overlap,
 				 tpUpdateBeaconParams pBeaconParams,
 				 tpPESession psessionEntry)
 {
 	if (!psessionEntry->htCapability)
-		return eSIR_SUCCESS;  /* protection from 11g is only for HT stations. */
+		return QDF_STATUS_SUCCESS;  /* protection from 11g is only for HT stations. */
 
 	/* overlapping protection configuration check. */
 	if (overlap) {
@@ -3413,7 +3413,7 @@ lim_enable_ht_protection_from11g(tpAniSirGlobal pMac, uint8_t enable,
 		    && (!psessionEntry->cfgProtection.overlapFromllg)) {
 			/* protection disabled. */
 			pe_debug("overlap protection from 11g is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		}
 	} else {
 		/* normal protection config check */
@@ -3421,12 +3421,12 @@ lim_enable_ht_protection_from11g(tpAniSirGlobal pMac, uint8_t enable,
 		    !psessionEntry->cfgProtection.fromllg) {
 			/* protection disabled. */
 			pe_debug("protection from 11g is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		} else if (!LIM_IS_AP_ROLE(psessionEntry)) {
 			if (!pMac->lim.cfgProtection.fromllg) {
 				/* protection disabled. */
 				pe_debug("protection from 11g is disabled");
-				return eSIR_SUCCESS;
+				return QDF_STATUS_SUCCESS;
 			}
 		}
 	}
@@ -3614,7 +3614,7 @@ lim_enable_ht_protection_from11g(tpAniSirGlobal pMac, uint8_t enable,
 				PARAM_llGCOEXIST_CHANGED;
 		}
 	}
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /* FIXME_PROTECTION : need to check for no APSD whenever we want to enable this protection. */
@@ -3628,14 +3628,14 @@ lim_enable_ht_protection_from11g(tpAniSirGlobal pMac, uint8_t enable,
    \param      tpUpdateBeaconParams pBeaconParams
    \return      None
    -------------------------------------------------------------*/
-tSirRetStatus
+QDF_STATUS
 lim_enable_ht_obss_protection(tpAniSirGlobal pMac, uint8_t enable,
 			      uint8_t overlap, tpUpdateBeaconParams pBeaconParams,
 			      tpPESession psessionEntry)
 {
 
 	if (!psessionEntry->htCapability)
-		return eSIR_SUCCESS;  /* this protection  is only for HT stations. */
+		return QDF_STATUS_SUCCESS;  /* this protection  is only for HT stations. */
 
 	/* overlapping protection configuration check. */
 	if (overlap) {
@@ -3646,12 +3646,12 @@ lim_enable_ht_obss_protection(tpAniSirGlobal pMac, uint8_t enable,
 		    !psessionEntry->cfgProtection.obss) { /* ToDo Update this field */
 			/* protection disabled. */
 			pe_debug("protection from Obss is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		} else if (!LIM_IS_AP_ROLE(psessionEntry)) {
 			if (!pMac->lim.cfgProtection.obss) { /* ToDo Update this field */
 				/* protection disabled. */
 				pe_debug("protection from Obss is disabled");
-				return eSIR_SUCCESS;
+				return QDF_STATUS_SUCCESS;
 			}
 		}
 	}
@@ -3694,7 +3694,7 @@ lim_enable_ht_obss_protection(tpAniSirGlobal pMac, uint8_t enable,
 
 		}
 	}
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -3854,13 +3854,13 @@ static void lim_handle_ht20coexist_ht20protection(tpAniSirGlobal mac_ctx,
  *
  * Return: 0 - success
  */
-tSirRetStatus lim_enable_ht20_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
+QDF_STATUS lim_enable_ht20_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 			   uint8_t overlap, tpUpdateBeaconParams beaconparams,
 			   tpPESession session_entry)
 {
 	/* This protection  is only for HT stations. */
 	if (!session_entry->htCapability)
-		return eSIR_SUCCESS;
+		return QDF_STATUS_SUCCESS;
 
 	/* overlapping protection configuration check. */
 	if (!overlap) {
@@ -3869,12 +3869,12 @@ tSirRetStatus lim_enable_ht20_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 		    !session_entry->cfgProtection.ht20) {
 			/* protection disabled. */
 			pe_debug("protection from HT20 is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		} else if (!LIM_IS_AP_ROLE(session_entry)) {
 			if (!mac_ctx->lim.cfgProtection.ht20) {
 				/* protection disabled. */
 				pe_debug("protection from HT20 is disabled");
-				return eSIR_SUCCESS;
+				return QDF_STATUS_SUCCESS;
 			}
 		}
 	}
@@ -3886,7 +3886,7 @@ tSirRetStatus lim_enable_ht20_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
 		lim_handle_ht20coexist_ht20protection(mac_ctx, beaconparams,
 					session_entry, overlap);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /** -------------------------------------------------------------
@@ -3897,13 +3897,13 @@ tSirRetStatus lim_enable_ht20_protection(tpAniSirGlobal mac_ctx, uint8_t enable,
    \param      tpUpdateBeaconParams pBeaconParams
    \return      None
    -------------------------------------------------------------*/
-tSirRetStatus
+QDF_STATUS
 lim_enable_ht_non_gf_protection(tpAniSirGlobal pMac, uint8_t enable,
 				uint8_t overlap, tpUpdateBeaconParams pBeaconParams,
 				tpPESession psessionEntry)
 {
 	if (!psessionEntry->htCapability)
-		return eSIR_SUCCESS;  /* this protection  is only for HT stations. */
+		return QDF_STATUS_SUCCESS;  /* this protection  is only for HT stations. */
 
 	/* overlapping protection configuration check. */
 	if (overlap) {
@@ -3913,13 +3913,13 @@ lim_enable_ht_non_gf_protection(tpAniSirGlobal pMac, uint8_t enable,
 		    !psessionEntry->cfgProtection.nonGf) {
 			/* protection disabled. */
 			pe_debug("protection from NonGf is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		} else if (!LIM_IS_AP_ROLE(psessionEntry)) {
 			/* normal protection config check */
 			if (!pMac->lim.cfgProtection.nonGf) {
 				/* protection disabled. */
 				pe_debug("protection from NonGf is disabled");
-				return eSIR_SUCCESS;
+				return QDF_STATUS_SUCCESS;
 			}
 		}
 	}
@@ -3959,7 +3959,7 @@ lim_enable_ht_non_gf_protection(tpAniSirGlobal pMac, uint8_t enable,
 		}
 	}
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /** -------------------------------------------------------------
@@ -3970,14 +3970,14 @@ lim_enable_ht_non_gf_protection(tpAniSirGlobal pMac, uint8_t enable,
    \param      tpUpdateBeaconParams pBeaconParams
    \return      None
    -------------------------------------------------------------*/
-tSirRetStatus
+QDF_STATUS
 lim_enable_ht_lsig_txop_protection(tpAniSirGlobal pMac, uint8_t enable,
 				   uint8_t overlap,
 				   tpUpdateBeaconParams pBeaconParams,
 				   tpPESession psessionEntry)
 {
 	if (!psessionEntry->htCapability)
-		return eSIR_SUCCESS;  /* this protection  is only for HT stations. */
+		return QDF_STATUS_SUCCESS;  /* this protection  is only for HT stations. */
 
 	/* overlapping protection configuration check. */
 	if (overlap) {
@@ -3987,13 +3987,13 @@ lim_enable_ht_lsig_txop_protection(tpAniSirGlobal pMac, uint8_t enable,
 			!psessionEntry->cfgProtection.lsigTxop) {
 			/* protection disabled. */
 			pe_debug("protection from LsigTxop not supported is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		} else if (!LIM_IS_AP_ROLE(psessionEntry)) {
 			/* normal protection config check */
 			if (!pMac->lim.cfgProtection.lsigTxop) {
 				/* protection disabled. */
 				pe_debug("protection from LsigTxop not supported is disabled");
-				return eSIR_SUCCESS;
+				return QDF_STATUS_SUCCESS;
 			}
 		}
 	}
@@ -4043,7 +4043,7 @@ lim_enable_ht_lsig_txop_protection(tpAniSirGlobal pMac, uint8_t enable,
 				PARAM_LSIG_TXOP_FULL_SUPPORT_CHANGED;
 		}
 	}
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /* FIXME_PROTECTION : need to check for no APSD whenever we want to enable this protection. */
@@ -4056,13 +4056,13 @@ lim_enable_ht_lsig_txop_protection(tpAniSirGlobal pMac, uint8_t enable,
    \param      tpUpdateBeaconParams pBeaconParams
    \return      None
    -------------------------------------------------------------*/
-tSirRetStatus
+QDF_STATUS
 lim_enable_ht_rifs_protection(tpAniSirGlobal pMac, uint8_t enable,
 			      uint8_t overlap, tpUpdateBeaconParams pBeaconParams,
 			      tpPESession psessionEntry)
 {
 	if (!psessionEntry->htCapability)
-		return eSIR_SUCCESS;  /* this protection  is only for HT stations. */
+		return QDF_STATUS_SUCCESS;  /* this protection  is only for HT stations. */
 
 	/* overlapping protection configuration check. */
 	if (overlap) {
@@ -4072,13 +4072,13 @@ lim_enable_ht_rifs_protection(tpAniSirGlobal pMac, uint8_t enable,
 		    !psessionEntry->cfgProtection.rifs) {
 			/* protection disabled. */
 			pe_debug("protection from Rifs is disabled");
-			return eSIR_SUCCESS;
+			return QDF_STATUS_SUCCESS;
 		} else if (!LIM_IS_AP_ROLE(psessionEntry)) {
 			/* normal protection config check */
 			if (!pMac->lim.cfgProtection.rifs) {
 				/* protection disabled. */
 				pe_debug("protection from Rifs is disabled");
-				return eSIR_SUCCESS;
+				return QDF_STATUS_SUCCESS;
 			}
 		}
 	}
@@ -4122,7 +4122,7 @@ lim_enable_ht_rifs_protection(tpAniSirGlobal pMac, uint8_t enable,
 				PARAM_RIFS_MODE_CHANGED;
 		}
 	}
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /* --------------------------------------------------------------------- */
@@ -4142,30 +4142,30 @@ lim_enable_ht_rifs_protection(tpAniSirGlobal pMac, uint8_t enable,
  * @return None
  */
 
-tSirRetStatus
+QDF_STATUS
 lim_enable_short_preamble(tpAniSirGlobal pMac, uint8_t enable,
 			  tpUpdateBeaconParams pBeaconParams,
 			  tpPESession psessionEntry)
 {
 	uint32_t val;
 
-	if (wlan_cfg_get_int(pMac, WNI_CFG_SHORT_PREAMBLE, &val) != eSIR_SUCCESS) {
+	if (wlan_cfg_get_int(pMac, WNI_CFG_SHORT_PREAMBLE, &val) != QDF_STATUS_SUCCESS) {
 		/* Could not get short preamble enabled flag from CFG. Log error. */
 		pe_err("could not retrieve short preamble flag");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (!val)
-		return eSIR_SUCCESS;
+		return QDF_STATUS_SUCCESS;
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_11G_SHORT_PREAMBLE_ENABLED, &val) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("could not retrieve 11G short preamble switching  enabled flag");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (!val) /* 11G short preamble switching is disabled. */
-		return eSIR_SUCCESS;
+		return QDF_STATUS_SUCCESS;
 
 	if (LIM_IS_AP_ROLE(psessionEntry)) {
 		if (enable && (psessionEntry->beaconParams.fShortPreamble == 0)) {
@@ -4189,7 +4189,7 @@ lim_enable_short_preamble(tpAniSirGlobal pMac, uint8_t enable,
 		}
 	}
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -4224,7 +4224,7 @@ lim_enable_short_preamble(tpAniSirGlobal pMac, uint8_t enable,
  *
  * @return QDF_STATUS_SUCCESS - in case of success
  */
-QDF_STATUS lim_tx_complete(tHalHandle hHal, qdf_nbuf_t buf, bool free)
+QDF_STATUS lim_tx_complete(void *context, qdf_nbuf_t buf, bool free)
 {
 	if (free)
 		cds_packet_free((void *)buf);
@@ -4482,7 +4482,7 @@ void lim_update_sta_run_time_ht_info(tpAniSirGlobal pMac,
    \return tSirRetStatu - status
    -------------------------------------------------------------*/
 
-tSirRetStatus lim_process_hal_ind_messages(tpAniSirGlobal pMac, uint32_t msgId,
+QDF_STATUS lim_process_hal_ind_messages(tpAniSirGlobal pMac, uint32_t msgId,
 					   void *msgParam)
 {
 	/* its PE's responsibility to free msgparam when its done extracting the message parameters. */
@@ -4500,15 +4500,15 @@ tSirRetStatus lim_process_hal_ind_messages(tpAniSirGlobal pMac, uint32_t msgId,
 	default:
 		qdf_mem_free(msgParam);
 		pe_err("invalid message id: %d received", msgId);
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (lim_post_msg_api(pMac, &msg) != eSIR_SUCCESS) {
+	if (lim_post_msg_api(pMac, &msg) != QDF_STATUS_SUCCESS) {
 		qdf_mem_free(msgParam);
 		pe_err("lim_post_msg_api failed for msgid: %d", msg.type);
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -4520,10 +4520,10 @@ tSirRetStatus lim_process_hal_ind_messages(tpAniSirGlobal pMac, uint32_t msgId,
  * Function validates DelTs req originated by SME or by HAL and also
  * sends halMsg_DelTs to HAL
  *
- * Return: eSIR_SUCCESS - Success, eSIR_FAILURE - Failure
+ * Return: QDF_STATUS_SUCCESS - Success, QDF_STATUS_E_FAILURE - Failure
  */
 
-tSirRetStatus
+QDF_STATUS
 lim_validate_delts_req(tpAniSirGlobal mac_ctx, tpSirDeltsReq delts_req,
 		       tSirMacAddr peer_mac_addr, tpPESession psession_entry)
 {
@@ -4543,7 +4543,7 @@ lim_validate_delts_req(tpAniSirGlobal mac_ctx, tpSirDeltsReq delts_req,
 	 */
 	if (delts_req == NULL) {
 		pe_err("Delete TS request pointer is NULL");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	if (LIM_IS_STA_ROLE(psession_entry)) {
@@ -4579,14 +4579,14 @@ lim_validate_delts_req(tpAniSirGlobal mac_ctx, tpSirDeltsReq delts_req,
 
 	if (sta == NULL) {
 		pe_err("Cannot find station context for delts req");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	if ((!sta->valid) ||
 		(sta->mlmStaContext.mlmState !=
 			eLIM_MLM_LINK_ESTABLISHED_STATE)) {
 		pe_err("Invalid Sta (or state) for DelTsReq");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	delts_req->req.wsmTspecPresent = 0;
@@ -4603,7 +4603,7 @@ lim_validate_delts_req(tpAniSirGlobal mac_ctx, tpSirDeltsReq delts_req,
 		delts_req->req.lleTspecPresent = 1;
 	else {
 		pe_warn("DELTS_REQ ignore - qos is disabled");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	tsinfo = delts_req->req.wmeTspecPresent ? &delts_req->req.tspec.tsinfo
@@ -4616,28 +4616,28 @@ lim_validate_delts_req(tpAniSirGlobal mac_ctx, tpSirDeltsReq delts_req,
 
 	/* if no Access Control, ignore the request */
 	if (lim_admit_control_delete_ts(mac_ctx, sta->assocId, tsinfo,
-				&ts_status, &tspec_idx) != eSIR_SUCCESS) {
+				&ts_status, &tspec_idx) != QDF_STATUS_SUCCESS) {
 		pe_err("DELTS request for sta assocId: %d tsid: %d up: %d",
 			sta->assocId, tsinfo->traffic.tsid,
 			tsinfo->traffic.userPrio);
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	} else if ((tsinfo->traffic.accessPolicy == SIR_MAC_ACCESSPOLICY_HCCA)
 				|| (tsinfo->traffic.accessPolicy ==
 			SIR_MAC_ACCESSPOLICY_BOTH)) {
 		/* edca only now. */
 	} else if (tsinfo->traffic.accessPolicy == SIR_MAC_ACCESSPOLICY_EDCA) {
 		/* send message to HAL to delete TS */
-		if (eSIR_SUCCESS !=
+		if (QDF_STATUS_SUCCESS !=
 			lim_send_hal_msg_del_ts(mac_ctx, sta->staIndex,
 						tspec_idx, delts_req->req,
 						psession_entry->peSessionId,
 						psession_entry->bssId)) {
 			pe_warn("DelTs with UP: %d failed in lim_send_hal_msg_del_ts - ignoring request",
 				tsinfo->traffic.userPrio);
-			return eSIR_FAILURE;
+			return QDF_STATUS_E_FAILURE;
 		}
 	}
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /** -------------------------------------------------------------
@@ -4664,7 +4664,7 @@ void lim_register_hal_ind_call_back(tpAniSirGlobal pMac)
 	msg.bodyval = 0;
 
 	MTRACE(mac_trace_msg_tx(pMac, NO_SESSION, msg.type));
-	if (eSIR_SUCCESS != wma_post_ctrl_msg(pMac, &msg)) {
+	if (QDF_STATUS_SUCCESS != wma_post_ctrl_msg(pMac, &msg)) {
 		qdf_mem_free(pHalCB);
 		pe_err("wma_post_ctrl_msg() failed");
 	}
@@ -4735,7 +4735,7 @@ void lim_process_del_ts_ind(tpAniSirGlobal pMac, struct scheduler_msg *limMsg)
 			     sizeof(tSirMacTSInfo));
 
 	/* validate the req */
-	if (eSIR_SUCCESS !=
+	if (QDF_STATUS_SUCCESS !=
 	    lim_validate_delts_req(pMac, pDelTsReq, peerMacAddr, psessionEntry)) {
 		pe_err("lim_validate_delts_req failed");
 		goto error2;
@@ -4793,12 +4793,12 @@ error1:
  * @param  limMsg - Lim Message structure object with the MimoPSparam in body
  * @return None
  */
-tSirRetStatus
+QDF_STATUS
 lim_post_sm_state_update(tpAniSirGlobal pMac,
 			 uint16_t staIdx, tSirMacHTMIMOPowerSaveState state,
 			 uint8_t *pPeerStaMac, uint8_t sessionId)
 {
-	tSirRetStatus retCode = eSIR_SUCCESS;
+	QDF_STATUS retCode = QDF_STATUS_SUCCESS;
 	struct scheduler_msg msgQ = {0};
 	tpSetMIMOPS pMIMO_PSParams;
 
@@ -4809,7 +4809,7 @@ lim_post_sm_state_update(tpAniSirGlobal pMac,
 	pMIMO_PSParams = qdf_mem_malloc(sizeof(tSetMIMOPS));
 	if (NULL == pMIMO_PSParams) {
 		pe_err(" AllocateMemory failed");
-		return eSIR_MEM_ALLOC_FAILED;
+		return QDF_STATUS_E_NOMEM;
 	}
 
 	pMIMO_PSParams->htMIMOPSState = state;
@@ -4825,7 +4825,7 @@ lim_post_sm_state_update(tpAniSirGlobal pMac,
 
 	MTRACE(mac_trace_msg_tx(pMac, NO_SESSION, msgQ.type));
 	retCode = wma_post_ctrl_msg(pMac, &msgQ);
-	if (eSIR_SUCCESS != retCode) {
+	if (QDF_STATUS_SUCCESS != retCode) {
 		pe_err("Posting WMA_SET_MIMOPS_REQ to HAL failed! Reason: %d",
 			retCode);
 		qdf_mem_free(pMIMO_PSParams);
@@ -4948,7 +4948,7 @@ bool lim_is_channel_valid_for_channel_switch(tpAniSirGlobal pMac, uint8_t channe
 	uint8_t index;
 	uint32_t validChannelListLen = WNI_CFG_VALID_CHANNEL_LIST_LEN;
 	tSirMacChanNum validChannelList[WNI_CFG_VALID_CHANNEL_LIST_LEN];
-	bool ok;
+	bool ok = false;
 
 	if (policy_mgr_is_chan_ok_for_dnbs(pMac->psoc, channel, &ok)) {
 		pe_err("policy_mgr_is_chan_ok_for_dnbs() returned error");
@@ -4963,14 +4963,18 @@ bool lim_is_channel_valid_for_channel_switch(tpAniSirGlobal pMac, uint8_t channe
 	if (wlan_cfg_get_str(pMac, WNI_CFG_VALID_CHANNEL_LIST,
 			     (uint8_t *) validChannelList,
 			     (uint32_t *) &validChannelListLen) !=
-			eSIR_SUCCESS) {
+			QDF_STATUS_SUCCESS) {
 		pe_err("could not retrieve valid channel list");
 		return false;
 	}
 
 	for (index = 0; index < validChannelListLen; index++) {
-		if (validChannelList[index] == channel)
-			return true;
+		if (validChannelList[index] != channel)
+			continue;
+
+		ok = policy_mgr_is_valid_for_channel_switch(pMac->psoc,
+							    channel);
+		return ok;
 	}
 
 	/* channel does not belong to list of valid channels */
@@ -5078,7 +5082,7 @@ void lim_frame_transmission_control(tpAniSirGlobal pMac, tLimQuietTxMode type,
 	msgQ.type = WMA_TRANSMISSION_CONTROL_IND;
 
 	MTRACE(mac_trace_msg_tx(pMac, NO_SESSION, msgQ.type));
-	if (wma_post_ctrl_msg(pMac, &msgQ) != eSIR_SUCCESS) {
+	if (wma_post_ctrl_msg(pMac, &msgQ) != QDF_STATUS_SUCCESS) {
 		qdf_mem_free(pTxCtrlMsg);
 		pe_err("Posting Message to HAL failed");
 		return;
@@ -5108,11 +5112,11 @@ void lim_frame_transmission_control(tpAniSirGlobal pMac, tLimQuietTxMode type,
  * @return None
  */
 
-tSirRetStatus
+QDF_STATUS
 lim_restore_pre_channel_switch_state(tpAniSirGlobal pMac, tpPESession psessionEntry)
 {
 
-	tSirRetStatus retCode = eSIR_SUCCESS;
+	QDF_STATUS retCode = QDF_STATUS_SUCCESS;
 
 	if (!LIM_IS_STA_ROLE(psessionEntry))
 		return retCode;
@@ -5133,11 +5137,11 @@ lim_restore_pre_channel_switch_state(tpAniSirGlobal pMac, tpPESession psessionEn
    \param pMac
    \return NONE
    ---------------------------------------------*/
-tSirRetStatus lim_restore_pre_quiet_state(tpAniSirGlobal pMac,
+QDF_STATUS lim_restore_pre_quiet_state(tpAniSirGlobal pMac,
 					  tpPESession psessionEntry)
 {
 
-	tSirRetStatus retCode = eSIR_SUCCESS;
+	QDF_STATUS retCode = QDF_STATUS_SUCCESS;
 
 	if (pMac->lim.gLimSystemRole != eLIM_STA_ROLE)
 		return retCode;
@@ -5415,10 +5419,8 @@ void lim_process_add_sta_rsp(tpAniSirGlobal mac_ctx, struct scheduler_msg *msg)
 	else if (LIM_IS_NDI_ROLE(session))
 		lim_ndp_add_sta_rsp(mac_ctx, session, msg->bodyptr);
 #ifdef FEATURE_WLAN_TDLS
-	else if (mac_ctx->lim.gLimAddStaTdls) {
+	else if (add_sta_params->staType == STA_ENTRY_TDLS_PEER)
 		lim_process_tdls_add_sta_rsp(mac_ctx, msg->bodyptr, session);
-		mac_ctx->lim.gLimAddStaTdls = false;
-	}
 #endif
 	else
 		lim_process_mlm_add_sta_rsp(mac_ctx, msg, session);
@@ -5520,7 +5522,7 @@ void lim_handle_heart_beat_failure_timeout(tpAniSirGlobal mac_ctx)
 			lim_print_mlm_state(mac_ctx, LOGE,
 				psession_entry->limMlmState);
 			if (mac_ctx->sme.tx_queue_cb)
-				mac_ctx->sme.tx_queue_cb(mac_ctx->hHdd,
+				mac_ctx->sme.tx_queue_cb(mac_ctx->hdd_handle,
 						psession_entry->smeSessionId,
 						WLAN_WAKE_ALL_NETIF_QUEUE,
 						WLAN_CONTROL_PATH);
@@ -5895,7 +5897,7 @@ void lim_pmf_sa_query_timer_handler(void *pMacGlobal, uint32_t param)
 
 	/* Increment the retry count, check if reached maximum */
 	if (wlan_cfg_get_int(pMac, WNI_CFG_PMF_SA_QUERY_MAX_RETRIES,
-			     &maxRetries) != eSIR_SUCCESS) {
+			     &maxRetries) != QDF_STATUS_SUCCESS) {
 		pe_err("Could not retrieve PMF SA Query maximum retries value");
 		pSta->pmfSaQueryState = DPH_SA_QUERY_NOT_IN_PROGRESS;
 		return;
@@ -6308,6 +6310,18 @@ void lim_set_stads_rtt_cap(tpDphHashNode sta_ds, struct s_ext_cap *ext_cap,
 	    ext_cap->fine_time_meas_responder);
 }
 
+#ifdef WLAN_SUPPORT_TWT
+void lim_set_peer_twt_cap(tpPESession session, struct s_ext_cap *ext_cap)
+{
+	session->peer_twt_requestor = ext_cap->twt_requestor_support;
+	session->peer_twt_responder = ext_cap->twt_responder_support;
+
+	pe_debug("Ext Cap peer TWT requestor: %d, responder: %d",
+		 ext_cap->twt_requestor_support,
+		 ext_cap->twt_responder_support);
+}
+#endif
+
 /**
  * lim_send_ie() - sends IE to wma
  * @mac_ctx: global MAC context
@@ -6485,7 +6499,7 @@ QDF_STATUS lim_send_ext_cap_ie(tpAniSirGlobal mac_ctx,
 	bool vht_enabled = false;
 	struct vdev_ie_info *vdev_ie;
 	struct scheduler_msg msg = {0};
-	tSirRetStatus status;
+	QDF_STATUS status;
 
 	wlan_cfg_get_int(mac_ctx, WNI_CFG_DOT11_MODE, &dot11mode);
 	if (IS_DOT11_MODE_VHT(dot11mode))
@@ -6493,7 +6507,7 @@ QDF_STATUS lim_send_ext_cap_ie(tpAniSirGlobal mac_ctx,
 
 	status = populate_dot11f_ext_cap(mac_ctx, vht_enabled, &ext_cap_data,
 					 NULL);
-	if (eSIR_SUCCESS != status) {
+	if (QDF_STATUS_SUCCESS != status) {
 		pe_err("Failed to populate ext cap IE");
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -6549,9 +6563,9 @@ QDF_STATUS lim_send_ext_cap_ie(tpAniSirGlobal mac_ctx,
  * This utility function is used to strip of the requested IE if present
  * in IE buffer.
  *
- * Return: tSirRetStatus
+ * Return: QDF_STATUS
  */
-tSirRetStatus lim_strip_ie(tpAniSirGlobal mac_ctx,
+QDF_STATUS lim_strip_ie(tpAniSirGlobal mac_ctx,
 		uint8_t *addn_ie, uint16_t *addn_ielen,
 		uint8_t eid, eSizeOfLenField size_of_len_field,
 		uint8_t *oui, uint8_t oui_length, uint8_t *extracted_ie,
@@ -6566,13 +6580,13 @@ tSirRetStatus lim_strip_ie(tpAniSirGlobal mac_ctx,
 
 	if (NULL == addn_ie) {
 		pe_debug("NULL addn_ie pointer");
-		return eSIR_IGNORE_IE;
+		return QDF_STATUS_E_INVAL;
 	}
 
 	tempbuf = qdf_mem_malloc(left);
 	if (NULL == tempbuf) {
 		pe_err("Unable to allocate memory");
-		return eSIR_MEM_ALLOC_FAILED;
+		return QDF_STATUS_E_NOMEM;
 	}
 
 	while (left >= 2) {
@@ -6589,7 +6603,7 @@ tSirRetStatus lim_strip_ie(tpAniSirGlobal mac_ctx,
 			pe_err("Invalid IEs eid: %d elem_len: %d left: %d",
 				elem_id, elem_len, left);
 			qdf_mem_free(tempbuf);
-			return eSIR_FAILURE;
+			return QDF_STATUS_E_FAILURE;
 		}
 
 		if (eid != elem_id ||
@@ -6621,7 +6635,7 @@ tSirRetStatus lim_strip_ie(tpAniSirGlobal mac_ctx,
 	*addn_ielen = templen;
 	qdf_mem_free(tempbuf);
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef WLAN_FEATURE_11W
@@ -6651,12 +6665,12 @@ void lim_del_pmf_sa_query_timer(tpAniSirGlobal mac_ctx, tpPESession pe_session)
 }
 #endif
 
-tSirRetStatus lim_strip_supp_op_class_update_struct(tpAniSirGlobal mac_ctx,
+QDF_STATUS lim_strip_supp_op_class_update_struct(tpAniSirGlobal mac_ctx,
 		uint8_t *addn_ie, uint16_t *addn_ielen,
 		tDot11fIESuppOperatingClasses *dst)
 {
 	uint8_t extracted_buff[DOT11F_IE_SUPPOPERATINGCLASSES_MAX_LEN + 2];
-	tSirRetStatus status;
+	QDF_STATUS status;
 
 	qdf_mem_set((uint8_t *)&extracted_buff[0],
 		    DOT11F_IE_SUPPOPERATINGCLASSES_MAX_LEN + 2,
@@ -6665,7 +6679,7 @@ tSirRetStatus lim_strip_supp_op_class_update_struct(tpAniSirGlobal mac_ctx,
 			      DOT11F_EID_SUPPOPERATINGCLASSES, ONE_BYTE,
 			      NULL, 0, extracted_buff,
 			      DOT11F_IE_SUPPOPERATINGCLASSES_MAX_LEN);
-	if (eSIR_SUCCESS != status) {
+	if (QDF_STATUS_SUCCESS != status) {
 		pe_warn("Failed to strip supp_op_mode IE status: %d",
 		       status);
 		return status;
@@ -6675,17 +6689,17 @@ tSirRetStatus lim_strip_supp_op_class_update_struct(tpAniSirGlobal mac_ctx,
 	    extracted_buff[1] > DOT11F_IE_SUPPOPERATINGCLASSES_MAX_LEN) {
 		pe_warn("Invalid IEs eid: %d elem_len: %d",
 			extracted_buff[0], extracted_buff[1]);
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	/* update the extracted supp op class to struct*/
 	if (DOT11F_PARSE_SUCCESS != dot11f_unpack_ie_supp_operating_classes(
 	    mac_ctx, &extracted_buff[2], extracted_buff[1], dst, false)) {
 		pe_err("dot11f_unpack Parse Error");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
-	return eSIR_SUCCESS;
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -6740,13 +6754,13 @@ void lim_update_extcap_struct(tpAniSirGlobal mac_ctx,
  * This function is used to strip extended capability IE from IE buffer and
  * update the passed structure.
  *
- * Return: tSirRetStatus
+ * Return: QDF_STATUS
  */
-tSirRetStatus lim_strip_extcap_update_struct(tpAniSirGlobal mac_ctx,
+QDF_STATUS lim_strip_extcap_update_struct(tpAniSirGlobal mac_ctx,
 		uint8_t *addn_ie, uint16_t *addn_ielen, tDot11fIEExtCap *dst)
 {
 	uint8_t extracted_buff[DOT11F_IE_EXTCAP_MAX_LEN + 2];
-	tSirRetStatus status;
+	QDF_STATUS status;
 
 	qdf_mem_set((uint8_t *)&extracted_buff[0], DOT11F_IE_EXTCAP_MAX_LEN + 2,
 		     0);
@@ -6754,7 +6768,7 @@ tSirRetStatus lim_strip_extcap_update_struct(tpAniSirGlobal mac_ctx,
 			      DOT11F_EID_EXTCAP, ONE_BYTE,
 			      NULL, 0, extracted_buff,
 			      DOT11F_IE_EXTCAP_MAX_LEN);
-	if (eSIR_SUCCESS != status) {
+	if (QDF_STATUS_SUCCESS != status) {
 		pe_debug("Failed to strip extcap IE status: %d", status);
 		return status;
 	}
@@ -6869,7 +6883,7 @@ void lim_init_obss_params(tpAniSirGlobal mac_ctx, tpPESession session)
 	uint32_t  cfg_value;
 
 	if (wlan_cfg_get_int(mac_ctx, WNI_CFG_OBSS_HT40_SCAN_ACTIVE_DWELL_TIME,
-		&cfg_value) !=  eSIR_SUCCESS) {
+		&cfg_value) !=  QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve: %x value",
 			WNI_CFG_OBSS_HT40_SCAN_ACTIVE_DWELL_TIME);
 		return;
@@ -6877,7 +6891,7 @@ void lim_init_obss_params(tpAniSirGlobal mac_ctx, tpPESession session)
 	session->obss_ht40_scanparam.obss_active_dwelltime = cfg_value;
 
 	if (wlan_cfg_get_int(mac_ctx, WNI_CFG_OBSS_HT40_SCAN_PASSIVE_DWELL_TIME,
-		&cfg_value) != eSIR_SUCCESS) {
+		&cfg_value) != QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve: %x value",
 			WNI_CFG_OBSS_HT40_SCAN_PASSIVE_DWELL_TIME);
 		return;
@@ -6886,7 +6900,7 @@ void lim_init_obss_params(tpAniSirGlobal mac_ctx, tpPESession session)
 
 	if (wlan_cfg_get_int(mac_ctx,
 		WNI_CFG_OBSS_HT40_SCAN_WIDTH_TRIGGER_INTERVAL,
-		&cfg_value) != eSIR_SUCCESS) {
+		&cfg_value) != QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve: %x value",
 			WNI_CFG_OBSS_HT40_SCAN_WIDTH_TRIGGER_INTERVAL);
 		return;
@@ -6894,7 +6908,7 @@ void lim_init_obss_params(tpAniSirGlobal mac_ctx, tpPESession session)
 	session->obss_ht40_scanparam.obss_width_trigger_interval = cfg_value;
 	if (wlan_cfg_get_int(mac_ctx,
 		WNI_CFG_OBSS_HT40_SCAN_ACTIVE_TOTAL_PER_CHANNEL,
-		&cfg_value) != eSIR_SUCCESS) {
+		&cfg_value) != QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve: %x value",
 			WNI_CFG_OBSS_HT40_SCAN_ACTIVE_TOTAL_PER_CHANNEL);
 		return;
@@ -6902,7 +6916,7 @@ void lim_init_obss_params(tpAniSirGlobal mac_ctx, tpPESession session)
 	session->obss_ht40_scanparam.obss_active_total_per_channel = cfg_value;
 	if (wlan_cfg_get_int(mac_ctx,
 		WNI_CFG_OBSS_HT40_SCAN_PASSIVE_TOTAL_PER_CHANNEL, &cfg_value)
-		!= eSIR_SUCCESS) {
+		!= QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve: %x value",
 			WNI_CFG_OBSS_HT40_SCAN_PASSIVE_TOTAL_PER_CHANNEL);
 		return;
@@ -6911,7 +6925,7 @@ void lim_init_obss_params(tpAniSirGlobal mac_ctx, tpPESession session)
 
 	if (wlan_cfg_get_int(mac_ctx,
 		WNI_CFG_OBSS_HT40_WIDTH_CH_TRANSITION_DELAY, &cfg_value)
-		!= eSIR_SUCCESS) {
+		!= QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve: %x value",
 			WNI_CFG_OBSS_HT40_WIDTH_CH_TRANSITION_DELAY);
 		return;
@@ -6920,7 +6934,7 @@ void lim_init_obss_params(tpAniSirGlobal mac_ctx, tpPESession session)
 								cfg_value;
 
 	if (wlan_cfg_get_int(mac_ctx, WNI_CFG_OBSS_HT40_SCAN_ACTIVITY_THRESHOLD,
-		&cfg_value) != eSIR_SUCCESS) {
+		&cfg_value) != QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve: %x value",
 			WNI_CFG_OBSS_HT40_SCAN_ACTIVITY_THRESHOLD);
 		return;
@@ -7098,7 +7112,7 @@ void lim_send_set_dtim_period(tpAniSirGlobal mac_ctx, uint8_t dtim_period,
 			      tpPESession session)
 {
 	struct set_dtim_params *dtim_params = NULL;
-	tSirRetStatus ret = eSIR_SUCCESS;
+	QDF_STATUS ret = QDF_STATUS_SUCCESS;
 	struct scheduler_msg msg = {0};
 
 	if (!session) {
@@ -7117,7 +7131,7 @@ void lim_send_set_dtim_period(tpAniSirGlobal mac_ctx, uint8_t dtim_period,
 	msg.bodyval = 0;
 	pe_debug("Post WMA_SET_DTIM_PERIOD to WMA");
 	ret = wma_post_ctrl_msg(mac_ctx, &msg);
-	if (eSIR_SUCCESS != ret) {
+	if (QDF_STATUS_SUCCESS != ret) {
 		pe_err("wma_post_ctrl_msg() failed");
 		qdf_mem_free(dtim_params);
 	}
@@ -7347,14 +7361,14 @@ void lim_update_usr_he_cap(tpAniSirGlobal mac_ctx, tpPESession session)
 	tDot11fIEhe_cap *he_cap = &session->he_config;
 	struct he_cap_network_endian *he_cap_from_ie;
 	uint8_t extracted_buff[DOT11F_IE_HE_CAP_MAX_LEN + 2];
-	tSirRetStatus status;
+	QDF_STATUS status;
 	qdf_mem_zero(extracted_buff, sizeof(extracted_buff));
 	status = lim_strip_ie(mac_ctx, add_ie->probeRespBCNData_buff,
 			&add_ie->probeRespBCNDataLen,
 			DOT11F_EID_HE_CAP, ONE_BYTE,
 			HE_CAP_OUI_TYPE, (uint8_t)HE_CAP_OUI_SIZE,
 			extracted_buff, DOT11F_IE_HE_CAP_MAX_LEN);
-	if (eSIR_SUCCESS != status) {
+	if (QDF_STATUS_SUCCESS != status) {
 		pe_debug("Failed to strip HE cap IE status: %d", status);
 		return;
 	}
@@ -7385,7 +7399,7 @@ void lim_decide_he_op(tpAniSirGlobal mac_ctx, tpAddBssParams add_bss,
 	tDot11fIEhe_op *he_ops = &add_bss->he_op;
 	tSirAddIeParams *add_ie = &session->addIeParams;
 	uint8_t extracted_buff[DOT11F_IE_HE_OP_MAX_LEN + 2];
-	tSirRetStatus status;
+	QDF_STATUS status;
 
 	qdf_mem_zero(extracted_buff, sizeof(extracted_buff));
 	status = lim_strip_ie(mac_ctx, add_ie->probeRespBCNData_buff,
@@ -7393,7 +7407,7 @@ void lim_decide_he_op(tpAniSirGlobal mac_ctx, tpAddBssParams add_bss,
 			DOT11F_EID_HE_OP, ONE_BYTE,
 			HE_OP_OUI_TYPE, (uint8_t)HE_OP_OUI_SIZE,
 			extracted_buff, DOT11F_IE_HE_OP_MAX_LEN);
-	if (eSIR_SUCCESS != status) {
+	if (QDF_STATUS_SUCCESS != status) {
 		pe_debug("Failed to strip HE OP IE status: %d", status);
 		return;
 	}
@@ -7414,7 +7428,7 @@ void lim_decide_he_op(tpAniSirGlobal mac_ctx, tpAddBssParams add_bss,
 	he_ops->tx_bssid_ind = he_ops_from_ie->tx_bssid_ind;
 	he_ops->bss_col_disabled = he_ops_from_ie->bss_col_disabled;
 
-	if (eSIR_SUCCESS != wlan_cfg_get_int(mac_ctx,
+	if (QDF_STATUS_SUCCESS != wlan_cfg_get_int(mac_ctx,
 			WNI_CFG_HE_OPS_BASIC_MCS_NSS, &val))
 		val = WNI_CFG_HE_OPS_BASIC_MCS_NSS_DEF;
 	*((uint16_t *)he_ops->basic_mcs_nss) = (uint16_t)val;
@@ -7863,12 +7877,12 @@ static QDF_STATUS lim_populate_he_mcs_per_bw(tpAniSirGlobal mac_ctx,
 
 	pe_debug("peer rates: rx_mcs - 0x%04x tx_mcs - 0x%04x",
 		 peer_rx, peer_tx);
-	if (wlan_cfg_get_int(mac_ctx, cfg_rx_param, &val) != eSIR_SUCCESS) {
+	if (wlan_cfg_get_int(mac_ctx, cfg_rx_param, &val) != QDF_STATUS_SUCCESS) {
 		pe_err("could not retrieve HE_MCS");
 		return QDF_STATUS_E_FAILURE;
 	}
 	*self_rx = (uint16_t) val;
-	if (wlan_cfg_get_int(mac_ctx, cfg_tx_param, &val) != eSIR_SUCCESS) {
+	if (wlan_cfg_get_int(mac_ctx, cfg_tx_param, &val) != QDF_STATUS_SUCCESS) {
 		pe_err("could not retrieve HE_MCS");
 		return QDF_STATUS_E_FAILURE;
 	}

@@ -36,7 +36,9 @@
 #include "host_diag_core_event.h"
 #include "csr_link_list.h"
 #include "sme_power_save.h"
+#include "nan_api.h"
 
+struct wmi_twt_enable_complete_event_param;
 /*--------------------------------------------------------------------------
   Type declarations
   ------------------------------------------------------------------------*/
@@ -49,6 +51,7 @@ typedef enum eSmeCommandType {
 	eSmeCsrCommandMask = 0x10000,
 	eSmeCommandRoam,
 	eSmeCommandWmStatusChange,
+	e_sme_command_del_sta_session,
 #ifdef FEATURE_WLAN_TDLS
 	/*
 	 * eSmeTdlsCommandMask = 0x80000,
@@ -117,21 +120,35 @@ typedef struct sSelfRecoveryStats {
 } tSelfRecoveryStats;
 
 typedef void (*ocb_callback)(void *context, void *response);
-typedef void (*sme_set_thermal_level_callback)(void *context, u_int8_t level);
-typedef void (*p2p_lo_callback)(void *context, void *event);
+typedef void (*sme_set_thermal_level_callback)(hdd_handle_t hdd_handle,
+					       u_int8_t level);
+typedef void (*p2p_lo_callback)(void *context,
+				struct sir_p2p_lo_event *event);
 #ifdef FEATURE_OEM_DATA_SUPPORT
 typedef void (*sme_send_oem_data_rsp_msg)(struct oem_data_rsp *);
 #endif
 
+#ifdef FEATURE_WLAN_APF
 /**
- * typedef bpf_get_offload_cb - BPF offload callback signature
+ * typedef apf_get_offload_cb - APF offload callback signature
  * @context: Opaque context that the client can use to associate the
  *    callback with the request
- * @caps: BPF offload capabilities as reported by firmware
+ * @caps: APF offload capabilities as reported by firmware
  */
-struct sir_bpf_get_offload;
-typedef void (*bpf_get_offload_cb)(void *context,
-				   struct sir_bpf_get_offload *caps);
+struct sir_apf_get_offload;
+typedef void (*apf_get_offload_cb)(void *context,
+				   struct sir_apf_get_offload *caps);
+
+/**
+ * typedef apf_read_mem_cb - APF read memory response callback
+ * @context: Opaque context that the client can use to associate the
+ *    callback with the request
+ * @evt: APF read memory response event parameters
+ */
+typedef void (*apf_read_mem_cb)(void *context,
+				struct wmi_apf_read_memory_resp_event_params
+									  *evt);
+#endif /* FEATURE_WLAN_APF */
 
 /**
  * typedef sme_encrypt_decrypt_callback - encrypt/decrypt callback
@@ -155,6 +172,48 @@ struct chain_rssi_result;
 typedef void (*get_chain_rssi_callback)(void *context,
 					struct chain_rssi_result *data);
 
+/**
+ * typedef pwr_save_fail_cb - power save fail callback function
+ * @hdd_handle: HDD handle registered with SME
+ * @params: failure parameters
+ */
+struct chip_pwr_save_fail_detected_params;
+typedef void (*pwr_save_fail_cb)(hdd_handle_t hdd_handle,
+			struct chip_pwr_save_fail_detected_params *params);
+
+/**
+ * typedef bt_activity_info_cb - bluetooth activity callback function
+ * @hdd_handle: HDD handle registered with SME
+ * @bt_activity: bluetooth activity information
+ */
+typedef void (*bt_activity_info_cb)(hdd_handle_t hdd_handle,
+				    uint32_t bt_activity);
+
+/**
+ * typedef congestion_cb - congestion callback function
+ * @hdd_handle: HDD handle registered with SME
+ * @congestion: Current congestion value
+ * @vdev_id: ID of the vdev for which congestion is being reported
+ */
+typedef void (*congestion_cb)(hdd_handle_t hdd_handle, uint32_t congestion,
+			      uint32_t vdev_id);
+
+/**
+ * typedef rso_cmd_status_cb - RSO command status  callback function
+ * @hdd_handle: HDD handle registered with SME
+ * @rso_status: Status of the operation
+ */
+typedef void (*rso_cmd_status_cb)(hdd_handle_t hdd_handle,
+				  struct rso_cmd_status *rso_status);
+
+/**
+ * typedef lost_link_info_cb - lost link indication callback function
+ * @hdd_handle: HDD handle registered with SME
+ * @lost_link_info: Information about the lost link
+ */
+typedef void (*lost_link_info_cb)(hdd_handle_t hdd_handle,
+				  struct sir_lost_link_info *lost_link_info);
+
 typedef struct tagSmeStruct {
 	eSmeState state;
 	qdf_mutex_t lkSmeGlobalLock;
@@ -168,8 +227,9 @@ typedef struct tagSmeStruct {
 	host_event_wlan_status_payload_type eventPayload;
 #endif
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
-	void (*pLinkLayerStatsIndCallback)(void *callbackContext,
-			int indType, void *pRsp);
+	void *ll_stats_context;
+	void (*pLinkLayerStatsIndCallback)(void *callback_ctx, int ind_type,
+					   void *rsp, void *context);
 	void (*link_layer_stats_ext_cb)(hdd_handle_t callback_ctx,
 					tSirLLStatsResults *rsp);
 #endif /* WLAN_FEATURE_LINK_LAYER_STATS */
@@ -201,11 +261,11 @@ typedef struct tagSmeStruct {
 	void (*pExtScanIndCb)(void *, const uint16_t, void *);
 #endif /* FEATURE_WLAN_EXTSCAN */
 #ifdef WLAN_FEATURE_NAN
-	void (*nanCallback)(void *, tSirNanEvent *);
+	nan_callback nan_callback;
 #endif
 	bool enableSelfRecovery;
-	tCsrLinkStatusCallback linkStatusCallback;
-	void *linkStatusContext;
+	csr_link_status_callback link_status_callback;
+	void *link_status_context;
 	int (*get_tsf_cb)(void *pcb_cxt, struct stsf *ptsf);
 	void *get_tsf_cxt;
 	/* get temperature event context and callback */
@@ -227,8 +287,7 @@ typedef struct tagSmeStruct {
 	void *dcc_stats_event_context;
 	ocb_callback dcc_stats_event_callback;
 	sme_set_thermal_level_callback set_thermal_level_cb;
-	void *bpf_get_offload_context;
-	bpf_get_offload_cb bpf_get_offload_cb;
+	void *apf_get_offload_context;
 	p2p_lo_callback p2p_lo_event_callback;
 	void *p2p_lo_event_context;
 #ifdef FEATURE_OEM_DATA_SUPPORT
@@ -236,19 +295,16 @@ typedef struct tagSmeStruct {
 #endif
 	sme_encrypt_decrypt_callback encrypt_decrypt_cb;
 	void *encrypt_decrypt_context;
-	void (*lost_link_info_cb)(void *context,
-			struct sir_lost_link_info *lost_link_info);
+	lost_link_info_cb lost_link_info_cb;
 
 	bool (*set_connection_info_cb)(bool);
 	bool (*get_connection_info_cb)(uint8_t *session_id,
 			enum scan_reject_states *reason);
-	void (*rso_cmd_status_cb)(void *hdd_context,
-			struct rso_cmd_status *rso_status);
-	void (*congestion_cb)(void *, uint32_t congestion, uint32_t vdev_id);
+	rso_cmd_status_cb rso_cmd_status_cb;
+	congestion_cb congestion_cb;
 	void (*stats_ext2_cb)(void *, struct sir_sme_rx_aggr_hole_ind *);
-	void (*chip_power_save_fail_cb)(void *,
-			struct chip_pwr_save_fail_detected_params *);
-	void (*bt_activity_info_cb)(void *context, uint32_t bt_activity);
+	pwr_save_fail_cb chip_power_save_fail_cb;
+	bt_activity_info_cb bt_activity_info_cb;
 	void *get_arp_stats_context;
 	void (*get_arp_stats_cb)(void *, struct rsp_stats *, void *);
 	get_chain_rssi_callback get_chain_rssi_cb;
@@ -256,6 +312,13 @@ typedef struct tagSmeStruct {
 	void (*tx_queue_cb)(void *, uint32_t vdev_id,
 			    enum netif_action_type action,
 			    enum netif_reason_type reason);
+	void (*twt_enable_cb)(void *hdd_ctx,
+			struct wmi_twt_enable_complete_event_param *params);
+	void (*twt_disable_cb)(void *hdd_ctx);
+#ifdef FEATURE_WLAN_APF
+	apf_get_offload_cb apf_get_offload_cb;
+	apf_read_mem_cb apf_read_mem_cb;
+#endif
 } tSmeStruct, *tpSmeStruct;
 
 #endif /* #if !defined( __SMEINTERNAL_H ) */

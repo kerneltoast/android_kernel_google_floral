@@ -256,12 +256,6 @@ wlan_hdd_cfg80211_roam_metrics_handover(struct hdd_adapter *adapter,
 					struct csr_roam_info *roam_info);
 #endif
 
-#ifdef FEATURE_WLAN_WAPI
-void wlan_hdd_cfg80211_set_key_wapi(struct hdd_adapter *adapter,
-				    uint8_t key_index,
-				    const uint8_t *mac_addr, const uint8_t *key,
-				    int key_Len);
-#endif
 struct hdd_context *hdd_cfg80211_wiphy_alloc(int priv_size);
 
 int wlan_hdd_cfg80211_tdls_scan(struct wiphy *wiphy,
@@ -369,7 +363,7 @@ static inline void wlan_hdd_cfg80211_extscan_callback(void *ctx,
 #endif /* FEATURE_WLAN_EXTSCAN */
 /**
  * wlan_hdd_rso_cmd_status_cb() - HDD callback to read RSO command status
- * @ctx: void pointer to hdd context
+ * @hdd_handle: opaque handle for the hdd context
  * @rso_status: rso command status
  *
  * This callback function is invoked by firmware to update
@@ -377,7 +371,8 @@ static inline void wlan_hdd_cfg80211_extscan_callback(void *ctx,
  *
  * Return: None
  */
-void wlan_hdd_rso_cmd_status_cb(void *ctx, struct rso_cmd_status *rso_status);
+void wlan_hdd_rso_cmd_status_cb(hdd_handle_t hdd_handle,
+				struct rso_cmd_status *rso_status);
 
 void hdd_rssi_threshold_breached(void *hddctx,
 				 struct rssi_breach_event *data);
@@ -502,13 +497,13 @@ void hdd_set_rate_bw(struct rate_info *info, enum hdd_rate_info_bw hdd_bw);
 
 /**
  * hdd_lost_link_info_cb() - callback function to get lost link information
- * @context: HDD context
+ * @hdd_handle: Opaque handle for the HDD context
  * @lost_link_info: lost link information
  *
  * Return: none
  */
-void hdd_lost_link_info_cb(void *context,
-			struct sir_lost_link_info *lost_link_info);
+void hdd_lost_link_info_cb(hdd_handle_t hdd_handle,
+			   struct sir_lost_link_info *lost_link_info);
 /*
  * hdd_get_sap_operating_band:  Get current operating channel
  * for sap.
@@ -541,14 +536,14 @@ int wlan_hdd_disconnect(struct hdd_adapter *adapter, u16 reason);
 
 /**
  * hdd_update_cca_info_cb() - stores congestion value in station context
- * @context : HDD context
- * @congestion : congestion
- * @vdev_id : vdev id
+ * @hdd_handle: HDD handle
+ * @congestion: congestion
+ * @vdev_id: vdev id
  *
  * Return: None
  */
-void hdd_update_cca_info_cb(void *context, uint32_t congestion,
-			uint32_t vdev_id);
+void hdd_update_cca_info_cb(hdd_handle_t hdd_handle, uint32_t congestion,
+			    uint32_t vdev_id);
 
 /**
  * wlan_hdd_get_adjacent_chan(): Gets next/previous channel
@@ -577,12 +572,12 @@ int wlan_hdd_merge_avoid_freqs(struct ch_avoid_ind_type *destFreqList,
 
 /**
  * hdd_bt_activity_cb() - callback function to receive bt activity
- * @context: HDD context
+ * @hdd_handle: Opaque handle to the HDD context
  * @bt_activity: specifies the kind of bt activity
  *
  * Return: none
  */
-void hdd_bt_activity_cb(void *context, uint32_t bt_activity);
+void hdd_bt_activity_cb(hdd_handle_t hdd_handle, uint32_t bt_activity);
 
 /**
  * wlan_hdd_save_gtk_offload_params() - Save gtk offload parameters in STA
@@ -609,4 +604,16 @@ void wlan_hdd_save_gtk_offload_params(struct hdd_adapter *adapter,
  * Return : 0 on success and errno on failure
  */
 int wlan_hdd_send_mode_change_event(void);
+
+/**
+ * wlan_hdd_restore_channels() - Restore the channels which were cached
+ * and disabled in wlan_hdd_disable_channels api.
+ * @hdd_ctx: Pointer to the HDD context
+ * @notify_sap_event: Indicates if SAP event needs to be notified
+ *
+ * Return: 0 on success, Error code on failure
+ */
+int wlan_hdd_restore_channels(struct hdd_context *hdd_ctx,
+			      bool notify_sap_event);
+
 #endif

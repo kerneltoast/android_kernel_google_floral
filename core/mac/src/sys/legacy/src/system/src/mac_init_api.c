@@ -41,45 +41,32 @@
 
 static tAniSirGlobal global_mac_context;
 
-extern tSirRetStatus halDoCfgInit(tpAniSirGlobal pMac);
-extern tSirRetStatus halProcessStartEvent(tpAniSirGlobal pMac);
-
-tSirRetStatus mac_start(tHalHandle hHal, void *pHalMacStartParams)
+QDF_STATUS mac_start(mac_handle_t mac_handle,
+		     struct mac_start_params *params)
 {
-	tSirRetStatus status = eSIR_SUCCESS;
-	tpAniSirGlobal pMac = (tpAniSirGlobal) hHal;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 
-	if (NULL == pMac) {
+	if (!mac || !params) {
 		QDF_ASSERT(0);
-		status = eSIR_FAILURE;
+		status = QDF_STATUS_E_FAILURE;
 		return status;
 	}
 
-	pMac->gDriverType =
-		((tHalMacStartParameters *) pHalMacStartParams)->driverType;
+	mac->gDriverType = params->driver_type;
 
-	if (ANI_DRIVER_TYPE(pMac) != QDF_DRIVER_TYPE_MFG) {
-		status = pe_start(pMac);
-	}
+	if (ANI_DRIVER_TYPE(mac) != QDF_DRIVER_TYPE_MFG)
+		status = pe_start(mac);
 
 	return status;
 }
 
-/** -------------------------------------------------------------
-   \fn mac_stop
-   \brief this function will be called from HDD to stop MAC. This function will stop all the mac modules.
- \       memory with global context will only be initialized not freed here.
-   \param   tHalHandle hHal
-   \param tHalStopType
-   \return tSirRetStatus
-   -------------------------------------------------------------*/
-
-QDF_STATUS mac_stop(tHalHandle hHal, tHalStopType stopType)
+QDF_STATUS mac_stop(mac_handle_t mac_handle)
 {
-	tpAniSirGlobal pMac = (tpAniSirGlobal) hHal;
+	tpAniSirGlobal mac = MAC_CONTEXT(mac_handle);
 
-	pe_stop(pMac);
-	cfg_cleanup(pMac);
+	pe_stop(mac);
+	cfg_cleanup(mac);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -89,32 +76,31 @@ QDF_STATUS mac_stop(tHalHandle hHal, tHalStopType stopType)
    \brief this function will be called during init. This function is suppose to allocate all the
  \       memory with the global context will be allocated here.
    \param   tHalHandle pHalHandle
-   \param   hdd_handle_t hHdd
+   \param   hdd_handle_t hdd_handle
    \param   tHalOpenParameters* pHalOpenParams
-   \return tSirRetStatus
+   \return QDF_STATUS
    -------------------------------------------------------------*/
 
-tSirRetStatus mac_open(struct wlan_objmgr_psoc *psoc, tHalHandle *pHalHandle,
-			hdd_handle_t hHdd, struct cds_config_info *cds_cfg)
+QDF_STATUS mac_open(struct wlan_objmgr_psoc *psoc, tHalHandle *pHalHandle,
+		    hdd_handle_t hdd_handle, struct cds_config_info *cds_cfg)
 {
 	tpAniSirGlobal p_mac = &global_mac_context;
-	tSirRetStatus status = eSIR_SUCCESS;
-	QDF_STATUS qdf_status;
+	QDF_STATUS status;
 
 	if (pHalHandle == NULL)
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 
 	/*
 	 * Set various global fields of p_mac here
 	 * (Could be platform dependent as some variables in p_mac are platform
 	 * dependent)
 	 */
-	p_mac->hHdd = hHdd;
+	p_mac->hdd_handle = hdd_handle;
 
-	qdf_status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_LEGACY_MAC_ID);
-	if (QDF_IS_STATUS_ERROR(qdf_status)) {
+	status = wlan_objmgr_psoc_try_get_ref(psoc, WLAN_LEGACY_MAC_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
 		pe_err("PSOC get ref failure");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	p_mac->psoc = psoc;
@@ -128,8 +114,8 @@ tSirRetStatus mac_open(struct wlan_objmgr_psoc *psoc, tHalHandle *pHalHandle,
 			p_mac->gDriverType = QDF_DRIVER_TYPE_MFG;
 
 		/* Call routine to initialize CFG data structures */
-		if (eSIR_SUCCESS != cfg_init(p_mac))
-			return eSIR_FAILURE;
+		if (QDF_STATUS_SUCCESS != cfg_init(p_mac))
+			return QDF_STATUS_E_FAILURE;
 
 		sys_init_globals(p_mac);
 	}
@@ -141,7 +127,7 @@ tSirRetStatus mac_open(struct wlan_objmgr_psoc *psoc, tHalHandle *pHalHandle,
 	p_mac->is_usr_cfg_amsdu_enabled = true;
 
 	status =  pe_open(p_mac, cds_cfg);
-	if (eSIR_SUCCESS != status) {
+	if (QDF_STATUS_SUCCESS != status) {
 		pe_err("pe_open() failure");
 		cfg_de_init(p_mac);
 	}

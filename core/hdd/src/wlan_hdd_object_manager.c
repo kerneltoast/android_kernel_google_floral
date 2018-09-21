@@ -44,16 +44,33 @@ static void hdd_init_pdev_os_priv(struct hdd_context *hdd_ctx,
 
 static void hdd_deinit_pdev_os_priv(struct wlan_objmgr_pdev *pdev)
 {
+	os_if_spectral_netlink_deinit(pdev);
 	wlan_cfg80211_scan_priv_deinit(pdev);
 }
 
-static void hdd_init_vdev_os_priv(struct hdd_adapter *adapter,
-	struct vdev_osif_priv *os_priv)
+static struct vdev_osif_priv *
+hdd_init_vdev_os_priv(struct hdd_adapter *adapter)
 {
+	struct vdev_osif_priv *os_priv;
+
+	os_priv = qdf_mem_malloc(sizeof(*os_priv));
+	if (!os_priv)
+		return NULL;
+
 	/* Initialize the vdev OS private structure*/
 	os_priv->wdev = adapter->dev->ieee80211_ptr;
 	os_priv->legacy_osif_priv = adapter;
 	wlan_cfg80211_tdls_priv_init(os_priv);
+
+	return os_priv;
+}
+
+static void hdd_deinit_vdev_os_priv(struct vdev_osif_priv *os_priv)
+{
+	if (os_priv) {
+		wlan_cfg80211_tdls_priv_deinit(os_priv);
+		qdf_mem_free(os_priv);
+	}
 }
 
 static void hdd_init_psoc_qdf_ctx(struct wlan_objmgr_psoc *psoc)
@@ -181,7 +198,7 @@ int hdd_objmgr_create_and_store_pdev(struct hdd_context *hdd_ctx)
 	}
 
 	hdd_ctx->hdd_pdev = pdev;
-	sme_store_pdev(hdd_ctx->hHal, hdd_ctx->hdd_pdev);
+	sme_store_pdev(hdd_ctx->mac_handle, hdd_ctx->hdd_pdev);
 	hdd_init_pdev_os_priv(hdd_ctx, priv);
 	return 0;
 
@@ -224,7 +241,6 @@ int hdd_objmgr_create_and_store_vdev(struct wlan_objmgr_pdev *pdev,
 	QDF_STATUS status;
 	int errno;
 	struct wlan_objmgr_vdev *vdev;
-	struct wlan_objmgr_peer *peer;
 	struct vdev_osif_priv *osif_priv;
 	struct wlan_vdev_create_params vdev_params = {0};
 
@@ -234,12 +250,11 @@ int hdd_objmgr_create_and_store_vdev(struct wlan_objmgr_pdev *pdev,
 		return -EINVAL;
 	}
 
-	osif_priv = qdf_mem_malloc(sizeof(*osif_priv));
+	osif_priv = hdd_init_vdev_os_priv(adapter);
 	if (!osif_priv) {
 		hdd_err("Failed to allocate osif_priv; out of memory");
 		return -ENOMEM;
 	}
-	hdd_init_vdev_os_priv(adapter, osif_priv);
 
 	vdev_params.opmode = adapter->device_mode;
 	vdev_params.osifp = osif_priv;
@@ -266,28 +281,16 @@ int hdd_objmgr_create_and_store_vdev(struct wlan_objmgr_pdev *pdev,
 		goto vdev_destroy;
 	}
 
-	peer = wlan_objmgr_peer_obj_create(vdev, WLAN_PEER_SELF,
-					   vdev_params.macaddr);
-	if (!peer) {
-		hdd_err("Failed to create self peer for adapter mode %d",
-			adapter->device_mode);
-		errno = -ENOMEM;
-		goto vdev_put_ref;
-	}
-
 	adapter->hdd_vdev = vdev;
 	adapter->session_id = wlan_vdev_get_id(vdev);
 
 	return 0;
 
-vdev_put_ref:
-	wlan_objmgr_vdev_release_ref(vdev, WLAN_HDD_ID_OBJ_MGR);
-
 vdev_destroy:
 	wlan_objmgr_vdev_obj_delete(vdev);
 
 osif_priv_free:
-	qdf_mem_free(osif_priv);
+	hdd_deinit_vdev_os_priv(osif_priv);
 
 	return errno;
 }
@@ -297,7 +300,6 @@ int hdd_objmgr_release_and_destroy_vdev(struct hdd_adapter *adapter)
 	QDF_STATUS status;
 	struct wlan_objmgr_vdev *vdev = adapter->hdd_vdev;
 	struct vdev_osif_priv *osif_priv;
-	uint8_t *self_mac_addr;
 
 	adapter->hdd_vdev = NULL;
 	adapter->session_id = HDD_SESSION_ID_INVALID;
@@ -310,110 +312,12 @@ int hdd_objmgr_release_and_destroy_vdev(struct hdd_adapter *adapter)
 	wlan_vdev_reset_ospriv(vdev);
 
 	QDF_BUG(osif_priv);
-	if (osif_priv) {
-		wlan_cfg80211_tdls_priv_deinit(osif_priv);
-		qdf_mem_free(osif_priv);
-	}
-
-	self_mac_addr = wlan_vdev_mlme_get_macaddr(vdev);
-	if (hdd_objmgr_remove_peer_object(vdev, self_mac_addr))
-		hdd_err("Self peer delete failed");
+	hdd_deinit_vdev_os_priv(osif_priv);
 
 	status = wlan_objmgr_vdev_obj_delete(vdev);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_HDD_ID_OBJ_MGR);
 
 	return qdf_status_to_os_return(status);
-}
-
-int hdd_objmgr_add_peer_object(struct wlan_objmgr_vdev *vdev,
-			       enum QDF_OPMODE adapter_mode,
-			       uint8_t *mac_addr,
-			       bool is_p2p_type)
-{
-	enum wlan_peer_type peer_type;
-	struct wlan_objmgr_peer *peer;
-
-	if ((adapter_mode == QDF_STA_MODE) ||
-		(adapter_mode == QDF_P2P_CLIENT_MODE)) {
-		peer_type = WLAN_PEER_AP;
-	} else if ((adapter_mode == QDF_SAP_MODE) ||
-		(adapter_mode == QDF_P2P_GO_MODE)) {
-		if (is_p2p_type) {
-			peer_type = WLAN_PEER_P2P_CLI;
-		} else {
-			peer_type = WLAN_PEER_STA;
-		}
-	} else if (adapter_mode == QDF_IBSS_MODE) {
-		peer_type = WLAN_PEER_IBSS;
-	} else if (adapter_mode == QDF_NDI_MODE) {
-		peer_type = WLAN_PEER_NDP;
-	} else {
-		hdd_err("Unsupported device mode %d", adapter_mode);
-		return -EINVAL;
-	}
-
-	if (!vdev) {
-		hdd_err("vdev NULL");
-		QDF_ASSERT(0);
-		return -EFAULT;
-	}
-
-	peer = wlan_objmgr_peer_obj_create(vdev, peer_type, mac_addr);
-	if (!peer)
-		return -ENOMEM;
-
-	hdd_debug("Peer object "MAC_ADDRESS_STR" add success! Type: %d",
-		 MAC_ADDR_ARRAY(mac_addr), peer_type);
-
-	return 0;
-}
-
-int hdd_objmgr_remove_peer_object(struct wlan_objmgr_vdev *vdev,
-				  uint8_t *mac_addr)
-{
-	struct wlan_objmgr_psoc *psoc;
-	struct wlan_objmgr_pdev *pdev;
-	struct wlan_objmgr_peer *peer;
-	uint8_t pdev_id;
-
-	if (!vdev) {
-		hdd_err("vdev NULL");
-		QDF_ASSERT(0);
-		return -EINVAL;
-	}
-
-	psoc = wlan_vdev_get_psoc(vdev);
-	if (!psoc) {
-		hdd_err("Psoc NUll");
-		QDF_ASSERT(0);
-		return -EINVAL;
-	}
-
-	pdev = wlan_vdev_get_pdev(vdev);
-	if (!pdev) {
-		hdd_err("pdev NULL");
-		QDF_ASSERT(0);
-		return -EINVAL;
-	}
-
-	pdev_id = wlan_objmgr_pdev_get_pdev_id(pdev);
-	peer = wlan_objmgr_get_peer(psoc, pdev_id, mac_addr,
-				    WLAN_HDD_ID_OBJ_MGR);
-	if (peer) {
-		wlan_objmgr_peer_obj_delete(peer);
-
-		/* Unref to decrement ref happened in find_peer */
-		wlan_objmgr_peer_release_ref(peer, WLAN_HDD_ID_OBJ_MGR);
-
-		hdd_info("Peer obj "MAC_ADDRESS_STR" deleted",
-				MAC_ADDR_ARRAY(mac_addr));
-		return 0;
-	}
-
-	hdd_err("Peer obj "MAC_ADDRESS_STR" not found",
-				MAC_ADDR_ARRAY(mac_addr));
-
-	return -EINVAL;
 }
 
 int hdd_objmgr_set_peer_mlme_auth_state(struct wlan_objmgr_vdev *vdev,

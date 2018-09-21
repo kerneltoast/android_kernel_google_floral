@@ -251,7 +251,7 @@ static bool lim_chk_assoc_req_parse_error(tpAniSirGlobal mac_ctx,
 					  uint8_t sub_type, uint8_t *frm_body,
 					  uint32_t frame_len)
 {
-	tSirRetStatus status;
+	QDF_STATUS status;
 
 	if (sub_type == LIM_ASSOC)
 		status = sir_convert_assoc_req_frame2_struct(mac_ctx, frm_body,
@@ -260,7 +260,7 @@ static bool lim_chk_assoc_req_parse_error(tpAniSirGlobal mac_ctx,
 		status = sir_convert_reassoc_req_frame2_struct(mac_ctx,
 						frm_body, frame_len, assoc_req);
 
-	if (status == eSIR_SUCCESS)
+	if (status == QDF_STATUS_SUCCESS)
 		return true;
 
 	pe_warn("Assoc Req rejected: frame parsing error. source addr:"
@@ -289,7 +289,7 @@ static bool lim_chk_capab(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 {
 	uint16_t temp;
 
-	if (cfg_get_capability_info(mac_ctx, &temp, session) != eSIR_SUCCESS) {
+	if (cfg_get_capability_info(mac_ctx, &temp, session) != QDF_STATUS_SUCCESS) {
 		pe_err("could not retrieve Capabilities");
 		return false;
 	}
@@ -558,7 +558,7 @@ static bool lim_check_11ax_basic_mcs(tpAniSirGlobal mac_ctx,
 		rx_mcs = assoc_req->he_cap.rx_he_mcs_map_lt_80;
 		tx_mcs = assoc_req->he_cap.tx_he_mcs_map_lt_80;
 		sta_mcs = HE_INTERSECT_MCS(rx_mcs, tx_mcs);
-		if (eSIR_SUCCESS != wlan_cfg_get_int(mac_ctx,
+		if (QDF_STATUS_SUCCESS != wlan_cfg_get_int(mac_ctx,
 				WNI_CFG_HE_OPS_BASIC_MCS_NSS, &val))
 			val = WNI_CFG_HE_OPS_BASIC_MCS_NSS_DEF;
 		basic_mcs = (uint16_t)val;
@@ -610,7 +610,7 @@ lim_process_for_spectrum_mgmt(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 			      uint8_t sub_type, tSirMacCapabilityInfo local_cap)
 {
 	if (local_cap.spectrumMgt) {
-		tSirRetStatus status = eSIR_SUCCESS;
+		QDF_STATUS status = QDF_STATUS_SUCCESS;
 		/*
 		 * If station is 11h capable, then it SHOULD send all mandatory
 		 * IEs in assoc request frame. Let us verify that
@@ -641,7 +641,7 @@ lim_process_for_spectrum_mgmt(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 				status =
 				    lim_is_dot11h_power_capabilities_in_range(
 					mac_ctx, assoc_req, session);
-				if (eSIR_SUCCESS != status) {
+				if (QDF_STATUS_SUCCESS != status) {
 					pe_warn("LIM Info: MinTxPower(STA) > MaxTxPower(AP) in %s Req from "
 						MAC_ADDRESS_STR,
 						(LIM_ASSOC == sub_type) ?
@@ -650,7 +650,7 @@ lim_process_for_spectrum_mgmt(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 				}
 				status = lim_is_dot11h_supported_channels_valid(
 							mac_ctx, assoc_req);
-				if (eSIR_SUCCESS != status) {
+				if (QDF_STATUS_SUCCESS != status) {
 					pe_warn("LIM Info: wrong supported channels (STA) in %s Req from "
 						MAC_ADDRESS_STR,
 						(LIM_ASSOC == sub_type) ?
@@ -737,7 +737,7 @@ static bool lim_chk_is_11b_sta_supported(tpAniSirGlobal mac_ctx,
 
 	if (phy_mode == WNI_CFG_PHY_MODE_11G) {
 		if (wlan_cfg_get_int(mac_ctx, WNI_CFG_11G_ONLY_POLICY,
-			&cfg_11g_only) != eSIR_SUCCESS) {
+			&cfg_11g_only) != QDF_STATUS_SUCCESS) {
 			pe_err("couldn't get 11g-only flag");
 			return false;
 		}
@@ -807,6 +807,137 @@ static void lim_print_ht_cap(tpAniSirGlobal mac_ctx, tpPESession session,
 }
 
 /**
+  * lim_check_wpa_rsn_ie() - wpa and rsn ie related checks
+  * @session: pointer to pe session entry
+  * @mac_ctx: pointer to Global MAC structure
+  * @sub_type: Assoc(=0) or Reassoc(=1) Requestframe
+  * @hdr: pointer to the MAC head
+  * @assoc_req: pointer to ASSOC/REASSOC Request frame
+  * @pmf_connection: flag indicating pmf connection
+  *
+  * This function checks if wpa/rsn IE is present and validates
+  * ie version, length and mismatch.
+  *
+  * Return: true if no error, false otherwise
+  */
+static bool lim_check_wpa_rsn_ie(tpPESession session, tpAniSirGlobal mac_ctx,
+				 uint8_t sub_type, tpSirMacMgmtHdr hdr,
+				 tpSirAssocReq assoc_req, bool *pmf_connection)
+{
+	uint32_t ret;
+	tDot11fIEWPA dot11f_ie_wpa = {0};
+	tDot11fIERSN dot11f_ie_rsn = {0};
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	/*
+	 * Clear the buffers so that frame parser knows that there isn't a
+	 * previously decoded IE in these buffers
+	 */
+	qdf_mem_set((uint8_t *) &dot11f_ie_rsn, sizeof(dot11f_ie_rsn), 0);
+	qdf_mem_set((uint8_t *) &dot11f_ie_wpa, sizeof(dot11f_ie_wpa), 0);
+	pe_err("RSN enabled auth, Re/Assoc req from STA: "
+		MAC_ADDRESS_STR, MAC_ADDR_ARRAY(hdr->sa));
+
+	if (assoc_req->rsnPresent) {
+		if (!(assoc_req->rsn.length)) {
+			pe_warn("Re/Assoc rejected from: "
+				MAC_ADDRESS_STR,
+				MAC_ADDR_ARRAY(hdr->sa));
+			/*
+			 * rcvd Assoc req frame with RSN IE but
+			 * length is zero
+			 */
+			lim_send_assoc_rsp_mgmt_frame(mac_ctx,
+				eSIR_MAC_INVALID_IE_STATUS, 1,
+				hdr->sa, sub_type, 0, session);
+			return false;
+		}
+
+		/* Unpack the RSN IE */
+		ret = dot11f_unpack_ie_rsn(mac_ctx,
+					   &assoc_req->rsn.info[0],
+					   assoc_req->rsn.length,
+					   &dot11f_ie_rsn, false);
+		if (!DOT11F_SUCCEEDED(ret)) {
+			pe_err("Invalid RSN IE");
+			return false;
+		}
+
+		/* Check if the RSN version is supported */
+		if (SIR_MAC_OUI_VERSION_1 == dot11f_ie_rsn.version) {
+			/* check the groupwise and pairwise cipher suites */
+			status = lim_check_rx_rsn_ie_match(mac_ctx,
+					   &dot11f_ie_rsn, session,
+					   assoc_req->HTCaps.present,
+					   pmf_connection);
+			if (QDF_STATUS_SUCCESS != status) {
+				pe_warn("Re/Assoc rejected from: "
+					MAC_ADDRESS_STR,
+					MAC_ADDR_ARRAY(hdr->sa));
+
+				lim_send_assoc_rsp_mgmt_frame(mac_ctx, status,
+							 1, hdr->sa, sub_type,
+							 0, session);
+				return false;
+			}
+		} else {
+			pe_warn("Re/Assoc rejected from: " MAC_ADDRESS_STR,
+				MAC_ADDR_ARRAY(hdr->sa));
+
+			/*
+			 * rcvd Assoc req frame with RSN IE but
+			 * IE version is wrong
+			 */
+			lim_send_assoc_rsp_mgmt_frame(mac_ctx,
+				eSIR_MAC_UNSUPPORTED_RSN_IE_VERSION_STATUS,
+				1, hdr->sa, sub_type, 0, session);
+			return false;
+		}
+	} else if (assoc_req->wpaPresent) {
+		if (!(assoc_req->wpa.length)) {
+			pe_warn("Re/Assoc rejected from: "
+				MAC_ADDRESS_STR,
+				MAC_ADDR_ARRAY(hdr->sa));
+
+			/* rcvd Assoc req frame with invalid WPA IE length */
+			lim_send_assoc_rsp_mgmt_frame(mac_ctx,
+				eSIR_MAC_INVALID_IE_STATUS, 1,
+				hdr->sa, sub_type, 0, session);
+			return false;
+		}
+		/* Unpack the WPA IE */
+		ret = dot11f_unpack_ie_wpa(mac_ctx,
+					   &assoc_req->wpa.info[4],
+					   (assoc_req->wpa.length - 4),
+					   &dot11f_ie_wpa, false);
+		if (!DOT11F_SUCCEEDED(ret)) {
+			pe_err("Invalid WPA IE");
+			return false;
+		}
+
+		/* check the groupwise and pairwise cipher suites*/
+		status = lim_check_rx_wpa_ie_match(mac_ctx, dot11f_ie_wpa,
+					session, assoc_req->HTCaps.present);
+		if (QDF_STATUS_SUCCESS != status) {
+			pe_warn("Re/Assoc rejected from: "
+				MAC_ADDRESS_STR,
+				MAC_ADDR_ARRAY(hdr->sa));
+
+			/*
+			 * rcvd Assoc req frame with WPA IE
+			 * but there is mismatch
+			 */
+			lim_send_assoc_rsp_mgmt_frame(mac_ctx, status, 1,
+					hdr->sa, sub_type, 0, session);
+			return false;
+		}
+
+	}
+	return true;
+
+}
+
+/**
  * lim_chk_n_process_wpa_rsn_ie() - wpa ie related checks
  * @mac_ctx: pointer to Global MAC structure
  * @hdr: pointer to the MAC head
@@ -817,7 +948,7 @@ static void lim_print_ht_cap(tpAniSirGlobal mac_ctx, tpPESession session,
  *
  * wpa ie related checks
  *
- * Return: true of no error, false otherwise
+ * Return: true if no error, false otherwise
  */
 static bool lim_chk_n_process_wpa_rsn_ie(tpAniSirGlobal mac_ctx,
 					 tpSirMacMgmtHdr hdr,
@@ -826,15 +957,6 @@ static bool lim_chk_n_process_wpa_rsn_ie(tpAniSirGlobal mac_ctx,
 					 uint8_t sub_type, bool *pmf_connection)
 {
 	const uint8_t *wps_ie = NULL;
-	tDot11fIEWPA dot11f_ie_wpa = {0};
-	tDot11fIERSN dot11f_ie_rsn = {0};
-	tSirRetStatus status = eSIR_SUCCESS;
-	/*
-	 * Clear the buffers so that frame parser knows that there isn't a
-	 * previously decoded IE in these buffers
-	 */
-	qdf_mem_set((uint8_t *) &dot11f_ie_rsn, sizeof(dot11f_ie_rsn), 0);
-	qdf_mem_set((uint8_t *) &dot11f_ie_wpa, sizeof(dot11f_ie_wpa), 0);
 
 	/* if additional IE is present, check if it has WscIE */
 	if (assoc_req->addIEPresent && assoc_req->addIE.length)
@@ -842,149 +964,17 @@ static bool lim_chk_n_process_wpa_rsn_ie(tpAniSirGlobal mac_ctx,
 					assoc_req->addIE.length);
 	else
 		pe_debug("Assoc req addIEPresent: %d addIE length: %d",
-			assoc_req->addIEPresent, assoc_req->addIE.length);
+			 assoc_req->addIEPresent, assoc_req->addIE.length);
 
 	/* when wps_ie is present, RSN/WPA IE is ignored */
 	if (wps_ie == NULL) {
-		/* check whether as RSN IE is present */
+		/* check whether RSN IE is present */
 		if (LIM_IS_AP_ROLE(session) &&
 		    session->pLimStartBssReq->privacy &&
-		    session->pLimStartBssReq->rsnIE.length) {
-			pe_err("RSN enabled auth, Re/Assoc req from STA: "
-					MAC_ADDRESS_STR,
-				MAC_ADDR_ARRAY(hdr->sa));
-			if (assoc_req->rsnPresent) {
-				if (assoc_req->rsn.length) {
-					/* Unpack the RSN IE */
-					if (dot11f_unpack_ie_rsn(mac_ctx,
-						&assoc_req->rsn.info[0],
-						assoc_req->rsn.length,
-						&dot11f_ie_rsn, false) !=
-							DOT11F_PARSE_SUCCESS) {
-						pe_err("Invalid RSN ie");
-						return false;
-					}
-
-					/* Check RSN version is supported */
-					if (SIR_MAC_OUI_VERSION_1 ==
-						dot11f_ie_rsn.version) {
-						/*
-						 * check the groupwise and
-						 * pairwise cipher suites
-						 */
-						status =
-						    lim_check_rx_rsn_ie_match(
-						      mac_ctx, &dot11f_ie_rsn,
-						      session,
-						      assoc_req->HTCaps.present,
-						      pmf_connection);
-						if (eSIR_SUCCESS != status) {
-							pe_warn("Re/Assoc rejected from: " MAC_ADDRESS_STR,
-							MAC_ADDR_ARRAY(
-								hdr->sa));
-
-							/*
-							 * some IE is not
-							 * properly sent
-							 * received Association
-							 * req frame with RSN IE
-							 * but length is 0
-							 */
-							lim_send_assoc_rsp_mgmt_frame(
-								mac_ctx,
-								status, 1,
-								hdr->sa,
-								sub_type, 0,
-								session);
-							return false;
-						}
-					} else {
-						pe_warn("Re/Assoc rejected from: " MAC_ADDRESS_STR,
-							MAC_ADDR_ARRAY(
-								hdr->sa));
-						/*
-						 * rcvd Assoc req frame with RSN
-						 * IE version wrong
-						 */
-						lim_send_assoc_rsp_mgmt_frame(
-							mac_ctx,
-							eSIR_MAC_UNSUPPORTED_RSN_IE_VERSION_STATUS,
-							1, hdr->sa, sub_type, 0,
-							session);
-						return false;
-					}
-				} else {
-					pe_warn("Re/Assoc rejected from: "
-							MAC_ADDRESS_STR,
-						MAC_ADDR_ARRAY(hdr->sa));
-					/*
-					 * rcvd Assoc req frame with RSN IE but
-					 * length is 0
-					 */
-					lim_send_assoc_rsp_mgmt_frame(mac_ctx,
-						eSIR_MAC_INVALID_INFORMATION_ELEMENT_STATUS,
-						1, hdr->sa, sub_type, 0,
-						session);
-					return false;
-				}
-			} /* end - if(assoc_req->rsnPresent) */
-			if ((!assoc_req->rsnPresent) && assoc_req->wpaPresent) {
-				/* Unpack the WPA IE */
-				if (assoc_req->wpa.length) {
-					/* OUI is not taken care */
-					if (dot11f_unpack_ie_wpa(mac_ctx,
-						&assoc_req->wpa.info[4],
-						assoc_req->wpa.length,
-						&dot11f_ie_wpa, false) !=
-							DOT11F_PARSE_SUCCESS) {
-						pe_err("Invalid WPA IE");
-						return false;
-					}
-					/*
-					 * check the groupwise and pairwise
-					 * cipher suites
-					 */
-					status = lim_check_rx_wpa_ie_match(
-						     mac_ctx, dot11f_ie_wpa,
-						     session,
-						     assoc_req->HTCaps.present);
-					if (eSIR_SUCCESS != status) {
-						pe_warn("Re/Assoc rejected from: "
-							   MAC_ADDRESS_STR,
-							MAC_ADDR_ARRAY(
-								hdr->sa));
-						/*
-						 * rcvd Assoc req frame with WPA
-						 * IE but mismatch
-						 */
-						lim_send_assoc_rsp_mgmt_frame(
-							mac_ctx, status, 1,
-							hdr->sa, sub_type, 0,
-							session);
-						return false;
-					}
-				} else {
-					pe_warn("Re/Assoc rejected from: "
-						   MAC_ADDRESS_STR,
-						MAC_ADDR_ARRAY(hdr->sa));
-					/*
-					 * rcvd Assoc req frame with invalid WPA
-					 * IE
-					 */
-					lim_send_assoc_rsp_mgmt_frame(mac_ctx,
-						eSIR_MAC_INVALID_INFORMATION_ELEMENT_STATUS,
-						1, hdr->sa, sub_type, 0,
-						session);
-					return false;
-				} /* end - if(assoc_req->wpa.length) */
-			} /* end - if(assoc_req->wpaPresent) */
-		}
-		/*
-		 * end of if(session->pLimStartBssReq->privacy
-		 * && session->pLimStartBssReq->rsnIE->length)
-		 */
-	} /* end of if( ! assoc_req->wscInfo.present ) */
-	else {
+		    session->pLimStartBssReq->rsnIE.length)
+			return lim_check_wpa_rsn_ie(session, mac_ctx, sub_type,
+						hdr, assoc_req, pmf_connection);
+	} else {
 		pe_debug("Assoc req WSE IE is present");
 	}
 	return true;
@@ -1229,7 +1219,7 @@ static bool lim_chk_wmm(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 				&(assoc_req->addtsReq),
 				&(assoc_req->qosCapability),
 				0, false, NULL, &tspecIdx, session) !=
-					eSIR_SUCCESS) {
+					QDF_STATUS_SUCCESS) {
 				pe_warn("AdmitControl: TSPEC rejected");
 				lim_send_assoc_rsp_mgmt_frame(mac_ctx,
 					eSIR_MAC_QAP_NO_BANDWIDTH_REASON,
@@ -1240,7 +1230,7 @@ static bool lim_chk_wmm(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 				return false;
 			}
 		} else if (lim_admit_control_add_sta(mac_ctx, hdr->sa, false)
-				!= eSIR_SUCCESS) {
+				!= QDF_STATUS_SUCCESS) {
 			pe_warn("AdmitControl: Sta rejected");
 			lim_send_assoc_rsp_mgmt_frame(mac_ctx,
 				eSIR_MAC_QAP_NO_BANDWIDTH_REASON, 1,
@@ -1493,7 +1483,7 @@ static bool lim_update_sta_ds(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 			&(assoc_req->extendedRates),
 			assoc_req->HTCaps.supportedMCSSet,
 			session, vht_caps,
-			&assoc_req->he_cap) != eSIR_SUCCESS) {
+			&assoc_req->he_cap) != QDF_STATUS_SUCCESS) {
 		/* Could not update hash table entry at DPH with rateset */
 		pe_err("Couldn't update hash entry for aid: %d MacAddr: "
 		       MAC_ADDRESS_STR,
@@ -1508,7 +1498,7 @@ static bool lim_update_sta_ds(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 			session);
 		pe_err("Delete dph hash entry");
 		if (dph_delete_hash_entry(mac_ctx, hdr->sa, sta_ds->assocId,
-			 &session->dph.dphHashTable) != eSIR_SUCCESS)
+			 &session->dph.dphHashTable) != QDF_STATUS_SUCCESS)
 			pe_err("error deleting hash entry");
 		return false;
 	}
@@ -1585,7 +1575,7 @@ static bool lim_update_sta_ds(tpAniSirGlobal mac_ctx, tpSirMacMgmtHdr hdr,
 	timer_id.fields.sessionId = session->peSessionId;
 	timer_id.fields.peerIdx = peer_idx;
 	if (wlan_cfg_get_int(mac_ctx, WNI_CFG_PMF_SA_QUERY_RETRY_INTERVAL,
-			&retry_interval) != eSIR_SUCCESS) {
+			&retry_interval) != QDF_STATUS_SUCCESS) {
 		pe_err("Couldn't get PMF SA Query retry interval value");
 		lim_reject_association(mac_ctx, hdr->sa, sub_type, true,
 			auth_type, peer_idx, false,
@@ -1659,7 +1649,7 @@ static bool lim_update_sta_ctx(tpAniSirGlobal mac_ctx, tpPESession session,
 		 * BTAMP: Add STA context at HW - issue WMA_ADD_STA_REQ to HAL
 		 */
 		if (lim_add_sta(mac_ctx, sta_ds, false, session) !=
-		    eSIR_SUCCESS) {
+		    QDF_STATUS_SUCCESS) {
 			pe_err("could not Add STA with assocId: %d",
 				sta_ds->assocId);
 			lim_reject_association(mac_ctx, sta_ds->staAddr,
@@ -1690,7 +1680,7 @@ static bool lim_update_sta_ctx(tpAniSirGlobal mac_ctx, tpPESession session,
 			sta_ds->mlmStaContext.mlmState =
 				eLIM_MLM_WT_ASSOC_DEL_STA_RSP_STATE;
 			if (lim_del_sta(mac_ctx, sta_ds, true, session)
-					!= eSIR_SUCCESS) {
+					!= QDF_STATUS_SUCCESS) {
 				pe_err("Couldn't DEL STA, assocId: %d staId: %d",
 					sta_ds->assocId, sta_ds->staIndex);
 				lim_reject_association(mac_ctx, sta_ds->staAddr,
@@ -1713,7 +1703,7 @@ static bool lim_update_sta_ctx(tpAniSirGlobal mac_ctx, tpPESession session,
 			 * same AID, already allocated
 			 */
 			if (lim_add_sta(mac_ctx, sta_ds, false, session)
-				!= eSIR_SUCCESS) {
+				!= QDF_STATUS_SUCCESS) {
 				pe_err("UPASD not supported, REASSOC Failed");
 				lim_reject_association(mac_ctx, sta_ds->staAddr,
 					sta_ds->mlmStaContext.subType, true,
@@ -1888,7 +1878,7 @@ void lim_process_assoc_req_frame(tpAniSirGlobal mac_ctx, uint8_t *rx_pkt_info,
 			 * STA might have missed the assoc response, so it is
 			 * sending assoc request frame again.
 			 */
-			lim_send_assoc_rsp_mgmt_frame(mac_ctx, eSIR_SUCCESS,
+			lim_send_assoc_rsp_mgmt_frame(mac_ctx, QDF_STATUS_SUCCESS,
 					sta_ds->assocId, sta_ds->staAddr,
 					sub_type,
 					sta_ds, session);
@@ -1932,10 +1922,15 @@ void lim_process_assoc_req_frame(tpAniSirGlobal mac_ctx, uint8_t *rx_pkt_info,
 	if ((session->access_policy_vendor_ie) &&
 		(session->access_policy ==
 		LIM_ACCESS_POLICY_RESPOND_IF_IE_IS_PRESENT)) {
+		if (frame_len <= LIM_ASSOC_REQ_IE_OFFSET) {
+			pe_debug("Received action frame of invalid len %d",
+				 frame_len);
+			return;
+		}
 		if (!wlan_get_vendor_ie_ptr_from_oui(
 				&session->access_policy_vendor_ie[2],
 				3, frm_body + LIM_ASSOC_REQ_IE_OFFSET,
-				 frame_len)) {
+				 frame_len - LIM_ASSOC_REQ_IE_OFFSET)) {
 			pe_err("Vendor ie not present and access policy is %x, Rejected association",
 				session->access_policy);
 			lim_send_assoc_rsp_mgmt_frame(mac_ctx,
@@ -2447,7 +2442,7 @@ void lim_send_mlm_assoc_ind(tpAniSirGlobal mac_ctx,
 		if (assoc_req->wmeInfoPresent) {
 			if (wlan_cfg_get_int (mac_ctx,
 				(uint16_t) WNI_CFG_WME_ENABLED, &tmp)
-				!= eSIR_SUCCESS)
+				!= QDF_STATUS_SUCCESS)
 				pe_err("wlan_cfg_get_int failed for id: %d",
 					WNI_CFG_WME_ENABLED);
 

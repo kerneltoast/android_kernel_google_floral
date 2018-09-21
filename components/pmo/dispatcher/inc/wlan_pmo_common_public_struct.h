@@ -260,7 +260,7 @@ enum pmo_auto_pwr_detect_failure_mode {
 /**
  * struct pmo_psoc_cfg - user configuration required for pmo
  * @ptrn_match_enable_all_vdev: true when pattern match is enable for all vdev
- * @apf_enable: true if psoc supports bpf else false
+ * @apf_enable: true if psoc supports apf else false
  * @arp_offload_enable: true if arp offload is supported for psoc else false
  * @hw_filter_mode_bitmap: which mode the hardware filter should use during DTIM
  * @ns_offload_enable_static: true if psoc supports ns offload in ini else false
@@ -322,12 +322,14 @@ struct pmo_psoc_cfg {
  * @unified_wow: Firmware supports "interface pause" flag in WoW command.
  *	This allows both D0-WoW (bus up) and Non-D0-WoW (bus down) to use one
  *	unified command
+ * @li_offload: Firmware has listen interval offload support
  */
 struct pmo_device_caps {
 	bool apf;
 	bool arp_ns_offload;
 	bool packet_filter;
 	bool unified_wow;
+	bool li_offload;
 };
 
 #endif /* end  of _WLAN_PMO_COMMONP_STRUCT_H_ */

@@ -321,7 +321,7 @@ static void lim_process_set_default_scan_ie_request(tpAniSirGlobal mac_ctx,
 	uint8_t *local_ie_buf;
 	uint16_t local_ie_len;
 	struct scheduler_msg msg_q = {0};
-	tSirRetStatus ret_code;
+	QDF_STATUS ret_code;
 
 	if (!msg_buf) {
 		pe_err("msg_buf is NULL");
@@ -360,7 +360,7 @@ static void lim_process_set_default_scan_ie_request(tpAniSirGlobal mac_ctx,
 	msg_q.bodyptr = wma_ie_params;
 	msg_q.bodyval = 0;
 	ret_code = wma_post_ctrl_msg(mac_ctx, &msg_q);
-	if (eSIR_SUCCESS != ret_code) {
+	if (QDF_STATUS_SUCCESS != ret_code) {
 		pe_err("fail to send WMA_SET_IE_INFO");
 		qdf_mem_free(wma_ie_params);
 	}
@@ -648,7 +648,7 @@ __lim_process_ext_scan_beacon_probe_rsp(tpAniSirGlobal pmac,
 	tSirProbeRespBeacon  *frame;
 	uint8_t              *body;
 	uint32_t             frm_len;
-	tSirRetStatus        status;
+	QDF_STATUS        status;
 
 	frm_len = WMA_GET_RX_PAYLOAD_LEN(rx_pkt_info);
 	if (frm_len <= SIR_MAC_B_PR_SSID_OFFSET) {
@@ -677,7 +677,7 @@ __lim_process_ext_scan_beacon_probe_rsp(tpAniSirGlobal pmac,
 		return;
 	}
 
-	if (status != eSIR_SUCCESS) {
+	if (status != QDF_STATUS_SUCCESS) {
 		pe_err("Frame parsing failed");
 		qdf_mem_free(frame);
 		return;
@@ -782,53 +782,62 @@ static void lim_fill_sap_bcn_pkt_meta(struct scan_cache_entry *scan_entry,
  *
  * Return: QDF_STATUS
  */
-static QDF_STATUS lim_allocate_and_get_bcn(tpAniSirGlobal mac_ctx,
-				cds_pkt_t *pkt,
-				uint8_t *rx_pkt_info,
-				tSchBeaconStruct *bcn,
+static QDF_STATUS lim_allocate_and_get_bcn(
+				tpAniSirGlobal mac_ctx,
+				cds_pkt_t **pkt,
+				uint8_t **rx_pkt_info,
+				tSchBeaconStruct **bcn,
 				struct scan_cache_entry *scan_entry)
 {
 	QDF_STATUS status;
+	uint8_t *rx_pkt_info_l = NULL;
+	tSchBeaconStruct *bcn_l = NULL;
+	cds_pkt_t *pkt_l = NULL;
 
-	pkt = qdf_mem_malloc(sizeof(*pkt));
-	if (!pkt) {
+	pkt_l = qdf_mem_malloc(sizeof(cds_pkt_t));
+	if (!pkt_l) {
 		pe_err("Failed to allocate pkt");
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	status = wma_ds_peek_rx_packet_info(pkt, (void *)&rx_pkt_info, false);
+	status = wma_ds_peek_rx_packet_info(
+		pkt_l, (void *)&rx_pkt_info_l, false);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		pe_err("Failed to get Rx Pkt meta");
 		goto free;
 	}
 
-	bcn = qdf_mem_malloc(sizeof(tSchBeaconStruct));
-	if (!bcn) {
+	bcn_l = qdf_mem_malloc(sizeof(tSchBeaconStruct));
+	if (!bcn_l) {
 		pe_err("Failed to allocate bcn struct");
 		goto free;
 	}
 
-	lim_fill_sap_bcn_pkt_meta(scan_entry, pkt);
+	lim_fill_sap_bcn_pkt_meta(scan_entry, pkt_l);
 
 	/* Convert the beacon frame into a structure */
 	if (sir_convert_beacon_frame2_struct(mac_ctx,
-	    (uint8_t *) rx_pkt_info,
-	    bcn) != eSIR_SUCCESS) {
-		pe_err_rl("beacon parsing failed");
+	    (uint8_t *)rx_pkt_info_l,
+	    bcn_l) != QDF_STATUS_SUCCESS) {
+		pe_err("beacon parsing failed");
 		goto free;
 	}
+
+	*pkt = pkt_l;
+	*bcn = bcn_l;
+	*rx_pkt_info = rx_pkt_info_l;
 
 	return QDF_STATUS_SUCCESS;
 
 free:
-	if (pkt) {
-		qdf_mem_free(pkt);
-		pkt = NULL;
+	if (pkt_l) {
+		qdf_mem_free(pkt_l);
+		pkt_l = NULL;
 	}
 
-	if (bcn) {
-		qdf_mem_free(bcn);
-		bcn = NULL;
+	if (bcn_l) {
+		qdf_mem_free(bcn_l);
+		bcn_l = NULL;
 	}
 
 	return QDF_STATUS_E_FAILURE;
@@ -850,7 +859,7 @@ void lim_handle_sap_beacon(struct wlan_objmgr_pdev *pdev,
 		return;
 	}
 
-	if (scan_entry->frm_subtype != SIR_MAC_MGMT_BEACON)
+	if (scan_entry->frm_subtype != MGMT_SUBTYPE_BEACON)
 		return;
 
 	mac_ctx = cds_get_context(QDF_MODULE_ID_PE);
@@ -869,10 +878,13 @@ void lim_handle_sap_beacon(struct wlan_objmgr_pdev *pdev,
 		    (filter->sap_channel[session_id] ==
 		    scan_entry->channel.chan_idx)) {
 			if (!pkt) {
-				status = lim_allocate_and_get_bcn(mac_ctx, pkt,
-						rx_pkt_info, bcn, scan_entry);
-				if (!QDF_IS_STATUS_SUCCESS(status))
+				status = lim_allocate_and_get_bcn(
+					mac_ctx, &pkt, &rx_pkt_info,
+					&bcn, scan_entry);
+				if (!QDF_IS_STATUS_SUCCESS(status)) {
+					pe_debug("lim_allocate_and_get_bcn fail!");
 					return;
+				}
 			}
 			sch_beacon_process_for_ap(mac_ctx, session_id,
 						  rx_pkt_info, bcn);
@@ -1216,7 +1228,7 @@ lim_handle80211_frames(tpAniSirGlobal pMac, struct scheduler_msg *limMsg,
 			lim_print_mac_addr(pMac, pHdr->bssId, LOGD);
 			if (lim_process_auth_frame_no_session
 				    (pMac, pRxPacketInfo,
-				    limMsg->bodyptr) == eSIR_SUCCESS) {
+				    limMsg->bodyptr) == QDF_STATUS_SUCCESS) {
 				goto end;
 			}
 		}
@@ -1382,7 +1394,7 @@ lim_handle80211_frames(tpAniSirGlobal pMac, struct scheduler_msg *limMsg,
 	if (lim_is_mgmt_frame_loggable(fc.type, fc.subType))
 		lim_diag_mgmt_rx_event_report(pMac, pHdr,
 					      psessionEntry,
-					      eSIR_SUCCESS, eSIR_SUCCESS);
+					      QDF_STATUS_SUCCESS, QDF_STATUS_SUCCESS);
 end:
 	lim_pkt_free(pMac, TXRX_FRM_802_11_MGMT, pRxPacketInfo,
 		     (void *)limMsg->bodyptr);
@@ -2229,7 +2241,7 @@ handle_ht_capabilityand_ht_info(struct sAniSirGlobal *pMac,
 	uint8_t *ptr;
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_HT_CAP_INFO, &cfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve WNI_CFG_HT_CAP_INFO value");
 		return;
 	}
@@ -2249,7 +2261,7 @@ handle_ht_capabilityand_ht_info(struct sAniSirGlobal *pMac,
 		(uint8_t) macHTCapabilityInfo.dsssCckMode40MHz;
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_HT_AMPDU_PARAMS, &cfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve WNI_CFG_HT_PARAM_INFO value");
 		return;
 	}
@@ -2261,7 +2273,7 @@ handle_ht_capabilityand_ht_info(struct sAniSirGlobal *pMac,
 
 	/* Get HT IE Info */
 	if (wlan_cfg_get_int(pMac, WNI_CFG_HT_INFO_FIELD1, &cfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve WNI_CFG_HT_INFO_FIELD1 value");
 		return;
 	}
@@ -2274,7 +2286,7 @@ handle_ht_capabilityand_ht_info(struct sAniSirGlobal *pMac,
 	pMac->lim.gHTRifsMode = (uint8_t) macHTInfoField1.rifsMode;
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_HT_INFO_FIELD2, &cfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve WNI_CFG_HT_INFO_FIELD2 value");
 		return;
 	}
@@ -2283,7 +2295,7 @@ handle_ht_capabilityand_ht_info(struct sAniSirGlobal *pMac,
 	pMac->lim.gHTOperMode = (tSirMacHTOperatingMode) macHTInfoField2.opMode;
 
 	if (wlan_cfg_get_int(pMac, WNI_CFG_HT_INFO_FIELD3, &cfgValue) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("Fail to retrieve WNI_CFG_HT_INFO_FIELD3 value");
 		return;
 	}

@@ -354,10 +354,6 @@ int wma_extscan_wow_event_callback(void *handle, void *event, uint32_t len);
 
 void wma_register_extscan_event_handler(tp_wma_handle wma_handle);
 
-QDF_STATUS wma_get_buf_extscan_start_cmd(tp_wma_handle wma_handle,
-					 tSirWifiScanCmdReqParams *pstart,
-					 wmi_buf_t *buf, int *buf_len);
-
 QDF_STATUS wma_start_extscan(tp_wma_handle wma,
 			     tSirWifiScanCmdReqParams *pstart);
 
@@ -374,10 +370,6 @@ QDF_STATUS wma_extscan_start_hotlist_monitor(tp_wma_handle wma,
 
 QDF_STATUS wma_extscan_stop_hotlist_monitor(tp_wma_handle wma,
 			tSirExtScanResetBssidHotlistReqParams *photlist_reset);
-
-QDF_STATUS wma_get_buf_extscan_change_monitor_cmd(tp_wma_handle wma_handle,
-				tSirExtScanSetSigChangeReqParams *psigchange,
-				wmi_buf_t *buf, int *buf_len);
 
 QDF_STATUS wma_extscan_start_change_monitor(tp_wma_handle wma,
 					    tSirExtScanSetSigChangeReqParams *
@@ -698,10 +690,6 @@ QDF_STATUS wma_notify_modem_power_state(void *wma_ptr,
 QDF_STATUS wma_set_smps_params(tp_wma_handle wma, uint8_t vdev_id,
 				      int value);
 
-void wma_set_suspend_dtim(tp_wma_handle wma);
-
-void wma_set_resume_dtim(tp_wma_handle wma);
-
 /*
  * wma_data.c functions declarations
  */
@@ -923,8 +911,6 @@ QDF_STATUS wma_unified_fw_profiling_cmd(wmi_unified_t wmi_handle,
 
 void wma_wow_tx_complete(void *wma);
 
-int wmi_unified_nat_keepalive_enable(tp_wma_handle wma, uint8_t vdev_id);
-
 int wma_unified_csa_offload_enable(tp_wma_handle wma, uint8_t vdev_id);
 
 #ifdef WLAN_FEATURE_NAN
@@ -1064,6 +1050,16 @@ int wma_process_dhcpserver_offload(tp_wma_handle wma_handle,
 QDF_STATUS wma_set_led_flashing(tp_wma_handle wma_handle,
 				struct flashing_req_params *flashing);
 #endif
+
+/**
+ * wma_sar_rsp_evt_handler() -  process sar response event from FW.
+ * @handle: ol scn handle
+ * @event: event buffer
+ * @len: buffer length
+ *
+ * Return: 0 for success or error code
+ */
+int wma_sar_rsp_evt_handler(ol_scn_t handle, uint8_t *event, uint32_t len);
 
 #ifdef FEATURE_WLAN_CH_AVOID
 QDF_STATUS wma_process_ch_avoid_update_req(tp_wma_handle wma_handle,
@@ -1355,4 +1351,6 @@ int wma_vdev_bss_color_collision_info_handler(void *handle,
 					      uint8_t *event,
 					      uint32_t len);
 
+int wma_twt_en_complete_event_handler(void *handle,
+				      uint8_t *event, uint32_t len);
 #endif

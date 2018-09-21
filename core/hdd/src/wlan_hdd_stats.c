@@ -32,7 +32,7 @@
 #include <qca_vendor.h>
 #include "wma_api.h"
 #include "wlan_hdd_hostapd.h"
-#include "wlan_hdd_request_manager.h"
+#include "wlan_osif_request_manager.h"
 #include "wlan_hdd_debugfs_llstat.h"
 #include "wlan_reg_services_api.h"
 #include <wlan_cfg80211_mc_cp_stats.h>
@@ -161,7 +161,25 @@ static int rssi_mcs_tbl[][10] = {
 
 
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
-static struct hdd_ll_stats_context ll_stats_context;
+
+/**
+ * struct hdd_ll_stats_priv - hdd link layer stats private
+ * @request_id: userspace-assigned link layer stats request id
+ * @request_bitmap: userspace-assigned link layer stats request bitmap
+ */
+struct hdd_ll_stats_priv {
+	uint32_t request_id;
+	uint32_t request_bitmap;
+};
+
+/*
+ * Used to allocate the size of 4096 for the link layer stats.
+ * The size of 4096 is considered assuming that all data per
+ * respective event fit with in the limit.Please take a call
+ * on the limit based on the data requirements on link layer
+ * statistics.
+ */
+#define LL_STATS_EVENT_BUF_SIZE 4096
 
 /**
  * put_wifi_rate_stat() - put wifi rate stats
@@ -283,53 +301,53 @@ error:
  *
  * Return: bool
  */
-static bool put_wifi_wmm_ac_stat(tpSirWifiWmmAcStat stats,
+static bool put_wifi_wmm_ac_stat(wmi_wmm_ac_stats *stats,
 				 struct sk_buff *vendor_event)
 {
 	if (nla_put_u32(vendor_event, QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_AC,
-			stats->ac) ||
+			stats->ac_type) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_TX_MPDU,
-			stats->txMpdu) ||
+			stats->tx_mpdu) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_RX_MPDU,
-			stats->rxMpdu) ||
+			stats->rx_mpdu) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_TX_MCAST,
-			stats->txMcast) ||
+			stats->tx_mcast) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_RX_MCAST,
-			stats->rxMcast) ||
+			stats->rx_mcast) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_RX_AMPDU,
-			stats->rxAmpdu) ||
+			stats->rx_ampdu) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_TX_AMPDU,
-			stats->txAmpdu) ||
+			stats->tx_ampdu) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_MPDU_LOST,
-			stats->mpduLost) ||
+			stats->mpdu_lost) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_RETRIES,
 			stats->retries) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_RETRIES_SHORT,
-			stats->retriesShort) ||
+			stats->retries_short) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_RETRIES_LONG,
-			stats->retriesLong) ||
+			stats->retries_long) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_CONTENTION_TIME_MIN,
-			stats->contentionTimeMin) ||
+			stats->contention_time_min) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_CONTENTION_TIME_MAX,
-			stats->contentionTimeMax) ||
+			stats->contention_time_max) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_CONTENTION_TIME_AVG,
-			stats->contentionTimeAvg) ||
+			stats->contention_time_avg) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_WMM_AC_CONTENTION_NUM_SAMPLES,
-			stats->contentionNumSamples)) {
+			stats->contention_num_samples)) {
 		hdd_err("QCA_WLAN_VENDOR_ATTR put fail");
 		return false;
 	}
@@ -396,6 +414,7 @@ static bool put_wifi_iface_stats(tpSirWifiIfaceStat pWifiIfaceStat,
 	struct nlattr *wmmInfo;
 	struct nlattr *wmmStats;
 	u64 average_tsf_offset;
+	wmi_iface_link_stats *link_stats = &pWifiIfaceStat->link_stats;
 
 	if (false == put_wifi_interface_info(&pWifiIfaceStat->info,
 					     vendor_event)) {
@@ -404,9 +423,9 @@ static bool put_wifi_iface_stats(tpSirWifiIfaceStat pWifiIfaceStat,
 
 	}
 
-	average_tsf_offset =  pWifiIfaceStat->avg_bcn_spread_offset_high;
+	average_tsf_offset =  link_stats->avg_bcn_spread_offset_high;
 	average_tsf_offset =  (average_tsf_offset << 32) |
-		pWifiIfaceStat->avg_bcn_spread_offset_low;
+		link_stats->avg_bcn_spread_offset_low;
 
 	if (nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_TYPE,
@@ -416,34 +435,34 @@ static bool put_wifi_iface_stats(tpSirWifiIfaceStat pWifiIfaceStat,
 			num_peers) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_BEACON_RX,
-			pWifiIfaceStat->beaconRx) ||
+			link_stats->beacon_rx) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_MGMT_RX,
-			pWifiIfaceStat->mgmtRx) ||
+			link_stats->mgmt_rx) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_MGMT_ACTION_RX,
-			pWifiIfaceStat->mgmtActionRx) ||
+			link_stats->mgmt_action_rx) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_MGMT_ACTION_TX,
-			pWifiIfaceStat->mgmtActionTx) ||
+			link_stats->mgmt_action_tx) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_RSSI_MGMT,
-			pWifiIfaceStat->rssiMgmt) ||
+			link_stats->rssi_mgmt) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_RSSI_DATA,
-			pWifiIfaceStat->rssiData) ||
+			link_stats->rssi_data) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_RSSI_ACK,
-			pWifiIfaceStat->rssiAck) ||
+			link_stats->rssi_ack) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_LEAKY_AP_DETECTED,
-			pWifiIfaceStat->is_leaky_ap) ||
+			link_stats->is_leaky_ap) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_LEAKY_AP_AVG_NUM_FRAMES_LEAKED,
-			pWifiIfaceStat->avg_rx_frms_leaked) ||
+			link_stats->avg_rx_frms_leaked) ||
 	    nla_put_u32(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_LEAKY_AP_GUARD_TIME,
-			pWifiIfaceStat->rx_leak_window) ||
+			link_stats->rx_leak_window) ||
 	    hdd_wlan_nla_put_u64(vendor_event,
 			QCA_WLAN_VENDOR_ATTR_LL_STATS_IFACE_AVERAGE_TSF_OFFSET,
 			average_tsf_offset) ||
@@ -474,7 +493,7 @@ static bool put_wifi_iface_stats(tpSirWifiIfaceStat pWifiIfaceStat,
 			return false;
 
 		if (false ==
-		    put_wifi_wmm_ac_stat(&pWifiIfaceStat->AccessclassStats[i],
+		    put_wifi_wmm_ac_stat(&pWifiIfaceStat->ac_stats[i],
 					 vendor_event)) {
 			hdd_err("put_wifi_wmm_ac_stat Fail");
 			return false;
@@ -516,8 +535,9 @@ bool hdd_get_interface_info(struct hdd_adapter *adapter,
 {
 	uint8_t *staMac = NULL;
 	struct hdd_station_ctx *sta_ctx;
-	tHalHandle hHal = WLAN_HDD_GET_HAL_CTX(adapter);
-	tpAniSirGlobal pMac = PMAC_STRUCT(hHal);
+	mac_handle_t mac_handle = adapter->hdd_ctx->mac_handle;
+	/* pre-existing layering violation */
+	tpAniSirGlobal pMac = MAC_CONTEXT(mac_handle);
 
 	pInfo->mode = hdd_map_device_to_ll_iface_mode(adapter->device_mode);
 
@@ -1064,20 +1084,22 @@ static void hdd_ll_process_peer_stats(struct hdd_adapter *adapter,
  * @ctx: Pointer to hdd context
  * @indType: Indication type
  * @pRsp: Pointer to response
+ * @cookie: Callback context
  *
  * After receiving Link Layer indications from FW.This callback converts the
  * firmware data to the NL data and send the same to the kernel/upper layers.
  *
  * Return: None
  */
-void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx,
-							int indType, void *pRsp)
+void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx, int indType,
+						 void *pRsp, void *cookie)
 {
 	struct hdd_context *hdd_ctx = (struct hdd_context *) ctx;
-	struct hdd_ll_stats_context *context;
 	struct hdd_adapter *adapter = NULL;
+	struct hdd_ll_stats_priv *priv;
 	tpSirLLStatsResults linkLayerStatsResults = (tpSirLLStatsResults) pRsp;
 	int status;
+	struct osif_request *request;
 
 	status = wlan_hdd_validate_context(hdd_ctx);
 	if (status)
@@ -1086,7 +1108,7 @@ void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx,
 	adapter = hdd_get_adapter_by_vdev(hdd_ctx,
 					   linkLayerStatsResults->ifaceId);
 
-	if (NULL == adapter) {
+	if (!adapter) {
 		hdd_err("vdev_id %d does not exist with host",
 			linkLayerStatsResults->ifaceId);
 		return;
@@ -1105,18 +1127,24 @@ void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx,
 			linkLayerStatsResults->num_radio,
 			linkLayerStatsResults->results);
 
-		context = &ll_stats_context;
-		spin_lock(&context->context_lock);
-		/* validate response received from target */
-		if ((context->request_id != linkLayerStatsResults->rspId) ||
-		  !(context->request_bitmap & linkLayerStatsResults->paramId)) {
-			spin_unlock(&context->context_lock);
-			hdd_err("Error : Request id %d response id %d request bitmap 0x%x response bitmap 0x%x",
-			context->request_id, linkLayerStatsResults->rspId,
-			context->request_bitmap, linkLayerStatsResults->paramId);
+		request = osif_request_get(cookie);
+		if (!request) {
+			hdd_err("Obsolete request");
 			return;
 		}
-		spin_unlock(&context->context_lock);
+
+		priv = osif_request_priv(request);
+
+		/* validate response received from target */
+		if ((priv->request_id != linkLayerStatsResults->rspId) ||
+		    !(priv->request_bitmap & linkLayerStatsResults->paramId)) {
+			hdd_err("Request id %d response id %d request bitmap 0x%x response bitmap 0x%x",
+				priv->request_id, linkLayerStatsResults->rspId,
+				priv->request_bitmap,
+				linkLayerStatsResults->paramId);
+			osif_request_put(request);
+			return;
+		}
 
 		if (linkLayerStatsResults->paramId & WMI_LINK_STATS_RADIO) {
 			hdd_ll_process_radio_stats(adapter,
@@ -1125,10 +1153,8 @@ void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx,
 				linkLayerStatsResults->num_radio,
 				linkLayerStatsResults->rspId);
 
-			spin_lock(&context->context_lock);
 			if (!linkLayerStatsResults->moreResultToFollow)
-				context->request_bitmap &= ~(WMI_LINK_STATS_RADIO);
-			spin_unlock(&context->context_lock);
+				priv->request_bitmap &= ~(WMI_LINK_STATS_RADIO);
 
 		} else if (linkLayerStatsResults->paramId &
 				WMI_LINK_STATS_IFACE) {
@@ -1137,17 +1163,15 @@ void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx,
 				linkLayerStatsResults->num_peers,
 				linkLayerStatsResults->rspId);
 
-			spin_lock(&context->context_lock);
 			/* Firmware doesn't send peerstats event if no peers are
 			 * connected. HDD should not wait for any peerstats in
 			 * this case and return the status to middleware after
 			 * receiving iface stats
 			 */
 			if (!linkLayerStatsResults->num_peers)
-				context->request_bitmap &=
+				priv->request_bitmap &=
 					~(WMI_LINK_STATS_ALL_PEER);
-			context->request_bitmap &= ~(WMI_LINK_STATS_IFACE);
-			spin_unlock(&context->context_lock);
+			priv->request_bitmap &= ~(WMI_LINK_STATS_IFACE);
 
 		} else if (linkLayerStatsResults->
 			   paramId & WMI_LINK_STATS_ALL_PEER) {
@@ -1156,21 +1180,19 @@ void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx,
 				linkLayerStatsResults->results,
 				linkLayerStatsResults->rspId);
 
-			spin_lock(&context->context_lock);
 			if (!linkLayerStatsResults->moreResultToFollow)
-				context->request_bitmap &= ~(WMI_LINK_STATS_ALL_PEER);
-			spin_unlock(&context->context_lock);
+				priv->request_bitmap &=
+						~(WMI_LINK_STATS_ALL_PEER);
 
 		} else {
 			hdd_err("INVALID LL_STATS_NOTIFY RESPONSE");
 		}
 
-		spin_lock(&context->context_lock);
 		/* complete response event if all requests are completed */
-		if (0 == context->request_bitmap)
-			complete(&context->response_event);
-		spin_unlock(&context->context_lock);
+		if (!priv->request_bitmap)
+			osif_request_complete(request);
 
+		osif_request_put(request);
 		break;
 	}
 	default:
@@ -1179,24 +1201,24 @@ void wlan_hdd_cfg80211_link_layer_stats_callback(void *ctx,
 	}
 }
 
-void hdd_lost_link_info_cb(void *context,
-				  struct sir_lost_link_info *lost_link_info)
+void hdd_lost_link_info_cb(hdd_handle_t hdd_handle,
+			   struct sir_lost_link_info *lost_link_info)
 {
-	struct hdd_context *hdd_ctx = (struct hdd_context *)context;
+	struct hdd_context *hdd_ctx = hdd_handle_to_context(hdd_handle);
 	int status;
 	struct hdd_adapter *adapter;
 
 	status = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != status)
+	if (status)
 		return;
 
-	if (NULL == lost_link_info) {
+	if (!lost_link_info) {
 		hdd_err("lost_link_info is NULL");
 		return;
 	}
 
 	adapter = hdd_get_adapter_by_vdev(hdd_ctx, lost_link_info->vdev_id);
-	if (NULL == adapter) {
+	if (!adapter) {
 		hdd_err("invalid adapter");
 		return;
 	}
@@ -1247,6 +1269,15 @@ __wlan_hdd_cfg80211_ll_stats_set(struct wiphy *wiphy,
 	if (0 != status)
 		return -EINVAL;
 
+	if (hdd_validate_adapter(adapter))
+		return -EINVAL;
+
+	if (adapter->device_mode != QDF_STA_MODE) {
+		hdd_debug("Cannot set LL_STATS for device mode %d",
+			  adapter->device_mode);
+		return -EINVAL;
+	}
+
 	if (wlan_cfg80211_nla_parse(tb_vendor,
 				    QCA_WLAN_VENDOR_ATTR_LL_STATS_SET_MAX,
 				    (struct nlattr *)data, data_len,
@@ -1285,7 +1316,7 @@ __wlan_hdd_cfg80211_ll_stats_set(struct wiphy *wiphy,
 		LinkLayerStatsSetReq.mpduSizeThreshold,
 		LinkLayerStatsSetReq.aggressiveStatisticsGathering);
 
-	if (QDF_STATUS_SUCCESS != sme_ll_stats_set_req(hdd_ctx->hHal,
+	if (QDF_STATUS_SUCCESS != sme_ll_stats_set_req(hdd_ctx->mac_handle,
 						       &LinkLayerStatsSetReq)) {
 		hdd_err("sme_ll_stats_set_req Failed");
 		return -EINVAL;
@@ -1339,31 +1370,49 @@ nla_policy
 static int wlan_hdd_send_ll_stats_req(struct hdd_context *hdd_ctx,
 				      tSirLLStatsGetReq *req)
 {
-	unsigned long rc;
-	struct hdd_ll_stats_context *context;
+	int ret;
+	struct hdd_ll_stats_priv *priv;
+	struct osif_request *request;
+	void *cookie;
+	static const struct osif_request_params params = {
+		.priv_size = sizeof(*priv),
+		.timeout_ms = WLAN_WAIT_TIME_LL_STATS,
+	};
 
-	context = &ll_stats_context;
-	spin_lock(&context->context_lock);
-	context->request_id = req->reqId;
-	context->request_bitmap = req->paramIdMask;
-	INIT_COMPLETION(context->response_event);
-	spin_unlock(&context->context_lock);
+	hdd_enter();
+
+	request = osif_request_alloc(&params);
+	if (!request) {
+		hdd_err("Request Allocation Failure");
+		return -ENOMEM;
+	}
+
+	cookie = osif_request_cookie(request);
+
+	priv = osif_request_priv(request);
+
+	priv->request_id = req->reqId;
+	priv->request_bitmap = req->paramIdMask;
 
 	if (QDF_STATUS_SUCCESS !=
-			sme_ll_stats_get_req(hdd_ctx->hHal, req)) {
+	    sme_ll_stats_get_req(hdd_ctx->mac_handle, req, cookie)) {
 		hdd_err("sme_ll_stats_get_req Failed");
-		return -EINVAL;
+		ret = -EINVAL;
+		goto exit;
 	}
 
-	rc = wait_for_completion_timeout(&context->response_event,
-			msecs_to_jiffies(WLAN_WAIT_TIME_LL_STATS));
-	if (!rc) {
+	ret = osif_request_wait_for_response(request);
+	if (ret) {
 		hdd_err("Target response timed out request id %d request bitmap 0x%x",
-			context->request_id, context->request_bitmap);
-		return -ETIMEDOUT;
+			priv->request_id, priv->request_bitmap);
+		ret = -ETIMEDOUT;
+		goto exit;
 	}
+	hdd_exit();
 
-	return 0;
+exit:
+	osif_request_put(request);
+	return ret;
 }
 
 int wlan_hdd_ll_stats_get(struct hdd_adapter *adapter, uint32_t req_id,
@@ -1390,9 +1439,10 @@ int wlan_hdd_ll_stats_get(struct hdd_adapter *adapter, uint32_t req_id,
 		return -EBUSY;
 	}
 
-	if (!adapter->is_link_layer_stats_set)
-		hdd_info("is_link_layer_stats_set: %d; STATs will be all zero",
-			adapter->is_link_layer_stats_set);
+	if (!adapter->is_link_layer_stats_set) {
+		hdd_info("LL_STATs not set");
+		return -EINVAL;
+	}
 
 	get_req.reqId = req_id;
 	get_req.paramIdMask = req_mask;
@@ -1482,10 +1532,8 @@ __wlan_hdd_cfg80211_ll_stats_get(struct wiphy *wiphy,
 
 	LinkLayerStatsGetReq.staId = adapter->session_id;
 
-	if (wlan_hdd_validate_session_id(adapter->session_id)) {
-		hdd_err("invalid session id: %d", adapter->session_id);
+	if (wlan_hdd_validate_session_id(adapter->session_id))
 		return -EINVAL;
-	}
 
 	ret = wlan_hdd_send_ll_stats_req(hdd_ctx, &LinkLayerStatsGetReq);
 	if (0 != ret) {
@@ -1552,8 +1600,9 @@ __wlan_hdd_cfg80211_ll_stats_clear(struct wiphy *wiphy,
 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
 	u32 statsClearReqMask;
 	u8 stopReq;
-	int status;
-	struct sk_buff *temp_skbuff;
+	int errno;
+	QDF_STATUS status;
+	struct sk_buff *skb;
 
 	hdd_enter_dev(dev);
 
@@ -1562,8 +1611,8 @@ __wlan_hdd_cfg80211_ll_stats_clear(struct wiphy *wiphy,
 		return -EPERM;
 	}
 
-	status = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != status)
+	errno = wlan_hdd_validate_context(hdd_ctx);
+	if (errno)
 		return -EINVAL;
 
 	if (!adapter->is_link_layer_stats_set) {
@@ -1607,45 +1656,48 @@ __wlan_hdd_cfg80211_ll_stats_clear(struct wiphy *wiphy,
 		LinkLayerStatsClearReq.statsClearReqMask,
 		LinkLayerStatsClearReq.stopReq);
 
-	if (QDF_STATUS_SUCCESS == sme_ll_stats_clear_req(hdd_ctx->hHal,
-					&LinkLayerStatsClearReq)) {
-		temp_skbuff = cfg80211_vendor_cmd_alloc_reply_skb(wiphy,
-								  2 *
-								  sizeof(u32) +
-								  2 *
-								  NLMSG_HDRLEN);
-		if (temp_skbuff != NULL) {
-			if (nla_put_u32(temp_skbuff,
-					QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_RSP_MASK,
-					statsClearReqMask) ||
-			    nla_put_u32(temp_skbuff,
-					QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_RSP,
-					stopReq)) {
-				hdd_err("LL_STATS_CLR put fail");
-				kfree_skb(temp_skbuff);
-				return -EINVAL;
-			}
+	status = sme_ll_stats_clear_req(hdd_ctx->mac_handle,
+					&LinkLayerStatsClearReq);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		hdd_err("stats clear request failed, %d", status);
+		return -EINVAL;
+	}
 
-			/* If the ask is to stop the stats collection
-			 * as part of clear (stopReq = 1), ensure
-			 * that no further requests of get go to the
-			 * firmware by having is_link_layer_stats_set set
-			 * to 0.  However it the stopReq as part of
-			 * the clear request is 0, the request to get
-			 * the statistics are honoured as in this case
-			 * the firmware is just asked to clear the
-			 * statistics.
-			 */
-			if (stopReq == 1)
-				adapter->is_link_layer_stats_set = false;
-
-			return cfg80211_vendor_cmd_reply(temp_skbuff);
-		}
-		hdd_exit();
+	skb = cfg80211_vendor_cmd_alloc_reply_skb(wiphy,
+						  2 * sizeof(u32) +
+						  2 * NLMSG_HDRLEN);
+	if (!skb) {
+		hdd_err("skb allocation failed");
 		return -ENOMEM;
 	}
 
-	return -EINVAL;
+	if (nla_put_u32(skb,
+			QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_RSP_MASK,
+			statsClearReqMask) ||
+	    nla_put_u32(skb,
+			QCA_WLAN_VENDOR_ATTR_LL_STATS_CLR_CONFIG_STOP_RSP,
+			stopReq)) {
+		hdd_err("LL_STATS_CLR put fail");
+		kfree_skb(skb);
+		return -EINVAL;
+	}
+
+	/* If the ask is to stop the stats collection
+	 * as part of clear (stopReq = 1), ensure
+	 * that no further requests of get go to the
+	 * firmware by having is_link_layer_stats_set set
+	 * to 0.  However it the stopReq as part of
+	 * the clear request is 0, the request to get
+	 * the statistics are honoured as in this case
+	 * the firmware is just asked to clear the
+	 * statistics.
+	 */
+	if (stopReq == 1)
+		adapter->is_link_layer_stats_set = false;
+
+	hdd_exit();
+
+	return cfg80211_vendor_cmd_reply(skb);
 }
 
 /**
@@ -2259,17 +2311,12 @@ void wlan_hdd_cfg80211_link_layer_stats_ext_callback(hdd_handle_t ctx,
 
 	hdd_enter();
 
-	if (!ctx) {
-		hdd_err("Invalid HDD context.");
-		return;
-	}
-
 	if (!rsp) {
 		hdd_err("Invalid result.");
 		return;
 	}
 
-	hdd_ctx = (struct hdd_context *)ctx;
+	hdd_ctx = hdd_handle_to_context(ctx);
 	linkLayer_stats_results = rsp;
 
 	status = wlan_hdd_validate_context(hdd_ctx);
@@ -2477,7 +2524,8 @@ static int __wlan_hdd_cfg80211_ll_stats_ext_set_param(struct wiphy *wiphy,
 						      const void *data,
 						      int data_len)
 {
-	int status;
+	QDF_STATUS status;
+	int errno;
 	uint32_t period;
 	struct net_device *dev = wdev->netdev;
 	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(dev);
@@ -2492,8 +2540,8 @@ static int __wlan_hdd_cfg80211_ll_stats_ext_set_param(struct wiphy *wiphy,
 		return -EPERM;
 	}
 
-	status = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != status)
+	errno = wlan_hdd_validate_context(hdd_ctx);
+	if (errno)
 		return -EPERM;
 
 	if (wlan_cfg80211_nla_parse(tb, QCA_WLAN_VENDOR_ATTR_LL_STATS_EXT_MAX,
@@ -2759,8 +2807,8 @@ static int __wlan_hdd_cfg80211_ll_stats_ext_set_param(struct wiphy *wiphy,
 
 set_thresh:
 	hdd_info("send thresh settings to target");
-	if (QDF_STATUS_SUCCESS != sme_ll_stats_set_thresh(hdd_ctx->hHal,
-							  &thresh)) {
+	status = sme_ll_stats_set_thresh(hdd_ctx->mac_handle, &thresh);
+	if (QDF_IS_STATUS_ERROR(status)) {
 		hdd_err("sme_ll_stats_set_thresh failed.");
 		return -EINVAL;
 	}
@@ -2768,10 +2816,10 @@ set_thresh:
 
 set_period:
 	hdd_info("send period to target");
-	status = wma_cli_set_command(adapter->session_id,
-				     WMI_PDEV_PARAM_STATS_OBSERVATION_PERIOD,
-				     period, PDEV_CMD);
-	if (status) {
+	errno = wma_cli_set_command(adapter->session_id,
+				    WMI_PDEV_PARAM_STATS_OBSERVATION_PERIOD,
+				    period, PDEV_CMD);
+	if (errno) {
 		hdd_err("wma_cli_set_command set_period failed.");
 		return -EINVAL;
 	}
@@ -3904,13 +3952,12 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 				  struct station_info *sinfo)
 {
 	struct hdd_station_ctx *sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
-	int ssidlen = sta_ctx->conn_info.SSID.SSID.length;
 	uint8_t rate_flags;
 	uint8_t mcs_index;
 
 	struct hdd_context *hdd_ctx = (struct hdd_context *) wiphy_priv(wiphy);
 	struct hdd_config *pCfg = hdd_ctx->config;
-
+	mac_handle_t mac_handle;
 	uint8_t OperationalRates[CSR_DOT11_SUPPORTED_RATES_MAX];
 	uint32_t ORLeng = CSR_DOT11_SUPPORTED_RATES_MAX;
 	uint8_t ExtendedRates[CSR_DOT11_EXTENDED_SUPPORTED_RATES_MAX];
@@ -3937,10 +3984,8 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 	enum data_rate_11ac_max_mcs vht_max_mcs;
 	int32_t rcpi_value;
 
-	if ((eConnectionState_Associated != sta_ctx->conn_info.connState) ||
-	    (0 == ssidlen)) {
-		hdd_debug("Not associated or Invalid ssidlen, %d",
-			ssidlen);
+	if (eConnectionState_Associated != sta_ctx->conn_info.connState) {
+		hdd_debug("Not associated");
 		/*To keep GUI happy */
 		return 0;
 	}
@@ -3994,6 +4039,7 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 
 	rate_flags = adapter->hdd_stats.class_a_stat.tx_rate_flags;
 	mcs_index = adapter->hdd_stats.class_a_stat.mcs_index;
+	mac_handle = hdd_ctx->mac_handle;
 
 	/* convert to the UI units of 100kbps */
 	myRate = adapter->hdd_stats.class_a_stat.tx_rate * 5;
@@ -4060,7 +4106,7 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 
 		/* Get Basic Rate Set */
 		if (0 !=
-		    sme_cfg_get_str(WLAN_HDD_GET_HAL_CTX(adapter),
+		    sme_cfg_get_str(mac_handle,
 				    WNI_CFG_OPERATIONAL_RATE_SET,
 				    OperationalRates,
 				    &ORLeng)) {
@@ -4088,7 +4134,7 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 
 		/* Get Extended Rate Set */
 		if (0 !=
-		    sme_cfg_get_str(WLAN_HDD_GET_HAL_CTX(adapter),
+		    sme_cfg_get_str(mac_handle,
 				    WNI_CFG_EXTENDED_OPERATIONAL_RATE_SET,
 				    ExtendedRates, &ERLeng)) {
 			hdd_err("cfg get returned failure");
@@ -4118,7 +4164,7 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 		 */
 		if ((3 != rssidx) && !(rate_flags & TX_RATE_LEGACY)) {
 			if (0 !=
-			    sme_cfg_get_str(WLAN_HDD_GET_HAL_CTX(adapter),
+			    sme_cfg_get_str(mac_handle,
 					    WNI_CFG_CURRENT_MCS_SET, MCSRates,
 					    &MCSLeng)) {
 				hdd_err("cfg get returned failure");
@@ -4144,7 +4190,7 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 			if (rate_flags &
 			    (TX_RATE_VHT20 | TX_RATE_VHT40 |
 			     TX_RATE_VHT80)) {
-				sme_cfg_get_int(WLAN_HDD_GET_HAL_CTX(adapter),
+				sme_cfg_get_int(mac_handle,
 						WNI_CFG_VHT_TX_MCS_MAP,
 						&vht_mcs_map);
 				vht_max_mcs = (enum data_rate_11ac_max_mcs)
@@ -4424,10 +4470,8 @@ static int __wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 	if (status)
 		return status;
 
-	if (wlan_hdd_validate_session_id(adapter->session_id)) {
-		hdd_err("invalid session id: %d", adapter->session_id);
+	if (wlan_hdd_validate_session_id(adapter->session_id))
 		return -EINVAL;
-	}
 
 	if (adapter->device_mode == QDF_SAP_MODE)
 		return wlan_hdd_get_sap_stats(adapter, sinfo);
@@ -4607,7 +4651,8 @@ static bool wlan_hdd_update_survey_info(struct wiphy *wiphy,
 	struct hdd_context *hdd_ctx;
 
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	sme_get_operation_channel(hdd_ctx->hHal, &channel, adapter->session_id);
+	sme_get_operation_channel(hdd_ctx->mac_handle, &channel,
+				  adapter->session_id);
 	opfreq = wlan_reg_chan_to_freq(hdd_ctx->hdd_pdev, channel);
 
 	mutex_lock(&hdd_ctx->chan_info_lock);
@@ -4707,17 +4752,6 @@ int wlan_hdd_cfg80211_dump_survey(struct wiphy *wiphy,
 	cds_ssr_unprotect(__func__);
 
 	return ret;
-}
-/**
- * hdd_init_ll_stats_ctx() - initialize link layer stats context
- *
- * Return: none
- */
-inline void hdd_init_ll_stats_ctx(void)
-{
-	spin_lock_init(&ll_stats_context.context_lock);
-	init_completion(&ll_stats_context.response_event);
-	ll_stats_context.request_bitmap = 0;
 }
 
 /**
@@ -4822,7 +4856,7 @@ static bool hdd_is_rcpi_applicable(struct hdd_adapter *adapter,
 static void wlan_hdd_get_rcpi_cb(void *context, struct qdf_mac_addr mac_addr,
 				 int32_t rcpi, QDF_STATUS status)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct rcpi_info *priv;
 
 	if (!context) {
@@ -4830,13 +4864,13 @@ static void wlan_hdd_get_rcpi_cb(void *context, struct qdf_mac_addr mac_addr,
 		return;
 	}
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete RCPI request");
 		return;
 	}
 
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	priv->mac_addr = mac_addr;
 
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
@@ -4846,8 +4880,8 @@ static void wlan_hdd_get_rcpi_cb(void *context, struct qdf_mac_addr mac_addr,
 		priv->rcpi = rcpi;
 	}
 
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 }
 
 /**
@@ -4871,8 +4905,8 @@ static int __wlan_hdd_get_rcpi(struct hdd_adapter *adapter,
 	struct sme_rcpi_req *rcpi_req;
 	void *cookie;
 	struct rcpi_info *priv;
-	struct hdd_request *request;
-	static const struct hdd_request_params params = {
+	struct osif_request *request;
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_RCPI,
 	};
@@ -4921,13 +4955,13 @@ static int __wlan_hdd_get_rcpi(struct hdd_adapter *adapter,
 		return -EINVAL;
 	}
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure");
 		qdf_mem_free(rcpi_req);
 		return -ENOMEM;
 	}
-	cookie = hdd_request_cookie(request);
+	cookie = osif_request_cookie(request);
 
 	rcpi_req->mac_addr = mac_addr;
 	rcpi_req->session_id = adapter->session_id;
@@ -4935,7 +4969,7 @@ static int __wlan_hdd_get_rcpi(struct hdd_adapter *adapter,
 	rcpi_req->rcpi_callback = wlan_hdd_get_rcpi_cb;
 	rcpi_req->rcpi_context = cookie;
 
-	qdf_status = sme_get_rcpi(hdd_ctx->hHal, rcpi_req);
+	qdf_status = sme_get_rcpi(hdd_ctx->mac_handle, rcpi_req);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 		hdd_err("Unable to retrieve RCPI");
 		status = qdf_status_to_os_return(qdf_status);
@@ -4943,7 +4977,7 @@ static int __wlan_hdd_get_rcpi(struct hdd_adapter *adapter,
 	}
 
 	/* request was sent -- wait for the response */
-	ret = hdd_request_wait_for_response(request);
+	ret = osif_request_wait_for_response(request);
 	if (ret) {
 		hdd_err("SME timed out while retrieving RCPI");
 		status = -EINVAL;
@@ -4951,7 +4985,7 @@ static int __wlan_hdd_get_rcpi(struct hdd_adapter *adapter,
 	}
 
 	/* update the adapter with the fresh results */
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	adapter->rcpi.mac_addr = priv->mac_addr;
 	adapter->rcpi.rcpi = priv->rcpi;
 	if (qdf_mem_cmp(&mac_addr, &priv->mac_addr, sizeof(mac_addr))) {
@@ -4964,7 +4998,7 @@ static int __wlan_hdd_get_rcpi(struct hdd_adapter *adapter,
 	hdd_debug("RCPI = %d", *rcpi_value);
 out:
 	qdf_mem_free(rcpi_req);
-	hdd_request_put(request);
+	osif_request_put(request);
 
 	hdd_exit();
 	return status;
@@ -5057,31 +5091,31 @@ struct rssi_priv {
  */
 static void hdd_get_rssi_cb(int8_t rssi, uint32_t sta_id, void *context)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct rssi_priv *priv;
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete request");
 		return;
 	}
 
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	priv->rssi = rssi;
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 }
 
 QDF_STATUS wlan_hdd_get_rssi(struct hdd_adapter *adapter, int8_t *rssi_value)
 {
 	struct hdd_context *hdd_ctx;
 	struct hdd_station_ctx *sta_ctx;
-	QDF_STATUS hstatus;
+	QDF_STATUS status;
 	int ret;
 	void *cookie;
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct rssi_priv *priv;
-	static const struct hdd_request_params params = {
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
@@ -5114,30 +5148,30 @@ QDF_STATUS wlan_hdd_get_rssi(struct hdd_adapter *adapter, int8_t *rssi_value)
 		return QDF_STATUS_SUCCESS;
 	}
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure, return cached RSSI");
 		*rssi_value = adapter->rssi;
 		return QDF_STATUS_SUCCESS;
 	}
-	cookie = hdd_request_cookie(request);
+	cookie = osif_request_cookie(request);
 
-	hstatus = sme_get_rssi(hdd_ctx->hHal, hdd_get_rssi_cb,
-			       sta_ctx->conn_info.staId[0],
-			       sta_ctx->conn_info.bssId, adapter->rssi,
-			       cookie);
-	if (QDF_STATUS_SUCCESS != hstatus) {
+	status = sme_get_rssi(hdd_ctx->mac_handle, hdd_get_rssi_cb,
+			      sta_ctx->conn_info.staId[0],
+			      sta_ctx->conn_info.bssId, adapter->rssi,
+			      cookie);
+	if (QDF_STATUS_SUCCESS != status) {
 		hdd_err("Unable to retrieve RSSI");
 		/* we'll returned a cached value below */
 	} else {
 		/* request was sent -- wait for the response */
-		ret = hdd_request_wait_for_response(request);
+		ret = osif_request_wait_for_response(request);
 		if (ret) {
 			hdd_warn("SME timed out while retrieving RSSI");
 			/* we'll returned a cached value below */
 		} else {
 			/* update the adapter with the fresh results */
-			priv = hdd_request_priv(request);
+			priv = osif_request_priv(request);
 
 			adapter->rssi = priv->rssi;
 
@@ -5158,7 +5192,7 @@ QDF_STATUS wlan_hdd_get_rssi(struct hdd_adapter *adapter, int8_t *rssi_value)
 	 * received a response or we sent a request and timed out.
 	 * regardless we are done with the request.
 	 */
-	hdd_request_put(request);
+	osif_request_put(request);
 
 	*rssi_value = adapter->rssi;
 	hdd_debug("RSSI = %d", *rssi_value);
@@ -5182,33 +5216,32 @@ struct snr_priv {
  */
 static void hdd_get_snr_cb(int8_t snr, uint32_t sta_id, void *context)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct snr_priv *priv;
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete request");
 		return;
 	}
 
 	/* propagate response back to requesting thread */
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	priv->snr = snr;
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 }
 
 QDF_STATUS wlan_hdd_get_snr(struct hdd_adapter *adapter, int8_t *snr)
 {
 	struct hdd_context *hdd_ctx;
 	struct hdd_station_ctx *sta_ctx;
-	QDF_STATUS hstatus;
-	int valid;
+	QDF_STATUS status;
 	int ret;
 	void *cookie;
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct snr_priv *priv;
-	static const struct hdd_request_params params = {
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
@@ -5222,34 +5255,34 @@ QDF_STATUS wlan_hdd_get_snr(struct hdd_adapter *adapter, int8_t *snr)
 
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 
-	valid = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != valid)
+	ret = wlan_hdd_validate_context(hdd_ctx);
+	if (ret)
 		return QDF_STATUS_E_FAULT;
 
 	sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure");
 		return QDF_STATUS_E_FAULT;
 	}
-	cookie = hdd_request_cookie(request);
+	cookie = osif_request_cookie(request);
 
-	hstatus = sme_get_snr(hdd_ctx->hHal, hdd_get_snr_cb,
-			      sta_ctx->conn_info.staId[0],
-			      sta_ctx->conn_info.bssId, cookie);
-	if (QDF_STATUS_SUCCESS != hstatus) {
+	status = sme_get_snr(hdd_ctx->mac_handle, hdd_get_snr_cb,
+			     sta_ctx->conn_info.staId[0],
+			     sta_ctx->conn_info.bssId, cookie);
+	if (QDF_STATUS_SUCCESS != status) {
 		hdd_err("Unable to retrieve RSSI");
 		/* we'll returned a cached value below */
 	} else {
 		/* request was sent -- wait for the response */
-		ret = hdd_request_wait_for_response(request);
+		ret = osif_request_wait_for_response(request);
 		if (ret) {
 			hdd_err("SME timed out while retrieving SNR");
 			/* we'll now returned a cached value below */
 		} else {
 			/* update the adapter with the fresh results */
-			priv = hdd_request_priv(request);
+			priv = osif_request_priv(request);
 			adapter->snr = priv->snr;
 		}
 	}
@@ -5259,7 +5292,7 @@ QDF_STATUS wlan_hdd_get_snr(struct hdd_adapter *adapter, int8_t *snr)
 	 * received a response or we sent a request and timed out.
 	 * regardless we are done with the request.
 	 */
-	hdd_request_put(request);
+	osif_request_put(request);
 
 	*snr = adapter->snr;
 	hdd_exit();
@@ -5273,7 +5306,7 @@ struct linkspeed_priv {
 static void
 hdd_get_link_speed_cb(tSirLinkSpeedInfo *linkspeed_info, void *context)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct linkspeed_priv *priv;
 
 	if (!linkspeed_info) {
@@ -5281,16 +5314,16 @@ hdd_get_link_speed_cb(tSirLinkSpeedInfo *linkspeed_info, void *context)
 		return;
 	}
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete request");
 		return;
 	}
 
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	priv->linkspeed_info = *linkspeed_info;
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 }
 
 int wlan_hdd_get_linkspeed_for_peermac(struct hdd_adapter *adapter,
@@ -5301,9 +5334,9 @@ int wlan_hdd_get_linkspeed_for_peermac(struct hdd_adapter *adapter,
 	QDF_STATUS status;
 	void *cookie;
 	tSirLinkSpeedInfo *linkspeed_info;
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct linkspeed_priv *priv;
-	static const struct hdd_request_params params = {
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
@@ -5313,19 +5346,19 @@ int wlan_hdd_get_linkspeed_for_peermac(struct hdd_adapter *adapter,
 		return -EINVAL;
 	}
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure");
 		ret = -ENOMEM;
 		goto return_cached_value;
 	}
 
-	cookie = hdd_request_cookie(request);
-	priv = hdd_request_priv(request);
+	cookie = osif_request_cookie(request);
+	priv = osif_request_priv(request);
 
 	linkspeed_info = &priv->linkspeed_info;
 	qdf_copy_macaddr(&linkspeed_info->peer_macaddr, mac_address);
-	status = sme_get_link_speed(WLAN_HDD_GET_HAL_CTX(adapter),
+	status = sme_get_link_speed(adapter->hdd_ctx->mac_handle,
 				    linkspeed_info,
 				    cookie, hdd_get_link_speed_cb);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -5333,7 +5366,7 @@ int wlan_hdd_get_linkspeed_for_peermac(struct hdd_adapter *adapter,
 		ret = qdf_status_to_os_return(status);
 		goto cleanup;
 	}
-	ret = hdd_request_wait_for_response(request);
+	ret = osif_request_wait_for_response(request);
 	if (ret) {
 		hdd_err("SME timed out while retrieving link speed");
 		goto cleanup;
@@ -5346,7 +5379,7 @@ cleanup:
 	 * received a response or we sent a request and timed out.
 	 * regardless we are done with the request.
 	 */
-	hdd_request_put(request);
+	osif_request_put(request);
 
 return_cached_value:
 	*linkspeed = adapter->estimated_linkspeed;
@@ -5409,7 +5442,7 @@ struct peer_rssi_priv {
 static void hdd_get_peer_rssi_cb(struct sir_peer_info_resp *sta_rssi,
 				 void *context)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct peer_rssi_priv *priv;
 	struct sir_peer_info *rssi_info;
 	uint8_t peer_num;
@@ -5419,13 +5452,13 @@ static void hdd_get_peer_rssi_cb(struct sir_peer_info_resp *sta_rssi,
 		return;
 	}
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete request");
 		return;
 	}
 
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 
 	peer_num = sta_rssi->count;
 	rssi_info = sta_rssi->info;
@@ -5441,8 +5474,8 @@ static void hdd_get_peer_rssi_cb(struct sir_peer_info_resp *sta_rssi,
 		     peer_num * sizeof(*rssi_info));
 	priv->peer_sta_info.sta_num = peer_num;
 
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 
 }
 
@@ -5454,9 +5487,9 @@ int wlan_hdd_get_peer_rssi(struct hdd_adapter *adapter,
 	void *cookie;
 	int ret;
 	struct sir_peer_info_req rssi_req;
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct peer_rssi_priv *priv;
-	static const struct hdd_request_params params = {
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
@@ -5467,19 +5500,19 @@ int wlan_hdd_get_peer_rssi(struct hdd_adapter *adapter,
 		return -EFAULT;
 	}
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure");
 		return -ENOMEM;
 	}
 
-	cookie = hdd_request_cookie(request);
-	priv = hdd_request_priv(request);
+	cookie = osif_request_cookie(request);
+	priv = osif_request_priv(request);
 
 	qdf_mem_copy(&rssi_req.peer_macaddr, macaddress,
 		     QDF_MAC_ADDR_SIZE);
 	rssi_req.sessionid = adapter->session_id;
-	status = sme_get_peer_info(WLAN_HDD_GET_HAL_CTX(adapter),
+	status = sme_get_peer_info(adapter->hdd_ctx->mac_handle,
 				   rssi_req,
 				   cookie,
 				   hdd_get_peer_rssi_cb);
@@ -5487,7 +5520,7 @@ int wlan_hdd_get_peer_rssi(struct hdd_adapter *adapter,
 		hdd_err("Unable to retrieve statistics for rssi");
 		ret = -EFAULT;
 	} else {
-		ret = hdd_request_wait_for_response(request);
+		ret = osif_request_wait_for_response(request);
 		if (ret) {
 			hdd_err("SME timed out while retrieving rssi");
 			ret = -EFAULT;
@@ -5497,7 +5530,7 @@ int wlan_hdd_get_peer_rssi(struct hdd_adapter *adapter,
 		}
 	}
 
-	hdd_request_put(request);
+	osif_request_put(request);
 
 	return ret;
 }
@@ -5517,7 +5550,7 @@ struct peer_info_priv {
 static void wlan_hdd_get_peer_info_cb(struct sir_peer_info_ext_resp *sta_info,
 				      void *context)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct peer_info_priv *priv;
 	uint8_t sta_num;
 
@@ -5539,21 +5572,21 @@ static void wlan_hdd_get_peer_info_cb(struct sir_peer_info_ext_resp *sta_info,
 		sta_num = sta_info->count;
 	}
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete request");
 		return;
 	}
 
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 
 	priv->peer_sta_ext_info.sta_num = sta_num;
 	qdf_mem_copy(&priv->peer_sta_ext_info.info,
 		     sta_info->info,
 		     sta_num * sizeof(sta_info->info[0]));
 
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 }
 
 int wlan_hdd_get_peer_info(struct hdd_adapter *adapter,
@@ -5564,9 +5597,9 @@ int wlan_hdd_get_peer_info(struct hdd_adapter *adapter,
 	void *cookie;
 	int ret;
 	struct sir_peer_info_ext_req peer_info_req;
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct peer_info_priv *priv;
-	static const struct hdd_request_params params = {
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
@@ -5576,20 +5609,20 @@ int wlan_hdd_get_peer_info(struct hdd_adapter *adapter,
 		return -EFAULT;
 	}
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure");
 		return -ENOMEM;
 	}
 
-	cookie = hdd_request_cookie(request);
-	priv = hdd_request_priv(request);
+	cookie = osif_request_cookie(request);
+	priv = osif_request_priv(request);
 
 	qdf_mem_copy(&peer_info_req.peer_macaddr, &macaddress,
 		     QDF_MAC_ADDR_SIZE);
 	peer_info_req.sessionid = adapter->session_id;
 	peer_info_req.reset_after_request = 0;
-	status = sme_get_peer_info_ext(WLAN_HDD_GET_HAL_CTX(adapter),
+	status = sme_get_peer_info_ext(adapter->hdd_ctx->mac_handle,
 				       &peer_info_req,
 				       cookie,
 				       wlan_hdd_get_peer_info_cb);
@@ -5597,7 +5630,7 @@ int wlan_hdd_get_peer_info(struct hdd_adapter *adapter,
 		hdd_err("Unable to retrieve statistics for peer info");
 		ret = -EFAULT;
 	} else {
-		ret = hdd_request_wait_for_response(request);
+		ret = osif_request_wait_for_response(request);
 		if (ret) {
 			hdd_err("SME timed out while retrieving peer info");
 			ret = -EFAULT;
@@ -5608,7 +5641,7 @@ int wlan_hdd_get_peer_info(struct hdd_adapter *adapter,
 		}
 	}
 
-	hdd_request_put(request);
+	osif_request_put(request);
 
 	return ret;
 }
@@ -5628,7 +5661,7 @@ struct class_a_stats {
  */
 static void hdd_get_class_a_statistics_cb(void *stats, void *context)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct class_a_stats *priv;
 	tCsrGlobalClassAStatsInfo *returned_stats;
 
@@ -5638,29 +5671,29 @@ static void hdd_get_class_a_statistics_cb(void *stats, void *context)
 		return;
 	}
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete request");
 		return;
 	}
 
 	returned_stats = stats;
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	priv->class_a_stats = *returned_stats;
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 	hdd_exit();
 }
 
 QDF_STATUS wlan_hdd_get_class_astats(struct hdd_adapter *adapter)
 {
 	struct hdd_station_ctx *sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
-	QDF_STATUS hstatus;
+	QDF_STATUS status;
 	int ret;
 	void *cookie;
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct class_a_stats *priv;
-	static const struct hdd_request_params params = {
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
@@ -5675,33 +5708,33 @@ QDF_STATUS wlan_hdd_get_class_astats(struct hdd_adapter *adapter)
 		return QDF_STATUS_SUCCESS;
 	}
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure");
 		return QDF_STATUS_E_NOMEM;
 	}
-	cookie = hdd_request_cookie(request);
+	cookie = osif_request_cookie(request);
 
 	/* query only for Class A statistics (which include link speed) */
-	hstatus = sme_get_statistics(WLAN_HDD_GET_HAL_CTX(adapter),
-				     eCSR_HDD, SME_GLOBAL_CLASSA_STATS,
-				     hdd_get_class_a_statistics_cb,
-				     sta_ctx->conn_info.staId[0],
-				     cookie, adapter->session_id);
-	if (QDF_STATUS_SUCCESS != hstatus) {
+	status = sme_get_statistics(adapter->hdd_ctx->mac_handle,
+				    eCSR_HDD, SME_GLOBAL_CLASSA_STATS,
+				    hdd_get_class_a_statistics_cb,
+				    sta_ctx->conn_info.staId[0],
+				    cookie, adapter->session_id);
+	if (QDF_STATUS_SUCCESS != status) {
 		hdd_warn("Unable to retrieve Class A statistics");
 		goto return_cached_results;
 	}
 
 	/* request was sent -- wait for the response */
-	ret = hdd_request_wait_for_response(request);
+	ret = osif_request_wait_for_response(request);
 	if (ret) {
 		hdd_warn("SME timed out while retrieving Class A statistics");
 		goto return_cached_results;
 	}
 
 	/* update the adapter with the fresh results */
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	adapter->hdd_stats.class_a_stat = priv->class_a_stats;
 
 return_cached_results:
@@ -5710,7 +5743,7 @@ return_cached_results:
 	 * received a response or we sent a request and timed out.
 	 * regardless we are done with the request.
 	 */
-	hdd_request_put(request);
+	osif_request_put(request);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -5771,7 +5804,7 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 	adapter->hdd_stats.class_a_stat.tx_rate_flags = stats.tx_rate_flags;
 	adapter->hdd_stats.class_a_stat.mcs_index =
 		sme_get_mcs_idx(stats.tx_rate * 5, stats.tx_rate_flags,
-			adapter->hdd_stats.class_a_stat.nss, &mcs_rate_flags);
+			&adapter->hdd_stats.class_a_stat.nss, &mcs_rate_flags);
 	adapter->hdd_stats.class_a_stat.mcs_rate_flags = mcs_rate_flags;
 
 	/* save per chain rssi to legacy location */
@@ -5799,7 +5832,7 @@ struct station_stats {
  */
 static void hdd_get_station_statistics_cb(void *stats, void *context)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct station_stats *priv;
 	tCsrSummaryStatsInfo *summary_stats;
 	tCsrGlobalClassAStatsInfo *class_a_stats;
@@ -5811,7 +5844,7 @@ static void hdd_get_station_statistics_cb(void *stats, void *context)
 		return;
 	}
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete request");
 		return;
@@ -5821,15 +5854,15 @@ static void hdd_get_station_statistics_cb(void *stats, void *context)
 	class_a_stats = (tCsrGlobalClassAStatsInfo *) (summary_stats + 1);
 	per_chain_rssi_stats = (struct csr_per_chain_rssi_stats_info *)
 				(class_a_stats + 1);
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 
 	/* copy over the stats. do so as a struct copy */
 	priv->summary_stats = *summary_stats;
 	priv->class_a_stats = *class_a_stats;
 	priv->per_chain_rssi_stats = *per_chain_rssi_stats;
 
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 }
 
 int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
@@ -5838,9 +5871,9 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 	QDF_STATUS status;
 	int errno;
 	void *cookie;
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct station_stats *priv;
-	static const struct hdd_request_params params = {
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
@@ -5850,15 +5883,15 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 		return 0;
 	}
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure");
 		return -ENOMEM;
 	}
-	cookie = hdd_request_cookie(request);
+	cookie = osif_request_cookie(request);
 
 	/* query only for Summary & Class A statistics */
-	status = sme_get_statistics(WLAN_HDD_GET_HAL_CTX(adapter),
+	status = sme_get_statistics(adapter->hdd_ctx->mac_handle,
 				    eCSR_HDD,
 				    SME_SUMMARY_STATS |
 					    SME_GLOBAL_CLASSA_STATS |
@@ -5873,14 +5906,14 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 	}
 
 	/* request was sent -- wait for the response */
-	errno = hdd_request_wait_for_response(request);
+	errno = osif_request_wait_for_response(request);
 	if (errno) {
 		hdd_err("Failed to wait for statistics, errno %d", errno);
 		goto put_request;
 	}
 
 	/* update the adapter with the fresh results */
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	adapter->hdd_stats.summary_stat = priv->summary_stats;
 	adapter->hdd_stats.class_a_stat = priv->class_a_stats;
 	adapter->hdd_stats.per_chain_rssi_stats = priv->per_chain_rssi_stats;
@@ -5891,7 +5924,7 @@ put_request:
 	 * received a response or we sent a request and timed out.
 	 * regardless we are done with the request.
 	 */
-	hdd_request_put(request);
+	osif_request_put(request);
 
 	/* either callback updated adapter stats or it has cached data */
 	return 0;
@@ -5915,21 +5948,21 @@ struct temperature_priv {
  */
 static void hdd_get_temperature_cb(int temperature, void *context)
 {
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct temperature_priv *priv;
 
 	hdd_enter();
 
-	request = hdd_request_get(context);
+	request = osif_request_get(context);
 	if (!request) {
 		hdd_err("Obsolete request");
 		return;
 	}
 
-	priv = hdd_request_priv(request);
+	priv = osif_request_priv(request);
 	priv->temperature = temperature;
-	hdd_request_complete(request);
-	hdd_request_put(request);
+	osif_request_complete(request);
+	osif_request_put(request);
 	hdd_exit();
 }
 
@@ -5938,9 +5971,9 @@ int wlan_hdd_get_temperature(struct hdd_adapter *adapter, int *temperature)
 	QDF_STATUS status;
 	int ret;
 	void *cookie;
-	struct hdd_request *request;
+	struct osif_request *request;
 	struct temperature_priv *priv;
-	static const struct hdd_request_params params = {
+	static const struct osif_request_params params = {
 		.priv_size = sizeof(*priv),
 		.timeout_ms = WLAN_WAIT_TIME_STATS,
 	};
@@ -5951,23 +5984,23 @@ int wlan_hdd_get_temperature(struct hdd_adapter *adapter, int *temperature)
 		return -EPERM;
 	}
 
-	request = hdd_request_alloc(&params);
+	request = osif_request_alloc(&params);
 	if (!request) {
 		hdd_err("Request allocation failure");
 		return -ENOMEM;
 	}
-	cookie = hdd_request_cookie(request);
-	status = sme_get_temperature(WLAN_HDD_GET_HAL_CTX(adapter),
-				     cookie, hdd_get_temperature_cb);
+	cookie = osif_request_cookie(request);
+	status = sme_get_temperature(adapter->hdd_ctx->mac_handle, cookie,
+				     hdd_get_temperature_cb);
 	if (QDF_STATUS_SUCCESS != status) {
 		hdd_err("Unable to retrieve temperature");
 	} else {
-		ret = hdd_request_wait_for_response(request);
+		ret = osif_request_wait_for_response(request);
 		if (ret) {
 			hdd_err("SME timed out while retrieving temperature");
 		} else {
 			/* update the adapter with the fresh results */
-			priv = hdd_request_priv(request);
+			priv = osif_request_priv(request);
 			if (priv->temperature)
 				adapter->temperature = priv->temperature;
 		}
@@ -5978,7 +6011,7 @@ int wlan_hdd_get_temperature(struct hdd_adapter *adapter, int *temperature)
 	 * received a response or we sent a request and timed out.
 	 * regardless we are done with the request.
 	 */
-	hdd_request_put(request);
+	osif_request_put(request);
 
 	*temperature = adapter->temperature;
 	hdd_exit();

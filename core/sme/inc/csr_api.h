@@ -591,20 +591,6 @@ typedef enum {
 	eCSR_ROAM_RESULT_INVOKE_FAILED,
 } eCsrRoamResult;
 
-/*----------------------------------------------------------------------------
-   List of link quality indications HDD can receive from SME
-   --------------------------------------------------------------------------*/
-typedef enum {
-	eCSR_ROAM_LINK_QUAL_MIN_IND = -1,
-
-	eCSR_ROAM_LINK_QUAL_POOR_IND = 0,       /* bad link                */
-	eCSR_ROAM_LINK_QUAL_GOOD_IND = 1,       /* acceptable for voice    */
-	eCSR_ROAM_LINK_QUAL_VERY_GOOD_IND = 2,  /* suitable for voice      */
-	eCSR_ROAM_LINK_QUAL_EXCELLENT_IND = 3,  /* suitable for voice      */
-
-	eCSR_ROAM_LINK_QUAL_MAX_IND     /* invalid value */
-} eCsrRoamLinkQualityInd;
-
 typedef enum {
 	eCSR_DISCONNECT_REASON_UNSPECIFIED = 0,
 	eCSR_DISCONNECT_REASON_MIC_ERROR,
@@ -1525,7 +1511,7 @@ typedef struct tagCsrSummaryStatsInfo {
 } tCsrSummaryStatsInfo;
 
 typedef struct tagCsrGlobalClassAStatsInfo {
-	uint32_t nss;
+	uint8_t nss;
 	uint32_t max_pwr;
 	uint32_t tx_rate;
 	/* mcs index for HT20 and HT40 rates */
@@ -1658,19 +1644,11 @@ struct wep_update_default_key_idx {
 	uint8_t default_idx;
 };
 
-/*
- * NOTE: p2 is the second context pass in for the caller
- * NOTE: what if callback is called before requester gets the scanId??
- */
-typedef QDF_STATUS (*csr_scan_completeCallback)(tHalHandle, void *p2,
-						uint8_t sessionId,
-						uint32_t scanID,
-						eCsrScanStatus status);
-typedef QDF_STATUS (*csr_roam_completeCallback)(void *pContext,
-						struct csr_roam_info *pParam,
-						uint32_t roamId,
-						eRoamCmdStatus roamStatus,
-						eCsrRoamResult roamResult);
+typedef QDF_STATUS (*csr_roam_complete_cb)(void *context,
+					   struct csr_roam_info *param,
+					   uint32_t roam_id,
+					   eRoamCmdStatus roam_status,
+					   eCsrRoamResult roam_result);
 typedef QDF_STATUS (*csr_session_open_cb)(uint8_t session_id);
 typedef QDF_STATUS (*csr_session_close_cb)(uint8_t session_id);
 
@@ -1706,7 +1684,7 @@ typedef QDF_STATUS (*csr_session_close_cb)(uint8_t session_id);
 #define CSR_IS_AUTH_TYPE_SAE(auth_type) (false)
 #endif
 
-QDF_STATUS csr_set_channels(tHalHandle hHal, tCsrConfigParam *pParam);
+QDF_STATUS csr_set_channels(tpAniSirGlobal pMac, tCsrConfigParam *pParam);
 
 /* enum to string conversion for debug output */
 const char *get_e_roam_cmd_status_str(eRoamCmdStatus val);
@@ -1714,8 +1692,6 @@ const char *get_e_csr_roam_result_str(eCsrRoamResult val);
 const char *csr_phy_mode_str(eCsrPhyMode phy_mode);
 QDF_STATUS csr_set_phy_mode(tHalHandle hHal, uint32_t phyMode,
 			    enum band_info eBand, bool *pfRestartNeeded);
-typedef void (*csr_roamLinkQualityIndCallback)
-	(eCsrRoamLinkQualityInd ind, void *pContext);
 typedef void (*tCsrStatsCallback)(void *stats, void *pContext);
 typedef void (*tCsrRssiCallback)(int8_t rssi, uint32_t staId, void *pContext);
 
@@ -1753,7 +1729,7 @@ typedef void (*csr_readyToSuspendCallback)(void *pContext, bool suspended);
 #ifdef WLAN_FEATURE_EXTWOW_SUPPORT
 typedef void (*csr_readyToExtWoWCallback)(void *pContext, bool status);
 #endif
-typedef void (*tCsrLinkStatusCallback)(uint8_t status, void *pContext);
+typedef void (*csr_link_status_callback)(uint8_t status, void *context);
 #ifdef FEATURE_WLAN_TDLS
 void csr_roam_fill_tdls_info(tpAniSirGlobal mac_ctx,
 			     struct csr_roam_info *roam_info,
@@ -1768,19 +1744,19 @@ void csr_packetdump_timer_stop(void);
 
 /**
  * csr_get_channel_status() - get chan info via channel number
- * @p_mac: Pointer to Global MAC structure
+ * @mac: Pointer to Global MAC structure
  * @channel_id: channel id
  *
  * Return: chan status info
  */
-struct lim_channel_status *csr_get_channel_status(void *p_mac,
-						  uint32_t channel_id);
+struct lim_channel_status *
+csr_get_channel_status(tpAniSirGlobal mac, uint32_t channel_id);
 
 /**
  * csr_clear_channel_status() - clear chan info
- * @p_mac: Pointer to Global MAC structure
+ * @mac: Pointer to Global MAC structure
  *
  * Return: none
  */
-void csr_clear_channel_status(void *p_mac);
+void csr_clear_channel_status(tpAniSirGlobal mac);
 #endif

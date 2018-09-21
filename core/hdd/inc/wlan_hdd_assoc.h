@@ -37,6 +37,9 @@
 #define HDD_MAX_NUM_TDLS_STA_P_UAPSD_OFFCHAN  1
 #define TDLS_STA_INDEX_VALID(staId) \
 	(((staId) >= 0) && ((staId) < 0xFF))
+#else
+#define HDD_MAX_NUM_TDLS_STA          0
+
 #endif
 /* Timeout (in ms) for Link to Up before Registering Station */
 #define ASSOC_LINKUP_TIMEOUT 60
@@ -214,6 +217,14 @@ struct hdd_context;
  */
 bool hdd_is_connecting(struct hdd_station_ctx *hdd_sta_ctx);
 
+/*
+ * hdd_is_fils_connection: API to determine if connection is FILS
+ * @adapter: hdd adapter
+ *
+ * Return: true if fils connection else false
+ */
+bool hdd_is_fils_connection(struct hdd_adapter *adapter);
+
 /**
  * hdd_conn_is_connected() - Function to check connection status
  * @sta_ctx:    pointer to global HDD Station context
@@ -221,6 +232,14 @@ bool hdd_is_connecting(struct hdd_station_ctx *hdd_sta_ctx);
  * Return: false if any errors encountered, true otherwise
  */
 bool hdd_conn_is_connected(struct hdd_station_ctx *sta_ctx);
+
+/**
+ * hdd_adapter_is_connected_sta() - check if @adapter is a connected station
+ * @adapter: the adapter to check
+ *
+ * Return: true if @adapter is a connected station
+ */
+bool hdd_adapter_is_connected_sta(struct hdd_adapter *adapter);
 
 /**
  * hdd_conn_get_connected_band() - get current connection radio band
@@ -356,8 +375,9 @@ void hdd_delete_peer(struct hdd_station_ctx *sta_ctx, uint8_t sta_id);
 QDF_STATUS hdd_roam_deregister_sta(struct hdd_adapter *adapter, uint8_t sta_id);
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
-void hdd_wma_send_fastreassoc_cmd(struct hdd_adapter *adapter,
-				  const tSirMacAddr bssid, int channel);
+QDF_STATUS
+hdd_wma_send_fastreassoc_cmd(struct hdd_adapter *adapter,
+			     const tSirMacAddr bssid, int channel);
 /**
  * hdd_save_gtk_params() - Save GTK offload params
  * @adapter: HDD adapter
@@ -369,9 +389,11 @@ void hdd_wma_send_fastreassoc_cmd(struct hdd_adapter *adapter,
 void hdd_save_gtk_params(struct hdd_adapter *adapter,
 			 struct csr_roam_info *csr_roam_info, bool is_reassoc);
 #else
-static inline void hdd_wma_send_fastreassoc_cmd(struct hdd_adapter *adapter,
-		const tSirMacAddr bssid, int channel)
+static inline QDF_STATUS
+hdd_wma_send_fastreassoc_cmd(struct hdd_adapter *adapter,
+			     const tSirMacAddr bssid, int channel)
 {
+	return QDF_STATUS_SUCCESS;
 }
 static inline void hdd_save_gtk_params(struct hdd_adapter *adapter,
 				       struct csr_roam_info *csr_roam_info,

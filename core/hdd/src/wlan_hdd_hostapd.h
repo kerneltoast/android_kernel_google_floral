@@ -110,13 +110,6 @@ QDF_STATUS hdd_softap_sta_deauth(struct hdd_adapter *adapter,
 		struct csr_del_sta_params *pDelStaParams);
 void hdd_softap_sta_disassoc(struct hdd_adapter *adapter,
 			     struct csr_del_sta_params *pDelStaParams);
-int hdd_softap_unpack_ie(tHalHandle halHandle,
-			 eCsrEncryptionType *pEncryptType,
-			 eCsrEncryptionType *mcEncryptType,
-			 eCsrAuthType *pAuthType,
-			 bool *pMFPCapable,
-			 bool *pMFPRequired,
-			 uint16_t gen_ie_len, uint8_t *gen_ie);
 
 QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 				    void *context);
@@ -201,4 +194,14 @@ QDF_STATUS wlan_hdd_config_acs(struct hdd_context *hdd_ctx,
 			       struct hdd_adapter *adapter);
 
 void hdd_sap_indicate_disconnect_for_sta(struct hdd_adapter *adapter);
+
+/**
+ * hdd_ipa_ap_disconnect() - call hdd_ipa_wlan_evt if
+ * ipa is enabled
+ * @pAdapter: pointer to adapter context
+ *
+ * Return: QDF_STATUS_SUCCESS on success, QDF_STATUS_E_** on error
+ */
+void hdd_ipa_ap_disconnect(struct hdd_adapter *adapter);
+
 #endif /* end #if !defined(WLAN_HDD_HOSTAPD_H) */

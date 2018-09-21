@@ -339,9 +339,6 @@ static QDF_STATUS pmo_core_mc_addr_flitering_sanity(
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (!pmo_core_is_vdev_connected(vdev))
-		return QDF_STATUS_E_INVAL;
-
 	return QDF_STATUS_SUCCESS;
 }
 QDF_STATUS pmo_core_cache_mc_addr_list(
@@ -380,6 +377,7 @@ QDF_STATUS pmo_core_cache_mc_addr_list(
 		  mc_list_config->vdev_id, mc_list_config->psoc);
 
 	status = pmo_core_cache_mc_addr_list_in_vdev_priv(mc_list_config, vdev);
+
 dec_ref:
 	pmo_vdev_put_ref(vdev);
 out:
@@ -456,7 +454,7 @@ static QDF_STATUS pmo_core_handle_enable_mc_list_trigger(
 		if (!vdev_ctx->pmo_psoc_ctx->psoc_cfg.active_mode_offload) {
 			pmo_debug("active offload is disabled, skip in mode %d",
 				  trigger);
-			status = QDF_STATUS_E_INVAL;
+			status = QDF_STATUS_SUCCESS;
 			goto free_req;
 		}
 		status = pmo_core_do_enable_mc_addr_list(vdev, vdev_ctx,
@@ -466,7 +464,7 @@ static QDF_STATUS pmo_core_handle_enable_mc_list_trigger(
 		if (vdev_ctx->pmo_psoc_ctx->psoc_cfg.active_mode_offload) {
 			pmo_debug("active offload is enabled, skip in mode %d",
 				  trigger);
-			status = QDF_STATUS_E_INVAL;
+			status = QDF_STATUS_SUCCESS;
 			goto free_req;
 		}
 		status = pmo_core_do_enable_mc_addr_list(vdev, vdev_ctx,
@@ -515,6 +513,11 @@ QDF_STATUS pmo_core_enable_mc_addr_filtering_in_fwr(
 	status = pmo_core_mc_addr_flitering_sanity(vdev);
 	if (status != QDF_STATUS_SUCCESS)
 		goto put_vdev;
+
+	if (!pmo_core_is_vdev_connected(vdev)) {
+		status = QDF_STATUS_E_INVAL;
+		goto put_vdev;
+	}
 
 	pmo_debug("enable mclist trigger: %d", trigger);
 	status = pmo_core_handle_enable_mc_list_trigger(vdev, trigger);
@@ -612,6 +615,11 @@ QDF_STATUS pmo_core_disable_mc_addr_filtering_in_fwr(
 	status = pmo_core_mc_addr_flitering_sanity(vdev);
 	if (status != QDF_STATUS_SUCCESS)
 		goto put_ref;
+
+	if (!pmo_core_is_vdev_connected(vdev)) {
+		status = QDF_STATUS_E_INVAL;
+		goto put_ref;
+	}
 
 	pmo_debug("disable mclist trigger: %d", trigger);
 

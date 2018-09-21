@@ -199,6 +199,8 @@
 #define SIR_MAC_VHT_GID_NOTIFICATION           1
 #define SIR_MAC_VHT_OPMODE_NOTIFICATION        2
 
+#define SIR_MAC_VHT_OPMODE_SIZE                3
+
 #define NUM_OF_SOUNDING_DIMENSIONS	1 /*Nss - 1, (Nss = 2 for 2x2)*/
 /* HT Action Field Codes */
 #define SIR_MAC_SM_POWER_SAVE       1
@@ -631,18 +633,15 @@
 #define SIR_MAC_VENDOR_AP_1_OUI             "\x00\x0C\x43"
 #define SIR_MAC_VENDOR_AP_1_OUI_LEN         3
 
-#define SIR_MAC_VENDOR_AP_2_OUI             "\x00\x10\x18"
-#define SIR_MAC_VENDOR_AP_2_OUI_LEN         3
-
-#define SIR_MAC_VENDOR_AP_2_DATA            "\x02\xFF\xF0\x2C\x00\x00"
-#define SIR_MAC_VENDOR_AP_2_DATA_2          "\x02\xFF\x04\x0C\x00\x00"
-#define SIR_MAC_VENDOR_AP_2_DATA_LEN        6
-
 #define SIR_MAC_VENDOR_AP_3_OUI             "\x00\x03\x7F"
 #define SIR_MAC_VENDOR_AP_3_OUI_LEN         3
 
 #define SIR_MAC_VENDOR_AP_4_OUI             "\x8C\xFD\xF0"
 #define SIR_MAC_VENDOR_AP_4_OUI_LEN         3
+
+/* Maximum allowable size of a beacon and probe rsp frame */
+#define SIR_MAX_BEACON_SIZE    512
+#define SIR_MAX_PROBE_RESP_SIZE 512
 
 /* / Status Code (present in Management response frames) enum */
 
@@ -707,7 +706,7 @@ typedef enum eSirMacStatusCodes {
 	eSIR_MAC_TS_NOT_HONOURED_STATUS = 39,   /* The TS has not been created because the request cannot be honored; however, a suggested */
 	/* TSPEC is provided so that the initiating STA may attempt to set another TS */
 	/* with the suggested changes to the TSPEC */
-	eSIR_MAC_INVALID_INFORMATION_ELEMENT_STATUS = 40,       /* Invalid information element, i.e., an information element defined in this standard for */
+	eSIR_MAC_INVALID_IE_STATUS = 40,       /* Invalid information element, i.e., an information element defined in this standard for */
 	/* which the content does not meet the specifications in Clause 7 */
 	eSIR_MAC_INVALID_GROUP_CIPHER_STATUS = 41,      /* Invalid group cipher */
 	eSIR_MAC_INVALID_PAIRWISE_CIPHER_STATUS = 42,   /* Invalid pairwise cipher */

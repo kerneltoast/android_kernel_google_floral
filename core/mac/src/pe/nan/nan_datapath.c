@@ -47,7 +47,7 @@ static QDF_STATUS lim_add_ndi_peer(tpAniSirGlobal mac_ctx,
 	tpPESession session;
 	tpDphHashNode sta_ds;
 	uint16_t assoc_id, peer_idx;
-	tSirRetStatus status;
+	QDF_STATUS status;
 	uint8_t zero_mac_addr[QDF_MAC_ADDR_SIZE] = { 0, 0, 0, 0, 0, 0 };
 
 	if (!qdf_mem_cmp(&zero_mac_addr, &peer_mac_addr.bytes[0],
@@ -92,7 +92,7 @@ static QDF_STATUS lim_add_ndi_peer(tpAniSirGlobal mac_ctx,
 	/* wma decides NDI mode from wma->inferface struct */
 	sta_ds->staType = STA_ENTRY_NDI_PEER;
 	status = lim_add_sta(mac_ctx, sta_ds, false, session);
-	if (eSIR_SUCCESS != status) {
+	if (QDF_STATUS_SUCCESS != status) {
 		/* couldn't add peer */
 		pe_err("limAddSta failed status: %d",
 			status);
@@ -315,7 +315,6 @@ void lim_process_ndi_del_sta_rsp(tpAniSirGlobal mac_ctx,
 	 * Copy peer info in del peer indication before
 	 * lim_delete_dph_hash_entry is called as this will be lost.
 	 */
-	peer_ind.session_id = pe_session->smeSessionId;
 	peer_ind.sta_id = sta_ds->staIndex;
 	qdf_mem_copy(&peer_ind.peer_mac_addr.bytes,
 		sta_ds->staAddr, sizeof(tSirMacAddr));
@@ -425,7 +424,7 @@ void lim_ndi_del_bss_rsp(tpAniSirGlobal  mac_ctx,
 	if (lim_set_link_state(mac_ctx, eSIR_LINK_IDLE_STATE,
 			session_entry->selfMacAddr,
 			session_entry->selfMacAddr, NULL, NULL)
-			!= eSIR_SUCCESS) {
+			!= QDF_STATUS_SUCCESS) {
 		pe_err("NDI: DEL_BSS_RSP setLinkState failed");
 		goto end;
 	}
@@ -478,13 +477,12 @@ static QDF_STATUS lim_send_sme_ndp_add_sta_rsp(tpAniSirGlobal mac_ctx,
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	/* this message is going to os_if, fill in sme session id */
-	new_peer_ind->session_id = add_sta_rsp->smesessionId;
 	qdf_mem_copy(new_peer_ind->peer_mac_addr.bytes, add_sta_rsp->staMac,
 		     sizeof(tSirMacAddr));
 	new_peer_ind->sta_id = add_sta_rsp->staIdx;
 
 	ucfg_nan_event_handler(psoc, vdev, NDP_NEW_PEER, new_peer_ind);
+	qdf_mem_free(new_peer_ind);
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_NAN_ID);
 	return QDF_STATUS_SUCCESS;
 }

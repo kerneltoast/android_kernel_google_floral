@@ -433,40 +433,6 @@ void wlan_hdd_classify_pkt(struct sk_buff *skb)
 }
 
 /**
- * wlan_hdd_latency_opt()- latency option
- * @adapter:  pointer to the adapter structure
- * @skb:      pointer to sk buff
- *
- * Function to disable power save for icmp packets.
- *
- * Return: None
- */
-#ifdef WLAN_ICMP_DISABLE_PS
-static inline void
-wlan_hdd_latency_opt(struct hdd_adapter *adapter, struct sk_buff *skb)
-{
-	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-
-	if (hdd_ctx->config->icmp_disable_ps_val <= 0)
-		return;
-
-	if (QDF_NBUF_CB_GET_PACKET_TYPE(skb) ==
-				QDF_NBUF_CB_PACKET_TYPE_ICMP) {
-		wlan_hdd_set_powersave(adapter, false,
-				hdd_ctx->config->icmp_disable_ps_val);
-		sme_ps_enable_auto_ps_timer(WLAN_HDD_GET_HAL_CTX(adapter),
-					  adapter->session_id,
-					  hdd_ctx->config->icmp_disable_ps_val);
-	}
-}
-#else
-static inline void
-wlan_hdd_latency_opt(struct hdd_adapter *adapter, struct sk_buff *skb)
-{
-}
-#endif
-
-/**
  * hdd_get_transmit_sta_id() - function to retrieve station id to be used for
  * sending traffic towards a particular destination address. The destination
  * address can be unicast, multicast or broadcast
@@ -1074,7 +1040,7 @@ static netdev_tx_t __hdd_hard_start_xmit(struct sk_buff *skb,
 	}
 
 	if (adapter->tx_fn(adapter->txrx_vdev,
-		 (qdf_nbuf_t) skb) != NULL) {
+		 (qdf_nbuf_t)skb) != NULL) {
 		QDF_TRACE(QDF_MODULE_ID_HDD_DATA, QDF_TRACE_LEVEL_INFO_HIGH,
 			  "%s: Failed to send packet to txrx for staid: %d",
 			  __func__, STAId);
@@ -1293,15 +1259,14 @@ QDF_STATUS hdd_init_tx_rx(struct hdd_adapter *adapter)
  */
 QDF_STATUS hdd_deinit_tx_rx(struct hdd_adapter *adapter)
 {
-	QDF_STATUS status = QDF_STATUS_SUCCESS;
-
-	if (NULL == adapter) {
-		hdd_err("adapter is NULL");
-		QDF_ASSERT(0);
+	QDF_BUG(adapter);
+	if (!adapter)
 		return QDF_STATUS_E_FAILURE;
-	}
 
-	return status;
+	adapter->txrx_vdev = NULL;
+	adapter->tx_fn = NULL;
+
+	return QDF_STATUS_SUCCESS;
 }
 
 #ifdef FEATURE_MONITOR_MODE_SUPPORT
@@ -1734,6 +1699,9 @@ void hdd_disable_rx_ol_for_low_tput(struct hdd_context *hdd_ctx, bool disable)
 static bool hdd_can_handle_receive_offload(struct hdd_context *hdd_ctx,
 					   struct sk_buff *skb)
 {
+	if (!hdd_ctx->receive_offload_cb)
+		return false;
+
 	if (!QDF_NBUF_CB_RX_TCP_PROTO(skb) ||
 	    qdf_atomic_read(&hdd_ctx->disable_lro_in_concurrency) ||
 	    QDF_NBUF_CB_RX_PEER_CACHED_FRM(skb) ||
@@ -1941,18 +1909,23 @@ QDF_STATUS hdd_rx_packet_cbk(void *context, qdf_nbuf_t rxBuf)
 
 		hdd_tsf_timestamp_rx(hdd_ctx, skb, ktime_to_us(skb->tstamp));
 
-		if (hdd_can_handle_receive_offload(hdd_ctx, skb) &&
-		    hdd_ctx->receive_offload_cb)
+		if (hdd_can_handle_receive_offload(hdd_ctx, skb))
 			rx_ol_status = hdd_ctx->receive_offload_cb(adapter,
 								   skb);
 
 		if (rx_ol_status != QDF_STATUS_SUCCESS) {
+			/* we should optimize this per packet check, unlikely */
+			/* Account for GRO/LRO ineligible packets, mostly UDP */
+			hdd_ctx->no_rx_offload_pkt_cnt++;
 			if (hdd_napi_enabled(HDD_NAPI_ANY) &&
-				!hdd_ctx->enable_rxthread &&
-				!QDF_NBUF_CB_RX_PEER_CACHED_FRM(skb))
+			    !hdd_ctx->enable_rxthread &&
+			    !QDF_NBUF_CB_RX_PEER_CACHED_FRM(skb)) {
 				rxstat = netif_receive_skb(skb);
-			else
-				rxstat = netif_rx_ni(skb);
+			} else {
+				local_bh_disable();
+				rxstat = netif_receive_skb(skb);
+				local_bh_enable();
+			}
 		}
 
 		if (!rxstat) {
@@ -2374,8 +2347,8 @@ int hdd_set_mon_rx_cb(struct net_device *dev)
 		goto exit;
 	}
 
-	qdf_status = sme_create_mon_session(hdd_ctx->hHal,
-				     adapter->mac_addr.bytes);
+	qdf_status = sme_create_mon_session(hdd_ctx->mac_handle,
+					    adapter->mac_addr.bytes);
 	if (QDF_STATUS_SUCCESS != qdf_status) {
 		hdd_err("sme_create_mon_session() failed to register. Status= %d [0x%08X]",
 			qdf_status, qdf_status);

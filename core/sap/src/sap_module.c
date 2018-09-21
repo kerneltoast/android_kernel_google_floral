@@ -367,6 +367,12 @@ QDF_STATUS sap_deinit_ctx(struct sap_context *sap_ctx)
 		sap_clear_session_param(hal, sap_ctx, sap_ctx->sessionId);
 	}
 
+	if (sap_ctx->channelList) {
+		qdf_mem_free(sap_ctx->channelList);
+		sap_ctx->channelList = NULL;
+		sap_ctx->num_of_channel = 0;
+	}
+
 	return QDF_STATUS_SUCCESS;
 }
 
@@ -707,13 +713,6 @@ QDF_STATUS wlansap_start_bss(struct sap_context *sap_ctx,
 		goto fail;
 	}
 	pmac = PMAC_STRUCT(hHal);
-	if (NULL == pmac) {
-		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH,
-			  "%s: Invalid MAC context from p_cds_gctx",
-			  __func__);
-		qdf_status = QDF_STATUS_E_FAULT;
-		goto fail;
-	}
 	/* If concurrent session is running that is already associated
 	 * then we just follow that sessions country info (whether
 	 * present or not doesn't maater as we have to follow whatever
@@ -1286,6 +1285,7 @@ QDF_STATUS wlansap_set_channel_change_with_csa(struct sap_context *sapContext,
 	void *hHal = NULL;
 	bool valid;
 	QDF_STATUS status;
+	bool sta_sap_scc_on_dfs_chan;
 
 	if (NULL == sapContext) {
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
@@ -1313,6 +1313,8 @@ QDF_STATUS wlansap_set_channel_change_with_csa(struct sap_context *sapContext,
 		policy_mgr_is_any_mode_active_on_band_along_with_session(
 			pMac->psoc, sapContext->sessionId, POLICY_MGR_BAND_5));
 
+	sta_sap_scc_on_dfs_chan =
+		policy_mgr_is_sta_sap_scc_allowed_on_dfs_chan(pMac->psoc);
 	/*
 	 * Now, validate if the passed channel is valid in the
 	 * current regulatory domain.
@@ -1322,9 +1324,10 @@ QDF_STATUS wlansap_set_channel_change_with_csa(struct sap_context *sapContext,
 			CHANNEL_STATE_ENABLE) ||
 		(wlan_reg_get_channel_state(pMac->pdev, targetChannel) ==
 			CHANNEL_STATE_DFS &&
-		!policy_mgr_is_any_mode_active_on_band_along_with_session(
+		(!policy_mgr_is_any_mode_active_on_band_along_with_session(
 			pMac->psoc, sapContext->sessionId,
-			POLICY_MGR_BAND_5)))) {
+			POLICY_MGR_BAND_5) ||
+			sta_sap_scc_on_dfs_chan)))) {
 		/*
 		 * validate target channel switch w.r.t various concurrency
 		 * rules set.
@@ -1738,6 +1741,21 @@ QDF_STATUS wlansap_channel_change_request(struct sap_context *sapContext,
 	mac_ctx = PMAC_STRUCT(hHal);
 	phy_mode = sapContext->csr_roamProfile.phyMode;
 
+	/* Update phy_mode if the target channel is in the other band */
+	if (WLAN_CHAN_IS_5GHZ(target_channel) &&
+	    ((phy_mode == eCSR_DOT11_MODE_11g) ||
+	    (phy_mode == eCSR_DOT11_MODE_11g_ONLY)))
+		phy_mode = eCSR_DOT11_MODE_11a;
+	else if (WLAN_CHAN_IS_2GHZ(target_channel) &&
+		 (phy_mode == eCSR_DOT11_MODE_11a))
+		phy_mode = eCSR_DOT11_MODE_11g;
+
+	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_DEBUG,
+		  "%s: phy_mode: %d, target_channel: %d new phy_mode: %d",
+		  __func__, sapContext->csr_roamProfile.phyMode,
+		  target_channel, phy_mode);
+	sapContext->csr_roamProfile.phyMode = phy_mode;
+
 	if (sapContext->csr_roamProfile.ChannelInfo.numOfChannels == 0 ||
 	    sapContext->csr_roamProfile.ChannelInfo.ChannelList == NULL) {
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
@@ -1771,8 +1789,8 @@ QDF_STATUS wlansap_channel_change_request(struct sap_context *sapContext,
 				ch_params, &sapContext->csr_roamProfile);
 
 	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO,
-		"%s: chan:%d width:%d offset:%d seg0:%d seg1:%d",
-		__func__, sapContext->channel, ch_params->ch_width,
+		"%s: chan:%d phy_mode %d width:%d offset:%d seg0:%d seg1:%d",
+		__func__, sapContext->channel, phy_mode, ch_params->ch_width,
 		ch_params->sec_ch_offset, ch_params->center_freq_seg0,
 		ch_params->center_freq_seg1);
 
@@ -2020,9 +2038,9 @@ wlan_sap_set_channel_avoidance(tHalHandle hal, bool sap_channel_avoidance)
 {
 	tpAniSirGlobal mac_ctx = NULL;
 
-	if (NULL != hal)
+	if (NULL != hal) {
 		mac_ctx = PMAC_STRUCT(hal);
-	if (mac_ctx == NULL || hal == NULL) {
+	} else {
 		QDF_TRACE(QDF_MODULE_ID_SAP,
 			  QDF_TRACE_LEVEL_ERROR,
 			  FL("hal or mac_ctx pointer NULL"));
@@ -2313,18 +2331,22 @@ void wlansap_extend_to_acs_range(tHalHandle hal, uint8_t *startChannelNum,
 				 (*endChannelNum + ACS_2G_EXTEND) : 14;
 	} else if (*startChannelNum >= 36 && *endChannelNum >= 36) {
 		*bandStartChannel = CHAN_ENUM_36;
-		*bandEndChannel = CHAN_ENUM_165;
+		*bandEndChannel = CHAN_ENUM_173;
 		tmp_startChannelNum = (*startChannelNum - ACS_5G_EXTEND) > 36 ?
 				   (*startChannelNum - ACS_5G_EXTEND) : 36;
-		tmp_endChannelNum = (*endChannelNum + ACS_5G_EXTEND) <= 165 ?
-				 (*endChannelNum + ACS_5G_EXTEND) : 165;
+		tmp_endChannelNum = (*endChannelNum + ACS_5G_EXTEND) <=
+				     WNI_CFG_CURRENT_CHANNEL_STAMAX ?
+				     (*endChannelNum + ACS_5G_EXTEND) :
+				     WNI_CFG_CURRENT_CHANNEL_STAMAX;
 	} else {
 		*bandStartChannel = CHAN_ENUM_1;
-		*bandEndChannel = CHAN_ENUM_165;
+		*bandEndChannel = CHAN_ENUM_173;
 		tmp_startChannelNum = *startChannelNum > 5 ?
 			(*startChannelNum - ACS_2G_EXTEND) : 1;
-		tmp_endChannelNum = (*endChannelNum + ACS_5G_EXTEND) <= 165 ?
-			(*endChannelNum + ACS_5G_EXTEND) : 165;
+		tmp_endChannelNum = (*endChannelNum + ACS_5G_EXTEND) <=
+				     WNI_CFG_CURRENT_CHANNEL_STAMAX ?
+				     (*endChannelNum + ACS_5G_EXTEND) :
+				     WNI_CFG_CURRENT_CHANNEL_STAMAX;
 	}
 
 	/* Note if the ACS range include only DFS channels, do not cross range
@@ -2461,7 +2483,6 @@ QDF_STATUS wlansap_acs_chselect(struct sap_context *sap_context,
 	tHalHandle h_hal = NULL;
 	QDF_STATUS qdf_status = QDF_STATUS_E_FAILURE;
 	tpAniSirGlobal pmac = NULL;
-	tWLAN_SAPEvent sapEvent; /* State machine event */
 
 	if (NULL == sap_context) {
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
@@ -2512,7 +2533,7 @@ QDF_STATUS wlansap_acs_chselect(struct sap_context *sap_context,
 	 * different scan callback function to process
 	 * the results pre start BSS.
 	 */
-	qdf_status = sap_goto_channel_sel(sap_context, &sapEvent, true, false);
+	qdf_status = sap_channel_sel(sap_context);
 
 	if (QDF_STATUS_E_ABORTED == qdf_status) {
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,

@@ -375,6 +375,8 @@ struct addstafor_sessioncmd {
 struct delstafor_sessionCmd {
 	/* Session self mac addr */
 	tSirMacAddr selfMacAddr;
+	csr_session_close_cb session_close_cb;
+	void *context;
 };
 
 struct csr_neighbor_roamconfig {
@@ -688,7 +690,6 @@ struct csr_scanstruct {
 	struct csr_channel occupiedChannels[CSR_ROAM_SESSION_MAX];
 	int8_t roam_candidate_count[CSR_ROAM_SESSION_MAX];
 	int8_t inScanResultBestAPRssi;
-	csr_scan_completeCallback callback11dScanDone;
 	bool fcc_constraint;
 	uint8_t max_scan_count;
 	bool defer_update_channel_list;
@@ -715,11 +716,6 @@ struct csr_roam_connectedinfo {
 	 */
 	uint8_t *pbFrames;
 	uint8_t staId;
-};
-
-struct csr_linkquality_indinfo {
-	csr_roamLinkQualityIndCallback callback;
-	void *context;
 };
 
 #ifndef QCA_SUPPORT_CP_STATS
@@ -837,7 +833,7 @@ struct csr_roam_session {
 
 	csr_session_open_cb  session_open_cb;
 	csr_session_close_cb session_close_cb;
-	csr_roam_completeCallback callback;
+	csr_roam_complete_cb callback;
 	void *pContext;
 	eCsrConnectState connectState;
 	struct rsn_caps rsn_caps;
@@ -942,6 +938,9 @@ struct csr_roam_session {
 	bool ch_switch_in_progress;
 	bool roam_synch_in_progress;
 	bool supported_nss_1x1;
+	uint8_t vdev_nss;
+	uint8_t nss;
+	bool nss_forced_1x1;
 	bool disable_hi_rssi;
 	bool dhcp_done;
 	uint8_t disconnect_reason;
@@ -980,8 +979,6 @@ struct csr_roamstruct {
 	tDblLinkList peStatsReqList;
 	struct csr_tlstats_reqinfo tlStatsReqInfo;
 #endif
-	eCsrRoamLinkQualityInd vccLinkQuality;
-	struct csr_linkquality_indinfo linkQualityIndInfo;
 	tCsrTimerInfo WaitForKeyTimerInfo;
 	struct csr_roam_session *roamSession;
 	uint32_t transactionId;  /* Current transaction ID for internal use. */
@@ -1234,7 +1231,7 @@ QDF_STATUS csr_open(tpAniSirGlobal pMac);
 QDF_STATUS csr_init_chan_list(tpAniSirGlobal mac, uint8_t *alpha2);
 QDF_STATUS csr_close(tpAniSirGlobal pMac);
 QDF_STATUS csr_start(tpAniSirGlobal pMac);
-QDF_STATUS csr_stop(tpAniSirGlobal pMac, tHalStopType stopType);
+QDF_STATUS csr_stop(tpAniSirGlobal pMac);
 QDF_STATUS csr_ready(tpAniSirGlobal pMac);
 
 #ifdef FEATURE_WLAN_WAPI
@@ -1283,9 +1280,6 @@ QDF_STATUS csr_get_tsm_stats(tpAniSirGlobal pMac,
 		struct qdf_mac_addr bssId,
 		void *pContext, uint8_t tid);
 #endif
-
-/* Remove this code once SLM_Sessionization is supported */
-void csr_disconnect_all_active_sessions(tpAniSirGlobal pMac);
 
 /* Returns whether "Legacy Fast Roaming" is enabled...or not */
 bool csr_roam_is_fast_roam_enabled(tpAniSirGlobal pMac,
@@ -1442,11 +1436,11 @@ QDF_STATUS csr_roam_update_config(
 
 /**
  * csr_is_mcc_channel() - check if using the channel results into MCC
- * @hal: pointer to HAL
+ * @mac_ctx: pointer to global MAC context
  * @channel : channel number to check for MCC scenario
  *
  * Return : true if channel causes MCC, else false
  */
-bool csr_is_mcc_channel(tHalHandle hal, uint8_t channel);
+bool csr_is_mcc_channel(tpAniSirGlobal mac_ctx, uint8_t channel);
 
 #endif

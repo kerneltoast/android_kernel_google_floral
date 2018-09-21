@@ -474,7 +474,7 @@ static bool __lim_process_sme_sys_ready_ind(tpAniSirGlobal pMac, uint32_t *pMsgB
 	pe_debug("sending WMA_SYS_READY_IND msg to HAL");
 	MTRACE(mac_trace_msg_tx(pMac, NO_SESSION, msg.type));
 
-	if (eSIR_SUCCESS != wma_post_ctrl_msg(pMac, &msg)) {
+	if (QDF_STATUS_SUCCESS != wma_post_ctrl_msg(pMac, &msg)) {
 		pe_err("wma_post_ctrl_msg failed");
 		return true;
 	}
@@ -566,7 +566,7 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 {
 	uint16_t size;
 	uint32_t val = 0;
-	tSirRetStatus ret_status;
+	QDF_STATUS ret_status;
 	tSirMacChanNum channel_number;
 	tLimMlmStartReq *mlm_start_req = NULL;
 	tpSirSmeStartBssReq sme_start_bss_req = NULL;
@@ -579,7 +579,7 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 	uint16_t sme_transaction_id = 0xFF;
 	uint32_t chanwidth;
 	struct vdev_type_nss *vdev_type_nss;
-	tSirRetStatus cfg_get_wmi_dfs_master_param = eSIR_SUCCESS;
+	QDF_STATUS cfg_get_wmi_dfs_master_param = QDF_STATUS_SUCCESS;
 
 /* FEATURE_WLAN_DIAG_SUPPORT */
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM
@@ -929,7 +929,7 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 			ret_status = wlan_cfg_get_int(mac_ctx,
 					WNI_CFG_IBSS_AUTO_BSSID,
 					&auto_gen_bssid);
-			if (ret_status != eSIR_SUCCESS) {
+			if (ret_status != QDF_STATUS_SUCCESS) {
 				pe_err("Get Auto Gen BSSID fail,Status: %d",
 					ret_status);
 				ret_code = eSIR_LOGE_EXCEPTION;
@@ -984,18 +984,18 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 
 		} else {
 			if (wlan_cfg_get_int(mac_ctx,
-				WNI_CFG_DTIM_PERIOD, &val) != eSIR_SUCCESS)
+				WNI_CFG_DTIM_PERIOD, &val) != QDF_STATUS_SUCCESS)
 				pe_err("could not retrieve DTIM Period");
 			mlm_start_req->dtimPeriod = (uint8_t) val;
 		}
 
 		if (wlan_cfg_get_int(mac_ctx, WNI_CFG_CFP_PERIOD, &val) !=
-			eSIR_SUCCESS)
+			QDF_STATUS_SUCCESS)
 			pe_err("could not retrieve Beacon interval");
 		mlm_start_req->cfParamSet.cfpPeriod = (uint8_t) val;
 
 		if (wlan_cfg_get_int(mac_ctx, WNI_CFG_CFP_MAX_DURATION, &val) !=
-			eSIR_SUCCESS)
+			QDF_STATUS_SUCCESS)
 			pe_err("could not retrieve CFPMaxDuration");
 		mlm_start_req->cfParamSet.cfpMaxDuration = (uint16_t) val;
 
@@ -1027,7 +1027,7 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 		    (CHAN_HOP_ALL_BANDS_ENABLE ||
 		     BAND_5G == session->limRFBand)) {
 			if (wlan_cfg_get_int(mac_ctx,
-				WNI_CFG_11H_ENABLED, &val) != eSIR_SUCCESS)
+				WNI_CFG_11H_ENABLED, &val) != QDF_STATUS_SUCCESS)
 				pe_err("Fail to get WNI_CFG_11H_ENABLED");
 			else
 				session->lim11hEnable = val;
@@ -1041,7 +1041,7 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 						&val);
 				session->lim11hEnable = val;
 			}
-			if (cfg_get_wmi_dfs_master_param != eSIR_SUCCESS)
+			if (cfg_get_wmi_dfs_master_param != QDF_STATUS_SUCCESS)
 				/* Failed get CFG WNI_CFG_DFS_MASTER_ENABLED */
 				pe_err("Get Fail, CFG DFS ENABLE");
 		}
@@ -1049,7 +1049,7 @@ __lim_handle_sme_start_bss_request(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 		if (!session->lim11hEnable) {
 			if (cfg_set_int(mac_ctx,
 				WNI_CFG_LOCAL_POWER_CONSTRAINT, 0) !=
-				eSIR_SUCCESS)
+				QDF_STATUS_SUCCESS)
 				/*
 				 * Failed to set the CFG param
 				 * WNI_CFG_LOCAL_POWER_CONSTRAINT
@@ -1227,7 +1227,6 @@ __lim_process_sme_join_req(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 	uint16_t ie_len;
 	const uint8_t *vendor_ie;
 	tSirBssDescription *bss_desc;
-	struct vdev_type_nss *vdev_type_nss;
 
 	if (!mac_ctx || !msg_buf) {
 		QDF_TRACE(QDF_MODULE_ID_PE, QDF_TRACE_LEVEL_ERROR,
@@ -1427,17 +1426,7 @@ __lim_process_sme_join_req(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 
 		/* Copy The channel Id to the session Table */
 		session->currentOperChannel = bss_desc->channelId;
-		if (IS_5G_CH(session->currentOperChannel))
-			vdev_type_nss = &mac_ctx->vdev_type_nss_5g;
-		else
-			vdev_type_nss = &mac_ctx->vdev_type_nss_2g;
-		if (session->pePersona == QDF_P2P_CLIENT_MODE)
-			session->vdev_nss = vdev_type_nss->p2p_cli;
-		else
-			session->vdev_nss = vdev_type_nss->sta;
-		session->nss = session->vdev_nss;
-		if (!mac_ctx->roam.configParam.enable2x2)
-			session->nss = 1;
+
 		session->vhtCapability =
 			IS_DOT11_MODE_VHT(session->dot11mode);
 		if (session->vhtCapability) {
@@ -1567,7 +1556,7 @@ __lim_process_sme_join_req(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 
 		if (wlan_cfg_get_int(mac_ctx, WNI_CFG_JOIN_FAILURE_TIMEOUT,
 			(uint32_t *) &mlm_join_req->joinFailureTimeout) !=
-			eSIR_SUCCESS) {
+			QDF_STATUS_SUCCESS) {
 			pe_err("couldn't retrieve JoinFailureTimer value"
 				" setting to default value");
 			mlm_join_req->joinFailureTimeout =
@@ -1590,6 +1579,16 @@ __lim_process_sme_join_req(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 			sizeof(tSirMacRateSet));
 
 		session->encryptType = sme_join_req->UCEncryptionType;
+
+		session->supported_nss_1x1 = sme_join_req->supported_nss_1x1;
+		session->vdev_nss = sme_join_req->vdev_nss;
+		session->nss = sme_join_req->nss;
+		session->nss_forced_1x1 = sme_join_req->nss_forced_1x1;
+
+		pe_debug("nss %d, vdev_nss %d, supported_nss_1x1 %d",
+			 session->nss,
+			 session->vdev_nss,
+			 session->supported_nss_1x1);
 
 		mlm_join_req->bssDescription.length =
 			session->pLimJoinReq->bssDescription.length;
@@ -1658,7 +1657,7 @@ __lim_process_sme_join_req(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 		/* Initialize 11h Enable Flag */
 		if (BAND_5G == session->limRFBand) {
 			if (wlan_cfg_get_int(mac_ctx, WNI_CFG_11H_ENABLED,
-				&val) != eSIR_SUCCESS) {
+				&val) != QDF_STATUS_SUCCESS) {
 				pe_err("Fail to get WNI_CFG_11H_ENABLED");
 				session->lim11hEnable =
 					WNI_CFG_11H_ENABLED_STADEF;
@@ -1819,7 +1818,7 @@ static void __lim_process_sme_reassoc_req(tpAniSirGlobal mac_ctx,
 	}
 #ifdef FEATURE_WLAN_DIAG_SUPPORT /* FEATURE_WLAN_DIAG_SUPPORT */
 	lim_diag_event_report(mac_ctx, WLAN_PE_DIAG_REASSOC_REQ_EVENT,
-			session_entry, eSIR_SUCCESS, eSIR_SUCCESS);
+			session_entry, QDF_STATUS_SUCCESS, QDF_STATUS_SUCCESS);
 #endif /* FEATURE_WLAN_DIAG_SUPPORT */
 	/* mac_ctx->lim.gpLimReassocReq = reassoc_req;//TO SUPPORT BT-AMP */
 
@@ -1843,6 +1842,11 @@ static void __lim_process_sme_reassoc_req(tpAniSirGlobal mac_ctx,
 			reassoc_req->enableVhtGid;
 		pe_debug("vht su bformer [%d]", session_entry->vht_config.su_beam_former);
 	}
+
+	session_entry->supported_nss_1x1 = reassoc_req->supported_nss_1x1;
+	session_entry->vdev_nss = reassoc_req->vdev_nss;
+	session_entry->nss = reassoc_req->nss;
+	session_entry->nss_forced_1x1 = reassoc_req->nss_forced_1x1;
 
 	pe_debug("vhtCapability: %d su_beam_formee: %d su_tx_bformer %d",
 		session_entry->vhtCapability,
@@ -1955,11 +1959,11 @@ static void __lim_process_sme_reassoc_req(tpAniSirGlobal mac_ctx,
 
 	if (wlan_cfg_get_int(mac_ctx, WNI_CFG_REASSOCIATION_FAILURE_TIMEOUT,
 			(uint32_t *)&mlm_reassoc_req->reassocFailureTimeout) !=
-			eSIR_SUCCESS)
+			QDF_STATUS_SUCCESS)
 		pe_err("could not retrieve ReassocFailureTimeout value");
 
 	if (cfg_get_capability_info(mac_ctx, &caps, session_entry) !=
-			eSIR_SUCCESS)
+			QDF_STATUS_SUCCESS)
 		pe_err("could not retrieve Capabilities value");
 
 	lim_update_caps_info_for_bss(mac_ctx, &caps,
@@ -1976,18 +1980,18 @@ static void __lim_process_sme_reassoc_req(tpAniSirGlobal mac_ctx,
 	 * WNI_CFG_TELE_BCN_MAX_LI
 	 */
 	if (wlan_cfg_get_int(mac_ctx, WNI_CFG_TELE_BCN_WAKEUP_EN,
-				&tele_bcn_en) != eSIR_SUCCESS)
+				&tele_bcn_en) != QDF_STATUS_SUCCESS)
 		pe_err("Couldn't get WNI_CFG_TELE_BCN_WAKEUP_EN");
 
 	val = WNI_CFG_LISTEN_INTERVAL_STADEF;
 
 	if (tele_bcn_en) {
 		if (wlan_cfg_get_int(mac_ctx, WNI_CFG_TELE_BCN_MAX_LI, &val) !=
-		    eSIR_SUCCESS)
+		    QDF_STATUS_SUCCESS)
 			pe_err("could not retrieve ListenInterval");
 	} else {
 		if (wlan_cfg_get_int(mac_ctx, WNI_CFG_LISTEN_INTERVAL, &val) !=
-		    eSIR_SUCCESS)
+		    QDF_STATUS_SUCCESS)
 			pe_err("could not retrieve ListenInterval");
 	}
 
@@ -2903,7 +2907,7 @@ static void
 __lim_handle_sme_stop_bss_request(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 {
 	tSirSmeStopBssReq stopBssReq;
-	tSirRetStatus status;
+	QDF_STATUS status;
 	tLimSmeStates prevState;
 	tpPESession psessionEntry;
 	uint8_t smesessionId;
@@ -3015,7 +3019,7 @@ __lim_handle_sme_stop_bss_request(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 		if (NULL == pStaDs)
 			continue;
 		status = lim_del_sta(pMac, pStaDs, false, psessionEntry);
-		if (eSIR_SUCCESS == status) {
+		if (QDF_STATUS_SUCCESS == status) {
 			lim_delete_dph_hash_entry(pMac, pStaDs->staAddr,
 						  pStaDs->assocId, psessionEntry);
 			lim_release_peer_idx(pMac, pStaDs->assocId, psessionEntry);
@@ -3027,7 +3031,7 @@ __lim_handle_sme_stop_bss_request(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 	/* send a delBss to HAL and wait for a response */
 	status = lim_del_bss(pMac, NULL, psessionEntry->bssIdx, psessionEntry);
 
-	if (status != eSIR_SUCCESS) {
+	if (status != QDF_STATUS_SUCCESS) {
 		pe_err("delBss failed for bss %d", psessionEntry->bssIdx);
 		psessionEntry->limSmeState = prevState;
 
@@ -3190,7 +3194,7 @@ void __lim_process_sme_assoc_cnf_new(tpAniSirGlobal mac_ctx, uint32_t msg_type,
 			eLIM_MLM_LINK_ESTABLISHED_STATE;
 		pe_debug("sending Assoc Rsp frame to STA (assoc id=%d)",
 			sta_ds->assocId);
-		lim_send_assoc_rsp_mgmt_frame(mac_ctx, eSIR_SUCCESS,
+		lim_send_assoc_rsp_mgmt_frame(mac_ctx, QDF_STATUS_SUCCESS,
 					sta_ds->assocId, sta_ds->staAddr,
 					sta_ds->mlmStaContext.subType, sta_ds,
 					session_entry);
@@ -3252,7 +3256,7 @@ static void __lim_process_sme_addts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 						 &sessionId);
 	if (psessionEntry == NULL) {
 		pe_err("Session Does not exist for given bssId");
-		lim_send_sme_addts_rsp(pMac, pSirAddts->rspReqd, eSIR_FAILURE,
+		lim_send_sme_addts_rsp(pMac, pSirAddts->rspReqd, QDF_STATUS_E_FAILURE,
 				       NULL, pSirAddts->req.tspec,
 				       smesessionId, smetransactionId);
 		return;
@@ -3340,7 +3344,7 @@ static void __lim_process_sme_addts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 	if (pSirAddts->timeout)
 		timeout = pSirAddts->timeout;
 	else if (wlan_cfg_get_int(pMac, WNI_CFG_ADDTS_RSP_TIMEOUT, &timeout) !=
-		 eSIR_SUCCESS) {
+		 QDF_STATUS_SUCCESS) {
 		pe_debug("Unable to get Cfg param %d (Addts Rsp Timeout)",
 			WNI_CFG_ADDTS_RSP_TIMEOUT);
 		goto send_failure_addts_rsp;
@@ -3373,7 +3377,7 @@ static void __lim_process_sme_addts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 	return;
 
 send_failure_addts_rsp:
-	lim_send_sme_addts_rsp(pMac, pSirAddts->rspReqd, eSIR_FAILURE,
+	lim_send_sme_addts_rsp(pMac, pSirAddts->rspReqd, QDF_STATUS_E_FAILURE,
 			       psessionEntry, pSirAddts->req.tspec,
 			       smesessionId, smetransactionId);
 }
@@ -3387,7 +3391,7 @@ static void __lim_process_sme_delts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 	tpDphHashNode pStaDs = NULL;
 	tpPESession psessionEntry;
 	uint8_t sessionId;
-	uint32_t status = eSIR_SUCCESS;
+	uint32_t status = QDF_STATUS_SUCCESS;
 	uint8_t smesessionId;
 	uint16_t smetransactionId;
 
@@ -3399,7 +3403,7 @@ static void __lim_process_sme_delts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 				&sessionId);
 	if (psessionEntry == NULL) {
 		pe_err("Session Does not exist for given bssId");
-		status = eSIR_FAILURE;
+		status = QDF_STATUS_E_FAILURE;
 		goto end;
 	}
 #ifdef FEATURE_WLAN_DIAG_SUPPORT_LIM    /* FEATURE_WLAN_DIAG_SUPPORT */
@@ -3407,11 +3411,11 @@ static void __lim_process_sme_delts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 			      0);
 #endif /* FEATURE_WLAN_DIAG_SUPPORT */
 
-	if (eSIR_SUCCESS !=
+	if (QDF_STATUS_SUCCESS !=
 	    lim_validate_delts_req(pMac, pDeltsReq, peerMacAddr, psessionEntry)) {
 		pe_err("lim_validate_delts_req failed");
-		status = eSIR_FAILURE;
-		lim_send_sme_delts_rsp(pMac, pDeltsReq, eSIR_FAILURE, psessionEntry,
+		status = QDF_STATUS_E_FAILURE;
+		lim_send_sme_delts_rsp(pMac, pDeltsReq, QDF_STATUS_E_FAILURE, psessionEntry,
 				       smesessionId, smetransactionId);
 		return;
 	}
@@ -3468,10 +3472,10 @@ static void __lim_process_sme_delts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 	if (pStaDs != NULL) {
 		lim_send_edca_params(pMac, psessionEntry->gLimEdcaParamsActive,
 				     pStaDs->bssId, false);
-		status = eSIR_SUCCESS;
+		status = QDF_STATUS_SUCCESS;
 	} else {
 		pe_err("Self entry missing in Hash Table");
-		status = eSIR_FAILURE;
+		status = QDF_STATUS_E_FAILURE;
 	}
 #ifdef FEATURE_WLAN_ESE
 	lim_send_sme_tsm_ie_ind(pMac, psessionEntry, 0, 0, 0);
@@ -3479,7 +3483,7 @@ static void __lim_process_sme_delts_req(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 
 	/* send an sme response back */
 end:
-	lim_send_sme_delts_rsp(pMac, pDeltsReq, eSIR_SUCCESS, psessionEntry,
+	lim_send_sme_delts_rsp(pMac, pDeltsReq, QDF_STATUS_SUCCESS, psessionEntry,
 			       smesessionId, smetransactionId);
 }
 
@@ -3551,7 +3555,7 @@ __lim_process_sme_get_statistics_request(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 	msgQ.bodyval = 0;
 	MTRACE(mac_trace_msg_tx(pMac, NO_SESSION, msgQ.type));
 
-	if (eSIR_SUCCESS != (wma_post_ctrl_msg(pMac, &msgQ))) {
+	if (QDF_STATUS_SUCCESS != (wma_post_ctrl_msg(pMac, &msgQ))) {
 		qdf_mem_free(pMsgBuf);
 		pMsgBuf = NULL;
 		pe_err("Unable to forward request");
@@ -3585,7 +3589,7 @@ __lim_process_sme_get_tsm_stats_request(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 	msgQ.bodyval = 0;
 	MTRACE(mac_trace_msg_tx(pMac, NO_SESSION, msgQ.type));
 
-	if (eSIR_SUCCESS != (wma_post_ctrl_msg(pMac, &msgQ))) {
+	if (QDF_STATUS_SUCCESS != (wma_post_ctrl_msg(pMac, &msgQ))) {
 		qdf_mem_free(pMsgBuf);
 		pMsgBuf = NULL;
 		pe_err("Unable to forward request");
@@ -3684,7 +3688,7 @@ lim_send_vdev_restart(tpAniSirGlobal pMac,
 {
 	tpHalHiddenSsidVdevRestart pHalHiddenSsidVdevRestart = NULL;
 	struct scheduler_msg msgQ = {0};
-	tSirRetStatus retCode = eSIR_SUCCESS;
+	QDF_STATUS retCode = QDF_STATUS_SUCCESS;
 
 	if (psessionEntry == NULL) {
 		pe_err("Invalid parameters");
@@ -3707,7 +3711,7 @@ lim_send_vdev_restart(tpAniSirGlobal pMac,
 	msgQ.bodyval = 0;
 
 	retCode = wma_post_ctrl_msg(pMac, &msgQ);
-	if (eSIR_SUCCESS != retCode) {
+	if (QDF_STATUS_SUCCESS != retCode) {
 		pe_err("wma_post_ctrl_msg() failed");
 		qdf_mem_free(pHalHiddenSsidVdevRestart);
 	}
@@ -3725,7 +3729,7 @@ static void __lim_process_roam_scan_offload_req(tpAniSirGlobal mac_ctx,
 {
 	tpPESession pe_session;
 	struct scheduler_msg wma_msg = {0};
-	tSirRetStatus status;
+	QDF_STATUS status;
 	tSirRoamOffloadScanReq *req_buffer;
 	uint16_t local_ie_len;
 	uint8_t *local_ie_buf;
@@ -3762,7 +3766,7 @@ static void __lim_process_roam_scan_offload_req(tpAniSirGlobal mac_ctx,
 	wma_msg.bodyptr = req_buffer;
 
 	status = wma_post_ctrl_msg(mac_ctx, &wma_msg);
-	if (eSIR_SUCCESS != status) {
+	if (QDF_STATUS_SUCCESS != status) {
 		pe_err("Posting WMA_ROAM_SCAN_OFFLOAD_REQ failed");
 		qdf_mem_free(req_buffer);
 	}
@@ -4052,23 +4056,23 @@ static void __lim_process_report_message(tpAniSirGlobal pMac,
  * @param pSessionEntry session entry.
  * @return None
  */
-tSirRetStatus
+QDF_STATUS
 lim_send_set_max_tx_power_req(tpAniSirGlobal pMac, int8_t txPower,
 			      tpPESession pSessionEntry)
 {
 	tpMaxTxPowerParams pMaxTxParams = NULL;
-	tSirRetStatus retCode = eSIR_SUCCESS;
+	QDF_STATUS retCode = QDF_STATUS_SUCCESS;
 	struct scheduler_msg msgQ = {0};
 
 	if (pSessionEntry == NULL) {
 		pe_err("Invalid parameters");
-		return eSIR_FAILURE;
+		return QDF_STATUS_E_FAILURE;
 	}
 
 	pMaxTxParams = qdf_mem_malloc(sizeof(tMaxTxPowerParams));
 	if (NULL == pMaxTxParams) {
 		pe_err("Unable to allocate memory for pMaxTxParams");
-		return eSIR_MEM_ALLOC_FAILED;
+		return QDF_STATUS_E_NOMEM;
 
 	}
 	pMaxTxParams->power = txPower;
@@ -4084,7 +4088,7 @@ lim_send_set_max_tx_power_req(tpAniSirGlobal pMac, int8_t txPower,
 	pe_debug("Post WMA_SET_MAX_TX_POWER_REQ to WMA");
 	MTRACE(mac_trace_msg_tx(pMac, pSessionEntry->peSessionId, msgQ.type));
 	retCode = wma_post_ctrl_msg(pMac, &msgQ);
-	if (eSIR_SUCCESS != retCode) {
+	if (QDF_STATUS_SUCCESS != retCode) {
 		pe_err("wma_post_ctrl_msg() failed");
 		qdf_mem_free(pMaxTxParams);
 	}
@@ -4248,7 +4252,7 @@ static void __lim_process_send_disassoc_frame(tpAniSirGlobal mac_ctx,
 					uint32_t *msg_buf)
 {
 	struct sme_send_disassoc_frm_req sme_send_disassoc_frame_req;
-	tSirRetStatus status;
+	QDF_STATUS status;
 	tpPESession session_entry = NULL;
 	uint8_t sme_session_id;
 	uint16_t sme_trans_id;
@@ -4265,7 +4269,7 @@ static void __lim_process_send_disassoc_frame(tpAniSirGlobal mac_ctx,
 				&sme_send_disassoc_frame_req,
 				(uint8_t *)msg_buf);
 
-	if ((eSIR_FAILURE == status) ||
+	if ((QDF_STATUS_E_FAILURE == status) ||
 		(lim_is_group_addr(sme_send_disassoc_frame_req.peer_mac) &&
 		!lim_is_addr_bc(sme_send_disassoc_frame_req.peer_mac))) {
 		pe_err("received invalid SME_DISASSOC_REQ message");
@@ -4311,7 +4315,7 @@ static void lim_set_pdev_ht_ie(tpAniSirGlobal mac_ctx, uint8_t pdev_id,
 {
 	struct set_ie_param *ie_params;
 	struct scheduler_msg msg = {0};
-	tSirRetStatus rc = eSIR_SUCCESS;
+	QDF_STATUS rc = QDF_STATUS_SUCCESS;
 	const uint8_t *p_ie = NULL;
 	tHtCaps *p_ht_cap;
 	int i;
@@ -4357,7 +4361,7 @@ static void lim_set_pdev_ht_ie(tpAniSirGlobal mac_ctx, uint8_t pdev_id,
 		msg.bodyval = 0;
 
 		rc = wma_post_ctrl_msg(mac_ctx, &msg);
-		if (rc != eSIR_SUCCESS) {
+		if (rc != QDF_STATUS_SUCCESS) {
 			pe_err("wma_post_ctrl_msg() return failure");
 			qdf_mem_free(ie_params->ie_ptr);
 			qdf_mem_free(ie_params);
@@ -4382,7 +4386,7 @@ static void lim_set_pdev_vht_ie(tpAniSirGlobal mac_ctx, uint8_t pdev_id,
 {
 	struct set_ie_param *ie_params;
 	struct scheduler_msg msg = {0};
-	tSirRetStatus rc = eSIR_SUCCESS;
+	QDF_STATUS rc = QDF_STATUS_SUCCESS;
 	const uint8_t *p_ie = NULL;
 	tSirMacVHTCapabilityInfo *vht_cap;
 	int i;
@@ -4437,7 +4441,7 @@ static void lim_set_pdev_vht_ie(tpAniSirGlobal mac_ctx, uint8_t pdev_id,
 		msg.bodyval = 0;
 
 		rc = wma_post_ctrl_msg(mac_ctx, &msg);
-		if (rc != eSIR_SUCCESS) {
+		if (rc != QDF_STATUS_SUCCESS) {
 			pe_err("wma_post_ctrl_msg failure");
 			qdf_mem_free(ie_params->ie_ptr);
 			qdf_mem_free(ie_params);
@@ -4913,10 +4917,12 @@ static void lim_process_sme_channel_change_request(tpAniSirGlobal mac_ctx,
 		session_entry->channelChangeReasonCode =
 			LIM_SWITCH_CHANNEL_OPERATION;
 
-	pe_debug("switch old chnl %d to new chnl %d, ch_bw %d",
-			session_entry->currentOperChannel,
-			ch_change_req->targetChannel,
-			ch_change_req->ch_width);
+	pe_debug("switch old chnl %d to new chnl %d, ch_bw %d, nw_type %d, dot11mode %d",
+		 session_entry->currentOperChannel,
+		 ch_change_req->targetChannel,
+		 ch_change_req->ch_width,
+		 ch_change_req->nw_type,
+		 ch_change_req->dot11mode);
 
 	/* Store the New Channel Params in session_entry */
 	session_entry->ch_width = ch_change_req->ch_width;
@@ -4941,12 +4947,13 @@ static void lim_process_sme_channel_change_request(tpAniSirGlobal mac_ctx,
 	if (CHAN_HOP_ALL_BANDS_ENABLE ||
 	    BAND_5G == session_entry->limRFBand) {
 		if (wlan_cfg_get_int(mac_ctx, WNI_CFG_11H_ENABLED, &val) !=
-				eSIR_SUCCESS)
+				QDF_STATUS_SUCCESS)
 			pe_err("Fail to get WNI_CFG_11H_ENABLED");
 	}
 
 	session_entry->lim11hEnable = val;
 	session_entry->dot11mode = ch_change_req->dot11mode;
+	session_entry->nwType = ch_change_req->nw_type;
 	qdf_mem_copy(&session_entry->rateSet,
 			&ch_change_req->operational_rateset,
 			sizeof(session_entry->rateSet));
@@ -5577,7 +5584,7 @@ static void lim_process_sme_dfs_csa_ie_request(tpAniSirGlobal mac_ctx,
 skip_vht:
 	/* Send CSA IE request from here */
 	if (sch_set_fixed_beacon_fields(mac_ctx, session_entry) !=
-			eSIR_SUCCESS) {
+			QDF_STATUS_SUCCESS) {
 		pe_err("Unable to set CSA IE in beacon");
 		return;
 	}
@@ -5701,7 +5708,7 @@ static void lim_process_nss_update_request(tpAniSirGlobal mac_ctx,
 
 	/* Send nss update request from here */
 	if (sch_set_fixed_beacon_fields(mac_ctx, session_entry) !=
-			eSIR_SUCCESS) {
+			QDF_STATUS_SUCCESS) {
 		pe_err("Unable to set op mode IE in beacon");
 		return;
 	}
@@ -5788,7 +5795,7 @@ static void obss_color_collision_process_color_disable(tpAniSirGlobal mac_ctx,
 	beacon_params.bss_color = session->he_op.bss_color;
 
 	if (sch_set_fixed_beacon_fields(mac_ctx, session) !=
-	    eSIR_SUCCESS) {
+	    QDF_STATUS_SUCCESS) {
 		pe_err("Unable to set op mode IE in beacon");
 		return;
 	}
@@ -5935,7 +5942,7 @@ void lim_process_set_he_bss_color(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 	session_entry->bss_color_changing = 1;
 
 	if (sch_set_fixed_beacon_fields(mac_ctx, session_entry) !=
-			eSIR_SUCCESS) {
+			QDF_STATUS_SUCCESS) {
 		pe_err("Unable to set op mode IE in beacon");
 		return;
 	}
