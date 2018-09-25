@@ -3832,6 +3832,7 @@ static void msm_afe_clear_config(void)
 {
 	afe_clear_config(AFE_CDC_REGISTERS_CONFIG);
 	afe_clear_config(AFE_SLIMBUS_SLAVE_CONFIG);
+	afe_clear_config(AFE_CIRRUS_PORT_CONFIG);
 }
 
 static int msm_adsp_power_up_config(struct snd_soc_codec *codec,
@@ -5791,6 +5792,24 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 		.ignore_pmdown_time = 1,
 		.id = MSM_FRONTEND_DAI_MULTIMEDIA17,
 	},
+	{
+		.name = LPASS_BE_TERT_TDM_TX_0,
+		.stream_name = "Tertiary TDM0 Capture",
+		.cpu_dai_name = "msm-dai-q6-tdm.36897",
+		.platform_name = "msm-pcm-hostless",
+#if defined(CONFIG_SND_SOC_CS35L36_TDM)
+		.codecs = spk_codec,
+		.num_codecs = ARRAY_SIZE(spk_codec),
+#else
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-tx",
+#endif
+		.id = MSM_BACKEND_DAI_TERT_TDM_TX_0,
+		.be_hw_params_fixup = msm_be_hw_params_fixup,
+		.ops = &sm8150_tdm_be_ops,
+		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
+		.ignore_suspend = 1,
+	},
 };
 
 static struct snd_soc_dai_link msm_common_be_dai_links[] = {
@@ -5987,7 +6006,7 @@ static struct snd_soc_dai_link msm_common_be_dai_links[] = {
 		.ignore_pmdown_time = 1,
 	},
 	{
-		.name = LPASS_BE_TERT_TDM_TX_0,
+		.name = "Tertiary TDM0 Capture",
 		.stream_name = "Tertiary TDM0 Capture",
 		.cpu_dai_name = "msm-dai-q6-tdm.36897",
 		.platform_name = "msm-pcm-routing",
@@ -5999,6 +6018,7 @@ static struct snd_soc_dai_link msm_common_be_dai_links[] = {
 		.be_hw_params_fixup = msm_be_hw_params_fixup,
 		.ops = &sm8150_tdm_be_ops,
 		.ignore_suspend = 1,
+		.ignore_pmdown_time = 1,
 	},
 	{
 		.name = LPASS_BE_QUAT_TDM_RX_0,

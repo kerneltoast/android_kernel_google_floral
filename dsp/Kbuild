@@ -102,6 +102,9 @@ endif
 ifdef CONFIG_DTS_SRS_TM
 	Q6_OBJS += msm-dts-srs-tm-config.o
 endif
+ifdef CONFIG_CIRRUS_SPKR_PROTECTION
+	Q6_OBJS += msm-cirrus-playback.o
+endif
 
 ifdef CONFIG_AFE_HWDEP
 	Q6_OBJS += q6afecal-hwdep.o

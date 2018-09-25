@@ -15,6 +15,7 @@ GNU General Public License for more details.
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include "q6_init.h"
+#include <dsp/msm-cirrus-playback.h>
 
 static int __init audio_q6_init(void)
 {
@@ -31,11 +32,13 @@ static int __init audio_q6_init(void)
 	audio_slimslave_init();
 	avtimer_init();
 	msm_mdf_init();
+	crus_sp_init();
 	return 0;
 }
 
 static void __exit audio_q6_exit(void)
 {
+	crus_sp_exit();
 	msm_mdf_exit();
 	avtimer_exit();
 	audio_slimslave_exit();

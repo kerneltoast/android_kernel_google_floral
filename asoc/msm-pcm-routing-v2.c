@@ -46,6 +46,8 @@
 #include "msm-dolby-dap-config.h"
 #include "msm-ds2-dap-config.h"
 
+#include <dsp/msm-cirrus-playback.h>
+
 #ifndef CONFIG_DOLBY_DAP
 #undef DOLBY_ADM_COPP_TOPOLOGY_ID
 #define DOLBY_ADM_COPP_TOPOLOGY_ID 0xFFFFFFFE
@@ -22891,6 +22893,8 @@ static int msm_routing_probe(struct snd_soc_platform *platform)
 		msm_routing_be_dai_name_table_mixer_controls,
 		ARRAY_SIZE(msm_routing_be_dai_name_table_mixer_controls));
 
+	msm_crus_pb_add_controls(platform);
+
 	snd_soc_add_platform_controls(platform, msm_source_tracking_controls,
 				ARRAY_SIZE(msm_source_tracking_controls));
 	snd_soc_add_platform_controls(platform, adm_channel_config_controls,
@@ -22926,10 +22930,27 @@ static struct snd_soc_platform_driver msm_soc_routing_platform = {
 
 static int msm_routing_pcm_probe(struct platform_device *pdev)
 {
+	struct msm_pcm_drv_data *pdata;
+	int rc;
+
+	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
+	if (!pdata) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	of_property_read_string(pdev->dev.of_node, "qcom,msm-pcm-config",
+				&pdata->config_name);
+
+	platform_set_drvdata(pdev, pdata);
 
 	dev_dbg(&pdev->dev, "dev name %s\n", dev_name(&pdev->dev));
-	return snd_soc_register_platform(&pdev->dev,
-				  &msm_soc_routing_platform);
+
+	rc = snd_soc_register_platform(&pdev->dev,
+				&msm_soc_routing_platform);
+
+out:
+	return rc;
 }
 
 static int msm_routing_pcm_remove(struct platform_device *pdev)

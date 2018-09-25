@@ -40,9 +40,7 @@
 
 #include "cs35l36.h"
 
-#ifdef CONFIG_CIRRUS_SPKR_PROTECTION
-#include <asoc/msm-cirrus-playback.h>
-#endif
+#include <dsp/msm-cirrus-playback.h>
 /*
  * Some fields take zero as a valid value so use a high bit flag that won't
  * get written to the device to mark those.
@@ -636,7 +634,6 @@ static int cs35l36_pcm_startup(struct snd_pcm_substream *substream,
 static int cs35l36_dai_mute_stream(struct snd_soc_dai *dai,
 		int mute, int stream)
 {
-#ifdef CONFIG_CIRRUS_SPKR_PROTECTION
 	int ret = 0;
 	pr_debug("%s: mute: %d , stream: %d", __func__, mute, stream);
 
@@ -662,7 +659,6 @@ static int cs35l36_dai_mute_stream(struct snd_soc_dai *dai,
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK)
 			msm_crus_check_set_setting(CS35L36_UNMUTE);
 	}
-#endif
 	return 0;
 }
 
