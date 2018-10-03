@@ -169,8 +169,7 @@ static QDF_STATUS wlan_mgmt_txrx_pdev_obj_create_notification(
 
 	mgmt_txrx_pdev_ctx->pdev = pdev;
 
-	status = wlan_mgmt_txrx_desc_pool_init(mgmt_txrx_pdev_ctx,
-					       MGMT_DESC_POOL_MAX);
+	status = wlan_mgmt_txrx_desc_pool_init(mgmt_txrx_pdev_ctx);
 	if (status != QDF_STATUS_SUCCESS) {
 		mgmt_txrx_err(
 			"Failed to initialize mgmt desc. pool with status: %u",
@@ -729,6 +728,7 @@ QDF_STATUS wlan_mgmt_txrx_pdev_open(struct wlan_objmgr_pdev *pdev)
 
 QDF_STATUS wlan_mgmt_txrx_pdev_close(struct wlan_objmgr_pdev *pdev)
 {
+	struct wlan_objmgr_psoc *psoc;
 	struct mgmt_txrx_priv_pdev_context *mgmt_txrx_pdev_ctx;
 	struct mgmt_txrx_desc_elem_t *mgmt_desc;
 	uint32_t pool_size;
@@ -737,6 +737,12 @@ QDF_STATUS wlan_mgmt_txrx_pdev_close(struct wlan_objmgr_pdev *pdev)
 	if (!pdev) {
 		mgmt_txrx_err("pdev context is NULL");
 		return QDF_STATUS_E_INVAL;
+	}
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		mgmt_txrx_err("psoc unavailable for pdev %pK", pdev);
+		return QDF_STATUS_E_NULL_VALUE;
 	}
 
 	mgmt_txrx_pdev_ctx = (struct mgmt_txrx_priv_pdev_context *)
@@ -760,6 +766,10 @@ QDF_STATUS wlan_mgmt_txrx_pdev_close(struct wlan_objmgr_pdev *pdev)
 				"mgmt descriptor with desc id: %d not in freelist",
 				index);
 			mgmt_desc = &mgmt_txrx_pdev_ctx->mgmt_desc_pool.pool[index];
+			if (psoc->soc_cb.tx_ops.mgmt_txrx_tx_ops.
+					tx_drain_nbuf_op)
+				psoc->soc_cb.tx_ops.mgmt_txrx_tx_ops.
+					tx_drain_nbuf_op(pdev, mgmt_desc->nbuf);
 			qdf_nbuf_free(mgmt_desc->nbuf);
 			wlan_objmgr_peer_release_ref(mgmt_desc->peer,
 				WLAN_MGMT_NB_ID);

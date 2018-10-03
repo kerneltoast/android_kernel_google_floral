@@ -162,7 +162,7 @@ QDF_STATUS ucfg_tdls_psoc_open(struct wlan_objmgr_psoc *psoc)
 	QDF_STATUS status;
 	struct tdls_soc_priv_obj *soc_obj;
 
-	tdls_notice("tdls psoc open");
+	tdls_debug("tdls psoc open");
 	soc_obj = wlan_objmgr_psoc_get_comp_private_obj(psoc,
 							WLAN_UMAC_COMP_TDLS);
 	if (!soc_obj) {
@@ -182,7 +182,7 @@ QDF_STATUS ucfg_tdls_update_config(struct wlan_objmgr_psoc *psoc,
 	uint32_t tdls_feature_flags;
 	struct policy_mgr_tdls_cbacks tdls_pm_call_backs;
 
-	tdls_notice("tdls update config ");
+	tdls_debug("tdls update config ");
 	if (!psoc || !req) {
 		tdls_err("psoc: 0x%pK, req: 0x%pK", psoc, req);
 		return QDF_STATUS_E_FAILURE;
@@ -761,6 +761,128 @@ QDF_STATUS ucfg_tdls_antenna_switch(struct wlan_objmgr_vdev *vdev,
 dec_ref:
 	wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
 error:
+	qdf_mem_free(req);
+	return status;
+}
+
+QDF_STATUS ucfg_set_tdls_offchannel(struct wlan_objmgr_vdev *vdev,
+				    int offchannel)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct scheduler_msg msg = {0, };
+	struct tdls_set_offchannel *req;
+
+	req = qdf_mem_malloc(sizeof(*req));
+	if (!req) {
+		tdls_err("mem allocate fail");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_TDLS_NB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		tdls_err("can't get vdev");
+		goto free;
+	}
+
+	req->offchannel = offchannel;
+	req->vdev = vdev;
+	req->callback = wlan_tdls_offchan_parms_callback;
+	msg.bodyptr = req;
+	msg.callback = tdls_process_cmd;
+	msg.type = TDLS_CMD_SET_OFFCHANNEL;
+	status = scheduler_post_msg(QDF_MODULE_ID_OS_IF, &msg);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		tdls_err("post set tdls offchannel msg fail");
+		goto dec_ref;
+	}
+
+	return status;
+
+dec_ref:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
+
+free:
+	qdf_mem_free(req);
+	return status;
+}
+
+QDF_STATUS ucfg_set_tdls_offchan_mode(struct wlan_objmgr_vdev *vdev,
+				      int offchanmode)
+{
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+	struct scheduler_msg msg = {0, };
+	struct tdls_set_offchanmode *req;
+
+	req = qdf_mem_malloc(sizeof(*req));
+	if (!req) {
+		tdls_err("mem allocate fail");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_TDLS_NB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		tdls_err("can't get vdev");
+		goto free;
+	}
+
+	req->offchan_mode = offchanmode;
+	req->vdev = vdev;
+	req->callback = wlan_tdls_offchan_parms_callback;
+	msg.bodyptr = req;
+	msg.callback = tdls_process_cmd;
+	msg.type = TDLS_CMD_SET_OFFCHANMODE;
+	status = scheduler_post_msg(QDF_MODULE_ID_OS_IF, &msg);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		tdls_err("post set offchanmode msg fail");
+		goto dec_ref;
+	}
+
+	return status;
+
+dec_ref:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
+
+free:
+	qdf_mem_free(req);
+	return status;
+}
+
+QDF_STATUS ucfg_set_tdls_secoffchanneloffset(struct wlan_objmgr_vdev *vdev,
+					     int offchanoffset)
+{
+	int status = QDF_STATUS_SUCCESS;
+	struct scheduler_msg msg = {0, };
+	struct tdls_set_secoffchanneloffset *req;
+
+	req = qdf_mem_malloc(sizeof(*req));
+	if (!req) {
+		tdls_err("mem allocate fail");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	status = wlan_objmgr_vdev_try_get_ref(vdev, WLAN_TDLS_NB_ID);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		tdls_err("can't get vdev");
+		goto free;
+	}
+
+	req->offchan_offset = offchanoffset;
+	req->vdev = vdev;
+	req->callback = wlan_tdls_offchan_parms_callback;
+	msg.bodyptr = req;
+	msg.callback = tdls_process_cmd;
+	msg.type = TDLS_CMD_SET_SECOFFCHANOFFSET;
+	status = scheduler_post_msg(QDF_MODULE_ID_OS_IF, &msg);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		tdls_err("post set secoffchan offset msg fail");
+		goto dec_ref;
+	}
+	return status;
+
+dec_ref:
+	wlan_objmgr_vdev_release_ref(vdev, WLAN_TDLS_NB_ID);
+
+free:
 	qdf_mem_free(req);
 	return status;
 }

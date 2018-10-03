@@ -153,7 +153,7 @@ QDF_STATUS tdls_vdev_obj_create_notification(struct wlan_objmgr_vdev *vdev,
 	struct tdls_soc_priv_obj *tdls_soc_obj;
 	uint32_t tdls_feature_flags;
 
-	tdls_notice("tdls vdev mode %d", wlan_vdev_mlme_get_opmode(vdev));
+	tdls_debug("tdls vdev mode %d", wlan_vdev_mlme_get_opmode(vdev));
 	if (wlan_vdev_mlme_get_opmode(vdev) != QDF_STA_MODE &&
 	    wlan_vdev_mlme_get_opmode(vdev) != QDF_P2P_CLIENT_MODE)
 		return QDF_STATUS_SUCCESS;
@@ -203,7 +203,7 @@ QDF_STATUS tdls_vdev_obj_create_notification(struct wlan_objmgr_vdev *vdev,
 		goto err;
 	}
 
-	tdls_notice("tdls object attach to vdev successfully");
+	tdls_debug("tdls object attach to vdev successfully");
 	return status;
 err:
 	qdf_mem_free(tdls_vdev_obj);
@@ -321,6 +321,15 @@ QDF_STATUS tdls_process_cmd(struct scheduler_msg *msg)
 		break;
 	case TDLS_CMD_GET_ALL_PEERS:
 		tdls_get_all_peers_from_list(msg->bodyptr);
+		break;
+	case TDLS_CMD_SET_OFFCHANNEL:
+		tdls_process_set_offchannel(msg->bodyptr);
+		break;
+	case TDLS_CMD_SET_OFFCHANMODE:
+		tdls_process_set_offchan_mode(msg->bodyptr);
+		break;
+	case TDLS_CMD_SET_SECOFFCHANOFFSET:
+		tdls_process_set_secoffchanneloffset(msg->bodyptr);
 		break;
 	default:
 		break;
@@ -708,31 +717,12 @@ void tdls_notify_decrement_session(struct wlan_objmgr_psoc *psoc)
 	tdls_process_session_update(psoc, TDLS_CMD_SESSION_DECREMENT);
 }
 
-/**
- * tdls_send_update_to_fw - update tdls status info
- * @tdls_vdev_obj: tdls vdev private object.
- * @tdls_prohibited: indicates whether tdls is prohibited.
- * @tdls_chan_swit_prohibited: indicates whether tdls channel switch
- *                             is prohibited.
- * @sta_connect_event: indicate sta connect or disconnect event
- * @session_id: session id
- *
- * Normally an AP does not influence TDLS connection between STAs
- * associated to it. But AP may set bits for TDLS Prohibited or
- * TDLS Channel Switch Prohibited in Extended Capability IE in
- * Assoc/Re-assoc response to STA. So after STA is connected to
- * an AP, call this function to update TDLS status as per those
- * bits set in Ext Cap IE in received Assoc/Re-assoc response
- * from AP.
- *
- * Return: None.
- */
-static void tdls_send_update_to_fw(struct tdls_vdev_priv_obj *tdls_vdev_obj,
-				   struct tdls_soc_priv_obj *tdls_soc_obj,
-				   bool tdls_prohibited,
-				   bool tdls_chan_swit_prohibited,
-				   bool sta_connect_event,
-				   uint8_t session_id)
+void tdls_send_update_to_fw(struct tdls_vdev_priv_obj *tdls_vdev_obj,
+			    struct tdls_soc_priv_obj *tdls_soc_obj,
+			    bool tdls_prohibited,
+			    bool tdls_chan_swit_prohibited,
+			    bool sta_connect_event,
+			    uint8_t session_id)
 {
 	struct tdls_info *tdls_info_to_fw;
 	struct tdls_config_params *threshold_params;
@@ -1343,7 +1333,7 @@ void tdls_scan_done_callback(struct tdls_soc_priv_obj *tdls_soc)
 		return;
 
 	if (TDLS_SUPPORT_DISABLED == tdls_soc->tdls_current_mode) {
-		tdls_notice("TDLS mode is disabled OR not enabled");
+		tdls_debug("TDLS mode is disabled OR not enabled");
 		return;
 	}
 

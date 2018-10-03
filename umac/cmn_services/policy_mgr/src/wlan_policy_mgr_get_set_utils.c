@@ -512,7 +512,7 @@ bool policy_mgr_is_hw_dbs_capable(struct wlan_objmgr_psoc *psoc)
 {
 	uint32_t param, i, found = 0;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
-	void *wmi_handle;
+	struct wmi_unified *wmi_handle;
 
 	pm_ctx = policy_mgr_get_context(psoc);
 
@@ -526,9 +526,9 @@ bool policy_mgr_is_hw_dbs_capable(struct wlan_objmgr_psoc *psoc)
 		return false;
 	}
 
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
 	if (!wmi_handle) {
-		policy_mgr_debug("Invalid WMA context");
+		policy_mgr_debug("Invalid WMI handle");
 		return false;
 	}
 
@@ -564,7 +564,7 @@ bool policy_mgr_is_hw_sbs_capable(struct wlan_objmgr_psoc *psoc)
 {
 	uint32_t param, i, found = 0;
 	struct policy_mgr_psoc_priv_obj *pm_ctx;
-	void *wmi_handle;
+	struct wmi_unified *wmi_handle;
 
 	pm_ctx = policy_mgr_get_context(psoc);
 	if (!pm_ctx) {
@@ -572,7 +572,11 @@ bool policy_mgr_is_hw_sbs_capable(struct wlan_objmgr_psoc *psoc)
 		return false;
 	}
 
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		policy_mgr_debug("Invalid WMI handle");
+		return false;
+	}
 
 	policy_mgr_debug("DBS service bit map: %d",
 		wmi_service_enabled(wmi_handle,
@@ -1195,7 +1199,7 @@ QDF_STATUS policy_mgr_decr_active_session(struct wlan_objmgr_psoc *psoc,
 			policy_mgr_convert_device_mode_to_qdf_type(mode),
 			session_id);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-		policy_mgr_err("No connection with mode:%d vdev_id:%d",
+		policy_mgr_debug("No connection with mode:%d vdev_id:%d",
 			policy_mgr_convert_device_mode_to_qdf_type(mode),
 			session_id);
 		return qdf_status;
@@ -1533,6 +1537,29 @@ static bool policy_mgr_is_sub_20_mhz_enabled(struct wlan_objmgr_psoc *psoc)
 	return pm_ctx->user_cfg.sub_20_mhz_enabled;
 }
 
+/**
+ * policy_mgr_check_privacy_for_new_conn() - Check privacy mode concurrency
+ * @pm_ctx: policy_mgr_psoc_priv_obj policy mgr context
+ *
+ * This routine is called to check vdev security mode allowed in concurrency.
+ * At present, WAPI security mode is not allowed to run concurrency with any
+ * other vdev.
+ *
+ * Return: true - allow
+ */
+static bool policy_mgr_check_privacy_for_new_conn(
+	struct policy_mgr_psoc_priv_obj *pm_ctx)
+{
+	if (!pm_ctx->hdd_cbacks.hdd_wapi_security_sta_exist)
+		return true;
+
+	if (pm_ctx->hdd_cbacks.hdd_wapi_security_sta_exist() &&
+	    (policy_mgr_get_connection_count(pm_ctx->psoc) > 0))
+		return false;
+
+	return true;
+}
+
 bool policy_mgr_is_concurrency_allowed(struct wlan_objmgr_psoc *psoc,
 				       enum policy_mgr_con_mode mode,
 				       uint8_t channel,
@@ -1697,7 +1724,8 @@ bool policy_mgr_is_concurrency_allowed(struct wlan_objmgr_psoc *psoc,
 		}
 	}
 
-	if (!policy_mgr_allow_sap_go_concurrency(psoc, mode, channel)) {
+	if (!policy_mgr_allow_sap_go_concurrency(psoc, mode, channel,
+						 WLAN_INVALID_VDEV_ID)) {
 		policy_mgr_err("This concurrency combination is not allowed");
 		goto done;
 	}
@@ -1718,6 +1746,11 @@ bool policy_mgr_is_concurrency_allowed(struct wlan_objmgr_psoc *psoc,
 			index++;
 		}
 		qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
+	}
+
+	if (!policy_mgr_check_privacy_for_new_conn(pm_ctx)) {
+		policy_mgr_err("Don't allow new conn when wapi security conn existing");
+		goto done;
 	}
 
 	status = true;
@@ -1743,6 +1776,37 @@ bool policy_mgr_allow_concurrency(struct wlan_objmgr_psoc *psoc,
 	}
 
 	return policy_mgr_is_concurrency_allowed(psoc, mode, channel, bw);
+}
+
+bool  policy_mgr_allow_concurrency_csa(struct wlan_objmgr_psoc *psoc,
+				       enum policy_mgr_con_mode mode,
+				       uint8_t channel,
+				       uint32_t vdev_id)
+{
+	bool allow = false;
+	struct policy_mgr_conc_connection_info info;
+	uint8_t num_cxn_del = 0;
+
+	/*
+	 * Store the connection's parameter and temporarily delete it
+	 * from the concurrency table. This way the allow concurrency
+	 * check can be used as though a new connection is coming up,
+	 * after check, restore the connection to concurrency table.
+	 */
+	policy_mgr_store_and_del_conn_info_by_vdev_id(psoc, vdev_id,
+						      &info, &num_cxn_del);
+	allow = policy_mgr_allow_concurrency(
+				psoc,
+				mode,
+				channel,
+				HW_MODE_20_MHZ);
+	if (!allow)
+		policy_mgr_err("CSA concurrency check failed");
+	/* Restore the connection entry */
+	if (num_cxn_del > 0)
+		policy_mgr_restore_deleted_conn_info(psoc, &info, num_cxn_del);
+
+	return allow;
 }
 
 /**
@@ -2083,8 +2147,8 @@ enum policy_mgr_con_mode policy_mgr_convert_device_mode_to_qdf_type(
 		mode = PM_IBSS_MODE;
 		break;
 	default:
-		policy_mgr_err("Unsupported mode (%d)",
-			device_mode);
+		policy_mgr_debug("Unsupported mode (%d)",
+				 device_mode);
 	}
 
 	return mode;
@@ -2112,8 +2176,8 @@ enum QDF_OPMODE policy_mgr_get_qdf_mode_from_pm(
 		mode = QDF_IBSS_MODE;
 		break;
 	default:
-		policy_mgr_err("Unsupported policy mgr mode (%d)",
-			       device_mode);
+		policy_mgr_debug("Unsupported policy mgr mode (%d)",
+				 device_mode);
 	}
 	return mode;
 }
@@ -3001,63 +3065,42 @@ uint32_t policy_mgr_get_connection_info(struct wlan_objmgr_psoc *psoc,
 
 bool policy_mgr_allow_sap_go_concurrency(struct wlan_objmgr_psoc *psoc,
 					 enum policy_mgr_con_mode mode,
-					 uint8_t channel)
+					 uint8_t channel,
+					 uint32_t vdev_id)
 {
-	uint32_t sap_cnt;
-	uint32_t go_cnt;
 	enum policy_mgr_con_mode con_mode;
 	uint8_t con_chan;
 	int id;
+	uint32_t vdev;
+	bool dbs;
 
-	sap_cnt = policy_mgr_mode_specific_connection_count(psoc,
-							    PM_SAP_MODE,
-							    NULL);
-	go_cnt = policy_mgr_mode_specific_connection_count(psoc,
-							   PM_P2P_GO_MODE,
-							   NULL);
-
-	if ((mode == PM_SAP_MODE || mode == PM_P2P_GO_MODE) &&
-	    (sap_cnt || go_cnt)) {
-		if (policy_mgr_dual_beacon_on_single_mac_mcc_capable(psoc))
-			return true;
-		if (policy_mgr_dual_beacon_on_single_mac_scc_capable(psoc)) {
-			for (id = 0; id < MAX_NUMBER_OF_CONC_CONNECTIONS;
-				id++) {
-				if (pm_conc_connection_list[id].in_use) {
-					con_mode =
-					    pm_conc_connection_list[id].mode;
-					con_chan =
-					    pm_conc_connection_list[id].chan;
-					if (((con_mode == PM_SAP_MODE) ||
-					     (con_mode == PM_P2P_GO_MODE)) &&
-					    (channel != con_chan)) {
-						policy_mgr_debug("Scc is supported, but first SAP and second SAP are not in same channel, So don't allow second SAP interface");
-						return false;
-					}
-				}
-			}
+	if (mode != PM_SAP_MODE && mode != PM_P2P_GO_MODE)
+		return true;
+	if (policy_mgr_dual_beacon_on_single_mac_mcc_capable(psoc))
+		return true;
+	dbs = policy_mgr_is_hw_dbs_capable(psoc);
+	for (id = 0; id < MAX_NUMBER_OF_CONC_CONNECTIONS; id++) {
+		if (!pm_conc_connection_list[id].in_use)
+			continue;
+		vdev = pm_conc_connection_list[id].vdev_id;
+		if (vdev_id == vdev)
+			continue;
+		con_mode = pm_conc_connection_list[id].mode;
+		if (con_mode != PM_SAP_MODE && con_mode != PM_P2P_GO_MODE)
+			continue;
+		con_chan = pm_conc_connection_list[id].chan;
+		if (policy_mgr_dual_beacon_on_single_mac_scc_capable(psoc) &&
+		    (channel == con_chan)) {
+			policy_mgr_debug("SCC enabled, 2 AP on same channel, allow 2nd AP");
 			return true;
 		}
-		if (!policy_mgr_is_hw_dbs_capable(psoc)) {
-			policy_mgr_debug("DBS is not supported, mcc and scc are not supported too, don't allow second SAP interface");
+		if (!dbs) {
+			policy_mgr_debug("DBS unsupported, mcc and scc unsupported too, don't allow 2nd AP");
 			return false;
 		}
-		/* If DBS is supported then allow second SAP/GO session only if
-		 * the freq band of the second SAP/GO interface is different
-		 * than the first SAP/GO interface.
-		 */
-		for (id = 0; id < MAX_NUMBER_OF_CONC_CONNECTIONS; id++) {
-			if (pm_conc_connection_list[id].in_use) {
-				con_mode = pm_conc_connection_list[id].mode;
-				con_chan = pm_conc_connection_list[id].chan;
-				if (((con_mode == PM_SAP_MODE) ||
-				     (con_mode == PM_P2P_GO_MODE)) &&
-				    (WLAN_REG_IS_SAME_BAND_CHANNELS(channel,
-					con_chan))) {
-					policy_mgr_debug("DBS is supported, but first SAP and second SAP are on same band, So don't allow second SAP interface");
-					return false;
-				}
-			}
+		if (WLAN_REG_IS_SAME_BAND_CHANNELS(channel, con_chan)) {
+			policy_mgr_debug("DBS supported, 2 SAP on same band, reject 2nd AP");
+			return false;
 		}
 	}
 
@@ -3068,9 +3111,9 @@ bool policy_mgr_allow_sap_go_concurrency(struct wlan_objmgr_psoc *psoc,
 bool policy_mgr_dual_beacon_on_single_mac_scc_capable(
 		struct wlan_objmgr_psoc *psoc)
 {
-	void *wmi_handle = NULL;
+	struct wmi_unified *wmi_handle;
 
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
 	if (!wmi_handle) {
 		policy_mgr_debug("Invalid WMI handle");
 		return false;
@@ -3095,9 +3138,9 @@ bool policy_mgr_dual_beacon_on_single_mac_scc_capable(
 bool policy_mgr_dual_beacon_on_single_mac_mcc_capable(
 		struct wlan_objmgr_psoc *psoc)
 {
-	void *wmi_handle = NULL;
+	struct wmi_unified *wmi_handle;
 
-	wmi_handle = GET_WMI_HDL_FROM_PSOC(psoc);
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
 	if (!wmi_handle) {
 		policy_mgr_debug("Invalid WMI handle");
 		return false;

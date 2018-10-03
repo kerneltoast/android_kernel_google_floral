@@ -804,10 +804,6 @@ QDF_STATUS (*send_set_arp_stats_req_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_get_arp_stats_req_cmd)(wmi_unified_t wmi_handle,
 					 struct get_arp_stats *req_buf);
 
-QDF_STATUS (*send_get_buf_extscan_hotlist_cmd)(wmi_unified_t wmi_handle,
-				   struct ext_scan_setbssid_hotlist_params *
-				   photlist, int *buf_len);
-
 #ifdef FEATURE_WLAN_APF
 QDF_STATUS
 (*send_set_active_apf_mode_cmd)(wmi_unified_t wmi_handle, uint8_t vdev_id,
@@ -1577,6 +1573,17 @@ QDF_STATUS (*extract_swfda_vdev_id)(wmi_unified_t wmi_handle, void *evt_buf,
 QDF_STATUS (*send_fils_discovery_send_cmd)(wmi_unified_t wmi_handle,
 					   struct fd_params *param);
 #endif /* WLAN_SUPPORT_FILS */
+
+QDF_STATUS
+(*send_roam_scan_stats_cmd)(wmi_unified_t wmi_handle,
+			    struct wmi_roam_scan_stats_req *params);
+
+QDF_STATUS
+(*extract_roam_scan_stats_res_evt)(wmi_unified_t wmi_handle,
+				   void *evt_buf,
+				   uint32_t *vdev_id,
+				   struct wmi_roam_scan_stats_res **res_param);
+
 QDF_STATUS (*send_offload_11k_cmd)(wmi_unified_t wmi_handle,
 		struct wmi_11k_offload_params *params);
 

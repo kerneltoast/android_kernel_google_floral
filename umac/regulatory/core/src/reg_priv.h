@@ -31,7 +31,6 @@
 #define reg_log(level, args...) \
 	QDF_TRACE(QDF_MODULE_ID_REGULATORY, level, ## args)
 #define reg_logfl(level, format, args...) reg_log(level, FL(format), ## args)
-
 #define reg_alert(format, args...) \
 		reg_logfl(QDF_TRACE_LEVEL_FATAL, format, ## args)
 #define reg_err(format, args...) \
@@ -44,6 +43,9 @@
 		reg_logfl(QDF_TRACE_LEVEL_INFO_HIGH, format, ## args)
 #define reg_debug(format, args...) \
 		reg_logfl(QDF_TRACE_LEVEL_DEBUG, format, ## args)
+#define reg_debug_rl(params...) \
+	QDF_TRACE_DEBUG_RL(QDF_MODULE_ID_REGULATORY, params)
+
 
 struct wlan_regulatory_psoc_priv_obj {
 	struct mas_chan_params mas_chan_params[PSOC_MAX_PHY_REG_CAP];
@@ -81,6 +83,7 @@ struct wlan_regulatory_psoc_priv_obj {
 			reg_cap[PSOC_MAX_PHY_REG_CAP];
 	bool force_ssc_disable_indoor_channel;
 	bool enable_srd_chan_in_master_mode;
+	bool enable_11d_in_world_mode;
 	qdf_spinlock_t cbk_list_lock;
 };
 

@@ -207,8 +207,8 @@ tgt_mc_cp_stats_prepare_raw_peer_rssi(struct wlan_objmgr_psoc *psoc,
 end:
 	if (ev.peer_stats)
 		get_peer_rssi_cb(&ev, last_req->cookie);
-	else
-		ucfg_mc_cp_stats_free_stats_resources(&ev);
+
+	ucfg_mc_cp_stats_free_stats_resources(&ev);
 
 	if (vdev)
 		wlan_objmgr_vdev_release_ref(vdev, WLAN_CP_STATS_ID);
@@ -571,13 +571,14 @@ tgt_mc_cp_stats_prepare_n_send_raw_station_stats(struct wlan_objmgr_psoc *psoc,
 	 * it in units of 500kbps which is expected by UMAC
 	 */
 	info.tx_rate = peer_mc_stats->tx_rate / 500;
+	info.rx_rate = peer_mc_stats->rx_rate / 500;
 	wlan_cp_stats_peer_obj_unlock(peer_cp_stats_priv);
 
 end:
 	if (info.vdev_summary_stats && info.vdev_chain_rssi)
 		get_station_stats_cb(&info, last_req->cookie);
-	else
-		ucfg_mc_cp_stats_free_stats_resources(&info);
+
+	ucfg_mc_cp_stats_free_stats_resources(&info);
 
 	if (peer)
 		wlan_objmgr_peer_release_ref(peer, WLAN_CP_STATS_ID);
