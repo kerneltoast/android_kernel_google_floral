@@ -376,11 +376,11 @@ QDF_STATUS wma_roam_scan_offload_mode(tp_wma_handle wma_handle,
 
 	status = wmi_unified_roam_scan_offload_mode_cmd(wma_handle->wmi_handle,
 				scan_cmd_fp, params);
+	qdf_mem_free(params);
 	if (QDF_IS_STATUS_ERROR(status))
 		return status;
 
 	WMA_LOGD("%s: WMA --> WMI_ROAM_SCAN_MODE", __func__);
-	qdf_mem_free(params);
 	return status;
 }
 
@@ -1431,8 +1431,9 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 		qdf_mem_free(roam_req);
 		return QDF_STATUS_E_PERM;
 	}
-	WMA_LOGD("%s: RSO Command:%d, reason:%d session ID %d", __func__,
-		 roam_req->Command, roam_req->reason, roam_req->sessionId);
+	WMA_LOGD("%s: RSO Command:%d, reason:%d session ID %d en %d", __func__,
+		 roam_req->Command, roam_req->reason, roam_req->sessionId,
+		 roam_req->RoamScanOffloadEnabled);
 	wma_handle->interfaces[roam_req->sessionId].roaming_in_progress = false;
 	switch (roam_req->Command) {
 	case ROAM_SCAN_OFFLOAD_START:
@@ -1712,18 +1713,18 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 
 	case ROAM_SCAN_OFFLOAD_UPDATE_CFG:
 		wma_handle->suitable_ap_hb_failure = false;
-		wma_roam_scan_fill_scan_params(wma_handle, pMac, roam_req,
-					       &scan_params);
-		qdf_status =
-			wma_roam_scan_offload_mode(wma_handle, &scan_params,
-						   roam_req,
-						   WMI_ROAM_SCAN_MODE_NONE,
-						   roam_req->sessionId);
-		if (qdf_status != QDF_STATUS_SUCCESS)
-			break;
 
-		if (roam_req->RoamScanOffloadEnabled == false)
-			break;
+		if (roam_req->RoamScanOffloadEnabled) {
+			wma_roam_scan_fill_scan_params(wma_handle, pMac,
+						       roam_req, &scan_params);
+			qdf_status =
+				wma_roam_scan_offload_mode(
+					wma_handle, &scan_params, roam_req,
+					WMI_ROAM_SCAN_MODE_NONE,
+					roam_req->sessionId);
+			if (qdf_status != QDF_STATUS_SUCCESS)
+				break;
+		}
 
 		qdf_status = wma_roam_scan_bmiss_cnt(wma_handle,
 					     roam_req->RoamBmissFirstBcnt,
@@ -1794,6 +1795,9 @@ QDF_STATUS wma_process_roaming_config(tp_wma_handle wma_handle,
 		qdf_status = wma_roam_scan_offload_ap_profile(wma_handle,
 					roam_req);
 		if (qdf_status != QDF_STATUS_SUCCESS)
+			break;
+
+		if (!roam_req->RoamScanOffloadEnabled)
 			break;
 
 		wma_roam_scan_fill_scan_params(wma_handle, pMac, roam_req,
@@ -2530,6 +2534,22 @@ int wma_roam_synch_frame_event_handler(void *handle, uint8_t *event,
 	if (synch_frame_event->vdev_id >= wma->max_bssid) {
 		WMA_LOGE("received invalid vdev_id %d",
 				 synch_frame_event->vdev_id);
+		return status;
+	}
+
+	if (synch_frame_event->bcn_probe_rsp_len >
+	    param_buf->num_bcn_probe_rsp_frame ||
+	    synch_frame_event->reassoc_req_len >
+	    param_buf->num_reassoc_req_frame ||
+	    synch_frame_event->reassoc_rsp_len >
+	    param_buf->num_reassoc_rsp_frame) {
+		WMA_LOGE("fixed/actual len err: bcn:%d/%d req:%d/%d rsp:%d/%d",
+			 synch_frame_event->bcn_probe_rsp_len,
+			 param_buf->num_bcn_probe_rsp_frame,
+			 synch_frame_event->reassoc_req_len,
+			 param_buf->num_reassoc_req_frame,
+			 synch_frame_event->reassoc_rsp_len,
+			 param_buf->num_reassoc_rsp_frame);
 		return status;
 	}
 
@@ -4628,160 +4648,71 @@ static inline int wma_get_hotlist_entries_per_page(wmi_unified_t wmi_handle,
 	return num_entries;
 }
 
-/**
- * wma_get_buf_extscan_hotlist_cmd() - prepare hotlist command
- * @handle: wma handle
- * @photlist: hotlist command params
- * @buf_len: buffer length
- *
- * This function fills individual elements for  hotlist request and
- * TLV for bssid entries
- *
- * Return: QDF Status.
- */
-QDF_STATUS wma_get_buf_extscan_hotlist_cmd(tp_wma_handle wma_handle,
-				tSirExtScanSetBssidHotListReqParams *photlist,
-				int *buf_len)
-{
-	return wmi_unified_get_buf_extscan_hotlist_cmd(wma_handle->wmi_handle,
-			(struct ext_scan_setbssid_hotlist_params *)photlist,
-			buf_len);
-}
-
-/**
- * wma_extscan_start_hotlist_monitor() - start hotlist monitor
- * @wma: wma handle
- * @photlist: hotlist request params
- *
- * This function configures hotlist monitor in fw.
- *
- * Return: QDF status
- */
 QDF_STATUS wma_extscan_start_hotlist_monitor(tp_wma_handle wma,
-			     tSirExtScanSetBssidHotListReqParams *photlist)
+			struct extscan_bssid_hotlist_set_params *params)
 {
-	QDF_STATUS qdf_status = QDF_STATUS_SUCCESS;
-	int len;
-
 	if (!wma || !wma->wmi_handle) {
 		WMA_LOGE("%s: WMA is closed, can not issue hotlist cmd",
 			 __func__);
 		return QDF_STATUS_E_INVAL;
 	}
-	/* Fill individual elements for  hotlist request and
-	 * TLV for bssid entries
-	 */
-	qdf_status = wma_get_buf_extscan_hotlist_cmd(wma, photlist, &len);
-	if (qdf_status != QDF_STATUS_SUCCESS) {
-		WMA_LOGE("%s: Failed to get buffer for hotlist scan cmd",
-			__func__);
-		return QDF_STATUS_E_FAILURE;
-	}
-	return QDF_STATUS_SUCCESS;
-}
 
-/**
- * wma_extscan_stop_hotlist_monitor() - stop hotlist monitor
- * @wma: wma handle
- * @photlist_reset: hotlist reset params
- *
- * This function configures hotlist monitor to stop in fw.
- *
- * Return: QDF status
- */
-QDF_STATUS wma_extscan_stop_hotlist_monitor(tp_wma_handle wma,
-		    tSirExtScanResetBssidHotlistReqParams *photlist_reset)
-{
-	struct extscan_bssid_hotlist_reset_params params = {0};
-
-	if (!wma || !wma->wmi_handle) {
-		WMA_LOGE("%s: WMA is closed, can not issue  cmd", __func__);
+	if (!params) {
+		WMA_LOGE("%s: Invalid params", __func__);
 		return QDF_STATUS_E_INVAL;
 	}
-	if (!photlist_reset) {
-		WMA_LOGE("%s: Invalid reset hotlist buffer", __func__);
+
+	return wmi_unified_extscan_start_hotlist_monitor_cmd(wma->wmi_handle,
+							     params);
+}
+
+QDF_STATUS wma_extscan_stop_hotlist_monitor(tp_wma_handle wma,
+		    struct extscan_bssid_hotlist_reset_params *params)
+{
+	if (!wma || !wma->wmi_handle) {
+		WMA_LOGE("%s: WMA is closed, can not issue cmd", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!params) {
+		WMA_LOGE("%s: Invalid params", __func__);
 		return QDF_STATUS_E_INVAL;
 	}
 	if (!wmi_service_enabled(wma->wmi_handle,
-				    wmi_service_extscan)) {
+				 wmi_service_extscan)) {
 		WMA_LOGE("%s: extscan not enabled", __func__);
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	params.request_id = photlist_reset->requestId;
-	params.vdev_id = photlist_reset->requestId;
-
 	return wmi_unified_extscan_stop_hotlist_monitor_cmd(wma->wmi_handle,
-				&params);
+							    params);
 }
 
-/**
- * wma_extscan_start_change_monitor() - send start change monitor cmd
- * @wma: wma handle
- * @psigchange: change monitor request params
- *
- * This function sends start change monitor request to fw.
- *
- * Return: QDF status
- */
-QDF_STATUS wma_extscan_start_change_monitor(tp_wma_handle wma,
-					    tSirExtScanSetSigChangeReqParams *
-					    psigchange)
+QDF_STATUS
+wma_extscan_start_change_monitor(tp_wma_handle wma,
+			struct extscan_set_sig_changereq_params *params)
 {
-	int i = 0;
 	QDF_STATUS status;
-	struct extscan_set_sig_changereq_params *params_ptr;
 
 	if (!wma || !wma->wmi_handle) {
-		WMA_LOGE("%s: WMA is closed,can not issue extscan cmd",
+		WMA_LOGE("%s: WMA is closed,can not issue cmd",
 			 __func__);
 		return QDF_STATUS_E_INVAL;
 	}
 
-	params_ptr = qdf_mem_malloc(sizeof(*params_ptr));
-
-	if (!params_ptr) {
-		WMA_LOGE(
-			"%s: unable to allocate memory for extscan_set_sig_changereq_params",
-			 __func__);
+	if (!params) {
+		WMA_LOGE("%s: NULL params", __func__);
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	params_ptr->request_id = psigchange->requestId;
-	params_ptr->vdev_id = psigchange->sessionId;
-	params_ptr->rssi_sample_size = psigchange->rssiSampleSize;
-	params_ptr->lostap_sample_size = psigchange->lostApSampleSize;
-	params_ptr->min_breaching = psigchange->minBreaching;
-	params_ptr->num_ap = psigchange->numAp;
-	for (i = 0; i < WLAN_EXTSCAN_MAX_SIGNIFICANT_CHANGE_APS; i++) {
-		qdf_mem_copy(&params_ptr->ap[i].bssid,
-				&psigchange->ap[i].bssid,
-				sizeof(struct qdf_mac_addr));
-		params_ptr->ap[i].high = psigchange->ap[i].high;
-		params_ptr->ap[i].low = psigchange->ap[i].low;
-	}
-
-	status = wmi_unified_extscan_start_change_monitor_cmd
-							(wma->wmi_handle,
-							params_ptr);
-	qdf_mem_free(params_ptr);
+	status = wmi_unified_extscan_start_change_monitor_cmd(wma->wmi_handle,
+							      params);
 	return status;
 }
 
-/**
- * wma_extscan_stop_change_monitor() - send stop change monitor cmd
- * @wma: wma handle
- * @pResetReq: Reset change request params
- *
- * This function sends stop change monitor request to fw.
- *
- * Return: QDF status
- */
 QDF_STATUS wma_extscan_stop_change_monitor(tp_wma_handle wma,
-		   tSirExtScanResetSignificantChangeReqParams *pResetReq)
+			struct extscan_capabilities_reset_params *params)
 {
-	struct extscan_capabilities_reset_params params = {0};
-
 	if (!wma || !wma->wmi_handle) {
 		WMA_LOGE("%s: WMA is closed, can not issue  cmd", __func__);
 		return QDF_STATUS_E_INVAL;
@@ -4792,11 +4723,8 @@ QDF_STATUS wma_extscan_stop_change_monitor(tp_wma_handle wma,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	params.request_id = pResetReq->requestId;
-	params.vdev_id = pResetReq->sessionId;
-
 	return wmi_unified_extscan_stop_change_monitor_cmd(wma->wmi_handle,
-					&params);
+							   params);
 }
 
 /**

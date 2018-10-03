@@ -693,6 +693,13 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_VCC_UL_MAC_LOSS_THRESH_MIN,
 		     CFG_VCC_UL_MAC_LOSS_THRESH_MAX),
 
+	REG_VARIABLE(CFG_DROP_BCN_ON_CHANNEL_MISMATCH, WLAN_PARAM_Integer,
+		     struct hdd_config, drop_bcn_on_chan_mismatch,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_DROP_BCN_ON_CHANNEL_MISMATCH_DEFAULT,
+		     CFG_DROP_BCN_ON_CHANNEL_MISMATCH_MIN,
+		     CFG_DROP_BCN_ON_CHANNEL_MISMATCH_MAX),
+
 	REG_VARIABLE(CFG_PASSIVE_MAX_CHANNEL_TIME_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, nPassiveMaxChnTime,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -4773,6 +4780,13 @@ struct reg_table_entry g_registry_table[] = {
 		CFG_OCE_ENABLE_SAP_MIN,
 		CFG_OCE_ENABLE_SAP_MAX),
 
+	REG_VARIABLE(CFG_ENABLE_11D_IN_WORLD_MODE_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, enable_11d_in_world_mode,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_11D_IN_WORLD_MODE_DEFAULT,
+		     CFG_ENABLE_11D_IN_WORLD_MODE_MIN,
+		     CFG_ENABLE_11D_IN_WORLD_MODE_MAX),
+
 	REG_VARIABLE(CFG_ENABLE_5G_BAND_PREF_NAME, WLAN_PARAM_Integer,
 		struct hdd_config, enable_5g_band_pref,
 		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -4876,6 +4890,13 @@ struct reg_table_entry g_registry_table[] = {
 			    struct hdd_config, action_oui_str[4],
 			    VAR_FLAGS_OPTIONAL,
 			    (void *)CFG_ACTION_OUI_SWITCH_TO_11N_MODE_DEFAULT),
+
+	REG_VARIABLE_STRING(CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_NAME,
+			    WLAN_PARAM_String,
+			    struct hdd_config, action_oui_str[5],
+			    VAR_FLAGS_OPTIONAL,
+			    (void *)
+			    CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_DEFAULT),
 
 	REG_VARIABLE(CFG_DTIM_1CHRX_ENABLE_NAME, WLAN_PARAM_Integer,
 		struct hdd_config, enable_dtim_1chrx,
@@ -6437,9 +6458,9 @@ static void hdd_cfg_print_sae(struct hdd_context *hdd_ctx)
 #ifdef CONFIG_DP_TRACE
 static void hdd_cfg_print_dp_trace_params(struct hdd_context *hdd_ctx)
 {
-	hdd_info("Name = [%s] Value = [%u]",
-		 CFG_ENABLE_DP_TRACE,
-		 hdd_ctx->config->enable_dp_trace);
+	hdd_debug("Name = [%s] Value = [%u]",
+		  CFG_ENABLE_DP_TRACE,
+		  hdd_ctx->config->enable_dp_trace);
 	hdd_debug("Name = [%s] Value = [%s]",
 		  CFG_ENABLE_DP_TRACE_CONFIG,
 		  hdd_ctx->config->dp_trace_config);
@@ -6484,6 +6505,45 @@ void hdd_cfg_print_11k_offload_params(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] value = [%u]",
 		  CFG_OFFLOAD_NEIGHBOR_REPORT_MAX_REQ_CAP_NAME,
 		  hdd_ctx->config->neighbor_report_offload_max_req_cap);
+}
+
+/**
+ * hdd_cfg_print_action_oui() - print the action OUI configurations
+ * @hdd_ctx: pointer to the HDD context
+ *
+ * Return: None
+ */
+static void hdd_cfg_print_action_oui(struct hdd_context *hdd_ctx)
+{
+	struct hdd_config *config = hdd_ctx->config;
+
+	hdd_debug("Name = [%s] value = [%u]",
+		  CFG_ENABLE_ACTION_OUI,
+		  config->action_oui_enable);
+
+	hdd_debug("Name = [%s] value = [%s]",
+		  CFG_ACTION_OUI_CONNECT_1X1_NAME,
+		  config->action_oui_str[ACTION_OUI_CONNECT_1X1]);
+
+	hdd_debug("Name = [%s] value = [%s]",
+		  CFG_ACTION_OUI_ITO_EXTENSION_NAME,
+		  config->action_oui_str[ACTION_OUI_ITO_EXTENSION]);
+
+	hdd_debug("Name = [%s] value = [%s]",
+		  CFG_ACTION_OUI_CCKM_1X1_NAME,
+		  config->action_oui_str[ACTION_OUI_CCKM_1X1]);
+
+	hdd_debug("Name = [%s] value = [%s]",
+		  CFG_ACTION_OUI_ITO_ALTERNATE_NAME,
+		  config->action_oui_str[ACTION_OUI_ITO_ALTERNATE]);
+
+	hdd_debug("Name = [%s] value = [%s]",
+		  CFG_ACTION_OUI_SWITCH_TO_11N_MODE_NAME,
+		  config->action_oui_str[ACTION_OUI_SWITCH_TO_11N_MODE]);
+
+	hdd_debug("Name = [%s] value = [%s]",
+		  CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_NAME,
+		  config->action_oui_str[ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN]);
 }
 
 /**
@@ -7431,6 +7491,8 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] Value = [%u]",
 		  CFG_ROAM_FORCE_RSSI_TRIGGER_NAME,
 		  hdd_ctx->config->roam_force_rssi_trigger);
+
+	hdd_cfg_print_action_oui(hdd_ctx);
 
 }
 

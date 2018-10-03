@@ -541,18 +541,6 @@ bool csr_nonscan_active_ll_remove_entry(struct sAniSirGlobal *mac_ctx,
 	return false;
 }
 
-bool csr_nonscan_pending_ll_remove_entry(struct sAniSirGlobal *mac_ctx,
-		tListElem *entry, bool inter_locked)
-{
-	tListElem *head;
-
-	head = csr_nonscan_pending_ll_next(mac_ctx, entry, inter_locked);
-	if (head == entry)
-		return true;
-
-	return false;
-}
-
 tListElem *csr_nonscan_active_ll_remove_head(struct sAniSirGlobal *mac_ctx,
 		bool inter_locked)
 {
@@ -576,7 +564,8 @@ tListElem *csr_nonscan_pending_ll_next(struct sAniSirGlobal *mac_ctx,
 	sme_cmd = GET_BASE_ADDR(entry, tSmeCmd, Link);
 	cmd.cmd_id = sme_cmd->cmd_id;
 	cmd.cmd_type = csr_get_cmd_type(sme_cmd);
-	cmd.vdev = wlan_objmgr_get_vdev_by_id_from_psoc(mac_ctx->psoc,
+	cmd.vdev = wlan_objmgr_get_vdev_by_id_from_psoc_no_state(
+				mac_ctx->psoc,
 				sme_cmd->sessionId, WLAN_LEGACY_SME_ID);
 	tcmd = wlan_serialization_get_pending_list_next_node_using_psoc(
 				mac_ctx->psoc, &cmd, false);
@@ -1747,7 +1736,7 @@ uint32_t csr_translate_to_wni_cfg_dot11_mode(tpAniSirGlobal pMac,
 
 	switch (csrDot11Mode) {
 	case eCSR_CFG_DOT11_MODE_AUTO:
-		sme_warn("Warning: sees eCSR_CFG_DOT11_MODE_AUTO");
+		sme_debug("eCSR_CFG_DOT11_MODE_AUTO");
 		if (IS_FEATURE_SUPPORTED_BY_FW(DOT11AX))
 			ret = WNI_CFG_DOT11_MODE_11AX;
 		else if (IS_FEATURE_SUPPORTED_BY_FW(DOT11AC))
@@ -4689,28 +4678,8 @@ uint8_t csr_retrieve_rsn_ie(tpAniSirGlobal pMac, uint32_t sessionId,
 			break;
 		}
 
-		if (csr_roam_is_fast_roam_enabled(pMac, sessionId)) {
-			/* If "Legacy Fast Roaming" is enabled ALWAYS rebuild
-			 * the RSN IE from scratch. So it contains the current
-			 * PMK-IDs
-			 */
-			cbRsnIe =
-				csr_construct_rsn_ie(pMac, sessionId, pProfile,
-						     pSirBssDesc, pIes, pRsnIe);
-		} else if (pProfile->nRSNReqIELength && pProfile->pRSNReqIE) {
-			/* If you have one started away, re-use it. */
-			if (pProfile->nRSNReqIELength <=
-					DOT11F_IE_RSN_MAX_LEN) {
-				cbRsnIe = (uint8_t) pProfile->nRSNReqIELength;
-				qdf_mem_copy(pRsnIe, pProfile->pRSNReqIE,
-					     cbRsnIe);
-			} else
-				sme_warn("csr_retrieve_rsn_ie detect invalid RSN IE length (%d)",
-					pProfile->nRSNReqIELength);
-		} else
-			cbRsnIe = csr_construct_rsn_ie(pMac, sessionId,
-							pProfile,
-						     pSirBssDesc, pIes, pRsnIe);
+		cbRsnIe = csr_construct_rsn_ie(pMac, sessionId, pProfile,
+					       pSirBssDesc, pIes, pRsnIe);
 	} while (0);
 
 	return cbRsnIe;

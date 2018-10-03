@@ -663,7 +663,7 @@ QDF_STATUS wlansap_start_bss(struct sap_context *sap_ctx,
 			  __func__);
 		return QDF_STATUS_E_FAULT;
 	}
-	sap_ctx->sapsMachine = eSAP_DISCONNECTED;
+	sap_ctx->fsm_state = SAP_INIT;
 
 	/* Channel selection is auto or configured */
 	sap_ctx->channel = pConfig->channel;
@@ -1346,10 +1346,10 @@ QDF_STATUS wlansap_set_channel_change_with_csa(struct sap_context *sapContext,
 		/*
 		 * Post a CSA IE request to SAP state machine with
 		 * target channel information and also CSA IE required
-		 * flag set in sapContext only, if SAP is in eSAP_STARTED
+		 * flag set in sapContext only, if SAP is in SAP_STARTED
 		 * state.
 		 */
-		if (eSAP_STARTED == sapContext->sapsMachine) {
+		if (sapContext->fsm_state == SAP_STARTED) {
 			status = wlansap_update_csa_channel_params(sapContext,
 					targetChannel);
 			if (status != QDF_STATUS_SUCCESS)
@@ -1425,8 +1425,8 @@ QDF_STATUS wlansap_set_channel_change_with_csa(struct sap_context *sapContext,
 
 		} else {
 			QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
-				  "%s: Failed to request Channel Change, since"
-				  "SAP is not in eSAP_STARTED state", __func__);
+				  "%s: Failed to request Channel Change, since SAP is not in SAP_STARTED state",
+				  __func__);
 			return QDF_STATUS_E_FAULT;
 		}
 
@@ -1453,7 +1453,7 @@ QDF_STATUS wlansap_set_key_sta(struct sap_context *sap_ctx,
 	QDF_STATUS qdf_ret_status = QDF_STATUS_E_FAILURE;
 	uint32_t roamId = INVALID_ROAM_ID;
 
-	if (NULL == sap_ctx) {
+	if (!sap_ctx) {
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
 			  "%s: Invalid SAP pointer",
 			  __func__);
@@ -2603,9 +2603,9 @@ QDF_STATUS wlansap_set_tx_leakage_threshold(tHalHandle hal,
 
 	mac = PMAC_STRUCT(hal);
 	tgt_dfs_set_tx_leakage_threshold(mac->pdev, tx_leakage_threshold);
-	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO,
-			"%s: leakage_threshold %d", __func__,
-			tx_leakage_threshold);
+	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_DEBUG,
+		  "%s: leakage_threshold %d", __func__,
+		  tx_leakage_threshold);
 	return QDF_STATUS_SUCCESS;
 }
 

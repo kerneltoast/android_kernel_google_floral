@@ -1955,6 +1955,7 @@ static void wma_shutdown_notifier_cb(void *priv)
 
 	qdf_event_set(&wma_handle->wma_resume_event);
 	pmo_ucfg_psoc_wakeup_host_event_received(wma_handle->psoc);
+	wmi_stop(wma_handle->wmi_handle);
 
 	msg.bodyptr = priv;
 	msg.callback = wma_cleanup_vdev_resp_and_hold_req;
@@ -2221,6 +2222,9 @@ wma_register_tx_ops_handler(struct wlan_lmac_if_tx_ops *tx_ops)
 
 	/* mgmt_txrx component's tx ops */
 	tx_ops->mgmt_txrx_tx_ops.mgmt_tx_send = wma_mgmt_unified_cmd_send;
+
+	/* mgmt txrx component nbuf op for nbuf dma unmap */
+	tx_ops->mgmt_txrx_tx_ops.tx_drain_nbuf_op = wma_mgmt_nbuf_unmap_cb;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2905,6 +2909,84 @@ void wma_vdev_init(struct wma_txrx_node *vdev)
 
 void wma_vdev_deinit(struct wma_txrx_node *vdev)
 {
+	struct beacon_info *bcn;
+	tp_wma_handle wma_handle;
+
+	wma_handle = cds_get_context(QDF_MODULE_ID_WMA);
+	/* validate the wma_handle */
+	if (!wma_handle) {
+		WMA_LOGE("%s: Invalid wma handle", __func__);
+		return;
+	}
+
+	bcn = vdev->beacon;
+	if (bcn) {
+		if (bcn->dma_mapped)
+			qdf_nbuf_unmap_single(wma_handle->qdf_dev,
+				bcn->buf, QDF_DMA_TO_DEVICE);
+		qdf_nbuf_free(bcn->buf);
+		qdf_mem_free(bcn);
+		vdev->beacon = NULL;
+	}
+
+	if (vdev->handle) {
+		qdf_mem_free(vdev->handle);
+		vdev->handle = NULL;
+	}
+
+	if (vdev->addBssStaContext) {
+		qdf_mem_free(vdev->addBssStaContext);
+		vdev->addBssStaContext = NULL;
+	}
+
+	if (vdev->staKeyParams) {
+		qdf_mem_free(vdev->staKeyParams);
+		vdev->staKeyParams = NULL;
+	}
+
+	if (vdev->del_staself_req) {
+		qdf_mem_free(vdev->del_staself_req);
+		vdev->del_staself_req = NULL;
+	}
+
+	if (vdev->stats_rsp) {
+		qdf_mem_free(vdev->stats_rsp);
+		vdev->stats_rsp = NULL;
+	}
+
+	if (vdev->psnr_req) {
+		qdf_mem_free(vdev->psnr_req);
+		vdev->psnr_req = NULL;
+	}
+
+	if (vdev->rcpi_req) {
+		qdf_mem_free(vdev->rcpi_req);
+		vdev->rcpi_req = NULL;
+		}
+
+	if (vdev->roam_scan_stats_req) {
+		struct sir_roam_scan_stats *req;
+
+		req = vdev->roam_scan_stats_req;
+		vdev->roam_scan_stats_req = NULL;
+		qdf_mem_free(req);
+	}
+
+	if (vdev->roam_synch_frame_ind.bcn_probe_rsp) {
+		qdf_mem_free(vdev->roam_synch_frame_ind.bcn_probe_rsp);
+		vdev->roam_synch_frame_ind.bcn_probe_rsp = NULL;
+	}
+
+	if (vdev->roam_synch_frame_ind.reassoc_req) {
+		qdf_mem_free(vdev->roam_synch_frame_ind.reassoc_req);
+		vdev->roam_synch_frame_ind.reassoc_req = NULL;
+	}
+
+	if (vdev->roam_synch_frame_ind.reassoc_rsp) {
+		qdf_mem_free(vdev->roam_synch_frame_ind.reassoc_rsp);
+		vdev->roam_synch_frame_ind.reassoc_rsp = NULL;
+	}
+
 	qdf_wake_lock_destroy(&vdev->vdev_start_wakelock);
 	qdf_wake_lock_destroy(&vdev->vdev_stop_wakelock);
 	qdf_wake_lock_destroy(&vdev->vdev_set_key_wakelock);
@@ -3153,7 +3235,6 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 
 	wma_handle->max_station = cds_cfg->max_station;
 	wma_handle->max_bssid = cds_cfg->max_bssid;
-	wma_handle->driver_type = cds_cfg->driver_type;
 	wma_handle->ssdp = cds_cfg->ssdp;
 	wma_handle->enable_mc_list = cds_cfg->enable_mc_list;
 	wma_handle->apf_packet_filter_enable =
@@ -3265,7 +3346,6 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 		      MAX_ENTRY_HOLD_REQ_QUEUE);
 	qdf_spinlock_create(&wma_handle->wma_hold_req_q_lock);
 	qdf_atomic_init(&wma_handle->is_wow_bus_suspended);
-	qdf_atomic_init(&wma_handle->scan_id_counter);
 
 	/* Register vdev start response event handler */
 	wmi_unified_register_event_handler(wma_handle->wmi_handle,
@@ -3339,6 +3419,12 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 					   wmi_update_vdev_rate_stats_event_id,
 					   wma_link_status_event_handler,
 					   WMA_RX_SERIALIZER_CTX);
+
+	wmi_unified_register_event_handler(wma_handle->wmi_handle,
+					   wmi_roam_scan_stats_event_id,
+					   wma_roam_scan_stats_event_handler,
+					   WMA_RX_SERIALIZER_CTX);
+
 #ifdef WLAN_FEATURE_LINK_LAYER_STATS
 	/* Register event handler for processing Link Layer Stats
 	 * response from the FW
@@ -4441,7 +4527,6 @@ QDF_STATUS wma_wmi_service_close(void)
 {
 	void *cds_ctx;
 	tp_wma_handle wma_handle;
-	struct beacon_info *bcn;
 	int i;
 
 	WMA_LOGD("%s: Enter", __func__);
@@ -4472,74 +4557,6 @@ QDF_STATUS wma_wmi_service_close(void)
 	wma_handle->wmi_handle = NULL;
 
 	for (i = 0; i < wma_handle->max_bssid; i++) {
-		bcn = wma_handle->interfaces[i].beacon;
-
-		if (bcn) {
-			if (bcn->dma_mapped)
-				qdf_nbuf_unmap_single(wma_handle->qdf_dev,
-					bcn->buf, QDF_DMA_TO_DEVICE);
-			qdf_nbuf_free(bcn->buf);
-			qdf_mem_free(bcn);
-			wma_handle->interfaces[i].beacon = NULL;
-		}
-
-		if (wma_handle->interfaces[i].handle) {
-			qdf_mem_free(wma_handle->interfaces[i].handle);
-			wma_handle->interfaces[i].handle = NULL;
-		}
-
-		if (wma_handle->interfaces[i].addBssStaContext) {
-			qdf_mem_free(wma_handle->
-				     interfaces[i].addBssStaContext);
-			wma_handle->interfaces[i].addBssStaContext = NULL;
-		}
-
-		if (wma_handle->interfaces[i].del_staself_req) {
-			qdf_mem_free(wma_handle->interfaces[i].del_staself_req);
-			wma_handle->interfaces[i].del_staself_req = NULL;
-		}
-
-		if (wma_handle->interfaces[i].stats_rsp) {
-			qdf_mem_free(wma_handle->interfaces[i].stats_rsp);
-			wma_handle->interfaces[i].stats_rsp = NULL;
-		}
-
-		if (wma_handle->interfaces[i].psnr_req) {
-			qdf_mem_free(wma_handle->
-				     interfaces[i].psnr_req);
-			wma_handle->interfaces[i].psnr_req = NULL;
-		}
-
-		if (wma_handle->interfaces[i].rcpi_req) {
-			qdf_mem_free(wma_handle->
-				     interfaces[i].rcpi_req);
-			wma_handle->interfaces[i].rcpi_req = NULL;
-		}
-
-		if (wma_handle->interfaces[i].roam_synch_frame_ind.
-		    bcn_probe_rsp) {
-			qdf_mem_free(wma_handle->interfaces[i].
-			      roam_synch_frame_ind.bcn_probe_rsp);
-			wma_handle->interfaces[i].roam_synch_frame_ind.
-				     bcn_probe_rsp = NULL;
-		}
-
-		if (wma_handle->interfaces[i].roam_synch_frame_ind.
-		    reassoc_req) {
-			qdf_mem_free(wma_handle->interfaces[i].
-				     roam_synch_frame_ind.reassoc_req);
-			wma_handle->interfaces[i].roam_synch_frame_ind.
-				     reassoc_req = NULL;
-		}
-
-		if (wma_handle->interfaces[i].roam_synch_frame_ind.
-		    reassoc_rsp) {
-			qdf_mem_free(wma_handle->interfaces[i].
-				     roam_synch_frame_ind.reassoc_rsp);
-			wma_handle->interfaces[i].roam_synch_frame_ind.
-				     reassoc_rsp = NULL;
-		}
-
 		wma_vdev_deinit(&wma_handle->interfaces[i]);
 	}
 
@@ -5580,6 +5597,11 @@ static void wma_set_pmo_caps(struct wlan_objmgr_psoc *psoc)
 	struct pmo_device_caps caps;
 
 	wma = cds_get_context(QDF_MODULE_ID_WMA);
+	if (!wma) {
+		WMA_LOGE("%s: wma handler is null", __func__);
+		return;
+	}
+
 	caps.arp_ns_offload =
 		wmi_service_enabled(wma->wmi_handle, wmi_service_arpns_offload);
 	caps.apf =
@@ -8125,24 +8147,19 @@ static QDF_STATUS wma_mc_process_msg(struct scheduler_msg *msg)
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_EXTSCAN_SET_BSSID_HOTLIST_REQ:
-		wma_extscan_start_hotlist_monitor(wma_handle,
-			(tSirExtScanSetBssidHotListReqParams *) msg->bodyptr);
+		wma_extscan_start_hotlist_monitor(wma_handle, msg->bodyptr);
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_EXTSCAN_RESET_BSSID_HOTLIST_REQ:
-		wma_extscan_stop_hotlist_monitor(wma_handle,
-			(tSirExtScanResetBssidHotlistReqParams *) msg->bodyptr);
+		wma_extscan_stop_hotlist_monitor(wma_handle, msg->bodyptr);
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_EXTSCAN_SET_SIGNF_CHANGE_REQ:
-		wma_extscan_start_change_monitor(wma_handle,
-			(tSirExtScanSetSigChangeReqParams *) msg->bodyptr);
+		wma_extscan_start_change_monitor(wma_handle, msg->bodyptr);
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_EXTSCAN_RESET_SIGNF_CHANGE_REQ:
-		wma_extscan_stop_change_monitor(wma_handle,
-			(tSirExtScanResetSignificantChangeReqParams *)
-							msg->bodyptr);
+		wma_extscan_stop_change_monitor(wma_handle, msg->bodyptr);
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case WMA_EXTSCAN_GET_CACHED_RESULTS_REQ:
@@ -8478,8 +8495,12 @@ static QDF_STATUS wma_mc_process_msg(struct scheduler_msg *msg)
 		wma_process_obss_color_collision_req(wma_handle, msg->bodyptr);
 		qdf_mem_free(msg->bodyptr);
 		break;
+	case WMA_GET_ROAM_SCAN_STATS:
+		wma_get_roam_scan_stats(wma_handle, msg->bodyptr);
+		qdf_mem_free(msg->bodyptr);
+		break;
 	default:
-		WMA_LOGE("Unhandled WMA message of type %d", msg->type);
+		WMA_LOGD("Unhandled WMA message of type %d", msg->type);
 		if (msg->bodyptr)
 			qdf_mem_free(msg->bodyptr);
 	}

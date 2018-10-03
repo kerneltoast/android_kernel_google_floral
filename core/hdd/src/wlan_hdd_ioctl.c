@@ -2298,7 +2298,7 @@ static int hdd_set_dwell_time(struct hdd_adapter *adapter, uint8_t *command)
 	int retval = 0;
 
 	pCfg = (WLAN_HDD_GET_CTX(adapter))->config;
-	if (!pCfg || mac_handle) {
+	if (!pCfg || !mac_handle) {
 		hdd_err("argument passed for SETDWELLTIME is incorrect");
 		return -EINVAL;
 	}
@@ -6115,7 +6115,7 @@ static int drv_cmd_tdls_secondary_channel_offset(struct hdd_adapter *adapter,
 
 	hdd_debug("Tdls offchannel offset:%d", set_value);
 
-	ret = hdd_set_tdls_secoffchanneloffset(hdd_ctx, set_value);
+	ret = hdd_set_tdls_secoffchanneloffset(hdd_ctx, adapter, set_value);
 
 	return ret;
 }
@@ -6151,7 +6151,7 @@ static int drv_cmd_tdls_off_channel_mode(struct hdd_adapter *adapter,
 
 	hdd_debug("Tdls offchannel mode:%d", set_value);
 
-	ret = hdd_set_tdls_offchannelmode(adapter, set_value);
+	ret = hdd_set_tdls_offchannelmode(hdd_ctx, adapter, set_value);
 
 	return ret;
 }
@@ -6185,7 +6185,7 @@ static int drv_cmd_tdls_off_channel(struct hdd_adapter *adapter,
 	if (ret != 1)
 		return -EINVAL;
 
-	if (wlan_reg_is_dfs_ch(hdd_ctx->hdd_pdev, set_value)) {
+	if (wlan_reg_is_dfs_ch(hdd_ctx->pdev, set_value)) {
 		hdd_err("DFS channel %d is passed for hdd_set_tdls_offchannel",
 		    set_value);
 		return -EINVAL;
@@ -6193,7 +6193,7 @@ static int drv_cmd_tdls_off_channel(struct hdd_adapter *adapter,
 
 	hdd_debug("Tdls offchannel num: %d", set_value);
 
-	ret = hdd_set_tdls_offchannel(hdd_ctx, set_value);
+	ret = hdd_set_tdls_offchannel(hdd_ctx, adapter, set_value);
 
 	return ret;
 }
@@ -6603,6 +6603,34 @@ QDF_STATUS hdd_update_smps_antenna_mode(struct hdd_context *hdd_ctx, int mode)
 	return QDF_STATUS_SUCCESS;
 }
 
+/**
+ * wlan_hdd_soc_set_antenna_mode_cb() - Callback for set antenna mode
+ * @status: Status of set antenna mode
+ * @context: callback context
+ *
+ * Callback on setting antenna mode
+ *
+ * Return: None
+ */
+static void
+wlan_hdd_soc_set_antenna_mode_cb(enum set_antenna_mode_status status,
+				 void *context)
+{
+	struct osif_request *request = NULL;
+
+	hdd_debug("Status: %d", status);
+
+	request = osif_request_get(context);
+	if (!request) {
+		hdd_err("obselete request");
+		return;
+	}
+
+	/* Signal the completion of set dual mac config */
+	osif_request_complete(request);
+	osif_request_put(request);
+}
+
 int hdd_set_antenna_mode(struct hdd_adapter *adapter,
 				  struct hdd_context *hdd_ctx, int mode)
 {
@@ -6830,8 +6858,7 @@ static int drv_cmd_set_fcc_channel(struct hdd_adapter *adapter,
 		return err;
 	}
 
-	status = ucfg_reg_set_fcc_constraint(hdd_ctx->hdd_pdev,
-			fcc_constraint);
+	status = ucfg_reg_set_fcc_constraint(hdd_ctx->pdev, fcc_constraint);
 
 	if (QDF_IS_STATUS_ERROR(status))
 		hdd_err("Failed to %s tx power for channels 12/13",
@@ -7164,12 +7191,10 @@ static int hdd_parse_disable_chan_cmd(struct hdd_adapter *adapter, uint8_t *ptr)
 			hdd_ctx->original_channels->
 					channel_info[j].channel_num =
 							parsed_channels[j];
-			/*
-			 * Cache the channel list in regulatory also
-			 */
-			ucfg_reg_cache_channel_state(hdd_ctx->hdd_pdev,
-						     parsed_channels,
-						     num_channels);
+
+		/* Cache the channel list in regulatory also */
+		ucfg_reg_cache_channel_state(hdd_ctx->pdev, parsed_channels,
+					     num_channels);
 	} else {
 		for (i = 0; i < num_channels; i++) {
 			for (j = 0; j < num_channels; j++)

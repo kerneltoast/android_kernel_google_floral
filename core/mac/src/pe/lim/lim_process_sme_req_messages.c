@@ -469,6 +469,7 @@ static bool __lim_process_sme_sys_ready_ind(tpAniSirGlobal pMac, uint32_t *pMsgB
 		pe_register_mgmt_rx_frm_callback(pMac);
 		pe_register_callbacks_with_wma(pMac, ready_req);
 		pMac->lim.sme_msg_callback = ready_req->sme_msg_cb;
+		pMac->lim.stop_roaming_callback = ready_req->stop_roaming_cb;
 	}
 
 	pe_debug("sending WMA_SYS_READY_IND msg to HAL");
@@ -1333,7 +1334,8 @@ __lim_process_sme_join_req(tpAniSirGlobal mac_ctx, uint32_t *msg_buf)
 						 bss_desc->channelId);
 		}
 		session->max_amsdu_num = sme_join_req->max_amsdu_num;
-
+		session->enable_session_twt_support =
+			sme_join_req->enable_session_twt_support;
 		/*
 		 * Store Session related parameters
 		 */
@@ -5583,18 +5585,7 @@ static void lim_process_sme_dfs_csa_ie_request(tpAniSirGlobal mac_ctx,
 		dfs_csa_ie_req->ch_params.center_freq_seg0;
 skip_vht:
 	/* Send CSA IE request from here */
-	if (sch_set_fixed_beacon_fields(mac_ctx, session_entry) !=
-			QDF_STATUS_SUCCESS) {
-		pe_err("Unable to set CSA IE in beacon");
-		return;
-	}
-
-	/*
-	 * First beacon update request is sent here, the remaining updates are
-	 * done when the FW responds back after sending the first beacon after
-	 * the template update
-	 */
-	lim_send_beacon_ind(mac_ctx, session_entry);
+	lim_send_dfs_chan_sw_ie_update(mac_ctx, session_entry);
 
 	if (dfs_csa_ie_req->ch_params.ch_width == CH_WIDTH_80MHZ)
 		ch_offset = BW80;

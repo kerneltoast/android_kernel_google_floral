@@ -195,6 +195,25 @@ struct hdd_context;
 #define CFG_11D_SUPPORT_ENABLED_MAX            WNI_CFG_11D_ENABLED_STAMAX
 #define CFG_11D_SUPPORT_ENABLED_DEFAULT        WNI_CFG_11D_ENABLED_STADEF       /* Default is ON */
 
+/*
+ * <ini>
+ * enable_11d_in_world_mode - enable 11d in world mode
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini enables 11d in world mode, irrespective of value of
+ * g11dSupportEnabled
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+ #define CFG_ENABLE_11D_IN_WORLD_MODE_NAME "enable_11d_in_world_mode"
+ #define CFG_ENABLE_11D_IN_WORLD_MODE_MIN     (0)
+ #define CFG_ENABLE_11D_IN_WORLD_MODE_MAX     (1)
+ #define CFG_ENABLE_11D_IN_WORLD_MODE_DEFAULT (0)
+
 #define CFG_11H_SUPPORT_ENABLED_NAME           "g11hSupportEnabled"
 #define CFG_11H_SUPPORT_ENABLED_MIN            (0)
 #define CFG_11H_SUPPORT_ENABLED_MAX            (1)
@@ -791,6 +810,27 @@ enum hdd_dot11_mode {
 #define CFG_MAX_SCAN_COUNT_MIN            (1)
 #define CFG_MAX_SCAN_COUNT_MAX            (8)
 #define CFG_MAX_SCAN_COUNT_DEFAULT        (4)
+
+/*
+ * <ini>
+ * drop_bcn_on_chan_mismatch - drop the beacon for chan mismatch
+ * @Min: 0
+ * @Max: 1
+ * @Default: 1
+ *
+ * This ini is used to decide drop the beacon or not if channel received
+ * in metadata doesn't match the one in beacon.
+ *
+ * Related: None
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_DROP_BCN_ON_CHANNEL_MISMATCH      "drop_bcn_on_chan_mismatch"
+#define CFG_DROP_BCN_ON_CHANNEL_MISMATCH_MIN       (0)
+#define CFG_DROP_BCN_ON_CHANNEL_MISMATCH_MAX       (1)
+#define CFG_DROP_BCN_ON_CHANNEL_MISMATCH_DEFAULT   (1)
 
 /*
  * <ini>
@@ -10679,7 +10719,7 @@ enum hdd_wext_control {
  * gAutoBmpsTimerValue - Set Auto BMPS Timer value
  * @Min: 0
  * @Max: 120
- * @Default: 5
+ * @Default: 30
  *
  * This ini is used to set Auto BMPS Timer value in seconds
  *
@@ -10694,7 +10734,7 @@ enum hdd_wext_control {
 #define CFG_AUTO_PS_ENABLE_TIMER_NAME          "gAutoBmpsTimerValue"
 #define CFG_AUTO_PS_ENABLE_TIMER_MIN           (0)
 #define CFG_AUTO_PS_ENABLE_TIMER_MAX           (120)
-#define CFG_AUTO_PS_ENABLE_TIMER_DEFAULT       (5)
+#define CFG_AUTO_PS_ENABLE_TIMER_DEFAULT       (30)
 
 #ifdef WLAN_ICMP_DISABLE_PS
 /*
@@ -13664,7 +13704,7 @@ enum hdd_external_acs_policy {
 #define CFG_OCE_PROBE_REQ_RATE_NAME    "oce_enable_probe_req_rate"
 #define CFG_OCE_PROBE_REQ_RATE_MIN     (0)
 #define CFG_OCE_PROBE_REQ_RATE_MAX     (1)
-#define CFG_OCE_PROBE_REQ_RATE_DEFAULT (0)
+#define CFG_OCE_PROBE_REQ_RATE_DEFAULT (1)
 
 /*
  * <ini>
@@ -13732,7 +13772,7 @@ enum hdd_external_acs_policy {
 #define CFG_ENABLE_PROBE_REQ_DEFERRAL_NAME    "oce_enable_probe_req_deferral"
 #define CFG_ENABLE_PROBE_REQ_DEFERRAL_MIN     (0)
 #define CFG_ENABLE_PROBE_REQ_DEFERRAL_MAX     (1)
-#define CFG_ENABLE_PROBE_REQ_DEFERRAL_DEFAULT (0)
+#define CFG_ENABLE_PROBE_REQ_DEFERRAL_DEFAULT (1)
 
 /*
  * <ini>
@@ -13777,7 +13817,7 @@ enum hdd_external_acs_policy {
 #define CFG_ENABLE_ESP_FEATURE_NAME    "enable_esp_for_roam"
 #define CFG_ENABLE_ESP_FEATURE_MIN     (0)
 #define CFG_ENABLE_ESP_FEATURE_MAX     (1)
-#define CFG_ENABLE_ESP_FEATURE_DEFAULT (0)
+#define CFG_ENABLE_ESP_FEATURE_DEFAULT (1)
 
 /*
  * <ini>
@@ -14320,6 +14360,9 @@ enum hdd_external_acs_policy {
  *
  * <OUI> is mandatory and it can be either 3 or 5 bytes means 6 or 10
  * hexa-decimal characters
+ * If the OUI and Data checks needs to be ignored, the oui FFFFFF
+ * needs to be provided as OUI and bit 0 of Info_Presence_Bit should
+ * be set to 0.
  *
  * <Data_Length> is mandatory field and should give length of
  * the <Data> if present else zero
@@ -14340,8 +14383,8 @@ enum hdd_external_acs_policy {
  * Presence of <Mac_Address> and <Capability> is
  * controlled by <Info_Presence_Bit> which is mandatory
  * <Info_Presence_Bit> will give the information for
- *   OUI – bit 0 (set/reset don't effect the behaviour,
- *                always enabled in the code)
+ *   OUI – bit 0 Should be set to 1
+ *               Setting to 0 will ignore OUI and data check
  *   Mac Address present – bit 1
  *   NSS – bit 2
  *   HT check – bit 3
@@ -14570,6 +14613,50 @@ enum hdd_external_acs_policy {
 #define CFG_ACTION_OUI_SWITCH_TO_11N_MODE_NAME    "gActionOUISwitchTo11nMode"
 #define CFG_ACTION_OUI_SWITCH_TO_11N_MODE_DEFAULT "00904C 03 0418BF E0 21 40"
 
+/*
+ * <ini>
+ * gActionOUIConnect1x1with1TxRxChain - Used to specify action OUIs for
+ *					 1x1 connection with one Tx/Rx Chain
+ * @Default:
+ * Note: User should strictly add new action OUIs at the end of this
+ * default value.
+ *
+ * Default OUIs: (All values in Hex)
+ * OUI 1 : 001018
+ *   OUI data Len : 06
+ *   OUI Data : 02FFF0040000
+ *   OUI data Mask: BC - 10111100
+ *   Info Mask : 21 - Check for Band
+ *   Capabilities: 40 - Band == 2G
+ *
+ * OUI 2 : 001018
+ *   OUI data Len : 06
+ *   OUI Data : 02FFF0050000
+ *   OUI data Mask: BC - 10111100
+ *   Info Mask : 21 - Check for Band
+ *   Capabilities: 40 - Band == 2G
+ *
+ * OUI 3 : 001018
+ *   OUI data Len : 06
+ *   OUI Data : 02FFF4050000
+ *   OUI data Mask: BC - 10111100
+ *   Info Mask : 21 - Check for Band
+ *   Capabilities: 40 - Band == 2G
+ *
+ * This ini is used to specify the AP OUIs with which only 1x1 connection
+ * with one Tx/Rx Chain is allowed.
+ *
+ * Related: gEnableActionOUI
+ *
+ * Supported Feature: Action OUIs
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_NAME    "gActionOUIConnect1x1with1TxRxChain"
+#define CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_DEFAULT "001018 06 02FFF0040000 BC 21 40 001018 06 02FFF0050000 BC 21 40 001018 06 02FFF4050000 BC 21 40"
+
  /* End of action oui inis */
 
 
@@ -14788,6 +14875,7 @@ struct hdd_config {
 	uint32_t active_dwell_2g;       /* in units of milliseconds */
 	uint32_t scan_probe_repeat_time;
 	uint32_t scan_num_probes;
+	bool drop_bcn_on_chan_mismatch;
 
 	uint32_t nInitialDwellTime;     /* in units of milliseconds */
 	bool initial_scan_no_dfs_chnl;
@@ -15480,6 +15568,7 @@ struct hdd_config {
 	uint32_t num_disallowed_aps;
 	bool oce_sta_enabled;
 	bool oce_sap_enabled;
+	bool enable_11d_in_world_mode;
 	/* 5G preference parameters for boosting RSSI */
 	bool                        enable_5g_band_pref;
 	int8_t                      rssi_boost_threshold_5g;

@@ -1441,7 +1441,7 @@ IE RSN (EID_RSN)                          // 7.3.2.25
 
 IE RSNOpaque (EID_RSN)                    // 7.3.2.25
 {
-    data[ 6..253 ];
+    data[ 0..253 ];
 }
 
 IE WAPI (EID_WAPI)                          // 7.3.2.25
@@ -3653,7 +3653,6 @@ FRAME AssocRequest                        // 7.2.3.4
     OPTIE  hs20vendor_ie;
     OPTIE  QCN_IE;
     OPTIE  he_cap;
-    OPTIE  MBO_IE;
     OPTIE  osen_ie;
 } // End frame AssocRequest.
 

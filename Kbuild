@@ -67,6 +67,10 @@ HDD_OBJS := 	$(HDD_SRC_DIR)/wlan_hdd_assoc.o \
 ifeq ($(CONFIG_WLAN_DEBUGFS), y)
 HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_debugfs.o
 HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_debugfs_llstat.o
+HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_debugfs_csr.o
+HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_debugfs_connect.o
+HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_debugfs_offload.o
+HDD_OBJS += $(HDD_SRC_DIR)/wlan_hdd_debugfs_roam.o
 endif
 
 ifeq ($(CONFIG_WLAN_CONV_SPECTRAL_ENABLE),y)
@@ -1667,6 +1671,7 @@ cppflags-$(CONFIG_WLAN_POWER_DEBUGFS) += -DWLAN_POWER_DEBUGFS
 
 # Enable object manager reference count debug infrastructure
 cppflags-$(CONFIG_WLAN_OBJMGR_DEBUG) += -DWLAN_OBJMGR_DEBUG
+cppflags-$(CONFIG_WLAN_OBJMGR_DEBUG) += -DWLAN_OBJMGR_REF_ID_DEBUG
 
 cppflags-$(CONFIG_WLAN_FEATURE_SAE) += -DWLAN_FEATURE_SAE
 
@@ -1966,6 +1971,7 @@ cppflags-y += -DWLAN_CMD_SERIALIZATION_LOCKING
 ccflags-$(CONFIG_ENABLE_SIZE_OPTIMIZE) += -Os
 
 # DFS component
+cppflags-y += -DWLAN_DFS_STATIC_MEM_ALLOC
 cppflags-$(CONFIG_WLAN_DFS_MASTER_ENABLE) += -DQCA_MCL_DFS_SUPPORT
 ifeq ($(CONFIG_WLAN_FEATURE_DFS_OFFLOAD), y)
 cppflags-$(CONFIG_WLAN_DFS_MASTER_ENABLE) += -DWLAN_DFS_FULL_OFFLOAD
@@ -1987,6 +1993,10 @@ cppflags-$(CONFIG_WLAN_NUD_TRACKING) += -DWLAN_NUD_TRACKING
 
 #Flag to enable set and get disable channel list feature
 cppflags-$(CONFIG_DISABLE_CHANNEL_LIST) += -DDISABLE_CHANNEL_LIST
+
+ifdef CONFIG_SCHED_HISTORY_SIZE
+ccflags-y += -DWLAN_SCHED_HISTORY_SIZE=$(CONFIG_SCHED_HISTORY_SIZE)
+endif
 
 # configure log buffer size
 ifdef CONFIG_CFG_NUM_DP_TRACE_RECORD
@@ -2060,16 +2070,16 @@ endif
 # inject some build related information
 ifeq ($(CONFIG_BUILD_TAG), y)
 CLD_CHECKOUT = $(shell cd "$(WLAN_ROOT)" && \
-	git reflog | grep -vm1 cherry-pick | grep -oE ^[0-f]+)
+	git reflog | grep -vm1 "}: cherry-pick: " | grep -oE ^[0-f]+)
 CLD_IDS = $(shell cd "$(WLAN_ROOT)" && \
-	git log $(CLD_CHECKOUT)~..HEAD | \
+	git log -50 $(CLD_CHECKOUT)~..HEAD | \
 		sed -nE 's/^\s*Change-Id: (I[0-f]{10})[0-f]{30}\s*$$/\1/p' | \
 		paste -sd "," -)
 
 CMN_CHECKOUT = $(shell cd "$(WLAN_COMMON_INC)" && \
-	git reflog | grep -vm1 cherry-pick | grep -oE ^[0-f]+)
+	git reflog | grep -vm1 "}: cherry-pick: " | grep -oE ^[0-f]+)
 CMN_IDS = $(shell cd "$(WLAN_COMMON_INC)" && \
-	git log $(CMN_CHECKOUT)~..HEAD | \
+	git log -50 $(CMN_CHECKOUT)~..HEAD | \
 		sed -nE 's/^\s*Change-Id: (I[0-f]{10})[0-f]{30}\s*$$/\1/p' | \
 		paste -sd "," -)
 

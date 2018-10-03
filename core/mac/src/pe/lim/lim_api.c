@@ -46,6 +46,7 @@
 #include "lim_ibss_peer_mgmt.h"
 #include "lim_admit_control.h"
 #include "lim_send_sme_rsp_messages.h"
+#include "lim_security_utils.h"
 #include "wmm_apsd.h"
 #include "lim_trace.h"
 #include "lim_ft_defs.h"
@@ -67,6 +68,7 @@
 #include "wlan_objmgr_psoc_obj.h"
 #include "os_if_nan.h"
 #include <wlan_scan_ucfg_api.h>
+#include <wlan_scan_public_structs.h>
 #include <wlan_p2p_ucfg_api.h>
 #include "wlan_utility.h"
 
@@ -1003,6 +1005,7 @@ QDF_STATUS pe_start(tpAniSirGlobal pMac)
 void pe_stop(tpAniSirGlobal pMac)
 {
 	lim_cleanup_mlm(pMac);
+	pe_debug(" PE STOP: Set LIM state to eLIM_MLM_OFFLINE_STATE");
 	SET_LIM_MLM_STATE(pMac, eLIM_MLM_OFFLINE_STATE);
 	return;
 }
@@ -1011,6 +1014,7 @@ static void pe_free_nested_messages(struct scheduler_msg *msg)
 {
 	switch (msg->type) {
 	case WMA_SET_LINK_STATE_RSP:
+		pe_debug("pe_free_nested_messages: WMA_SET_LINK_STATE_RSP");
 		qdf_mem_free(((tpLinkStateParams) msg->bodyptr)->callbackArg);
 		break;
 	default:
@@ -1251,6 +1255,16 @@ static QDF_STATUS pe_handle_probe_req_frames(tpAniSirGlobal mac_ctx,
 {
 	QDF_STATUS status;
 	struct scheduler_msg msg = {0};
+	uint32_t scan_queue_size = 0;
+
+	/* Check if the probe request frame can be posted in the scan queue */
+	status = scheduler_get_queue_size(QDF_MODULE_ID_SCAN, &scan_queue_size);
+	if (!QDF_IS_STATUS_SUCCESS(status) ||
+	    scan_queue_size > MAX_BCN_PROBE_IN_SCAN_QUEUE) {
+		pe_debug_rl("Dropping probe req frame, queue size %d",
+			    scan_queue_size);
+		return QDF_STATUS_E_FAILURE;
+	}
 
 	/* Forward to MAC via mesg = SIR_BB_XPORT_MGMT_MSG */
 	msg.type = SIR_BB_XPORT_MGMT_MSG;
@@ -2601,6 +2615,66 @@ tMgmtFrmDropReason lim_is_pkt_candidate_for_drop(tpAniSirGlobal pMac,
 		/* Drop the Probe Request in IBSS mode, if STA did not send out the last beacon */
 		/* In IBSS, the node which sends out the beacon, is supposed to respond to ProbeReq */
 		return eMGMT_DROP_NOT_LAST_IBSS_BCN;
+	} else if (subType == SIR_MAC_MGMT_AUTH) {
+		uint16_t curr_seq_num = 0;
+		struct tLimPreAuthNode *auth_node;
+
+		pHdr = WMA_GET_RX_MAC_HEADER(pRxPacketInfo);
+		psessionEntry = pe_find_session_by_bssid(pMac, pHdr->bssId,
+							 &sessionId);
+		if (!psessionEntry)
+			return eMGMT_DROP_NO_DROP;
+
+		curr_seq_num = ((pHdr->seqControl.seqNumHi << 4) |
+				(pHdr->seqControl.seqNumLo));
+		auth_node = lim_search_pre_auth_list(pMac, pHdr->sa);
+		if (auth_node && pHdr->fc.retry &&
+		    (auth_node->seq_num == curr_seq_num)) {
+			pe_err_rl("auth frame, seq num: %d is already processed, drop it",
+				  curr_seq_num);
+			return eMGMT_DROP_DUPLICATE_AUTH_FRAME;
+		}
+	} else if ((subType == SIR_MAC_MGMT_ASSOC_REQ) &&
+		   (subType == SIR_MAC_MGMT_DISASSOC) &&
+		   (subType == SIR_MAC_MGMT_DEAUTH)) {
+		uint16_t assoc_id;
+		dphHashTableClass *dph_table;
+		tDphHashNode *sta_ds;
+		qdf_time_t *timestamp;
+
+		pHdr = WMA_GET_RX_MAC_HEADER(pRxPacketInfo);
+		psessionEntry = pe_find_session_by_bssid(pMac, pHdr->bssId,
+				&sessionId);
+		if (!psessionEntry)
+			return eMGMT_DROP_NO_DROP;
+		dph_table = &psessionEntry->dph.dphHashTable;
+		sta_ds = dph_lookup_hash_entry(pMac, pHdr->sa, &assoc_id,
+					       dph_table);
+		if (!sta_ds) {
+			if (subType == SIR_MAC_MGMT_ASSOC_REQ)
+			    return eMGMT_DROP_NO_DROP;
+			else
+			    return eMGMT_DROP_EXCESSIVE_MGMT_FRAME;
+		}
+
+		if (subType == SIR_MAC_MGMT_ASSOC_REQ)
+			timestamp = &sta_ds->last_assoc_received_time;
+		else
+			timestamp = &sta_ds->last_disassoc_deauth_received_time;
+		if (*timestamp > 0 &&
+		    qdf_system_time_before(qdf_get_system_timestamp(),
+					   *timestamp +
+					   LIM_DOS_PROTECTION_TIME)) {
+			pe_debug_rl(FL("Dropping subtype 0x%x frame. %s %d ms %s %d ms"),
+				    subType, "It is received after",
+				    (int)(qdf_get_system_timestamp() - *timestamp),
+				    "of last frame. Allow it only after",
+				    LIM_DOS_PROTECTION_TIME);
+			return eMGMT_DROP_EXCESSIVE_MGMT_FRAME;
+		}
+
+		*timestamp = qdf_get_system_timestamp();
+
 	}
 
 	return eMGMT_DROP_NO_DROP;
@@ -2616,10 +2690,8 @@ void lim_update_lost_link_info(tpAniSirGlobal mac, tpPESession session,
 		pe_err("parameter NULL");
 		return;
 	}
-	if (!LIM_IS_STA_ROLE(session)) {
-		pe_err("not STA mode, do nothing");
+	if (!LIM_IS_STA_ROLE(session))
 		return;
-	}
 
 	lost_link_info = qdf_mem_malloc(sizeof(*lost_link_info));
 	if (NULL == lost_link_info) {

@@ -80,7 +80,6 @@ static inline mac_handle_t MAC_HANDLE(tpAniSirGlobal mac)
 
 #define ANI_DRIVER_TYPE(pMac)     (((tpAniSirGlobal)(pMac))->gDriverType)
 
-#define IS_MIRACAST_SESSION_PRESENT(pMac)     (((tpAniSirGlobal)(pMac))->fMiracastSessionPresent ? 1 : 0)
 /* ------------------------------------------------------------------- */
 /* Bss Qos Caps bit map definition */
 #define LIM_BSS_CAPS_OFFSET_HCF 0
@@ -759,6 +758,8 @@ typedef struct sAniSirLim {
 	uint8_t gLimDfsTargetChanNum;
 	QDF_STATUS(*sme_msg_callback)
 		(tpAniSirGlobal mac, struct scheduler_msg *msg);
+	QDF_STATUS(*stop_roaming_callback)
+		(tpAniSirGlobal mac, uint8_t session_id, uint8_t reason);
 	uint8_t retry_packet_cnt;
 	uint8_t beacon_probe_rsp_cnt_per_scan;
 	wlan_scan_requester req_id;
@@ -852,15 +853,11 @@ typedef struct sAniSirGlobal {
 	/* PAL/HDD handle */
 	hdd_handle_t hdd_handle;
 
-
 	tSmeStruct sme;
 	tSapStruct sap;
 	struct csr_scanstruct scan;
 	struct csr_roamstruct roam;
-
 	tRrmContext rrm;
-
-
 	csr_readyToSuspendCallback readyToSuspendCallback;
 	void *readyToSuspendContext;
 	uint8_t isCoalesingInIBSSAllowed;
@@ -869,16 +866,13 @@ typedef struct sAniSirGlobal {
 	bool pmf_offload;
 	bool is_fils_roaming_supported;
 	bool enable5gEBT;
-	uint8_t fMiracastSessionPresent;
 	uint8_t f_prefer_non_dfs_on_radar;
 	uint32_t fEnableDebugLog;
 	uint32_t f_sta_miracast_mcc_rest_time_val;
-	/* Miracast session 0-Disabled, 1-Source, 2-sink */
 #ifdef WLAN_FEATURE_EXTWOW_SUPPORT
 	csr_readyToExtWoWCallback readyToExtWoWCallback;
 	void *readyToExtWoWContext;
 #endif
-	hdd_ftm_msg_processor ftm_msg_processor_callback;
 	struct vdev_type_nss vdev_type_nss_2g;
 	struct vdev_type_nss vdev_type_nss_5g;
 
@@ -903,7 +897,6 @@ typedef struct sAniSirGlobal {
 	bool snr_monitor_enabled;
 	bool ignore_assoc_disallowed;
 	bool sta_prefer_80MHz_over_160MHz;
-	bool first_scan_done;
 	int8_t first_scan_bucket_threshold;
 	uint32_t peer_rssi;
 	uint32_t peer_txrate;

@@ -389,6 +389,11 @@ CONFIG_WLAN_OPEN_P2P_INTERFACE := y
 CONFIG_WLAN_ENABLE_SOCIAL_CHANNELS_5G_ONLY := y
 endif
 
+#enable 4addr support for QCS405
+ifeq ($(CONFIG_ARCH_QCS405), y)
+CONFIG_FEATURE_WLAN_STA_4ADDR_SCHEME := y
+endif
+
 #Enable power management suspend/resume functionality to PCI
 CONFIG_ATH_BUS_PM := y
 
@@ -541,6 +546,7 @@ endif
 ifeq ($(CONFIG_SLUB_DEBUG_ON), y)
 	CONFIG_FEATURE_UNIT_TEST_SUSPEND := y
 	CONFIG_LEAK_DETECTION := y
+	CONFIG_SCHED_HISTORY_SIZE := 256
 	CONFIG_UNIT_TEST := y
 endif
 

@@ -52,10 +52,6 @@
 
 #define WMA_READY_EVENTID_TIMEOUT          6000
 #define WMA_SERVICE_READY_EXT_TIMEOUT      6000
-#define WMA_TGT_SUSPEND_COMPLETE_TIMEOUT   6000
-#define WMA_WAKE_LOCK_TIMEOUT              WAKELOCK_DURATION_RECOMMENDED
-#define WMA_RESUME_TIMEOUT                 25000
-#define MAX_MEM_CHUNKS                     32
 #define NAN_CLUSTER_ID_BYTES               4
 
 #define WMA_CRASH_INJECT_TIMEOUT           5000
@@ -73,24 +69,9 @@
 
 #define WMA_MAX_MGMT_MPDU_LEN 2000
 
-#define FRAGMENT_SIZE 3072
-
 #define MAX_PRINT_FAILURE_CNT 50
 
 #define WMA_INVALID_VDEV_ID                             0xFF
-#define MAX_MEM_CHUNKS                                  32
-#define WMA_MAX_VDEV_SIZE                               20
-#define WMA_VDEV_TBL_ENTRY_ADD                          1
-#define WMA_VDEV_TBL_ENTRY_DEL                          0
-
-/* 11A/G channel boundary */
-#define WMA_11A_CHANNEL_BEGIN           34
-#define WMA_11A_CHANNEL_END             165
-#define WMA_11G_CHANNEL_BEGIN           1
-#define WMA_11G_CHANNEL_END             14
-
-#define WMA_11P_CHANNEL_BEGIN           (170)
-#define WMA_11P_CHANNEL_END             (184)
 
 /* Deprecated logging macros, to be removed. Please do not use in new code */
 #define WMA_LOGD(args ...) \
@@ -119,47 +100,12 @@
 #define WMA_LOGA(args ...)
 #endif
 
-#define     ALIGNED_WORD_SIZE       4
-#define WLAN_HAL_MSG_TYPE_MAX_ENUM_SIZE    0x7FFF
 #define WMA_WILDCARD_PDEV_ID 0x0
-
-/* Prefix used by scan req ids generated on the host */
-#define WMA_HOST_SCAN_REQID_PREFIX       0xA000
-/* Prefix used by roam scan req ids generated on the host */
-#define WMA_HOST_ROAM_SCAN_REQID_PREFIX  0xA800
-/* Prefix used by scan requestor id on host */
-#define WMA_HOST_SCAN_REQUESTOR_ID_PREFIX 0xA000
 
 #define WMA_HW_DEF_SCAN_MAX_DURATION      30000 /* 30 secs */
 
-/* Max offchannel duration */
-#define WMA_BURST_SCAN_MAX_NUM_OFFCHANNELS  (3)
 #define WMA_SCAN_NPROBES_DEFAULT            (2)
-#define WMA_SCAN_IDLE_TIME_DEFAULT          (25)
-#define WMA_P2P_SCAN_MAX_BURST_DURATION     (180)
-#define WMA_CTS_DURATION_MS_MAX             (32)
-#define WMA_GO_MIN_ACTIVE_SCAN_BURST_DURATION   (40)
-#define WMA_GO_MAX_ACTIVE_SCAN_BURST_DURATION   (120)
-#define WMA_DWELL_TIME_PASSIVE_DEFAULT          (110)
-#define WMA_DWELL_TIME_PROBE_TIME_MAP_SIZE      (11)
-#define WMA_3PORT_CONC_SCAN_MAX_BURST_DURATION  (25)
 
-#define WMA_SEC_TO_USEC                     (1000000)
-
-#define BEACON_TX_BUFFER_SIZE               (512)
-
-/* WMA_ETHER_TYPE_OFFSET = sa(6) + da(6) */
-#define WMA_ETHER_TYPE_OFFSET (6 + 6)
-/* WMA_ICMP_V6_HEADER_OFFSET = sa(6) + da(6) + eth_type(2) + icmp_v6_hdr(6)*/
-#define WMA_ICMP_V6_HEADER_OFFSET (6 + 6 + 2 + 6)
-/* WMA_ICMP_V6_TYPE_OFFSET = sa(6) + da(6) + eth_type(2) + 40 */
-#define WMA_ICMP_V6_TYPE_OFFSET (6 + 6 + 2 + 40)
-/* WMA_IPV4_PROTOCOL = sa(6) + da(6) + eth_type(2) + 9 */
-#define WMA_IPV4_PROTOCOL (6 + 6 + 2 + 9)
-#define WMA_ICMP_V6_HEADER_TYPE (0x3A)
-#define WMA_ICMP_V6_RA_TYPE (0x86)
-#define WMA_ICMP_V6_NS_TYPE (0x87)
-#define WMA_ICMP_V6_NA_TYPE (0x88)
 #define WMA_BCAST_MAC_ADDR (0xFF)
 #define WMA_MCAST_IPV4_MAC_ADDR (0x01)
 #define WMA_MCAST_IPV6_MAC_ADDR (0x33)
@@ -220,16 +166,6 @@ enum ds_mode {
 #define WMA_ROAM_DWELL_TIME_PASSIVE_DEFAULT  (110)
 #define WMA_ROAM_MIN_REST_TIME_DEFAULT       (50)
 #define WMA_ROAM_MAX_REST_TIME_DEFAULT       (500)
-#define WMA_ROAM_LOW_RSSI_TRIGGER_DEFAULT    (20)
-#define WMA_ROAM_LOW_RSSI_TRIGGER_VERYLOW    (10)
-#define WMA_ROAM_BEACON_WEIGHT_DEFAULT       (14)
-#define WMA_ROAM_OPP_SCAN_PERIOD_DEFAULT     (120000)
-#define WMA_ROAM_OPP_SCAN_AGING_PERIOD_DEFAULT \
-					(WMA_ROAM_OPP_SCAN_PERIOD_DEFAULT * 5)
-#define WMA_ROAM_BMISS_FIRST_BCNT_DEFAULT    (10)
-#define WMA_ROAM_BMISS_FINAL_BCNT_DEFAULT    (10)
-#define WMA_ROAM_BMISS_FIRST_BCNT_DEFAULT_P2P (15)
-#define WMA_ROAM_BMISS_FINAL_BCNT_DEFAULT_P2P (45)
 
 #define WMA_INVALID_KEY_IDX     0xff
 
@@ -248,7 +184,7 @@ enum ds_mode {
 #define WMA_CHAN_START_RESP          0
 #define WMA_CHAN_END_RESP            1
 
-#define WMA_BCN_BUF_MAX_SIZE 2500
+#define WMA_BCN_BUF_MAX_SIZE 512
 #define WMA_NOA_IE_SIZE(num_desc) (2 + (13 * (num_desc)))
 #define WMA_MAX_NOA_DESCRIPTORS 4
 
@@ -296,8 +232,6 @@ enum ds_mode {
 #define WMA_SMPS_MASK_LOWER_16BITS 0xFF
 #define WMA_SMPS_MASK_UPPER_3BITS 0x7
 #define WMA_SMPS_PARAM_VALUE_S 29
-
-#define WMA_MAX_SCAN_ID        0x00FF
 
 /*
  * Setting the Tx Comp Timeout to 1 secs.
@@ -495,10 +429,6 @@ enum ds_mode {
 	((hw_mode & WMA_HW_MODE_SBS_MODE_MASK) >>               \
 		WMA_HW_MODE_SBS_MODE_BITPOS)
 
-
-#define WMA_SCAN_END_EVENT	(WMI_SCAN_EVENT_COMPLETED |	\
-				WMI_SCAN_EVENT_DEQUEUED   |	\
-				WMI_SCAN_EVENT_START_FAILED)
 /*
  * PROBE_REQ_TX_DELAY
  * param to specify probe request Tx delay for scans triggered on this VDEV
@@ -513,93 +443,10 @@ enum ds_mode {
  */
 #define PROBE_REQ_TX_TIME_GAP 20
 
-/**
- * struct probeTime_dwellTime - probe time, dwell time map
- * @dwell_time: dwell time
- * @probe_time: repeat probe time
- */
-typedef struct probeTime_dwellTime {
-	uint8_t dwell_time;
-	uint8_t probe_time;
-} t_probeTime_dwellTime;
-
-static const t_probeTime_dwellTime
-	probe_time_dwell_time_map[WMA_DWELL_TIME_PROBE_TIME_MAP_SIZE] = {
-	{28, 11},               /* 0 SSID */
-	{28, 20},               /* 1 SSID */
-	{28, 20},               /* 2 SSID */
-	{28, 20},               /* 3 SSID */
-	{28, 20},               /* 4 SSID */
-	{28, 20},               /* 5 SSID */
-	{28, 20},               /* 6 SSID */
-	{28, 11},               /* 7 SSID */
-	{28, 11},               /* 8 SSID */
-	{28, 11},               /* 9 SSID */
-	{28, 8}                 /* 10 SSID */
-};
-
 typedef void (*txFailIndCallback)(uint8_t *peer_mac, uint8_t seqNo);
 
 typedef void (*tp_wma_packetdump_cb)(qdf_nbuf_t netbuf,
 			uint8_t status, uint8_t vdev_id, uint8_t type);
-
-#ifdef FEATURE_WLAN_TDLS
-/**
- * enum t_wma_tdls_mode - TDLS mode
- * @WMA_TDLS_SUPPORT_NOT_ENABLED: tdls is disable
- * @WMA_TDLS_SUPPORT_DISABLED: suppress implicit trigger and not respond to peer
- * @WMA_TDLS_SUPPORT_EXPLICIT_TRIGGER_ONLY: suppress implicit trigger,
- *                                          but respond to the peer
- * @WMA_TDLS_SUPPORT_ENABLED: implicit trigger
- * @WMA_TDLS_SUPPORT_ACTIVE_EXTERNAL_CONTROL: External control means
- *    implicit trigger but only to a peer mac configured by user space.
- */
-typedef enum {
-	WMA_TDLS_SUPPORT_NOT_ENABLED = 0,
-	WMA_TDLS_SUPPORT_DISABLED,
-	WMA_TDLS_SUPPORT_EXPLICIT_TRIGGER_ONLY,
-	WMA_TDLS_SUPPORT_ENABLED,
-	WMA_TDLS_SUPPORT_ACTIVE_EXTERNAL_CONTROL,
-} t_wma_tdls_mode;
-
-/**
- * enum wma_tdls_peer_notification - TDLS events
- * @WMA_TDLS_SHOULD_DISCOVER: tdls discovery recommended for peer (always based
- *                            on tx bytes per second > tx_discover threshold
- *                            NB: notification will be re-sent after
- *                            discovery_request_interval_ms
- * @WMA_TDLS_SHOULD_TEARDOWN: tdls link tear down recommended for peer
- *                            due to tx bytes per second below
- *                            tx_teardown_threshold
- *                            NB: this notification sent once
- * @WMA_TDLS_PEER_DISCONNECTED: tx peer TDLS link tear down complete
- */
-enum wma_tdls_peer_notification {
-	WMA_TDLS_SHOULD_DISCOVER,
-	WMA_TDLS_SHOULD_TEARDOWN,
-	WMA_TDLS_PEER_DISCONNECTED,
-};
-
-/**
- * enum wma_tdls_peer_reason - TDLS peer reason
- * @WMA_TDLS_TEARDOWN_REASON_TX: tdls teardown recommended due to low transmits
- * @WMA_TDLS_TEARDOWN_REASON_RATE: tdls tear down recommended due to
- *                                 packet rates < AP rates
- * @WMA_TDLS_TEARDOWN_REASON_RSSI: tdls link tear down recommended
- *                                 due to poor RSSI
- * @WMA_TDLS_TEARDOWN_REASON_SCAN: tdls link tear down recommended
- *                                 due to offchannel scan
- * @WMA_TDLS_DISCONNECTED_REASON_PEER_DELETE: tdls peer disconnected
- *                                            due to peer deletion
- */
-enum wma_tdls_peer_reason {
-	WMA_TDLS_TEARDOWN_REASON_TX,
-	WMA_TDLS_TEARDOWN_REASON_RATE,
-	WMA_TDLS_TEARDOWN_REASON_RSSI,
-	WMA_TDLS_TEARDOWN_REASON_SCAN,
-	WMA_TDLS_DISCONNECTED_REASON_PEER_DELETE,
-};
-#endif /* FEATURE_WLAN_TDLS */
 
 /**
  * enum wma_rx_exec_ctx - wma rx execution context
@@ -612,70 +459,6 @@ enum wma_rx_exec_ctx {
 	WMA_RX_WORK_CTX,
 	WMA_RX_TASKLET_CTX,
 	WMA_RX_SERIALIZER_CTX
-};
-
-/**
- * enum wma_phy_idx
- * @PHY1: to notify caller that PHY1 specific param needed
- * @PHY2: to notify caller that PHY2 specific param needed
- * @PHY1_PHY2: to notify caller that both PHY's param needed
- * Note: Firmware sends phy map in terms of bitmask, so enum
- *       also needs to be defined that way.
- *
- *       For example, 0x3 = 0011 = BIT0 corresponds to one phy and
- *       BIT1 coresponds to another phy. There is no direct relation between
- *       each bit to particular PHY (ex. PHYA or PHYB).
- *
- *       In simple terms, 3 means referring both PHYs & 1 or 2 means
- *       referring to either PHYA or PHYB.
- */
-enum wma_phy_idx {
-	PHY1 = 0x1,  /* 0x1 */
-	PHY2,        /* 0x2 */
-	PHY1_PHY2,   /* 0x3 */
-};
-
-/**
- * struct wma_mem_chunk - memory chunks
- * @vaddr: virtual address
- * @paddr: physical address
- * @memctx: dma mapped memory
- * @len: length of data
- * @req_id: request id
- *
- * memory chunck allocated by Host to be managed by FW
- * used only for low latency interfaces like pcie
- */
-struct wma_mem_chunk {
-	uint32_t *vaddr;
-	uint32_t paddr;
-
-	qdf_dma_mem_context(memctx);
-	uint32_t len;
-	uint32_t req_id;
-};
-
-/**
- * struct p2p_scan_param - p2p scan listen parameters
- * @scan_id: scan id
- * @p2p_scan_type: p2p scan type
- */
-struct p2p_scan_param {
-	uint32_t scan_id;
-	tSirP2pScanType p2p_scan_type;
-};
-
-/**
- * struct scan_param - scan parameters
- * @scan_id: scan id
- * @scan_requestor_id: scan requestor id
- * @p2p_scan_type: p2p scan type
- */
-struct scan_param {
-	uint32_t scan_id;
-	uint32_t scan_requestor_id;
-	tSirP2pScanType p2p_scan_type;
-	uint32_t chan_freq;
 };
 
 /**
@@ -1035,12 +818,14 @@ struct roam_synch_frame_ind {
  * @ns_offload_req: cached ns offload request
  * @wow_stats: stat counters for WoW related events
  * @rcpi_req: rcpi request
- * It stores parameters per vdev in wma.
- * @in_bmps : Whether bmps for this interface has been enabled
+ * @in_bmps: Whether bmps for this interface has been enabled
  * @vdev_start_wakelock: wakelock to protect vdev start op with firmware
  * @vdev_stop_wakelock: wakelock to protect vdev stop op with firmware
  * @vdev_set_key_wakelock: wakelock to protect vdev set key op with firmware
  * @channel: channel
+ * @roam_scan_stats_req: cached roam scan stats request
+ *
+ * It stores parameters per vdev in wma.
  */
 struct wma_txrx_node {
 	uint8_t addr[IEEE80211_ADDR_LEN];
@@ -1128,17 +913,8 @@ struct wma_txrx_node {
 	struct roam_synch_frame_ind roam_synch_frame_ind;
 	bool is_waiting_for_key;
 	uint8_t channel;
+	struct sir_roam_scan_stats *roam_scan_stats_req;
 };
-
-/**
- * struct scan_timer_info - scan timer info
- * @vdev_id: vdev id
- * @scan_id: scan id
- */
-typedef struct {
-	uint8_t vdev_id;
-	uint32_t scan_id;
-} scan_timer_info;
 
 /**
  * struct ibss_power_save_params - IBSS power save parameters
@@ -1195,49 +971,37 @@ struct wma_valid_channels {
 };
 
 /**
- * struct hw_mode_idx_to_mac_cap_idx - map between hw_mode to capabilities
- * @num_of_macs: number of macs/PHYs for given hw_mode through hw_mode_id
- * @mac_cap_idx: index of the mac/PHY for given hw_mode through hw_mode_id
- * @hw_mode_id: given hw_mode id
- */
-struct hw_mode_idx_to_mac_cap_idx {
-	uint8_t num_of_macs;
-	uint8_t mac_cap_idx;
-	uint8_t hw_mode_id;
-};
-
-/**
  * struct t_wma_handle - wma context
  * @wmi_handle: wmi handle
  * @cds_context: cds handle
  * @mac_context: mac context
  * @psoc: psoc context
+ * @pdev: physical device global object
  * @wma_resume_event: wma resume event
  * @target_suspend: target suspend event
  * @recovery_event: wma FW recovery event
  * @max_station: max stations
  * @max_bssid: max bssid
- * @driver_type: driver type
  * @myaddr: current mac address
  * @hwaddr: mac address from EEPROM
  * @lpss_support: LPSS feature is supported in target or not
- * @egap_support: Enhanced Green AP support flag
  * @wmi_ready: wmi status flag
  * @wlan_init_status: wlan init status
  * @qdf_dev: qdf device
  * @wmi_service_bitmap: wmi services bitmap received from Target
- * @frameTransRequired: frame transmission required
- * @wmaGlobalSystemRole: global system role
+ * @wmi_service_ext_bitmap: extended wmi services bitmap received from Target
  * @tx_frm_download_comp_cb: Tx Frame Compl Cb registered by umac
  * @tx_frm_download_comp_event: Event to wait for tx download completion
- * @tx_queue_empty_event: wait for tx queue to get flushed
+ * @tx_queue_empty_event: Dummy event to wait for draining MSDUs left
+ *   in hardware tx queue and before requesting VDEV_STOP. Nobody will
+ *   set this and wait will timeout, and code will poll the pending tx
+ *   descriptors number to be zero.
  * @umac_ota_ack_cb: Ack Complete Callback registered by umac
  * @umac_data_ota_ack_cb: ack complete callback
- * @last_umac_data_ota_timestamp: timestamp when OTA of last umac data was done
+ * @last_umac_data_ota_timestamp: timestamp when OTA of last umac data
+ *   was done
  * @last_umac_data_nbuf: cache nbuf ptr for the last umac data buf
  * @needShutdown: is shutdown needed or not
- * @num_mem_chunks: number of memory chunk
- * @mem_chunks: memory chunks
  * @tgt_cfg_update_cb: configuration update callback
  * @reg_cap: regulatory capablities
  * @scan_id: scan id
@@ -1245,23 +1009,28 @@ struct hw_mode_idx_to_mac_cap_idx {
  * @pdevconfig: pdev related configrations
  * @vdev_resp_queue: vdev response queue
  * @vdev_respq_lock: vdev response queue lock
+ * @wma_hold_req_queue: Queue use to serialize requests to firmware
+ * @wma_hold_req_q_lock: Mutex for @wma_hold_req_queue
  * @vht_supp_mcs: VHT supported MCS
  * @is_fw_assert: is fw asserted
  * @wow: wow related patterns & parameters
  * @no_of_suspend_ind: number of suspend indications
  * @no_of_resume_ind: number of resume indications
- * @mArpInfo: arp info
+ * @ack_work_ctx: Context for deferred processing of TX ACK
  * @powersave_mode: power save mode
  * @ptrn_match_enable_all_vdev: is pattern match is enable/disable
  * @pGetRssiReq: get RSSI request
+ * @get_one_peer_info: When a "get peer info" request is active, is
+ *   the request for a single peer?
+ * @get_sta_peer_info: Is a "get peer info" request active?
+ * @peer_macaddr: When @get_one_peer_info is true, the peer's mac address
  * @thermal_mgmt_info: Thermal mitigation related info
  * @roam_offload_enabled: is roam offload enable/disable
  * @ssdp: ssdp flag
- * @enable_mc_list : To Check if Multicast list filtering is enabled in FW
+ * @enable_mc_list: To Check if Multicast list filtering is enabled in FW
  * @ibss_started: is IBSS started or not
  * @ibsskey_info: IBSS key info
  * @hddTxFailCb: tx fail indication callback
- * @pno_wake_lock: PNO wake lock
  * @extscan_wake_lock: extscan wake lock
  * @wow_wake_lock: wow wake lock
  * @wow_auth_req_wl: wow wake lock for auth req
@@ -1272,12 +1041,11 @@ struct hw_mode_idx_to_mac_cap_idx {
  * @wow_auto_shutdown_wl: wow wake lock for shutdown req
  * @roam_ho_wl: wake lock for roam handoff req
  * @wow_nack: wow negative ack flag
- * @ap_client_cnt: ap client count
  * @is_wow_bus_suspended: is wow bus suspended flag
  * @wma_scan_comp_timer: scan completion timer
  * @suitable_ap_hb_failure: better ap found
- * @suitable_ap_hb_failure_rssi: record the RSSI when suitable_ap_hb_failure
- * for later usage to report RSSI at beacon miss scenario
+ * @suitable_ap_hb_failure_rssi: RSSI when suitable_ap_hb_failure
+ *   triggered for later usage to report RSSI at beacon miss scenario
  * @wma_ibss_power_save_params: IBSS Power Save config Parameters
  * @IsRArateLimitEnabled: RA rate limiti s enabled or not
  * @RArateLimitInterval: RA rate limit interval
@@ -1290,50 +1058,66 @@ struct hw_mode_idx_to_mac_cap_idx {
  * @last_mhf_entries_timestamp: timestamp when last entries where set
  * @hw_bd_id: hardware board id
  * @hw_bd_info: hardware board info
- * @in_d0wow: D0WOW is enable/disable
  * @miracast_value: miracast value
  * @log_completion_timer: log completion timer
  * @num_dbs_hw_modes: Number of HW modes supported by the FW
- * @dbs_mode: DBS HW mode list
+ * @hw_mode: DBS HW mode list
  * @old_hw_mode_index: Previous configured HW mode index
  * @new_hw_mode_index: Current configured HW mode index
- * @extended_caps phy_caps: extended caps per hw mode
  * @peer_authorized_cb: peer authorized hdd callback
- * @ocb_callback: callback to OCB commands
- * @ocb_resp: response to OCB commands
- * @wow_pno_match_wake_up_count: PNO match wake up count
- * @wow_pno_complete_wake_up_count: PNO complete wake up count
- * @wow_gscan_wake_up_count: Gscan wake up count
- * @wow_low_rssi_wake_up_count: Low rssi wake up count
- * @wow_rssi_breach_wake_up_count: RSSI breach wake up count
- * @wow_ucast_wake_up_count: WoW unicast packet wake up count
- * @wow_bcast_wake_up_count: WoW brodcast packet wake up count
- * @wow_ipv4_mcast_wake_up_count: WoW IPV4 mcast packet wake up count
- * @wow_ipv6_mcast_wake_up_count: WoW IPV6 mcast packet wake up count
- * @wow_ipv6_mcast_ra_stats: WoW IPV6 mcast RA packet wake up count
- * @wow_ipv6_mcast_ns_stats: WoW IPV6 mcast NS packet wake up count
- * @wow_ipv6_mcast_na_stats: WoW IPV6 mcast NA packet wake up count
- * @wow_icmpv4_count: WoW ipv4 icmp packet wake up count
- * @wow_icmpv6_count: WoW ipv6 icmp packet wake up count
- * @dual_mac_cfg: Dual mac configuration params for scan and fw mode
- *
+ * @wow_unspecified_wake_count: Number of wake events which did not
+ *   correspond to known wake events. Note that known wake events are
+ *   tracked on a per-vdev basis via the struct sir_vdev_wow_stats
+ *   wow_stats in struct wma_txrx_node
+ * @ocb_config_req: OCB request context
  * @max_scan:  maximum scan requests than can be queued
- * This structure is global wma context
- * It contains global wma module parameters and
- * handle of other modules.
- * @apf_packet_filter_enable: APF filter enabled or not
- * @active_uc_apf_mode: Setting that determines how APF is applied in active
- * mode for uc packets
- * @active_mc_bc_apf_mode: Setting that determines how APF is applied in
- * active mode for MC/BC packets
- * @service_ready_ext_evt: Wait event for service ready ext
+ * @self_gen_frm_pwr: Self-generated frame power
+ * @tx_chain_mask_cck: Is the CCK tx chain mask enabled
+ * @service_ready_ext_timer: Timer for service ready extended.  Note
+ *   this is a a timer instead of wait event because on receiving the
+ *   service ready event, we will be waiting on the MC thread for the
+ *   service extended ready event which is also processed in MC
+ *   thread.  This leads to MC thread being stuck. Alternative was to
+ *   process these events in tasklet/workqueue context. But, this
+ *   leads to race conditions when the events are processed in two
+ *   different context. So, processing ready event and extended ready
+ *   event in the serialized MC thread context with a timer.
+ * @csr_roam_synch_cb: CSR callback for firmware Roam Sync events
+ * @pe_roam_synch_cb: pe callback for firmware Roam Sync events
  * @wmi_cmd_rsp_wake_lock: wmi command response wake lock
  * @wmi_cmd_rsp_runtime_lock: wmi command response bus lock
- * @saved_chan: saved channel list sent as part of WMI_SCAN_CHAN_LIST_CMDID
- * @is_dfs_offloaded: dfs and cac timer offload
+ * @apf_enabled: Is APF enabled in firmware?
+ * @apf_packet_filter_enable: Is APF filter enabled om host?
+ * @active_uc_apf_mode: Setting that determines how APF is applied in
+ *   active mode for uc packets
+ * @active_mc_bc_apf_mode: Setting that determines how APF is applied in
+ *   active mode for MC/BC packets
+ * @ini_config: Initial configuration from upper layer
+ * @saved_chan: saved channel list sent as part of
+ *   WMI_SCAN_CHAN_LIST_CMDID
+ * @nan_datapath_enabled: Is NAN datapath support enabled in firmware?
+ * @pe_ndp_event_handler: Handler function for NAN Data Path events
+ * @fw_timeout_crash: Should firmware be reset upon response timeout?
+ * @sub_20_support: Does target support sub-20MHz bandwidth (aka
+ *   half-rate and quarter-rate)?
+ * @is_dfs_offloaded: Is dfs and cac timer offloaded?
+ * @wma_mgmt_tx_packetdump_cb: Callback function for TX packet dump
+ * @wma_mgmt_rx_packetdump_cb: Callback function for RX packet dump
+ * @rcpi_enabled: Is RCPI enabled?
+ * @link_stats_results: Structure for handing link stats from firmware
+ * @tx_fail_cnt: Number of TX failures
+ * @he_cap: 802.11ax capabilities
  * @bandcapability: band capability configured through ini
+ * @tx_bfee_8ss_enabled: Is Tx Beamformee support for 8x8 enabled?
+ * @in_imps: Is device in Idle Mode Power Save?
  * @ito_repeat_count: Indicates ito repeated count
- * @critical_events_in_flight: number of suspend preventing events in flight
+ * @wma_fw_time_sync_timer: timer used for firmware time sync
+ * @critical_events_in_flight: number of suspend-preventing events
+ *   in flight
+ *
+ * This structure is the global wma context.  It contains global wma
+ * module parameters and handles of other modules.
+
  */
 typedef struct {
 	void *wmi_handle;
@@ -1347,7 +1131,6 @@ typedef struct {
 	qdf_event_t recovery_event;
 	uint16_t max_station;
 	uint16_t max_bssid;
-	enum qdf_driver_type driver_type;
 	uint8_t myaddr[IEEE80211_ADDR_LEN];
 	uint8_t hwaddr[IEEE80211_ADDR_LEN];
 #ifdef WLAN_FEATURE_LPSS
@@ -1358,26 +1141,16 @@ typedef struct {
 	uint32_t wlan_init_status;
 	qdf_device_t qdf_dev;
 	uint32_t wmi_service_bitmap[WMI_SERVICE_BM_SIZE];
-	uint32_t wmi_service_ext_offset;
 	uint32_t wmi_service_ext_bitmap[WMI_SERVICE_SEGMENT_BM_SIZE32];
-	uint32_t frameTransRequired;
-	tBssSystemRole wmaGlobalSystemRole;
 	wma_tx_dwnld_comp_callback tx_frm_download_comp_cb;
 	qdf_event_t tx_frm_download_comp_event;
-	/*
-	 * Dummy event to wait for draining MSDUs left in hardware tx
-	 * queue and before requesting VDEV_STOP. Nobody will set this
-	 * and wait will timeout, and code will poll the pending tx
-	 * descriptors number to be zero.
-	 */
 	qdf_event_t tx_queue_empty_event;
-	wma_tx_ota_comp_callback umac_ota_ack_cb[SIR_MAC_MGMT_RESERVED15];
+	wma_tx_ota_comp_callback
+				umac_ota_ack_cb[SIR_MAC_MGMT_RESERVED15];
 	wma_tx_ota_comp_callback umac_data_ota_ack_cb;
 	unsigned long last_umac_data_ota_timestamp;
 	qdf_nbuf_t last_umac_data_nbuf;
 	bool needShutdown;
-	uint32_t num_mem_chunks;
-	struct wmi_host_mem_chunk mem_chunks[MAX_MEM_CHUNKS];
 	wma_tgt_cfg_cb tgt_cfg_update_cb;
 	HAL_REG_CAPABILITIES reg_cap;
 	uint32_t scan_id;
@@ -1392,10 +1165,6 @@ typedef struct {
 	struct wma_wow wow;
 	uint8_t no_of_suspend_ind;
 	uint8_t no_of_resume_ind;
-	/* Have a back up of arp info to send along
-	 * with ns info suppose if ns also enabled
-	 */
-	tSirHostOffloadReq mArpInfo;
 	struct wma_tx_ack_work_ctx *ack_work_ctx;
 	uint8_t powersave_mode;
 	bool ptrn_match_enable_all_vdev;
@@ -1450,24 +1219,12 @@ typedef struct {
 	struct dbs_hw_mode_info hw_mode;
 	uint32_t old_hw_mode_index;
 	uint32_t new_hw_mode_index;
-	qdf_atomic_t scan_id_counter;
 	wma_peer_authorized_fp peer_authorized_cb;
 	uint32_t wow_unspecified_wake_count;
-
-	/* OCB request contexts */
 	struct sir_ocb_config *ocb_config_req;
 	uint8_t max_scan;
 	uint16_t self_gen_frm_pwr;
 	bool tx_chain_mask_cck;
-	/* Going with a timer instead of wait event because on receiving the
-	 * service ready event, we will be waiting on the MC thread for the
-	 * service extended ready event which is also processed in MC thread.
-	 * This leads to MC thread being stuck. Alternative was to process
-	 * these events in tasklet/workqueue context. But, this leads to
-	 * race conditions when the events are processed in two different
-	 * context. So, processing ready event and extended ready event in
-	 * the serialized MC thread context with a timer.
-	 */
 	qdf_mc_timer_t service_ready_ext_timer;
 
 	QDF_STATUS (*csr_roam_synch_cb)(tpAniSirGlobal mac,
@@ -1486,7 +1243,6 @@ typedef struct {
 	enum active_apf_mode active_mc_bc_apf_mode;
 	struct wma_ini_config ini_config;
 	struct wma_valid_channels saved_chan;
-	/* NAN datapath support enabled in firmware */
 	bool nan_datapath_enabled;
 	QDF_STATUS (*pe_ndp_event_handler)(tpAniSirGlobal mac_ctx,
 					   struct scheduler_msg *msg);
@@ -1508,62 +1264,6 @@ typedef struct {
 	qdf_mc_timer_t wma_fw_time_sync_timer;
 	qdf_atomic_t critical_events_in_flight;
 } t_wma_handle, *tp_wma_handle;
-
-/**
- * struct wma_target_cap - target capabality
- * @wmi_service_bitmap: wmi services bitmap
- * @wlan_resource_config: resource config
- */
-struct wma_target_cap {
-	/* wmi services bitmap received from Target */
-	uint32_t wmi_service_bitmap[WMI_SERVICE_BM_SIZE];
-	/* default resource config,the os shim can overwrite it */
-	target_resource_config wlan_resource_config;
-};
-
-/**
- * struct t_wma_start_req - wma start request parameters
- * @pConfigBuffer: config buffer
- * @usConfigBufferLen: Length of the config buffer above
- * @driver_type: Production or FTM driver
- * @pUserData: user data
- * @pIndUserData: indication function pointer to send to UMAC
- *
- * The shared memory between WDI and HAL is 4K so maximum data can be
- * transferred from WDI to HAL is 4K
- */
-typedef struct {
-	void *pConfigBuffer;
-	uint16_t usConfigBufferLen;
-	enum qdf_driver_type driver_type;
-	void *pUserData;
-	void *pIndUserData;
-} t_wma_start_req;
-
-/* Enumeration for Version */
-typedef enum {
-	WLAN_HAL_MSG_VERSION0 = 0,
-	WLAN_HAL_MSG_VERSION1 = 1,
-	WLAN_HAL_MSG_WCNSS_CTRL_VERSION = 0x7FFF,   /*define as 2 bytes data */
-	WLAN_HAL_MSG_VERSION_MAX_FIELD = WLAN_HAL_MSG_WCNSS_CTRL_VERSION
-} tHalHostMsgVersion;
-
-/**
- * struct sHalMacStartParameter - mac start request parameters
- * @driverType: driver type (production/FTM)
- * @uConfigBufferLen: length of config buffer
- */
-typedef struct qdf_packed sHalMacStartParameter {
-	enum qdf_driver_type driverType;
-	uint32_t uConfigBufferLen;
-
-	/* Following this there is a TLV formatted buffer of length
-	 * "uConfigBufferLen" bytes containing all config values.
-	 * The TLV is expected to be formatted like this:
-	 * 0           15            31           31+CFG_LEN-1        length-1
-	 * |   CFG_ID   |   CFG_LEN   |   CFG_BODY    |  CFG_ID  |......|
-	 */
-} tHalMacStartParameter, *tpHalMacStartParameter;
 
 extern void cds_wma_complete_cback(void);
 extern void wma_send_regdomain_info_to_fw(uint32_t reg_dmn, uint16_t regdmn2G,
@@ -1926,60 +1626,6 @@ typedef enum {
 	WMI_VDEV_PARAM_GTX_BW_MASK,
 } green_tx_param;
 
-#ifdef FEATURE_WLAN_TDLS
-/**
- * struct wma_tdls_params - TDLS parameters
- * @vdev_id: vdev id
- * @tdls_state: TDLS state
- * @notification_interval_ms: notification inerval
- * @tx_discovery_threshold: tx discovery threshold
- * @tx_teardown_threshold: tx teardown threashold
- * @rssi_teardown_threshold: RSSI teardown threshold
- * @rssi_delta: RSSI delta
- * @tdls_options: TDLS options
- * @peer_traffic_ind_window: raffic indication window
- * @peer_traffic_response_timeout: traffic response timeout
- * @puapsd_mask: uapsd mask
- * @puapsd_inactivity_time: uapsd inactivity time
- * @puapsd_rx_frame_threshold: uapsd rx frame threshold
- * @teardown_notification_ms: tdls teardown notification interval
- * @tdls_peer_kickout_threshold: tdls packet threshold for
- *    peer kickout operation
- */
-typedef struct wma_tdls_params {
-	uint32_t vdev_id;
-	uint32_t tdls_state;
-	uint32_t notification_interval_ms;
-	uint32_t tx_discovery_threshold;
-	uint32_t tx_teardown_threshold;
-	int32_t rssi_teardown_threshold;
-	int32_t rssi_delta;
-	uint32_t tdls_options;
-	uint32_t peer_traffic_ind_window;
-	uint32_t peer_traffic_response_timeout;
-	uint32_t puapsd_mask;
-	uint32_t puapsd_inactivity_time;
-	uint32_t puapsd_rx_frame_threshold;
-	uint32_t teardown_notification_ms;
-	uint32_t tdls_peer_kickout_threshold;
-} t_wma_tdls_params;
-
-/**
- * struct wma_tdls_peer_event - TDLS peer event
- * @vdev_id: vdev id
- * @peer_macaddr: peer MAC address
- * @peer_status: TDLS peer status
- * @peer_reason: TDLS peer reason
- */
-typedef struct {
-	A_UINT32 vdev_id;
-	wmi_mac_addr peer_macaddr;
-	A_UINT32 peer_status;
-	A_UINT32 peer_reason;
-} wma_tdls_peer_event;
-
-#endif /* FEATURE_WLAN_TDLS */
-
 /**
  * enum uapsd_ac - U-APSD Access Categories
  * @UAPSD_BE: best effort
@@ -2323,6 +1969,18 @@ int wma_form_rx_packet(qdf_nbuf_t buf,
 QDF_STATUS wma_mgmt_unified_cmd_send(struct wlan_objmgr_vdev *vdev,
 				qdf_nbuf_t buf, uint32_t desc_id,
 				void *mgmt_tx_params);
+
+/**
+ * wma_mgmt_nbuf_unmap_cb() - dma unmap for pending mgmt pkts
+ * @pdev: objmgr pdev
+ * @buf: buffer
+ *
+ * This function does the dma unmap of the pending mgmt packet cleanup
+ *
+ * Return: None
+ */
+void wma_mgmt_nbuf_unmap_cb(struct wlan_objmgr_pdev *pdev,
+			    qdf_nbuf_t buf);
 
 /**
  * wma_chan_info_event_handler() - chan info event handler

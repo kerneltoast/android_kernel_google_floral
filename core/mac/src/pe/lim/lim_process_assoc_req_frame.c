@@ -860,6 +860,9 @@ static bool lim_check_wpa_rsn_ie(tpPESession session, tpAniSirGlobal mac_ctx,
 					   &dot11f_ie_rsn, false);
 		if (!DOT11F_SUCCEEDED(ret)) {
 			pe_err("Invalid RSN IE");
+			lim_send_assoc_rsp_mgmt_frame(
+				mac_ctx, eSIR_MAC_INVALID_IE_STATUS, 1,
+				hdr->sa, sub_type, 0, session);
 			return false;
 		}
 
@@ -912,6 +915,9 @@ static bool lim_check_wpa_rsn_ie(tpPESession session, tpAniSirGlobal mac_ctx,
 					   &dot11f_ie_wpa, false);
 		if (!DOT11F_SUCCEEDED(ret)) {
 			pe_err("Invalid WPA IE");
+			lim_send_assoc_rsp_mgmt_frame(
+				mac_ctx, eSIR_MAC_INVALID_IE_STATUS, 1,
+				hdr->sa, sub_type, 0, session);
 			return false;
 		}
 
@@ -2041,9 +2047,9 @@ void lim_process_assoc_req_frame(tpAniSirGlobal mac_ctx, uint8_t *rx_pkt_info,
 		goto error;
 
 	/* STA is Associated ! */
-	pe_err("Received: %s Req  successful from " MAC_ADDRESS_STR,
-		(LIM_ASSOC == sub_type) ? "Assoc" : "ReAssoc",
-		MAC_ADDR_ARRAY(hdr->sa));
+	pe_debug("Received: %s Req  successful from " MAC_ADDRESS_STR,
+		 (LIM_ASSOC == sub_type) ? "Assoc" : "ReAssoc",
+		 MAC_ADDR_ARRAY(hdr->sa));
 
 	/*
 	 * AID for this association will be same as the peer Index used in DPH

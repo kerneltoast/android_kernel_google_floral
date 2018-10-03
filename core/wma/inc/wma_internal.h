@@ -360,23 +360,55 @@ QDF_STATUS wma_start_extscan(tp_wma_handle wma,
 QDF_STATUS wma_stop_extscan(tp_wma_handle wma,
 			    tSirExtScanStopReqParams *pstopcmd);
 
-QDF_STATUS wma_get_buf_extscan_hotlist_cmd(tp_wma_handle wma_handle,
-					   tSirExtScanSetBssidHotListReqParams *
-					   photlist, int *buf_len);
-
+/**
+ * wma_extscan_start_hotlist_monitor() - start hotlist monitor
+ * @wma: wma handle
+ * @params: hotlist request params
+ *
+ * This function configures hotlist monitor in fw.
+ *
+ * Return: QDF status
+ */
 QDF_STATUS wma_extscan_start_hotlist_monitor(tp_wma_handle wma,
-					     tSirExtScanSetBssidHotListReqParams
-					     *photlist);
+			struct extscan_bssid_hotlist_set_params *params);
 
+/**
+ * wma_extscan_stop_hotlist_monitor() - stop hotlist monitor
+ * @wma: wma handle
+ * @params: hotlist request params
+ *
+ * This function configures hotlist monitor to stop in fw.
+ *
+ * Return: QDF status
+ */
 QDF_STATUS wma_extscan_stop_hotlist_monitor(tp_wma_handle wma,
-			tSirExtScanResetBssidHotlistReqParams *photlist_reset);
+			struct extscan_bssid_hotlist_reset_params *params);
 
-QDF_STATUS wma_extscan_start_change_monitor(tp_wma_handle wma,
-					    tSirExtScanSetSigChangeReqParams *
-					    psigchange);
+/**
+ * wma_extscan_start_change_monitor() - send start change monitor cmd
+ * @wma: wma handle
+ * @params: change monitor request params
+ *
+ * This function sends start change monitor request to fw.
+ *
+ * Return: QDF status
+ */
+QDF_STATUS
+wma_extscan_start_change_monitor(tp_wma_handle wma,
+			struct extscan_set_sig_changereq_params *params);
 
-QDF_STATUS wma_extscan_stop_change_monitor(tp_wma_handle wma,
-		   tSirExtScanResetSignificantChangeReqParams *pResetReq);
+/**
+ * wma_extscan_stop_change_monitor() - send stop change monitor cmd
+ * @wma: wma handle
+ * @params: change monitor request params
+ *
+ * This function sends stop change monitor request to fw.
+ *
+ * Return: QDF status
+ */
+QDF_STATUS
+wma_extscan_stop_change_monitor(tp_wma_handle wma,
+			struct extscan_capabilities_reset_params *params);
 
 QDF_STATUS wma_extscan_get_cached_results(tp_wma_handle wma,
 					  tSirExtScanGetCachedResultsReqParams *
@@ -1353,4 +1385,25 @@ int wma_vdev_bss_color_collision_info_handler(void *handle,
 
 int wma_twt_en_complete_event_handler(void *handle,
 				      uint8_t *event, uint32_t len);
+/**
+ * wma_get_roam_scan_stats() - Get roam scan stats request
+ * @handle: wma handle
+ * @req: request details
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS wma_get_roam_scan_stats(WMA_HANDLE handle,
+				   struct sir_roam_scan_stats *req);
+
+/**
+ * wma_roam_scan_stats_event_handler() - roam scan stats event handler
+ * @handle: wma handle
+ * @event: event data
+ * @len: length of data
+ *
+ * Return: Success or Failure status
+ */
+int wma_roam_scan_stats_event_handler(void *handle, uint8_t *event,
+				      uint32_t len);
+
 #endif

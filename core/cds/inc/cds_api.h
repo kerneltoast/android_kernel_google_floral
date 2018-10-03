@@ -208,25 +208,6 @@ static inline bool cds_is_module_stop_in_progress(void)
 }
 
 /**
- * cds_is_module_state_transitioning() - Is module state transitioning
- *
- * Return: true if module stop is in progress.
- */
-static inline int cds_is_module_state_transitioning(void)
-{
-	if (cds_is_load_or_unload_in_progress() || cds_is_driver_recovering() ||
-		cds_is_module_stop_in_progress()) {
-		pr_info("%s: Load/Unload %d or recovery %d or module_stop %d is in progress",
-			__func__, cds_is_load_or_unload_in_progress(),
-				cds_is_driver_recovering(),
-				cds_is_module_stop_in_progress());
-		return true;
-	} else {
-		return false;
-	}
-}
-
-/**
  * cds_is_fw_down() - Is FW down or not
  *
  * Return: true if FW is down and false otherwise.
@@ -480,7 +461,10 @@ void cds_reset_recovery_reason(void);
  *
  * Return: none
  */
-void cds_trigger_recovery(enum qdf_hang_reason reason);
+#define cds_trigger_recovery(reason) \
+	__cds_trigger_recovery(reason, __func__, __LINE__)
+void __cds_trigger_recovery(enum qdf_hang_reason reason, const char *func,
+			    const uint32_t line);
 
 void cds_set_wakelock_logging(bool value);
 bool cds_is_wakelock_enabled(void);

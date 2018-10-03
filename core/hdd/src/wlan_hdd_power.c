@@ -131,7 +131,7 @@ static void hdd_enable_gtk_offload(struct hdd_adapter *adapter)
 {
 	QDF_STATUS status;
 
-	status = pmo_ucfg_enable_gtk_offload_in_fwr(adapter->hdd_vdev);
+	status = pmo_ucfg_enable_gtk_offload_in_fwr(adapter->vdev);
 	if (status != QDF_STATUS_SUCCESS)
 		hdd_info("Failed to enable gtk offload");
 }
@@ -150,22 +150,21 @@ static void hdd_disable_gtk_offload(struct hdd_adapter *adapter)
 	QDF_STATUS status;
 
 	/* ensure to get gtk rsp first before disable it*/
-	gtk_rsp_request.callback =
-		wlan_hdd_cfg80211_update_replay_counter_cb;
+	gtk_rsp_request.callback = wlan_hdd_cfg80211_update_replay_counter_cb;
+
 	/* Passing as void* as PMO does not know legacy HDD adapter type */
-	gtk_rsp_request.callback_context =
-		(void *)adapter;
-	status = pmo_ucfg_get_gtk_rsp(adapter->hdd_vdev,
-			&gtk_rsp_request);
+	gtk_rsp_request.callback_context = (void *)adapter;
+
+	status = pmo_ucfg_get_gtk_rsp(adapter->vdev, &gtk_rsp_request);
 	if (status != QDF_STATUS_SUCCESS) {
 		hdd_err("Failed to send get gtk rsp status:%d", status);
 		return;
 	}
+
 	hdd_debug("send get_gtk_rsp successful");
-	status = pmo_ucfg_disable_gtk_offload_in_fwr(adapter->hdd_vdev);
+	status = pmo_ucfg_disable_gtk_offload_in_fwr(adapter->vdev);
 	if (status != QDF_STATUS_SUCCESS)
 		hdd_info("Failed to disable gtk offload");
-
 }
 
 
@@ -242,6 +241,7 @@ int wlan_hdd_ipv6_changed(struct notifier_block *nb,
  * @idev: pointer to net device
  * @ipv6addr: destination array to fill IPv6 addresses
  * @ipv6addr_type: IPv6 Address type
+ * @scope_array: scope of ipv6 addr
  * @count: number of IPv6 addresses
  *
  * This is the IPv6 utility function to populate unicast addresses.
@@ -250,7 +250,9 @@ int wlan_hdd_ipv6_changed(struct notifier_block *nb,
  */
 static int hdd_fill_ipv6_uc_addr(struct inet6_dev *idev,
 				uint8_t ipv6_uc_addr[][SIR_MAC_IPV6_ADDR_LEN],
-				uint8_t *ipv6addr_type, uint32_t *count)
+				uint8_t *ipv6addr_type,
+				enum pmo_ns_addr_scope *scope_array,
+				uint32_t *count)
 {
 	struct inet6_ifaddr *ifa;
 	struct list_head *p;
@@ -272,6 +274,7 @@ static int hdd_fill_ipv6_uc_addr(struct inet6_dev *idev,
 			qdf_mem_copy(ipv6_uc_addr[*count], &ifa->addr.s6_addr,
 				sizeof(ifa->addr.s6_addr));
 			ipv6addr_type[*count] = PMO_IPV6_ADDR_UC_TYPE;
+			scope_array[*count] = pmo_ucfg_ns_addr_scope(scope);
 			hdd_debug("Index %d scope = %s UC-Address: %pI6",
 				*count, (scope == IPV6_ADDR_SCOPE_LINKLOCAL) ?
 				"LINK LOCAL" : "GLOBAL", ipv6_uc_addr[*count]);
@@ -291,6 +294,7 @@ static int hdd_fill_ipv6_uc_addr(struct inet6_dev *idev,
  * @idev: pointer to net device
  * @ipv6addr: destination array to fill IPv6 addresses
  * @ipv6addr_type: IPv6 Address type
+ * @scope_array: scope of ipv6 addr
  * @count: number of IPv6 addresses
  *
  * This is the IPv6 utility function to populate anycast addresses.
@@ -299,7 +303,9 @@ static int hdd_fill_ipv6_uc_addr(struct inet6_dev *idev,
  */
 static int hdd_fill_ipv6_ac_addr(struct inet6_dev *idev,
 				uint8_t ipv6_ac_addr[][SIR_MAC_IPV6_ADDR_LEN],
-				uint8_t *ipv6addr_type, uint32_t *count)
+				uint8_t *ipv6addr_type,
+				enum pmo_ns_addr_scope *scope_array,
+				uint32_t *count)
 {
 	struct ifacaddr6 *ifaca;
 	uint32_t scope;
@@ -318,6 +324,7 @@ static int hdd_fill_ipv6_ac_addr(struct inet6_dev *idev,
 			qdf_mem_copy(ipv6_ac_addr[*count], &ifaca->aca_addr,
 				sizeof(ifaca->aca_addr));
 			ipv6addr_type[*count] = PMO_IPV6_ADDR_AC_TYPE;
+			scope_array[*count] = pmo_ucfg_ns_addr_scope(scope);
 			hdd_debug("Index %d scope = %s AC-Address: %pI6",
 				*count, (scope == IPV6_ADDR_SCOPE_LINKLOCAL) ?
 				"LINK LOCAL" : "GLOBAL", ipv6_ac_addr[*count]);
@@ -368,7 +375,8 @@ void hdd_enable_ns_offload(struct hdd_adapter *adapter,
 
 	/* Unicast Addresses */
 	errno = hdd_fill_ipv6_uc_addr(in6_dev, ns_req->ipv6_addr,
-				      ns_req->ipv6_addr_type, &ns_req->count);
+				      ns_req->ipv6_addr_type, ns_req->scope,
+				      &ns_req->count);
 	if (errno) {
 		hdd_disable_ns_offload(adapter, trigger);
 		hdd_debug("Max supported addresses: disabling NS offload");
@@ -377,7 +385,8 @@ void hdd_enable_ns_offload(struct hdd_adapter *adapter,
 
 	/* Anycast Addresses */
 	errno = hdd_fill_ipv6_ac_addr(in6_dev, ns_req->ipv6_addr,
-				      ns_req->ipv6_addr_type, &ns_req->count);
+				      ns_req->ipv6_addr_type, ns_req->scope,
+				      &ns_req->count);
 	if (errno) {
 		hdd_disable_ns_offload(adapter, trigger);
 		hdd_debug("Max supported addresses: disabling NS offload");
@@ -392,7 +401,7 @@ void hdd_enable_ns_offload(struct hdd_adapter *adapter,
 	}
 
 	/* enable ns request */
-	status = pmo_ucfg_enable_ns_offload_in_fwr(adapter->hdd_vdev, trigger);
+	status = pmo_ucfg_enable_ns_offload_in_fwr(adapter->vdev, trigger);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		hdd_err("Failed to enable ns offload; status:%d", status);
 		goto free_req;
@@ -413,13 +422,13 @@ void hdd_disable_ns_offload(struct hdd_adapter *adapter,
 	QDF_STATUS status;
 
 	hdd_enter();
-	status = pmo_ucfg_flush_ns_offload_req(adapter->hdd_vdev);
+	status = pmo_ucfg_flush_ns_offload_req(adapter->vdev);
 	if (status != QDF_STATUS_SUCCESS) {
 		hdd_err("Failed to flush NS Offload");
 		goto out;
 	}
 
-	status = pmo_ucfg_disable_ns_offload_in_fwr(adapter->hdd_vdev, trigger);
+	status = pmo_ucfg_disable_ns_offload_in_fwr(adapter->vdev, trigger);
 	if (status != QDF_STATUS_SUCCESS)
 		hdd_err("Failed to disable NS Offload");
 	else
@@ -478,7 +487,7 @@ static void hdd_enable_hw_filter(struct hdd_adapter *adapter)
 
 	hdd_enter();
 
-	status = pmo_ucfg_enable_hw_filter_in_fwr(adapter->hdd_vdev);
+	status = pmo_ucfg_enable_hw_filter_in_fwr(adapter->vdev);
 	if (status != QDF_STATUS_SUCCESS)
 		hdd_info("Failed to enable hardware filter");
 
@@ -491,7 +500,7 @@ static void hdd_disable_hw_filter(struct hdd_adapter *adapter)
 
 	hdd_enter();
 
-	status = pmo_ucfg_disable_hw_filter_in_fwr(adapter->hdd_vdev);
+	status = pmo_ucfg_disable_hw_filter_in_fwr(adapter->vdev);
 	if (status != QDF_STATUS_SUCCESS)
 		hdd_info("Failed to disable hardware filter");
 
@@ -503,13 +512,13 @@ void hdd_enable_host_offloads(struct hdd_adapter *adapter,
 {
 	hdd_enter();
 
-	if (!ucfg_pmo_is_vdev_supports_offload(adapter->hdd_vdev)) {
+	if (!ucfg_pmo_is_vdev_supports_offload(adapter->vdev)) {
 		hdd_debug("offload is not supported on vdev opmode %d",
 			  adapter->device_mode);
 		goto out;
 	}
 
-	if (!ucfg_pmo_is_vdev_connected(adapter->hdd_vdev)) {
+	if (!ucfg_pmo_is_vdev_connected(adapter->vdev)) {
 		hdd_debug("offload is not supported on disconnected vdevs");
 		goto out;
 	}
@@ -530,13 +539,13 @@ void hdd_disable_host_offloads(struct hdd_adapter *adapter,
 {
 	hdd_enter();
 
-	if (!ucfg_pmo_is_vdev_supports_offload(adapter->hdd_vdev)) {
+	if (!ucfg_pmo_is_vdev_supports_offload(adapter->vdev)) {
 		hdd_info("offload is not supported on this vdev opmode: %d",
 				adapter->device_mode);
 			goto out;
 	}
 
-	if (!ucfg_pmo_is_vdev_connected(adapter->hdd_vdev)) {
+	if (!ucfg_pmo_is_vdev_connected(adapter->vdev)) {
 		hdd_info("vdev is not connected");
 		goto out;
 	}
@@ -882,7 +891,7 @@ void hdd_enable_arp_offload(struct hdd_adapter *adapter,
 		goto free_req;
 	}
 
-	status = pmo_ucfg_enable_arp_offload_in_fwr(adapter->hdd_vdev, trigger);
+	status = pmo_ucfg_enable_arp_offload_in_fwr(adapter->vdev, trigger);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		hdd_err("failed arp offload config in fw; status:%d", status);
 		goto free_req;
@@ -903,13 +912,13 @@ void hdd_disable_arp_offload(struct hdd_adapter *adapter,
 	QDF_STATUS status;
 
 	hdd_enter();
-	status = pmo_ucfg_flush_arp_offload_req(adapter->hdd_vdev);
+	status = pmo_ucfg_flush_arp_offload_req(adapter->vdev);
 	if (status != QDF_STATUS_SUCCESS) {
 		hdd_err("Failed to flush arp Offload");
 		goto out;
 	}
 
-	status = pmo_ucfg_disable_arp_offload_in_fwr(adapter->hdd_vdev,
+	status = pmo_ucfg_disable_arp_offload_in_fwr(adapter->vdev,
 						     trigger);
 	if (status == QDF_STATUS_SUCCESS)
 		hdd_wlan_offload_event(PMO_IPV4_ARP_REPLY_OFFLOAD,
@@ -1137,7 +1146,7 @@ static int hdd_resume_wlan(void)
 			status = hdd_disable_default_pkt_filters(adapter);
 	}
 
-	ucfg_ipa_resume(hdd_ctx->hdd_pdev);
+	ucfg_ipa_resume(hdd_ctx->pdev);
 	status = pmo_ucfg_psoc_user_space_resume_req(hdd_ctx->hdd_psoc,
 						     QDF_SYSTEM_SUSPEND);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -1196,6 +1205,7 @@ QDF_STATUS hdd_wlan_shutdown(void)
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	hdd_bus_bw_compute_timer_stop(hdd_ctx);
 	policy_mgr_clear_concurrent_session_count(hdd_ctx->hdd_psoc);
 
 	hdd_debug("Invoking packetdump deregistration API");
@@ -1309,7 +1319,7 @@ QDF_STATUS hdd_wlan_re_init(void)
 	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
 	if (!hdd_ctx) {
 		hdd_err("HDD context is Null");
-		goto err_re_init;
+		goto err_ctx_null;
 	}
 	bug_on_reinit_failure = hdd_ctx->config->bug_on_reinit_failure;
 
@@ -1349,27 +1359,24 @@ QDF_STATUS hdd_wlan_re_init(void)
 	sme_set_chip_pwr_save_fail_cb(hdd_ctx->mac_handle,
 				      hdd_chip_pwr_save_fail_detected_cb);
 
-	hdd_lpass_notify_start(hdd_ctx);
-
 	hdd_send_default_scan_ies(hdd_ctx);
 	hdd_info("WLAN host driver reinitiation completed!");
-	goto success;
 
-err_re_init:
-	hdd_bus_bandwidth_deinit(hdd_ctx);
-
-	/* Allow the phone to go to sleep */
-	hdd_allow_suspend(WIFI_POWER_EVENT_WAKELOCK_DRIVER_REINIT);
-	if (bug_on_reinit_failure)
-		QDF_BUG(0);
-	return -EPERM;
-
-success:
 	if (hdd_ctx->config->sap_internal_restart)
 		hdd_ssr_restart_sap(hdd_ctx);
 
 	hdd_wlan_ssr_reinit_event();
 	return QDF_STATUS_SUCCESS;
+
+err_re_init:
+	hdd_bus_bandwidth_deinit(hdd_ctx);
+
+err_ctx_null:
+	/* Allow the phone to go to sleep */
+	hdd_allow_suspend(WIFI_POWER_EVENT_WAKELOCK_DRIVER_REINIT);
+	if (bug_on_reinit_failure)
+		QDF_BUG(0);
+	return -EPERM;
 }
 
 int wlan_hdd_set_powersave(struct hdd_adapter *adapter,
@@ -1677,7 +1684,7 @@ static int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 			return -EAGAIN;
 		}
 
-		wlan_abort_scan(hdd_ctx->hdd_pdev, INVAL_PDEV_ID,
+		wlan_abort_scan(hdd_ctx->pdev, INVAL_PDEV_ID,
 				adapter->session_id, INVALID_SCAN_ID, false);
 	}
 
@@ -1693,7 +1700,7 @@ static int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 	 * Suspend IPA early before proceeding to suspend other entities like
 	 * firmware to avoid any race conditions.
 	 */
-	if (ucfg_ipa_suspend(hdd_ctx->hdd_pdev)) {
+	if (ucfg_ipa_suspend(hdd_ctx->pdev)) {
 		hdd_err("IPA not ready to suspend!");
 		wlan_hdd_inc_suspend_stats(hdd_ctx, SUSPEND_FAIL_IPA);
 		return -EAGAIN;
@@ -1981,7 +1988,7 @@ int wlan_hdd_cfg80211_set_txpower(struct wiphy *wiphy,
 #ifdef QCA_SUPPORT_CP_STATS
 static void wlan_hdd_get_tx_power(struct hdd_adapter *adapter, int *dbm)
 {
-	wlan_cfg80211_mc_cp_stats_get_tx_power(adapter->hdd_vdev, dbm);
+	wlan_cfg80211_mc_cp_stats_get_tx_power(adapter->vdev, dbm);
 }
 #else
 static void wlan_hdd_get_tx_power(struct hdd_adapter *adapter, int *dbm)

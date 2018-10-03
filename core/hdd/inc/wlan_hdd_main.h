@@ -63,6 +63,7 @@
 #include "wlan_hdd_tdls.h"
 #include "wlan_hdd_tsf.h"
 #include "wlan_hdd_cfg80211.h"
+#include "wlan_hdd_debugfs.h"
 #include <qdf_defer.h>
 #include "sap_api.h"
 #include <wlan_hdd_lro.h>
@@ -98,6 +99,31 @@
 /*
  * Preprocessor definitions and constants
  */
+
+#ifdef FEATURE_WLAN_APF
+/**
+ * struct hdd_apf_context - hdd Context for apf
+ * @magic: magic number
+ * @qdf_apf_event: Completion variable for APF get operations
+ * @capability_response: capabilities response received from fw
+ * @apf_enabled: True: APF Interpreter enabled, False: Disabled
+ * @cmd_in_progress: Flag that indicates an APF command is in progress
+ * @buf: Buffer to accumulate read memory chunks
+ * @buf_len: Length of the read memory requested
+ * @offset: APF work memory offset to fetch from
+ * @lock: APF Context lock
+ */
+struct hdd_apf_context {
+	unsigned int magic;
+	qdf_event_t qdf_apf_event;
+	bool apf_enabled;
+	bool cmd_in_progress;
+	uint8_t *buf;
+	uint32_t buf_len;
+	uint32_t offset;
+	qdf_spinlock_t lock;
+};
+#endif /* FEATURE_WLAN_APF */
 
 /** Number of Tx Queues */
 #ifdef QCA_LL_TX_FLOW_CONTROL_V2
@@ -148,21 +174,37 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
 #define NUM_CPUS 1
 #endif
 
-/**event flags registered net device*/
-#define NET_DEVICE_REGISTERED  (0)
-#define SME_SESSION_OPENED     (1)
-#define INIT_TX_RX_SUCCESS     (2)
-#define WMM_INIT_DONE          (3)
-#define SOFTAP_BSS_STARTED     (4)
-#define DEVICE_IFACE_OPENED    (5)
-#define ACS_PENDING            (7)
-#define SOFTAP_INIT_DONE       (8)
+/**
+ * enum hdd_adapter_flags - event bitmap flags registered net device
+ * @NET_DEVICE_REGISTERED: Adapter is registered with the kernel
+ * @SME_SESSION_OPENED: Firmware vdev has been created
+ * @INIT_TX_RX_SUCCESS: Adapter datapath is initialized
+ * @WMM_INIT_DONE: Adapter is initialized
+ * @SOFTAP_BSS_STARTED: Software Access Point (SAP) is running
+ * @DEVICE_IFACE_OPENED: Adapter has been "opened" via the kernel
+ * @ACS_PENDING: Auto Channel Selection (ACS) is pending
+ * @SOFTAP_INIT_DONE: Software Access Point (SAP) is initialized
+ * @VENDOR_ACS_RESPONSE_PENDING: Waiting for event for vendor acs
+ */
+enum hdd_adapter_flags {
+	NET_DEVICE_REGISTERED,
+	SME_SESSION_OPENED,
+	INIT_TX_RX_SUCCESS,
+	WMM_INIT_DONE,
+	SOFTAP_BSS_STARTED,
+	DEVICE_IFACE_OPENED,
+	ACS_PENDING,
+	SOFTAP_INIT_DONE,
+	VENDOR_ACS_RESPONSE_PENDING,
+};
 
-/* Waiting for event for vendor acs */
-#define VENDOR_ACS_RESPONSE_PENDING   (8)
-
-/* HDD global event flags */
-#define ACS_IN_PROGRESS        (0)
+/**
+ * enum hdd_driver_flags - HDD global event bitmap flags
+ * @ACS_IN_PROGRESS: Auto Channel Selection (ACS) in progress
+ */
+enum hdd_driver_flags {
+	ACS_IN_PROGRESS,
+};
 
 /** Maximum time(ms)to wait for disconnect to complete **/
 /*  This value should be larger than the timeout used by WMA to wait for
@@ -212,6 +254,8 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
 #define WLAN_WAIT_TIME_SET_DUAL_MAC_CFG 1500
 
 #define WLAN_WAIT_TIME_APF     1000
+
+#define WLAN_WAIT_TIME_FW_ROAM_STATS 1000
 
 /* Maximum time(ms) to wait for RSO CMD status event */
 #define WAIT_TIME_RSO_CMD_STATUS 2000
@@ -1167,6 +1211,11 @@ struct rcpi_info {
 
 struct hdd_context;
 
+/**
+ * struct hdd_adapter - hdd vdev/net_device context
+ * @vdev: object manager vdev context
+ * @event_flags: a bitmap of hdd_adapter_flags
+ */
 struct hdd_adapter {
 	/* Magic cookie for adapter sanity verification.  Note that this
 	 * needs to be at the beginning of the private data structure so
@@ -1179,7 +1228,7 @@ struct hdd_adapter {
 	qdf_list_node_t node;
 
 	struct hdd_context *hdd_ctx;
-	struct wlan_objmgr_vdev *hdd_vdev;
+	struct wlan_objmgr_vdev *vdev;
 
 	void *txrx_vdev;
 
@@ -1214,8 +1263,6 @@ struct hdd_adapter {
 #endif
 	bool disconnection_in_progress;
 	qdf_mutex_t disconnection_status_lock;
-
-	/**Event Flags*/
 	unsigned long event_flags;
 
 	/**Device TX/RX statistics*/
@@ -1408,6 +1455,13 @@ struct hdd_adapter {
 	/* rcpi information */
 	struct rcpi_info rcpi;
 	bool send_mode_change;
+#ifdef FEATURE_WLAN_APF
+	struct hdd_apf_context apf_context;
+#endif /* FEATURE_WLAN_APF */
+
+#ifdef WLAN_DEBUGFS
+	struct hdd_debugfs_file_info csr_file[HDD_DEBUGFS_FILE_ID_MAX];
+#endif /* WLAN_DEBUGFS */
 };
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(adapter) (&(adapter)->session.station)
@@ -1513,13 +1567,11 @@ struct hdd_offloaded_packets_ctx {
 /**
  * enum driver_status: Driver Modules status
  * @DRIVER_MODULES_UNINITIALIZED: Driver CDS modules uninitialized
- * @DRIVER_MODULES_OPENED: Driver CDS modules opened
  * @DRIVER_MODULES_ENABLED: Driver CDS modules opened
  * @DRIVER_MODULES_CLOSED: Driver CDS modules closed
  */
 enum driver_modules_status {
 	DRIVER_MODULES_UNINITIALIZED,
-	DRIVER_MODULES_OPENED,
 	DRIVER_MODULES_ENABLED,
 	DRIVER_MODULES_CLOSED
 };
@@ -1662,10 +1714,14 @@ struct hdd_cache_channels {
 };
 #endif
 
-/** Adapter structure definition */
+/**
+ * struct hdd_context - hdd shared driver and psoc/device context
+ * @pdev: object manager pdev context
+ * @g_event_flags: a bitmap of hdd_driver_flags
+ */
 struct hdd_context {
 	struct wlan_objmgr_psoc *hdd_psoc;
-	struct wlan_objmgr_pdev *hdd_pdev;
+	struct wlan_objmgr_pdev *pdev;
 	mac_handle_t mac_handle;
 	struct wiphy *wiphy;
 	qdf_spinlock_t hdd_adapter_lock;
@@ -1841,11 +1897,8 @@ struct hdd_context {
 	uint32_t rx_high_ind_cnt;
 	/* For Rx thread non GRO/LRO packet accounting */
 	uint64_t no_rx_offload_pkt_cnt;
-	/* completion variable to indicate set antenna mode complete*/
-	struct completion set_antenna_mode_cmpl;
 	/* Current number of TX X RX chains being used */
 	enum antenna_mode current_antenna_mode;
-	bool apf_enabled;
 
 	/* the radio index assigned by cnss_logger */
 	int radio_index;
@@ -1931,6 +1984,11 @@ struct hdd_context {
 	qdf_mutex_t cache_channel_lock;
 #endif
 	enum sar_version sar_version;
+#ifdef FEATURE_WLAN_APF
+	bool apf_supported;
+	uint32_t apf_version;
+	bool apf_enabled_v2;
+#endif
 };
 
 /**
@@ -2236,16 +2294,6 @@ int hdd_bus_bandwidth_init(struct hdd_context *hdd_ctx);
  */
 void hdd_bus_bandwidth_deinit(struct hdd_context *hdd_ctx);
 
-/**
- * hdd_bus_bw_cancel_work() - Cancel the bus_bw_work worker
- * @hdd_ctx: HDD context
- *
- * Cancel the bus_bw_work to stop monitor link state.
- *
- * Return: None.
- */
-void hdd_bus_bw_cancel_work(struct hdd_context *hdd_ctx);
-
 #define GET_CUR_RX_LVL(config) ((config)->cur_rx_level)
 #define GET_BW_COMPUTE_INTV(config) ((config)->busBandwidthComputeInterval)
 
@@ -2279,11 +2327,6 @@ int hdd_bus_bandwidth_init(struct hdd_context *hdd_ctx)
 
 static inline
 void hdd_bus_bandwidth_deinit(struct hdd_context *hdd_ctx)
-{
-}
-
-static inline
-void hdd_bus_bw_cancel_work(struct hdd_context *hdd_ctx)
 {
 }
 
@@ -2499,9 +2542,6 @@ wlan_hdd_check_custom_con_channel_rules(struct hdd_adapter *sta_adapter,
 
 void wlan_hdd_stop_sap(struct hdd_adapter *ap_adapter);
 void wlan_hdd_start_sap(struct hdd_adapter *ap_adapter, bool reinit);
-
-void wlan_hdd_soc_set_antenna_mode_cb(enum set_antenna_mode_status status,
-				      void *context);
 
 #ifdef QCA_CONFIG_SMP
 int wlan_hdd_get_cpu(void);

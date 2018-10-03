@@ -2650,9 +2650,9 @@ static QDF_STATUS wma_store_bcn_tmpl(tp_wma_handle wma, uint8_t vdev_id,
 	}
 
 	len = *(u32 *) &bcn_info->beacon[0];
-	if (len > WMA_BCN_BUF_MAX_SIZE) {
+	if (len > SIR_MAX_BEACON_SIZE) {
 		WMA_LOGE("%s: Received beacon len %d exceeding max limit %d",
-			 __func__, len, WMA_BCN_BUF_MAX_SIZE);
+			 __func__, len, SIR_MAX_BEACON_SIZE);
 		return QDF_STATUS_E_INVAL;
 	}
 	WMA_LOGD("%s: Storing received beacon template buf to local buffer",
@@ -2874,8 +2874,8 @@ void wma_send_beacon(tp_wma_handle wma, tpSendbeaconParams bcn_info)
 
 		if (bcn_info->p2pIeOffset) {
 			p2p_ie = bcn_info->beacon + bcn_info->p2pIeOffset;
-			WMA_LOGI("%s: p2pIe is present - vdev_id %hu, p2p_ie = %pK, p2p ie len = %hu",
-				__func__, vdev_id, p2p_ie, p2p_ie[1]);
+			WMA_LOGD("%s: p2pIe is present - vdev_id %hu, p2p_ie = %pK, p2p ie len = %hu",
+				 __func__, vdev_id, p2p_ie, p2p_ie[1]);
 			if (wma_p2p_go_set_beacon_ie(wma, vdev_id,
 							 p2p_ie) < 0) {
 				WMA_LOGE("%s : wmi_unified_bcn_tmpl_send Failed ",
@@ -3317,50 +3317,77 @@ QDF_STATUS wma_set_htconfig(uint8_t vdev_id, uint16_t ht_capab, int value)
  *
  * Return: none
  */
-void wma_hidden_ssid_vdev_restart(tp_wma_handle wma_handle,
+void wma_hidden_ssid_vdev_restart(tp_wma_handle wma,
 				  tHalHiddenSsidVdevRestart *pReq)
 {
-	struct wma_txrx_node *intr = wma_handle->interfaces;
+	struct wma_txrx_node *intr = wma->interfaces;
 	struct wma_target_req *msg;
-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
+	struct hidden_ssid_vdev_restart_params params;
+	QDF_STATUS status;
+	uint8_t vdev_id;
 
-	if ((pReq->sessionId !=
-	     intr[pReq->sessionId].vdev_restart_params.vdev_id)
-	    || !((intr[pReq->sessionId].type == WMI_VDEV_TYPE_AP)
-		 && (intr[pReq->sessionId].sub_type == 0))) {
-		WMA_LOGE("%s : invalid session id", __func__);
+	vdev_id = pReq->sessionId;
+	if ((vdev_id != intr[vdev_id].vdev_restart_params.vdev_id)
+	    || !((intr[vdev_id].type == WMI_VDEV_TYPE_AP)
+		 && (intr[vdev_id].sub_type == 0))) {
+		WMA_LOGE(FL("invalid vdev_id %d"), vdev_id);
 		return;
 	}
 
-	intr[pReq->sessionId].vdev_restart_params.ssidHidden = pReq->ssidHidden;
-	qdf_atomic_set(&intr[pReq->sessionId].vdev_restart_params.
+	intr[vdev_id].vdev_restart_params.ssidHidden = pReq->ssidHidden;
+	qdf_atomic_set(&intr[vdev_id].vdev_restart_params.
 		       hidden_ssid_restart_in_progress, 1);
 
-	msg = wma_fill_vdev_req(wma_handle, pReq->sessionId,
+	WMA_LOGD(FL("hidden ssid set using IOCTL for vdev %d ssid_hidden %d"),
+		 vdev_id, pReq->ssidHidden);
+
+	msg = wma_fill_vdev_req(wma, vdev_id,
 			WMA_HIDDEN_SSID_VDEV_RESTART,
-			WMA_TARGET_REQ_TYPE_VDEV_STOP, pReq,
-			WMA_VDEV_STOP_REQUEST_TIMEOUT);
+			WMA_TARGET_REQ_TYPE_VDEV_START,
+			pReq,
+			WMA_VDEV_START_REQUEST_TIMEOUT);
 	if (!msg) {
-		WMA_LOGE("%s: Failed to fill vdev restart request for vdev_id %d",
-				__func__, pReq->sessionId);
+		WMA_LOGE(FL("Failed to fill vdev request, vdev_id %d"),
+			 vdev_id);
+		qdf_atomic_set(&intr[vdev_id].vdev_restart_params.
+			       hidden_ssid_restart_in_progress, 0);
+		qdf_mem_free(pReq);
 		return;
 	}
 
-	/* vdev stop -> vdev restart -> vdev up */
-	WMA_LOGD("%s, vdev_id: %d, pausing tx_ll_queue for VDEV_STOP",
-		 __func__, pReq->sessionId);
-	cdp_fc_vdev_pause(soc,
-		wma_handle->
-		interfaces[pReq->sessionId].handle,
-		OL_TXQ_PAUSE_REASON_VDEV_STOP);
-	wma_vdev_set_pause_bit(pReq->sessionId, PAUSE_TYPE_HOST);
-	if (wma_send_vdev_stop_to_fw(wma_handle, pReq->sessionId)) {
-		WMA_LOGE("%s: %d Failed to send vdev stop", __func__, __LINE__);
-		qdf_atomic_set(&intr[pReq->sessionId].vdev_restart_params.
+	params.session_id = vdev_id;
+	params.ssid_len = intr[vdev_id].vdev_restart_params.ssid.ssid_len;
+	qdf_mem_copy(params.ssid,
+		     intr[vdev_id].vdev_restart_params.ssid.ssid,
+		     params.ssid_len);
+	params.flags = intr[vdev_id].vdev_restart_params.flags;
+	if (intr[vdev_id].vdev_restart_params.ssidHidden)
+		params.flags |= WMI_UNIFIED_VDEV_START_HIDDEN_SSID;
+	else
+		params.flags &= (0xFFFFFFFE);
+	params.requestor_id = intr[vdev_id].vdev_restart_params.requestor_id;
+	params.disable_hw_ack =
+		intr[vdev_id].vdev_restart_params.disable_hw_ack;
+
+	params.mhz = intr[vdev_id].vdev_restart_params.chan.mhz;
+	params.band_center_freq1 =
+		intr[vdev_id].vdev_restart_params.chan.band_center_freq1;
+	params.band_center_freq2 =
+		intr[vdev_id].vdev_restart_params.chan.band_center_freq2;
+	params.info = intr[vdev_id].vdev_restart_params.chan.info;
+	params.reg_info_1 = intr[vdev_id].vdev_restart_params.chan.reg_info_1;
+	params.reg_info_2 = intr[vdev_id].vdev_restart_params.chan.reg_info_2;
+
+	wma_vdev_set_mlme_state(wma, vdev_id, WLAN_VDEV_S_STOP);
+	status = wmi_unified_hidden_ssid_vdev_restart_send(wma->wmi_handle,
+							   &params);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		WMA_LOGE(FL("Failed to send vdev restart command"));
+		qdf_atomic_set(&intr[vdev_id].vdev_restart_params.
 			       hidden_ssid_restart_in_progress, 0);
-		wma_remove_vdev_req(wma_handle, pReq->sessionId,
-					WMA_TARGET_REQ_TYPE_VDEV_STOP);
-		return;
+		wma_remove_vdev_req(wma, vdev_id,
+				    WMA_TARGET_REQ_TYPE_VDEV_START);
+		qdf_mem_free(pReq);
 	}
 }
 
@@ -3722,11 +3749,7 @@ static bool wma_is_pkt_drop_candidate(tp_wma_handle wma_handle,
 				      uint8_t *peer_addr, uint8_t *bssid,
 				      uint8_t subtype)
 {
-	struct cdp_pdev *pdev_ctx;
 	bool should_drop = false;
-	qdf_time_t timestamp;
-	bool ret;
-	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 	uint8_t nan_addr[] = {0x50, 0x6F, 0x9A, 0x01, 0x00, 0x00};
 
 	/* Drop the beacons from NAN device */
@@ -3735,53 +3758,6 @@ static bool wma_is_pkt_drop_candidate(tp_wma_handle wma_handle,
 			should_drop = true;
 			goto end;
 	}
-
-	/*
-	 * Currently this function handles only Disassoc,
-	 * Deauth and Assoc req frames. Return false for
-	 * all other frames.
-	 */
-	if (subtype != IEEE80211_FC0_SUBTYPE_DISASSOC &&
-	    subtype != IEEE80211_FC0_SUBTYPE_DEAUTH &&
-	    subtype != IEEE80211_FC0_SUBTYPE_ASSOC_REQ) {
-		should_drop = false;
-		goto end;
-	}
-
-	pdev_ctx = cds_get_context(QDF_MODULE_ID_TXRX);
-	if (!pdev_ctx) {
-		WMA_LOGE(FL("Failed to get the context"));
-		should_drop = true;
-		goto end;
-	}
-
-	ret = cdp_peer_get_last_mgmt_timestamp(soc, pdev_ctx,
-					       peer_addr, subtype,
-					       &timestamp);
-
-	if (!ret) {
-		if (IEEE80211_FC0_SUBTYPE_ASSOC_REQ != subtype) {
-			WMA_LOGE(FL("cdp_last_mgmt_timestamp_received %s 0x%x"),
-				 "failed for subtype", subtype);
-			should_drop = true;
-		}
-		goto end;
-	} else if (timestamp > 0 &&
-		   qdf_system_time_before(qdf_get_system_timestamp(),
-					  timestamp +
-					  WMA_MGMT_FRAME_DETECT_DOS_TIMER)) {
-		WMA_LOGD(FL("Dropping subtype 0x%x frame. %s %d ms %s %d ms"),
-			 subtype, "It is received after",
-			 (int)(qdf_get_system_timestamp() - timestamp),
-			 "of last frame. Allow it only after",
-			 WMA_MGMT_FRAME_DETECT_DOS_TIMER);
-		should_drop = true;
-		goto end;
-	}
-	if (!cdp_peer_update_last_mgmt_timestamp(soc, pdev_ctx, peer_addr,
-						 qdf_get_system_timestamp(),
-						 subtype))
-		should_drop = true;
 end:
 	return should_drop;
 }
@@ -4329,3 +4305,22 @@ QDF_STATUS wma_mgmt_unified_cmd_send(struct wlan_objmgr_vdev *vdev,
 	return QDF_STATUS_SUCCESS;
 }
 
+void wma_mgmt_nbuf_unmap_cb(struct wlan_objmgr_pdev *pdev,
+			    qdf_nbuf_t buf)
+{
+	struct wlan_objmgr_psoc *psoc;
+	qdf_device_t dev;
+
+	if (!buf)
+		return;
+
+	psoc = wlan_pdev_get_psoc(pdev);
+	if (!psoc) {
+		WMA_LOGE("%s: Psoc handle NULL", __func__);
+		return;
+	}
+
+	dev = wlan_psoc_get_qdf_dev(psoc);
+	if (wlan_psoc_nif_fw_ext_cap_get(psoc, WLAN_SOC_CEXT_WMI_MGMT_REF))
+		qdf_nbuf_unmap_single(dev, buf, QDF_DMA_TO_DEVICE);
+}

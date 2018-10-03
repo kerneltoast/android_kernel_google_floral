@@ -2840,13 +2840,13 @@ sir_convert_assoc_req_frame2_struct(tpAniSirGlobal pMac,
 	if (ar->VHTCaps.present) {
 		qdf_mem_copy(&pAssocReq->VHTCaps, &ar->VHTCaps,
 			     sizeof(tDot11fIEVHTCaps));
-		pe_warn("Received Assoc Req with VHT Cap");
+		pe_debug("Received Assoc Req with VHT Cap");
 		lim_log_vht_cap(pMac, &pAssocReq->VHTCaps);
 	}
 	if (ar->OperatingMode.present) {
 		qdf_mem_copy(&pAssocReq->operMode, &ar->OperatingMode,
 			     sizeof(tDot11fIEOperatingMode));
-		pe_warn("Received Assoc Req with Operating Mode IE");
+		pe_debug("Received Assoc Req with Operating Mode IE");
 		lim_log_operating_mode(pMac, &pAssocReq->operMode);
 	}
 	if (ar->ExtCap.present) {
@@ -6420,6 +6420,9 @@ QDF_STATUS populate_dot11f_twt_extended_caps(tpAniSirGlobal mac_ctx,
 	uint32_t value = 0;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
 	struct s_ext_cap *p_ext_cap;
+
+	if (!pe_session->enable_session_twt_support)
+		return QDF_STATUS_SUCCESS;
 
 	dot11f->num_bytes = DOT11F_IE_EXTCAP_MAX_LEN;
 	p_ext_cap = (struct s_ext_cap *)dot11f->bytes;

@@ -274,6 +274,7 @@ typedef enum eSirResultCodes {
 	eSIR_SME_DEAUTH_STATUS,
 	eSIR_PNO_SCAN_SUCCESS,
 	eSIR_SME_INVALID_SESSION,
+	eSIR_SME_PEER_CREATE_FAILED,
 	eSIR_DONOT_USE_RESULT_CODE = SIR_MAX_ENUM_SIZE
 } tSirResultCodes;
 
@@ -412,6 +413,7 @@ typedef struct sSirSmeReadyReq {
 	uint16_t transactionId;
 	void *csr_roam_synch_cb;
 	void *pe_roam_synch_cb;
+	void *stop_roaming_cb;
 	QDF_STATUS (*sme_msg_cb)(tpAniSirGlobal mac,
 				 struct scheduler_msg *msg);
 } tSirSmeReadyReq, *tpSirSmeReadyReq;
@@ -1078,6 +1080,7 @@ typedef struct sSirSmeJoinReq {
 	uint8_t vdev_nss;
 	uint8_t nss;
 	bool nss_forced_1x1;
+	bool enable_session_twt_support;
 	tSirBssDescription bssDescription;
 	/*
 	 * WARNING: Pls make bssDescription as last variable in struct
@@ -1784,28 +1787,6 @@ typedef struct sAniGetSnrReq {
 	void *pDevContext;      /* device context */
 	int8_t snr;
 } tAniGetSnrReq, *tpAniGetSnrReq;
-
-/**
- * struct ani_scan_req - Scan request
- * @msg_type: Message type
- * @msg_len: Message Length
- * @session_id: SME session Id
- * @scan_param: scan request parameter
- * @callback: call back function for scan result
- * @ctx: Global context
- *
- * Scan request message structure
- */
-struct ani_scan_req {
-	/* message type is same as the request type */
-	uint16_t msg_type;
-	/* length of the entire request */
-	uint16_t msg_len;
-	uint16_t session_id;
-	void *scan_param;
-	void *callback;
-	void *ctx;
-};
 
 /**
  * struct ani_roc_req - Remain on channel request
@@ -3010,9 +2991,9 @@ struct sir_wifi_start_log {
  * @pcl_len: Number of channels in the PCL
  */
 struct sir_pcl_list {
+	uint32_t pcl_len;
 	uint8_t pcl_list[128];
 	uint8_t weight_list[128];
-	uint32_t pcl_len;
 };
 
 /**
@@ -3902,7 +3883,6 @@ struct sir_wisa_params {
 
 #define WLAN_EXTSCAN_MAX_CHANNELS                 36
 #define WLAN_EXTSCAN_MAX_BUCKETS                  16
-#define WLAN_EXTSCAN_MAX_HOTLIST_APS              128
 #define WLAN_EXTSCAN_MAX_SIGNIFICANT_CHANGE_APS   64
 
 typedef enum {
@@ -3994,16 +3974,6 @@ enum wifi_extscan_event_type {
 enum extscan_configuration_flags {
 	EXTSCAN_LP_EXTENDED_BATCHING = 0x00000001,
 };
-
-typedef struct {
-	struct qdf_mac_addr bssid;
-
-	/* Low threshold */
-	int32_t low;
-
-	/* High threshold */
-	int32_t high;
-} tSirAPThresholdParam, *tpSirAPThresholdParam;
 
 typedef struct {
 	uint32_t requestId;
@@ -4318,48 +4288,6 @@ typedef struct {
 	uint8_t sessionId;
 } tSirExtScanStopReqParams, *tpSirExtScanStopReqParams;
 
-/**
- * struct tSirExtScanSetBssidHotListReqParams - set hotlist request
- * @requestId: request identifier
- * @sessionId: session identifier
- * @lost_ap_sample_size: number of samples to confirm AP loss
- * @numAp: Number of hotlist APs
- * @ap: hotlist APs
- */
-typedef struct {
-	uint32_t  requestId;
-	uint8_t   sessionId;
-
-	uint32_t  lost_ap_sample_size;
-	uint32_t  numAp;
-	tSirAPThresholdParam ap[WLAN_EXTSCAN_MAX_HOTLIST_APS];
-} tSirExtScanSetBssidHotListReqParams, *tpSirExtScanSetBssidHotListReqParams;
-
-typedef struct {
-	uint32_t requestId;
-	uint8_t sessionId;
-} tSirExtScanResetBssidHotlistReqParams,
-*tpSirExtScanResetBssidHotlistReqParams;
-
-typedef struct {
-	uint32_t requestId;
-	uint8_t sessionId;
-
-	/* Number of samples for averaging RSSI */
-	uint32_t rssiSampleSize;
-
-	/* Number of missed samples to confirm AP loss */
-	uint32_t lostApSampleSize;
-
-	/* Number of APs breaching threshold required for firmware
-	 * to generate event
-	 */
-	uint32_t minBreaching;
-
-	uint32_t numAp;
-	tSirAPThresholdParam ap[WLAN_EXTSCAN_MAX_SIGNIFICANT_CHANGE_APS];
-} tSirExtScanSetSigChangeReqParams, *tpSirExtScanSetSigChangeReqParams;
-
 typedef struct {
 	struct qdf_mac_addr bssid;
 	uint32_t channel;
@@ -4376,12 +4304,6 @@ typedef struct {
 	uint32_t numResults;
 	tSirWifiSignificantChange ap[];
 } tSirWifiSignificantChangeEvent, *tpSirWifiSignificantChangeEvent;
-
-typedef struct {
-	uint32_t requestId;
-	uint8_t sessionId;
-} tSirExtScanResetSignificantChangeReqParams,
-*tpSirExtScanResetSignificantChangeReqParams;
 
 typedef struct {
 	uint32_t requestId;
@@ -7270,6 +7192,21 @@ struct sir_limit_off_chan {
 	uint32_t max_off_chan_time;
 	uint32_t rest_time;
 	bool skip_dfs_chans;
+};
+
+typedef void (*roam_scan_stats_cb)(void *context,
+				   struct wmi_roam_scan_stats_res *res);
+
+/**
+ * struct sir_roam_scan_stats - Stores roam scan context
+ * @vdev_id: vdev id
+ * @cb: callback to be invoked for roam scan stats response
+ * @context: context of callback
+ */
+struct sir_roam_scan_stats {
+	uint32_t vdev_id;
+	roam_scan_stats_cb cb;
+	void *context;
 };
 
 /**
