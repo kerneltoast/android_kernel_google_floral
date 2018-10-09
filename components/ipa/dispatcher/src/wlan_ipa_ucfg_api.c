@@ -186,3 +186,13 @@ void ucfg_ipa_cleanup_dev_iface(struct wlan_objmgr_pdev *pdev,
 {
 	return ipa_cleanup_dev_iface(pdev, net_dev);
 }
+
+void ucfg_ipa_uc_ssr_cleanup(struct wlan_objmgr_pdev *pdev)
+{
+	return ipa_uc_ssr_cleanup(pdev);
+}
+
+void ucfg_ipa_fw_rejuvenate_send_msg(struct wlan_objmgr_pdev *pdev)
+{
+	return ipa_fw_rejuvenate_send_msg(pdev);
+}

@@ -564,7 +564,8 @@ tListElem *csr_nonscan_pending_ll_next(struct sAniSirGlobal *mac_ctx,
 	sme_cmd = GET_BASE_ADDR(entry, tSmeCmd, Link);
 	cmd.cmd_id = sme_cmd->cmd_id;
 	cmd.cmd_type = csr_get_cmd_type(sme_cmd);
-	cmd.vdev = wlan_objmgr_get_vdev_by_id_from_psoc(mac_ctx->psoc,
+	cmd.vdev = wlan_objmgr_get_vdev_by_id_from_psoc_no_state(
+				mac_ctx->psoc,
 				sme_cmd->sessionId, WLAN_LEGACY_SME_ID);
 	tcmd = wlan_serialization_get_pending_list_next_node_using_psoc(
 				mac_ctx->psoc, &cmd, false);
@@ -3876,6 +3877,28 @@ static inline void csr_update_pmksa_to_profile(struct csr_roam_profile *profile,
 }
 #endif
 
+/**
+ * csr_update_session_pmk() - Update the pmk len and pmk in the roam session
+ * @session: pointer to the CSR Roam session
+ * @pmkid_cache: pointer to the pmkid cache
+ *
+ * Return: None
+ */
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+static void csr_update_session_pmk(struct csr_roam_session *session,
+				   tPmkidCacheInfo *pmkid_cache)
+{
+	session->pmk_len = pmkid_cache->pmk_len;
+	qdf_mem_zero(session->psk_pmk, sizeof(session->psk_pmk));
+	qdf_mem_copy(session->psk_pmk, pmkid_cache->pmk, session->pmk_len);
+}
+#else
+static inline void csr_update_session_pmk(struct csr_roam_session *session,
+					  tPmkidCacheInfo *pmkid_cache)
+{
+}
+#endif
+
 uint8_t csr_construct_rsn_ie(tpAniSirGlobal pMac, uint32_t sessionId,
 			     struct csr_roam_profile *pProfile,
 			     tSirBssDescription *pSirBssDesc,
@@ -4007,6 +4030,14 @@ uint8_t csr_construct_rsn_ie(tpAniSirGlobal pMac, uint32_t sessionId,
 			qdf_mem_copy(pPMK->PMKIDList[0].PMKID,
 				     pmkid_cache.PMKID,
 				     CSR_RSN_PMKID_SIZE);
+
+			/*
+			 * If a PMK cache is found for the BSSID, then
+			 * update the PMK in CSR session also as this
+			 * will be sent to the FW during RSO.
+			 */
+			csr_update_session_pmk(session, &pmkid_cache);
+
 			csr_update_pmksa_to_profile(pProfile, &pmkid_cache);
 		} else {
 			pPMK->cPMKIDs = 0;
@@ -4677,28 +4708,8 @@ uint8_t csr_retrieve_rsn_ie(tpAniSirGlobal pMac, uint32_t sessionId,
 			break;
 		}
 
-		if (csr_roam_is_fast_roam_enabled(pMac, sessionId)) {
-			/* If "Legacy Fast Roaming" is enabled ALWAYS rebuild
-			 * the RSN IE from scratch. So it contains the current
-			 * PMK-IDs
-			 */
-			cbRsnIe =
-				csr_construct_rsn_ie(pMac, sessionId, pProfile,
-						     pSirBssDesc, pIes, pRsnIe);
-		} else if (pProfile->nRSNReqIELength && pProfile->pRSNReqIE) {
-			/* If you have one started away, re-use it. */
-			if (pProfile->nRSNReqIELength <=
-					DOT11F_IE_RSN_MAX_LEN) {
-				cbRsnIe = (uint8_t) pProfile->nRSNReqIELength;
-				qdf_mem_copy(pRsnIe, pProfile->pRSNReqIE,
-					     cbRsnIe);
-			} else
-				sme_warn("csr_retrieve_rsn_ie detect invalid RSN IE length (%d)",
-					pProfile->nRSNReqIELength);
-		} else
-			cbRsnIe = csr_construct_rsn_ie(pMac, sessionId,
-							pProfile,
-						     pSirBssDesc, pIes, pRsnIe);
+		cbRsnIe = csr_construct_rsn_ie(pMac, sessionId, pProfile,
+					       pSirBssDesc, pIes, pRsnIe);
 	} while (0);
 
 	return cbRsnIe;

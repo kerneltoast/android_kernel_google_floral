@@ -185,6 +185,7 @@ static inline bool in_compat_syscall(void) { return is_compat_task(); }
  * @ACS_PENDING: Auto Channel Selection (ACS) is pending
  * @SOFTAP_INIT_DONE: Software Access Point (SAP) is initialized
  * @VENDOR_ACS_RESPONSE_PENDING: Waiting for event for vendor acs
+ * DOWN_DURING_SSR: Interface went down during SSR
  */
 enum hdd_adapter_flags {
 	NET_DEVICE_REGISTERED,
@@ -196,6 +197,7 @@ enum hdd_adapter_flags {
 	ACS_PENDING,
 	SOFTAP_INIT_DONE,
 	VENDOR_ACS_RESPONSE_PENDING,
+	DOWN_DURING_SSR
 };
 
 /**
@@ -1716,11 +1718,12 @@ struct hdd_cache_channels {
 
 /**
  * struct hdd_context - hdd shared driver and psoc/device context
+ * @psoc: object manager psoc context
  * @pdev: object manager pdev context
  * @g_event_flags: a bitmap of hdd_driver_flags
  */
 struct hdd_context {
-	struct wlan_objmgr_psoc *hdd_psoc;
+	struct wlan_objmgr_psoc *psoc;
 	struct wlan_objmgr_pdev *pdev;
 	mac_handle_t mac_handle;
 	struct wiphy *wiphy;
@@ -2171,7 +2174,7 @@ void wlan_hdd_release_intf_addr(struct hdd_context *hdd_ctx,
 uint8_t hdd_get_operating_channel(struct hdd_context *hdd_ctx,
 			enum QDF_OPMODE mode);
 
-void hdd_set_conparam(uint32_t con_param);
+void hdd_set_conparam(int32_t con_param);
 enum QDF_GLOBAL_MODE hdd_get_conparam(void);
 void crda_regulatory_entry_default(uint8_t *countryCode, int domain_id);
 void wlan_hdd_reset_prob_rspies(struct hdd_adapter *adapter);
@@ -2235,6 +2238,17 @@ bool hdd_is_valid_mac_address(const uint8_t *pMacAddr);
 QDF_STATUS hdd_issta_p2p_clientconnected(struct hdd_context *hdd_ctx);
 bool wlan_hdd_validate_modules_state(struct hdd_context *hdd_ctx);
 
+/**
+ * wlan_hdd_validate_mac_address() - Function to validate mac address
+ * @mac_addr: input mac address
+ *
+ * Return QDF_STATUS
+ */
+#define wlan_hdd_validate_mac_address(mac_addr) \
+	__wlan_hdd_validate_mac_address(mac_addr, __func__)
+
+QDF_STATUS __wlan_hdd_validate_mac_address(struct qdf_mac_addr *mac_addr,
+					   const char *func);
 #ifdef MSM_PLATFORM
 /**
  * hdd_bus_bw_compute_timer_start() - start the bandwidth timer
@@ -2720,7 +2734,8 @@ static inline int wlan_hdd_nl_init(struct hdd_context *hdd_ctx)
 	return nl_srv_init(hdd_ctx->wiphy);
 }
 #endif
-QDF_STATUS hdd_sme_open_session_callback(uint8_t session_id);
+QDF_STATUS hdd_sme_open_session_callback(uint8_t session_id,
+					 QDF_STATUS qdf_status);
 QDF_STATUS hdd_sme_close_session_callback(uint8_t session_id);
 
 int hdd_reassoc(struct hdd_adapter *adapter, const uint8_t *bssid,

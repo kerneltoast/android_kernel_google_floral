@@ -49,16 +49,17 @@ void hdd_nud_incr_gw_rx_pkt_cnt(struct hdd_adapter *adapter,
 			       ->nud_tracking.tx_rx_stats.gw_rx_packets);
 }
 
-/**
- * hdd_nud_flush_work() - flush pending nud work
- * @adapter: Pointer to hdd adapter
- *
- * Return: None
- */
-static inline void
-hdd_nud_flush_work(struct hdd_adapter *adapter)
+void hdd_nud_flush_work(struct hdd_adapter *adapter)
 {
-	qdf_disable_work(&adapter->nud_tracking.nud_event_work);
+	struct hdd_context *hdd_ctx;
+
+	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+
+	if (adapter->device_mode == QDF_STA_MODE &&
+	    hdd_ctx->config->enable_nud_tracking) {
+		hdd_debug("Flush the NUD work");
+		qdf_disable_work(&adapter->nud_tracking.nud_event_work);
+	}
 }
 
 void hdd_nud_deinit_tracking(struct hdd_adapter *adapter)
@@ -95,8 +96,6 @@ void hdd_nud_reset_tracking(struct hdd_adapter *adapter)
 		adapter->nud_tracking.curr_state = NUD_NONE;
 		qdf_atomic_set(&adapter
 			       ->nud_tracking.tx_rx_stats.gw_rx_packets, 0);
-
-		hdd_nud_flush_work(adapter);
 	}
 }
 
@@ -200,8 +199,6 @@ static void hdd_nud_set_tracking(struct hdd_adapter *adapter,
 				 uint8_t nud_state,
 				 bool capture_enabled)
 {
-	hdd_debug("set the NUD tracking");
-
 	adapter->nud_tracking.curr_state = nud_state;
 	qdf_atomic_set(&adapter->nud_tracking.tx_rx_stats.gw_rx_packets, 0);
 	adapter->nud_tracking.is_gw_rx_pkt_track_enabled = capture_enabled;
@@ -241,6 +238,10 @@ static void __hdd_nud_failure_work(void *data)
 
 	if (eConnectionState_Associated != conn_state) {
 		hdd_debug("Not in Connected State");
+		return;
+	}
+	if (adapter->nud_tracking.curr_state != NUD_FAILED) {
+		hdd_debug("Not in NUD_FAILED state");
 		return;
 	}
 
@@ -316,11 +317,13 @@ static void hdd_nud_process_failure_event(struct hdd_adapter *adapter)
 	curr_state = adapter->nud_tracking.curr_state;
 	if (curr_state == NUD_PROBE || curr_state == NUD_INCOMPLETE) {
 		hdd_nud_capture_stats(adapter, NUD_FAILED);
-		if (hdd_nud_honour_failure(adapter))
+		if (hdd_nud_honour_failure(adapter)) {
+			adapter->nud_tracking.curr_state = NUD_FAILED;
 			qdf_sched_work(0, &adapter
 					->nud_tracking.nud_event_work);
-		else
+		} else {
 			hdd_nud_set_tracking(adapter, NUD_NONE, false);
+		}
 	} else {
 		hdd_debug("NUD FAILED -> Current State [0x%x]", curr_state);
 	}
@@ -352,12 +355,9 @@ static void hdd_nud_filter_netevent(struct neighbour *neigh)
 	if (status)
 		return;
 
-	if (adapter->device_mode != QDF_STA_MODE) {
-		hdd_err("Device_mode %s(%d) is not supported for NUD handling",
-			hdd_device_mode_to_string(adapter->device_mode),
-			adapter->device_mode);
+	if (adapter->device_mode != QDF_STA_MODE)
 		return;
-	}
+
 	conn_state = (WLAN_HDD_GET_STATION_CTX_PTR(adapter))
 		->conn_info.connState;
 
@@ -372,10 +372,9 @@ static void hdd_nud_filter_netevent(struct neighbour *neigh)
 	}
 
 	if (!qdf_is_macaddr_equal(&adapter->nud_tracking.gw_mac_addr,
-				  (struct qdf_mac_addr *)&neigh->ha[0])) {
-		hdd_debug("NUD event not for registered GW");
+				  (struct qdf_mac_addr *)&neigh->ha[0]))
 		return;
-	}
+
 	switch (neigh->nud_state) {
 	case NUD_PROBE:
 	case NUD_INCOMPLETE:

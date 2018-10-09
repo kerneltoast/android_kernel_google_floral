@@ -673,6 +673,11 @@ WLAN_PHY_MODE wma_chan_phy_mode(u8 chan, enum phy_ch_width chan_width,
 		return MODE_UNKNOWN;
 	}
 
+	if (chan_width >= CH_WIDTH_INVALID) {
+		WMA_LOGE("%s : Invalid channel width", __func__);
+		return MODE_UNKNOWN;
+	}
+
 	if (WLAN_REG_IS_24GHZ_CH(chan)) {
 		if (((CH_WIDTH_5MHZ == chan_width) ||
 		     (CH_WIDTH_10MHZ == chan_width)) &&
@@ -1177,7 +1182,7 @@ void wma_check_and_set_wake_timer(uint32_t time)
 
 	for (i = 0; i < wma->max_bssid; i++) {
 		iface = &wma->interfaces[i];
-		if (iface->is_vdev_valid && iface->is_waiting_for_key) {
+		if (iface->vdev_active && iface->is_waiting_for_key) {
 			/*
 			 * right now cookie is dont care, since FW disregards
 			 * that.
@@ -4377,7 +4382,7 @@ QDF_STATUS wma_process_set_ie_info(tp_wma_handle wma,
 	}
 
 	interface = &wma->interfaces[ie_info->vdev_id];
-	if (!interface->is_vdev_valid) {
+	if (!wma_is_vdev_valid(ie_info->vdev_id)) {
 		WMA_LOGE(FL("vdev_id: %d is not active"), ie_info->vdev_id);
 		return QDF_STATUS_E_INVAL;
 	}
@@ -5388,6 +5393,26 @@ QDF_STATUS wma_set_sar_limit(WMA_HANDLE handle,
 				sar_limit_params);
 
 	return ret;
+}
+
+QDF_STATUS wma_send_coex_config_cmd(WMA_HANDLE wma_handle,
+				    struct coex_config_params *coex_cfg_params)
+{
+	tp_wma_handle wma = (tp_wma_handle)wma_handle;
+
+	if (!wma || !wma->wmi_handle) {
+		WMA_LOGE("%s: WMA is closed, can not issue coex config command",
+			 __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	if (!coex_cfg_params) {
+		WMA_LOGE("%s: coex cfg params ptr NULL", __func__);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	return wmi_unified_send_coex_config_cmd(wma->wmi_handle,
+					       coex_cfg_params);
 }
 
 /**

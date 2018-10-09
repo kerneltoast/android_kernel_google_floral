@@ -90,6 +90,7 @@
 #define wma_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_WMA, params)
 #define wma_info(params...) QDF_TRACE_INFO(QDF_MODULE_ID_WMA, params)
 #define wma_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_WMA, params)
+#define wma_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_WMA, params)
 
 #define WMA_DEBUG_ALWAYS
 
@@ -214,10 +215,17 @@ enum ds_mode {
 
 #define WMA_PDEV_SET_HW_MODE_RESP 0x06
 
-#define WMA_VDEV_START_REQUEST_TIMEOUT		6000 /* 6s */
-#define WMA_VDEV_STOP_REQUEST_TIMEOUT		6000 /* 6s */
-#define WMA_VDEV_HW_MODE_REQUEST_TIMEOUT	5000 /* 5s */
-#define WMA_VDEV_PLCY_MGR_CMD_TIMEOUT		3000 /* 3s */
+#ifdef CONFIG_SLUB_DEBUG_ON
+#define SLUB_DEBUG_FACTOR (2)
+#else
+#define SLUB_DEBUG_FACTOR (1)
+#endif
+
+/* FW response timeout values in milli seconds */
+#define WMA_VDEV_START_REQUEST_TIMEOUT   (6000) * (SLUB_DEBUG_FACTOR)
+#define WMA_VDEV_STOP_REQUEST_TIMEOUT    (6000) * (SLUB_DEBUG_FACTOR)
+#define WMA_VDEV_HW_MODE_REQUEST_TIMEOUT (6000) * (SLUB_DEBUG_FACTOR)
+#define WMA_VDEV_PLCY_MGR_CMD_TIMEOUT    (6000) * (SLUB_DEBUG_FACTOR)
 #define WMA_VDEV_SET_KEY_WAKELOCK_TIMEOUT	WAKELOCK_DURATION_RECOMMENDED
 
 #define WMA_TGT_INVALID_SNR (0)
@@ -895,7 +903,6 @@ struct wma_txrx_node {
 	uint8_t wep_default_key_idx;
 	tSirHostOffloadReq arp_offload_req;
 	tSirHostOffloadReq ns_offload_req;
-	bool is_vdev_valid;
 #ifndef QCA_SUPPORT_CP_STATS
 	struct sir_vdev_wow_stats wow_stats;
 #endif
@@ -1719,7 +1726,7 @@ QDF_STATUS wma_set_rssi_monitoring(tp_wma_handle wma,
 					struct rssi_monitor_req *req);
 
 QDF_STATUS wma_send_pdev_set_pcl_cmd(tp_wma_handle wma_handle,
-		struct wmi_pcl_chan_weights *msg);
+				     struct set_pcl_req *msg);
 
 QDF_STATUS wma_send_pdev_set_hw_mode_cmd(tp_wma_handle wma_handle,
 		struct policy_mgr_hw_mode *msg);

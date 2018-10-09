@@ -854,8 +854,18 @@ int hdd_reassoc(struct hdd_adapter *adapter, const uint8_t *bssid,
 
 	sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
 
-	/* if not associated, no need to proceed with reassoc */
-	if (eConnectionState_Associated != sta_ctx->conn_info.connState) {
+	/*
+	 * pHddStaCtx->conn_info.connState is set to disconnected only
+	 * after the disconnect done indication from SME. If the SME is
+	 * in the process of disconnecting, the SME Connection state is
+	 * set to disconnected and the pHddStaCtx->conn_info.connState
+	 * will still be associated till the disconnect is done.
+	 * So check both the HDD state and SME state here.
+	 * If not associated, no need to proceed with reassoc
+	 */
+	if ((eConnectionState_Associated != sta_ctx->conn_info.connState) ||
+	    (!sme_is_conn_state_connected(hdd_ctx->mac_handle,
+	    adapter->session_id))) {
 		hdd_warn("Not associated");
 		ret = -EINVAL;
 		goto exit;
@@ -4879,14 +4889,14 @@ static int drv_cmd_miracast(struct hdd_adapter *adapter,
 		hdd_err("Failed to set miracast");
 		return -EBUSY;
 	}
-	ret_status = ucfg_scan_set_miracast(hdd_ctx->hdd_psoc,
+	ret_status = ucfg_scan_set_miracast(hdd_ctx->psoc,
 					    filterType ? true : false);
 	if (QDF_IS_STATUS_ERROR(ret_status)) {
 		hdd_err("Failed to set miracastn scan");
 		return -EBUSY;
 	}
 
-	if (policy_mgr_is_mcc_in_24G(hdd_ctx->hdd_psoc))
+	if (policy_mgr_is_mcc_in_24G(hdd_ctx->psoc))
 		return wlan_hdd_set_mas(adapter, filterType);
 
 exit:
@@ -6679,7 +6689,7 @@ int hdd_set_antenna_mode(struct hdd_adapter *adapter,
 
 	/* Check TDLS status and update antenna mode */
 	if ((QDF_STA_MODE == adapter->device_mode) &&
-	    policy_mgr_is_sta_active_connection_exists(hdd_ctx->hdd_psoc)) {
+	    policy_mgr_is_sta_active_connection_exists(hdd_ctx->psoc)) {
 		ret = wlan_hdd_tdls_antenna_switch(hdd_ctx, adapter, mode);
 		if (0 != ret)
 			goto exit;
