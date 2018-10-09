@@ -15,7 +15,9 @@
 #include <linux/module.h>
 #include <soc/swr-wcd.h>
 
-#define SWR_MAX_ROW		0 /* Rows = 48 */
+#define SWR_ROW_48		0
+#define SWR_ROW_50		1
+#define SWR_ROW_64		2
 #define SWR_MAX_COL		7 /* Cols = 16 */
 #define SWR_MIN_COL		0 /* Cols = 2 */
 
@@ -62,6 +64,12 @@ struct port_params {
 	u8 si;
 	u8 off1;
 	u8 off2;
+	u8 hstart;/* head start */
+	u8 hstop; /* head stop */
+	u8 wd_len;/* word length */
+	u8 bp_mode; /* block pack mode */
+	u8 bgp_ctrl;/* block group control */
+	u8 lane_ctrl;/* lane to be used */
 };
 
 struct swrm_mports {
@@ -77,6 +85,8 @@ struct swrm_mports {
 	u8 hstop;
 	u8 blk_grp_count;
 	u8 blk_pack_mode;
+	u8 word_length;
+	u8 lane_ctrl;
 };
 
 struct swrm_port_type {
@@ -102,12 +112,14 @@ struct swr_mstr_ctrl {
 	int clk_ref_count;
 	struct completion reset;
 	struct completion broadcast;
+	struct mutex iolock;
 	struct mutex mlock;
 	struct mutex reslock;
 	u32 swrm_base_reg;
 	char __iomem *swrm_dig_base;
 	u8 rcmd_id;
 	u8 wcmd_id;
+	u32 master_id;
 	void *handle; /* SWR Master handle from client for read and writes */
 	int (*read)(void *handle, int reg);
 	int (*write)(void *handle, int reg, int val);
@@ -117,6 +129,7 @@ struct swr_mstr_ctrl {
 			void *data), void *swr_handle, int type);
 	int irq;
 	int version;
+	int mclk_freq;
 	u32 num_dev;
 	int slave_status;
 	struct swrm_mports mport_cfg[SWR_MAX_MSTR_PORT_NUM];
@@ -127,10 +140,15 @@ struct swr_mstr_ctrl {
 	u8 num_cfg_devs;
 	struct mutex force_down_lock;
 	int force_down_state;
+	struct notifier_block event_notifier;
+	struct work_struct dc_presence_work;
 	u8 num_ports;
 	struct swrm_port_type
 			port_mapping[SWR_MSTR_PORT_LEN][SWR_MAX_CH_PER_PORT];
 	int swr_irq;
+	u32 clk_stop_mode0_supp;
+	struct work_struct wakeup_work;
+	u32 wakeup_req;
 };
 
 #endif /* _SWR_WCD_CTRL_H */

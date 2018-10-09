@@ -704,7 +704,10 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	prtd->set_channel_map = false;
 	prtd->reset_event = false;
 	runtime->private_data = prtd;
-	msm_adsp_init_mixer_ctl_pp_event_queue(soc_prtd);
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		msm_adsp_init_mixer_ctl_pp_event_queue(soc_prtd);
+
 	/* Vote to update the Rx thread priority to RT Thread for playback */
 	if ((substream->stream == SNDRV_PCM_STREAM_PLAYBACK) &&
 	    (pdata->perf_mode == LOW_LATENCY_PCM_MODE))
@@ -1298,7 +1301,7 @@ static int msm_pcm_volume_ctl_get(struct snd_kcontrol *kcontrol,
 		return -ENODEV;
 	}
 	if (!substream->runtime) {
-		pr_err("%s substream runtime not found\n", __func__);
+		pr_debug("%s substream runtime not found\n", __func__);
 		return 0;
 	}
 	prtd = substream->runtime->private_data;
@@ -1385,7 +1388,7 @@ static int msm_pcm_compress_ctl_get(struct snd_kcontrol *kcontrol,
 		return -EINVAL;
 	}
 	if (!substream->runtime) {
-		pr_err("%s substream runtime not found\n", __func__);
+		pr_debug("%s substream runtime not found\n", __func__);
 		return 0;
 	}
 	prtd = substream->runtime->private_data;

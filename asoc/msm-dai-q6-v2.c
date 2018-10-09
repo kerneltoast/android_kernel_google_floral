@@ -1212,6 +1212,29 @@ static int msm_dai_q6_add_island_mx_ctls(struct snd_card *card,
 	return rc;
 }
 
+/*
+ * For single CPU DAI registration, the dai id needs to be
+ * set explicitly in the dai probe as ASoC does not read
+ * the cpu->driver->id field rather it assigns the dai id
+ * from the device name that is in the form %s.%d. This dai
+ * id should be assigned to back-end AFE port id and used
+ * during dai prepare. For multiple dai registration, it
+ * is not required to call this function, however the dai->
+ * driver->id field must be defined and set to corresponding
+ * AFE Port id.
+ */
+static inline void msm_dai_q6_set_dai_id(struct snd_soc_dai *dai)
+{
+	if (!dai->driver) {
+		dev_err(dai->dev, "DAI driver is not set\n");
+		return;
+	}
+	if (!dai->driver->id) {
+		dev_dbg(dai->dev, "DAI driver id is not set\n");
+		return;
+	}
+	dai->id = dai->driver->id;
+}
 
 static int msm_dai_q6_aux_pcm_probe(struct snd_soc_dai *dai)
 {
@@ -1226,11 +1249,8 @@ static int msm_dai_q6_aux_pcm_probe(struct snd_soc_dai *dai)
 		pr_err("%s: Invalid params dai dev\n", __func__);
 		return -EINVAL;
 	}
-	if (!dai->driver->id) {
-		dev_warn(dai->dev, "DAI driver id is not set\n");
-		return -EINVAL;
-	}
-	dai->id = dai->driver->id;
+
+	msm_dai_q6_set_dai_id(dai);
 	dai_data = dev_get_drvdata(dai->dev);
 
 	if (dai_data->is_island_dai)
@@ -1725,15 +1745,20 @@ static int msm_dai_q6_spdif_dai_probe(struct snd_soc_dai *dai)
 		pr_err("%s: dai not found!!\n", __func__);
 		return -EINVAL;
 	}
+	if (!dai->dev) {
+		pr_err("%s: Invalid params dai dev\n", __func__);
+		return -EINVAL;
+	}
+
 	dai_data = kzalloc(sizeof(struct msm_dai_q6_spdif_dai_data),
 			GFP_KERNEL);
 
-	if (!dai_data) {
-		rc = -ENOMEM;
-	} else
+	if (!dai_data)
+		return -ENOMEM;
+	else
 		dev_set_drvdata(dai->dev, dai_data);
 
-	dai->id = dai->driver->id;
+	msm_dai_q6_set_dai_id(dai);
 	dai_data->port_id = dai->id;
 
 	switch (dai->id) {
@@ -2530,26 +2555,6 @@ static struct snd_soc_dai_ops msm_dai_q6_ops = {
 	.set_channel_map = msm_dai_q6_set_channel_map,
 };
 
-/*
- * For single CPU DAI registration, the dai id needs to be
- * set explicitly in the dai probe as ASoC does not read
- * the cpu->driver->id field rather it assigns the dai id
- * from the device name that is in the form %s.%d. This dai
- * id should be assigned to back-end AFE port id and used
- * during dai prepare. For multiple dai registration, it
- * is not required to call this function, however the dai->
- * driver->id field must be defined and set to corresponding
- * AFE Port id.
- */
-static inline void msm_dai_q6_set_dai_id(struct snd_soc_dai *dai)
-{
-	if (!dai->driver->id) {
-		dev_warn(dai->dev, "DAI driver id is not set\n");
-		return;
-	}
-	dai->id = dai->driver->id;
-}
-
 static int msm_dai_q6_cal_info_put(struct snd_kcontrol *kcontrol,
 				    struct snd_ctl_elem_value *ucontrol)
 {
@@ -3072,7 +3077,7 @@ static int msm_dai_q6_slim_rx_drift_get(struct snd_kcontrol *kcontrol,
 	struct msm_dai_q6_dai_data *dai_data = dev_get_drvdata(dai->dev);
 
 	if (!test_bit(STATUS_PORT_STARTED, dai_data->status_mask)) {
-		pr_err("%s: afe port not started. dai_data->status_mask = %ld\n",
+		pr_debug("%s: afe port not started. dai_data->status_mask = %ld\n",
 			__func__, *dai_data->status_mask);
 		goto done;
 	}
@@ -3188,7 +3193,7 @@ static int msm_dai_q6_dai_probe(struct snd_soc_dai *dai)
 	dai_data = kzalloc(sizeof(struct msm_dai_q6_dai_data), GFP_KERNEL);
 
 	if (!dai_data)
-		rc = -ENOMEM;
+		return -ENOMEM;
 	else
 		dev_set_drvdata(dai->dev, dai_data);
 
@@ -6978,8 +6983,7 @@ static int msm_dai_q6_tdm_set_clk(
 static int msm_dai_q6_dai_tdm_probe(struct snd_soc_dai *dai)
 {
 	int rc = 0;
-	struct msm_dai_q6_tdm_dai_data *tdm_dai_data =
-			dev_get_drvdata(dai->dev);
+	struct msm_dai_q6_tdm_dai_data *tdm_dai_data = NULL;
 	struct snd_kcontrol *data_format_kcontrol = NULL;
 	struct snd_kcontrol *header_type_kcontrol = NULL;
 	struct snd_kcontrol *header_kcontrol = NULL;
@@ -6987,6 +6991,8 @@ static int msm_dai_q6_dai_tdm_probe(struct snd_soc_dai *dai)
 	const struct snd_kcontrol_new *data_format_ctrl = NULL;
 	const struct snd_kcontrol_new *header_type_ctrl = NULL;
 	const struct snd_kcontrol_new *header_ctrl = NULL;
+
+	tdm_dai_data = dev_get_drvdata(dai->dev);
 
 	msm_dai_q6_set_dai_id(dai);
 
@@ -9597,7 +9603,7 @@ static struct platform_driver msm_dai_q6_tdm_driver = {
 static int msm_dai_q6_cdc_dma_format_put(struct snd_kcontrol *kcontrol,
 				      struct snd_ctl_elem_value *ucontrol)
 {
-	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+	struct msm_dai_q6_cdc_dma_dai_data *dai_data = kcontrol->private_data;
 	int value = ucontrol->value.integer.value[0];
 
 	dai_data->port_config.cdc_dma.data_format = value;
@@ -9608,7 +9614,7 @@ static int msm_dai_q6_cdc_dma_format_put(struct snd_kcontrol *kcontrol,
 static int msm_dai_q6_cdc_dma_format_get(struct snd_kcontrol *kcontrol,
 				      struct snd_ctl_elem_value *ucontrol)
 {
-	struct msm_dai_q6_dai_data *dai_data = kcontrol->private_data;
+	struct msm_dai_q6_cdc_dma_dai_data *dai_data = kcontrol->private_data;
 
 	ucontrol->value.integer.value[0] =
 		dai_data->port_config.cdc_dma.data_format;
@@ -9810,6 +9816,11 @@ static int msm_dai_q6_cdc_dma_prepare(struct snd_pcm_substream *substream,
 				pr_err("%s: afe send island mode failed %d\n",
 					__func__, rc);
 		}
+		if ((dai->id == AFE_PORT_ID_WSA_CODEC_DMA_TX_0) &&
+			(dai_data->port_config.cdc_dma.data_format == 1))
+			dai_data->port_config.cdc_dma.data_format =
+				AFE_LINEAR_PCM_DATA_PACKED_16BIT;
+
 		rc = afe_port_start(dai->id, &dai_data->port_config,
 						dai_data->rate);
 		if (rc < 0)
@@ -9870,7 +9881,7 @@ static struct snd_soc_dai_driver msm_dai_q6_cdc_dma_dai[] = {
 				   SNDRV_PCM_FMTBIT_S24_3LE |
 				   SNDRV_PCM_FMTBIT_S32_LE,
 			.channels_min = 1,
-			.channels_max = 2,
+			.channels_max = 4,
 			.rate_min = 8000,
 			.rate_max = 384000,
 		},
@@ -9896,7 +9907,7 @@ static struct snd_soc_dai_driver msm_dai_q6_cdc_dma_dai[] = {
 				   SNDRV_PCM_FMTBIT_S24_3LE |
 				   SNDRV_PCM_FMTBIT_S32_LE,
 			.channels_min = 1,
-			.channels_max = 2,
+			.channels_max = 4,
 			.rate_min = 8000,
 			.rate_max = 384000,
 		},

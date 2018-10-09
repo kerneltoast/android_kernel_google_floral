@@ -1638,7 +1638,7 @@ static int32_t q6asm_srvc_callback(struct apr_client_data *data, void *priv)
 	uint32_t dir = 0;
 	uint32_t i = IN;
 	uint32_t *payload;
-	unsigned long dsp_flags;
+	unsigned long dsp_flags = 0;
 	unsigned long flags = 0;
 	struct asm_buffer_node *buf_node = NULL;
 	struct list_head *ptr, *next;
@@ -1855,7 +1855,7 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 {
 	int i = 0;
 	struct audio_client *ac = (struct audio_client *)priv;
-	unsigned long dsp_flags;
+	unsigned long dsp_flags = 0;
 	uint32_t *payload;
 	uint32_t wakeup_flag = 1;
 	int32_t  ret = 0;
@@ -8625,7 +8625,7 @@ int q6asm_async_write(struct audio_client *ac,
 		return -EINVAL;
 	}
 	if (ac->apr == NULL) {
-		pr_err("%s: AC APR handle NULL\n", __func__);
+		pr_err_ratelimited("%s: AC APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -8718,7 +8718,7 @@ int q6asm_async_read(struct audio_client *ac,
 		return -EINVAL;
 	}
 	if (ac->apr == NULL) {
-		pr_err("%s: AC APR handle NULL\n", __func__);
+		pr_err_ratelimited("%s: AC APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -10136,9 +10136,15 @@ int q6asm_send_cal(struct audio_client *ac)
 	memset(&mem_hdr, 0, sizeof(mem_hdr));
 	mutex_lock(&cal_data[ASM_AUDSTRM_CAL]->lock);
 	cal_block = cal_utils_get_only_cal_block(cal_data[ASM_AUDSTRM_CAL]);
-	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block)) {
+	if (cal_block == NULL) {
+		pr_err("%s: cal_block is NULL\n",
+			__func__);
+		goto unlock;
+	}
+
+	if (cal_utils_is_cal_stale(cal_block)) {
 		rc = 0; /* not error case */
-		pr_err("%s: cal_block is NULL or stale\n",
+		pr_debug("%s: cal_block is stale\n",
 			__func__);
 		goto unlock;
 	}
