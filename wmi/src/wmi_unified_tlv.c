@@ -50,6 +50,10 @@
 #include "wlan_policy_mgr_public_struct.h"
 #endif
 
+#ifdef FEATURE_WLAN_TDLS
+#include "wlan_tdls_public_structs.h"
+#endif
+
 /* HTC service ids for WMI for multi-radio */
 static const uint32_t multi_svc_ids[] = {WMI_CONTROL_SVC,
 				WMI_CONTROL_SVC_WMAC1,
@@ -5676,6 +5680,12 @@ static QDF_STATUS extract_sar_limit_event_tlv(wmi_unified_t wmi_handle,
 	event->sar_enable = fixed_param->sar_enable;
 	event->num_limit_rows = fixed_param->num_limit_rows;
 
+	if (event->num_limit_rows > param_buf->num_sar_get_limits) {
+		WMI_LOGE(FL("Num rows %d exceeds sar_get_limits rows len %d"),
+			 event->num_limit_rows, param_buf->num_sar_get_limits);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	if (event->num_limit_rows > MAX_SAR_LIMIT_ROWS_SUPPORTED) {
 		QDF_ASSERT(0);
 		WMI_LOGE(FL("Num rows %d exceeds max of %d"),
@@ -6177,6 +6187,8 @@ static QDF_STATUS send_roam_scan_offload_mode_cmd_tlv(wmi_unified_t wmi_handle,
 
 #ifdef WLAN_FEATURE_ROAM_OFFLOAD
 	int auth_mode = roam_req->auth_mode;
+	roam_offload_param *req_offload_params =
+		&roam_req->roam_offload_params;
 	wmi_roam_offload_tlv_param *roam_offload_params;
 	wmi_roam_11i_offload_tlv_param *roam_offload_11i;
 	wmi_roam_11r_offload_tlv_param *roam_offload_11r;
@@ -6302,31 +6314,31 @@ static QDF_STATUS send_roam_scan_offload_mode_cmd_tlv(wmi_unified_t wmi_handle,
 		roam_offload_params->select_5g_margin =
 			roam_req->select_5ghz_margin;
 		roam_offload_params->handoff_delay_for_rx =
-			roam_req->roam_offload_params.ho_delay_for_rx;
+			req_offload_params->ho_delay_for_rx;
+		roam_offload_params->max_mlme_sw_retries =
+			req_offload_params->roam_preauth_retry_count;
+		roam_offload_params->no_ack_timeout =
+			req_offload_params->roam_preauth_no_ack_timeout;
 		roam_offload_params->reassoc_failure_timeout =
 			roam_req->reassoc_failure_timeout;
 
 		/* Fill the capabilities */
 		roam_offload_params->capability =
-				roam_req->roam_offload_params.capability;
+				req_offload_params->capability;
 		roam_offload_params->ht_caps_info =
-				roam_req->roam_offload_params.ht_caps_info;
+				req_offload_params->ht_caps_info;
 		roam_offload_params->ampdu_param =
-				roam_req->roam_offload_params.ampdu_param;
+				req_offload_params->ampdu_param;
 		roam_offload_params->ht_ext_cap =
-				roam_req->roam_offload_params.ht_ext_cap;
-		roam_offload_params->ht_txbf =
-				roam_req->roam_offload_params.ht_txbf;
-		roam_offload_params->asel_cap =
-				roam_req->roam_offload_params.asel_cap;
-		roam_offload_params->qos_caps =
-				roam_req->roam_offload_params.qos_caps;
+				req_offload_params->ht_ext_cap;
+		roam_offload_params->ht_txbf = req_offload_params->ht_txbf;
+		roam_offload_params->asel_cap = req_offload_params->asel_cap;
+		roam_offload_params->qos_caps = req_offload_params->qos_caps;
 		roam_offload_params->qos_enabled =
-				roam_req->roam_offload_params.qos_enabled;
-		roam_offload_params->wmm_caps =
-				roam_req->roam_offload_params.wmm_caps;
+				req_offload_params->qos_enabled;
+		roam_offload_params->wmm_caps = req_offload_params->wmm_caps;
 		qdf_mem_copy((uint8_t *)roam_offload_params->mcsset,
-				(uint8_t *)roam_req->roam_offload_params.mcsset,
+				(uint8_t *)req_offload_params->mcsset,
 				ROAM_OFFLOAD_NUM_MCS_SET);
 
 		buf_ptr += sizeof(wmi_roam_offload_tlv_param);
@@ -9902,6 +9914,78 @@ static QDF_STATUS send_regdomain_info_to_fw_cmd_tlv(wmi_unified_t wmi_handle,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef FEATURE_WLAN_TDLS
+/**
+ * tdls_get_wmi_offchannel_mode - Get WMI tdls off channel mode
+ * @tdls_sw_mode: tdls_sw_mode
+ *
+ * This function returns wmi tdls offchannel mode
+ *
+ * Return: enum value of wmi tdls offchannel mode
+ */
+static uint8_t tdls_get_wmi_offchannel_mode(uint8_t tdls_sw_mode)
+{
+	uint8_t off_chan_mode;
+
+	switch (tdls_sw_mode) {
+	case ENABLE_CHANSWITCH:
+		off_chan_mode = WMI_TDLS_ENABLE_OFFCHANNEL;
+		break;
+
+	case DISABLE_CHANSWITCH:
+		off_chan_mode = WMI_TDLS_DISABLE_OFFCHANNEL;
+		break;
+
+	default:
+		WMI_LOGD(FL("unknown tdls_sw_mode %d"), tdls_sw_mode);
+		off_chan_mode = WMI_TDLS_DISABLE_OFFCHANNEL;
+	}
+	return off_chan_mode;
+}
+
+/**
+ * tdls_get_wmi_offchannel_bw - Get WMI tdls off channel Bandwidth
+ * @tdls_sw_mode: tdls_sw_mode
+ *
+ * This function returns wmi tdls offchannel bandwidth
+ *
+ * Return: TDLS offchannel bandwidth
+ */
+static uint8_t tdls_get_wmi_offchannel_bw(uint16_t tdls_off_ch_bw_offset)
+{
+	uint8_t off_chan_bw;
+
+	switch (tdls_off_ch_bw_offset) {
+	case BW20:
+		off_chan_bw = WMI_TDLS_OFFCHAN_20MHZ;
+		break;
+	case BW40_LOW_PRIMARY:
+	case BW40_HIGH_PRIMARY:
+		off_chan_bw = WMI_TDLS_OFFCHAN_40MHZ;
+		break;
+	case BW80:
+		off_chan_bw = WMI_TDLS_OFFCHAN_80MHZ;
+	case BWALL:
+		off_chan_bw = WMI_TDLS_OFFCHAN_160MHZ;
+	default:
+		WMI_LOGD(FL("unknown tdls_offchannel bw offset %d"),
+			 off_chan_bw);
+		off_chan_bw = WMI_TDLS_OFFCHAN_20MHZ;
+	}
+	return off_chan_bw;
+}
+
+#else
+static uint8_t tdls_get_wmi_offchannel_mode(uint8_t tdls_sw_mode)
+{
+	return WMI_TDLS_DISABLE_OFFCHANNEL;
+}
+
+static uint8_t tdls_get_wmi_offchannel_bw(uint16_t tdls_off_ch_bw_offset)
+{
+	return WMI_TDLS_OFFCHAN_20MHZ;
+}
+#endif
 
 /**
  * send_set_tdls_offchan_mode_cmd_tlv() - set tdls off channel mode
@@ -9934,10 +10018,13 @@ static QDF_STATUS send_set_tdls_offchan_mode_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(chan_switch_params->peer_mac_addr,
 				&cmd->peer_macaddr);
 	cmd->vdev_id = chan_switch_params->vdev_id;
-	cmd->offchan_mode = chan_switch_params->tdls_sw_mode;
+	cmd->offchan_mode =
+		tdls_get_wmi_offchannel_mode(chan_switch_params->tdls_sw_mode);
 	cmd->is_peer_responder = chan_switch_params->is_responder;
 	cmd->offchan_num = chan_switch_params->tdls_off_ch;
-	cmd->offchan_bw_bitmap = chan_switch_params->tdls_off_ch_bw_offset;
+	cmd->offchan_bw_bitmap =
+		tdls_get_wmi_offchannel_bw(
+			chan_switch_params->tdls_off_ch_bw_offset);
 	cmd->offchan_oper_class = chan_switch_params->oper_class;
 
 	WMI_LOGD(FL("Peer MAC Addr mac_addr31to0: 0x%x, mac_addr47to32: 0x%x"),
@@ -16970,15 +17057,6 @@ static QDF_STATUS extract_ndp_end_ind_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_NOMEM;
 	}
 
-	(*rsp)->vdev = wlan_objmgr_get_vdev_by_opmode_from_psoc(
-			wmi_handle->soc->wmi_psoc, QDF_NDI_MODE, WLAN_NAN_ID);
-	if (!(*rsp)->vdev) {
-		WMI_LOGE("vdev is null");
-		qdf_mem_free(*rsp);
-		*rsp = NULL;
-		return QDF_STATUS_E_INVAL;
-	}
-
 	(*rsp)->num_ndp_ids = event->num_ndp_end_indication_list;
 	for (i = 0; i < (*rsp)->num_ndp_ids; i++) {
 		WMI_MAC_ADDR_TO_CHAR_ARRAY(&ind[i].peer_ndi_mac_addr,
@@ -18491,6 +18569,7 @@ static QDF_STATUS extract_all_stats_counts_tlv(wmi_unified_t wmi_handle,
 	wmi_stats_event_fixed_param *ev;
 	wmi_per_chain_rssi_stats *rssi_event;
 	WMI_UPDATE_STATS_EVENTID_param_tlvs *param_buf;
+	uint64_t min_data_len;
 
 	qdf_mem_zero(stats_param, sizeof(*stats_param));
 	param_buf = (WMI_UPDATE_STATS_EVENTID_param_tlvs *) evt_buf;
@@ -18499,6 +18578,11 @@ static QDF_STATUS extract_all_stats_counts_tlv(wmi_unified_t wmi_handle,
 	if (!ev) {
 		WMI_LOGE("%s: event fixed param NULL\n", __func__);
 		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (param_buf->num_data > WMI_SVC_MSG_MAX_SIZE - sizeof(*ev)) {
+		WMI_LOGE("num_data : %u is invalid", param_buf->num_data);
+		return QDF_STATUS_E_FAULT;
 	}
 
 	switch (ev->stats_id) {
@@ -18536,6 +18620,26 @@ static QDF_STATUS extract_all_stats_counts_tlv(wmi_unified_t wmi_handle,
 
 	}
 
+	/* ev->num_*_stats may cause uint32_t overflow, so use uint64_t
+	 * to save total length calculated
+	 */
+	min_data_len =
+		(((uint64_t)ev->num_pdev_stats) * sizeof(wmi_pdev_stats)) +
+		(((uint64_t)ev->num_vdev_stats) * sizeof(wmi_vdev_stats)) +
+		(((uint64_t)ev->num_peer_stats) * sizeof(wmi_peer_stats)) +
+		(((uint64_t)ev->num_bcnflt_stats) *
+		 sizeof(wmi_bcnfilter_stats_t)) +
+		(((uint64_t)ev->num_chan_stats) * sizeof(wmi_chan_stats)) +
+		(((uint64_t)ev->num_mib_stats) * sizeof(wmi_mib_stats)) +
+		(((uint64_t)ev->num_bcn_stats) * sizeof(wmi_bcn_stats)) +
+		(((uint64_t)ev->num_peer_extd_stats) *
+		 sizeof(wmi_peer_extd_stats));
+	if (param_buf->num_data != min_data_len) {
+		WMI_LOGE("data len: %u isn't same as calculated: %llu",
+			 param_buf->num_data, min_data_len);
+		return QDF_STATUS_E_FAULT;
+	}
+
 	stats_param->num_pdev_stats = ev->num_pdev_stats;
 	stats_param->num_pdev_ext_stats = 0;
 	stats_param->num_vdev_stats = ev->num_vdev_stats;
@@ -18558,6 +18662,12 @@ static QDF_STATUS extract_all_stats_counts_tlv(wmi_unified_t wmi_handle,
 	    WMITLV_GET_TLVLEN(rssi_event->tlv_header))
 		return QDF_STATUS_SUCCESS;
 
+	if (rssi_event->num_per_chain_rssi_stats >=
+	    WMITLV_GET_TLVLEN(rssi_event->tlv_header)) {
+		WMI_LOGE("num_per_chain_rssi_stats:%u is out of bounds",
+			 rssi_event->num_per_chain_rssi_stats);
+		return QDF_STATUS_E_INVAL;
+	}
 	stats_param->num_rssi_stats = rssi_event->num_per_chain_rssi_stats;
 
 	return QDF_STATUS_SUCCESS;
@@ -19832,11 +19942,21 @@ static QDF_STATUS extract_peer_delete_response_event_tlv(wmi_unified_t wmi_hdl,
 
 static bool is_management_record_tlv(uint32_t cmd_id)
 {
-	if ((cmd_id == WMI_MGMT_TX_COMPLETION_EVENTID) ||
-			(cmd_id == WMI_MGMT_TX_SEND_CMDID) ||
-			(cmd_id == WMI_OFFCHAN_DATA_TX_SEND_CMDID)) {
+	switch (cmd_id) {
+	case WMI_MGMT_TX_SEND_CMDID:
+	case WMI_MGMT_TX_COMPLETION_EVENTID:
+	case WMI_OFFCHAN_DATA_TX_SEND_CMDID:
+	case WMI_MGMT_RX_EVENTID:
 		return true;
+	default:
+		return false;
 	}
+}
+
+static bool is_diag_event_tlv(uint32_t event_id)
+{
+	if (WMI_DIAG_EVENTID == event_id)
+		return true;
 
 	return false;
 }
@@ -20361,6 +20481,10 @@ static QDF_STATUS extract_reg_ch_avoid_event_tlv(
 
 	if (!ch_avoid_ind) {
 		WMI_LOGE("Invalid channel avoid indication buffer");
+		return QDF_STATUS_E_INVAL;
+	}
+	if (param_buf->num_avd_freq_range < afr_fixed_param->num_freq_ranges) {
+		WMI_LOGE(FL("no.of freq ranges exceeded the limit"));
 		return QDF_STATUS_E_INVAL;
 	}
 	num_freq_ranges = (afr_fixed_param->num_freq_ranges >
@@ -22369,6 +22493,7 @@ struct wmi_ops tlv_ops =  {
 	.extract_peer_delete_response_event =
 				extract_peer_delete_response_event_tlv,
 	.is_management_record = is_management_record_tlv,
+	.is_diag_event = is_diag_event_tlv,
 	.extract_pdev_csa_switch_count_status =
 				extract_pdev_csa_switch_count_status_tlv,
 	.extract_pdev_tpc_ev_param = extract_pdev_tpc_ev_param_tlv,

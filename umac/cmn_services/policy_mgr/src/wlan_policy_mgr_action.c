@@ -31,6 +31,7 @@
 #include "qdf_types.h"
 #include "qdf_trace.h"
 #include "wlan_objmgr_global_obj.h"
+#include "qdf_platform.h"
 
 enum policy_mgr_conc_next_action (*policy_mgr_get_current_pref_hw_mode_ptr)
 	(struct wlan_objmgr_psoc *psoc);
@@ -892,15 +893,7 @@ bool policy_mgr_is_sap_restart_required_after_sta_disconnect(
 	return true;
 }
 
-/**
- * policy_mgr_check_sta_ap_concurrent_ch_intf() - Restart SAP in STA-AP case
- * @data: Pointer check concurrent channel work data
- *
- * Restarts the SAP interface in STA-AP concurrency scenario
- *
- * Restart: None
- */
-void policy_mgr_check_sta_ap_concurrent_ch_intf(void *data)
+static void __policy_mgr_check_sta_ap_concurrent_ch_intf(void *data)
 {
 	struct wlan_objmgr_psoc *psoc;
 	struct policy_mgr_psoc_priv_obj *pm_ctx = NULL;
@@ -910,6 +903,11 @@ void policy_mgr_check_sta_ap_concurrent_ch_intf(void *data)
 	uint8_t channel, sec_ch;
 	uint8_t operating_channel[MAX_NUMBER_OF_CONC_CONNECTIONS];
 	uint8_t vdev_id[MAX_NUMBER_OF_CONC_CONNECTIONS];
+
+	if (qdf_is_module_state_transitioning()) {
+		policy_mgr_err("Module transition in progress");
+		goto end;
+	}
 
 	work_info = (struct sta_ap_intf_check_work_ctx *) data;
 	if (!work_info) {
@@ -985,6 +983,13 @@ end:
 	}
 }
 
+void policy_mgr_check_sta_ap_concurrent_ch_intf(void *data)
+{
+	qdf_ssr_protect(__func__);
+	__policy_mgr_check_sta_ap_concurrent_ch_intf(data);
+	qdf_ssr_unprotect(__func__);
+}
+
 static bool policy_mgr_valid_sta_channel_check(struct wlan_objmgr_psoc *psoc,
 		uint8_t sta_channel)
 {
@@ -1049,10 +1054,11 @@ QDF_STATUS policy_mgr_valid_sap_conc_channel_check(
 
 	if (policy_mgr_valid_sta_channel_check(psoc, channel)) {
 		if (wlan_reg_is_dfs_ch(pm_ctx->pdev, channel) ||
-		    wlan_reg_is_passive_or_disable_ch(
-				pm_ctx->pdev, channel) ||
+		    wlan_reg_is_passive_or_disable_ch(pm_ctx->pdev, channel) ||
 		    !(policy_mgr_sta_sap_scc_on_lte_coex_chan(psoc) ||
-		      policy_mgr_is_safe_channel(psoc, channel))) {
+		    policy_mgr_is_safe_channel(psoc, channel)) ||
+		    (!reg_is_etsi13_srd_chan_allowed_master_mode(pm_ctx->pdev)
+		    && reg_is_etsi13_srd_chan(pm_ctx->pdev, channel))) {
 			if (wlan_reg_is_dfs_ch(pm_ctx->pdev, channel) &&
 			    sta_sap_scc_on_dfs_chan) {
 				policy_mgr_debug("STA SAP SCC is allowed on DFS channel");

@@ -1131,18 +1131,6 @@ void policy_mgr_incr_active_session(struct wlan_objmgr_psoc *psoc,
 
 	policy_mgr_debug("No.# of active sessions for mode %d = %d",
 		mode, pm_ctx->no_of_active_sessions[mode]);
-	/*
-	 * Get PCL logic makes use of the connection info structure.
-	 * Let us set the PCL to the FW before updating the connection
-	 * info structure about the new connection.
-	 */
-	if (mode == QDF_STA_MODE) {
-		qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
-		/* Set PCL of STA to the FW */
-		policy_mgr_pdev_set_pcl(psoc, mode);
-		qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
-		policy_mgr_debug("Set PCL of STA to FW");
-	}
 	policy_mgr_incr_connection_count(psoc, session_id);
 	if ((policy_mgr_mode_specific_connection_count(
 		psoc, PM_STA_MODE, NULL) > 0) && (mode != QDF_STA_MODE)) {
@@ -1199,7 +1187,7 @@ QDF_STATUS policy_mgr_decr_active_session(struct wlan_objmgr_psoc *psoc,
 			policy_mgr_convert_device_mode_to_qdf_type(mode),
 			session_id);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
-		policy_mgr_err("No connection with mode:%d vdev_id:%d",
+		policy_mgr_debug("No connection with mode:%d vdev_id:%d",
 			policy_mgr_convert_device_mode_to_qdf_type(mode),
 			session_id);
 		return qdf_status;
@@ -2147,8 +2135,8 @@ enum policy_mgr_con_mode policy_mgr_convert_device_mode_to_qdf_type(
 		mode = PM_IBSS_MODE;
 		break;
 	default:
-		policy_mgr_err("Unsupported mode (%d)",
-			device_mode);
+		policy_mgr_debug("Unsupported mode (%d)",
+				 device_mode);
 	}
 
 	return mode;
@@ -2176,8 +2164,8 @@ enum QDF_OPMODE policy_mgr_get_qdf_mode_from_pm(
 		mode = QDF_IBSS_MODE;
 		break;
 	default:
-		policy_mgr_err("Unsupported policy mgr mode (%d)",
-			       device_mode);
+		policy_mgr_debug("Unsupported policy mgr mode (%d)",
+				 device_mode);
 	}
 	return mode;
 }

@@ -550,6 +550,14 @@ static int target_if_ndp_end_ind_handler(ol_scn_t scn, uint8_t *data,
 		return -EINVAL;
 	}
 
+	rsp->vdev = wlan_objmgr_get_vdev_by_opmode_from_psoc(
+			  wmi_handle->soc->wmi_psoc, QDF_NDI_MODE, WLAN_NAN_ID);
+	if (!rsp->vdev) {
+		target_if_err("vdev is null");
+		qdf_mem_free(rsp);
+		return -EINVAL;
+	}
+
 	msg.bodyptr = rsp;
 	msg.type = NDP_END_IND;
 	msg.callback = target_if_nan_event_dispatcher;
@@ -671,6 +679,10 @@ QDF_STATUS target_if_nan_register_events(struct wlan_objmgr_psoc *psoc)
 	int ret;
 	wmi_unified_t handle = get_wmi_unified_hdl_from_psoc(psoc);
 
+	if (!handle) {
+		target_if_err("handle is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
 	ret = wmi_unified_register_event_handler(handle,
 		wmi_ndp_initiator_rsp_event_id,
 		target_if_ndp_initiator_rsp_handler,
@@ -748,6 +760,10 @@ QDF_STATUS target_if_nan_deregister_events(struct wlan_objmgr_psoc *psoc)
 	int ret, status = 0;
 	wmi_unified_t handle = get_wmi_unified_hdl_from_psoc(psoc);
 
+	if (!handle) {
+		target_if_err("handle is NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
 	ret = wmi_unified_unregister_event_handler(handle,
 				wmi_ndl_schedule_update_event_id);
 	if (ret) {
