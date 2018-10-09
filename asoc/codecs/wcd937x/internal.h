@@ -58,6 +58,8 @@ struct wcd937x_priv {
 	struct wcd937x_mbhc *mbhc;
 
 	u32 hph_mode;
+	bool comp1_enable;
+	bool comp2_enable;
 
 	struct irq_domain *virq;
 	struct wcd_irq_info irq_info;
@@ -71,6 +73,14 @@ struct wcd937x_priv {
 	struct codec_port_info
 			rx_port_mapping[MAX_PORT][MAX_CH_PER_PORT];
 	struct regulator_bulk_data *supplies;
+
+	struct notifier_block nblock;
+	/* wcd callback to bolero */
+	void *handle;
+	int (*update_wcd_event)(void *handle, u16 event, u32 data);
+	int (*register_notifier)(void *handle,
+				struct notifier_block *nblock,
+				bool enable);
 
 	u32 version;
 	/* Entry for version info */
@@ -95,6 +105,32 @@ struct wcd937x_pdata {
 
 	struct cdc_regulator *regulator;
 	int num_supplies;
+};
+
+struct wcd_ctrl_platform_data {
+	void *handle;
+	int (*update_wcd_event)(void *handle, u16 event, u32 data);
+	int (*register_notifier)(void *handle,
+				 struct notifier_block *nblock,
+				 bool enable);
+};
+
+enum {
+	WCD_RX1,
+	WCD_RX2,
+	WCD_RX3
+};
+
+enum {
+	BOLERO_WCD_EVT_TX_CH_HOLD_CLEAR = 1,
+	BOLERO_WCD_EVT_SSR_DOWN,
+	BOLERO_WCD_EVT_SSR_UP,
+};
+
+enum {
+	WCD_BOLERO_EVT_RX_MUTE = 1,	/* for RX mute/unmute */
+	WCD_BOLERO_EVT_IMPED_TRUE,	/* for imped true */
+	WCD_BOLERO_EVT_IMPED_FALSE,	/* for imped false */
 };
 
 enum {

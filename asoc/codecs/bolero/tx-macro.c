@@ -19,6 +19,7 @@
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
 #include <sound/tlv.h>
+#include <soc/swr-wcd.h>
 #include "bolero-cdc.h"
 #include "bolero-cdc-registers.h"
 #include "../msm-cdc-pinctrl.h"
@@ -42,6 +43,8 @@
 #define TX_MACRO_DMIC_SAMPLE_RATE_UNDEFINED 0
 #define TX_MACRO_MCLK_FREQ 9600000
 #define TX_MACRO_TX_PATH_OFFSET 0x80
+#define TX_MACRO_SWR_MIC_MUX_SEL_MASK 0xF
+#define TX_MACRO_ADC_MUX_CFG_OFFSET 0x2
 
 #define TX_MACRO_TX_UNMUTE_DELAY_MS	40
 
@@ -105,6 +108,12 @@ enum {
 	TX_MACRO_CLK_DIV_6,
 	TX_MACRO_CLK_DIV_8,
 	TX_MACRO_CLK_DIV_16,
+};
+
+enum {
+	MSM_DMIC,
+	SWR_MIC,
+	ANC_FB_TUNE1
 };
 
 struct tx_mute_work {
@@ -182,6 +191,11 @@ static int tx_macro_mclk_enable(struct tx_macro_priv *tx_priv,
 {
 	struct regmap *regmap = dev_get_regmap(tx_priv->dev->parent, NULL);
 	int ret = 0;
+
+	if (regmap == NULL) {
+		dev_err(tx_priv->dev, "%s: regmap is NULL\n", __func__);
+		return -EINVAL;
+	}
 
 	dev_dbg(tx_priv->dev, "%s: mclk_enable = %u,clk_users= %d\n",
 		__func__, mclk_enable, tx_priv->tx_mclk_users);
@@ -290,6 +304,33 @@ exit:
 	return ret;
 }
 
+static int tx_macro_event_handler(struct snd_soc_codec *codec, u16 event,
+				  u32 data)
+{
+	struct device *tx_dev = NULL;
+	struct tx_macro_priv *tx_priv = NULL;
+
+	if (!tx_macro_get_data(codec, &tx_dev, &tx_priv, __func__))
+		return -EINVAL;
+
+	switch (event) {
+	case BOLERO_MACRO_EVT_SSR_DOWN:
+		swrm_wcd_notify(
+			tx_priv->swr_ctrl_data[0].tx_swr_pdev,
+			SWR_DEVICE_SSR_DOWN, NULL);
+		swrm_wcd_notify(
+			tx_priv->swr_ctrl_data[0].tx_swr_pdev,
+			SWR_DEVICE_DOWN, NULL);
+		break;
+	case BOLERO_MACRO_EVT_SSR_UP:
+		swrm_wcd_notify(
+			tx_priv->swr_ctrl_data[0].tx_swr_pdev,
+			SWR_DEVICE_SSR_UP, NULL);
+		break;
+	}
+	return 0;
+}
+
 static void tx_macro_tx_hpf_corner_freq_callback(struct work_struct *work)
 {
 	struct delayed_work *hpf_delayed_work = NULL;
@@ -298,6 +339,7 @@ static void tx_macro_tx_hpf_corner_freq_callback(struct work_struct *work)
 	struct snd_soc_codec *codec = NULL;
 	u16 dec_cfg_reg = 0, hpf_gate_reg = 0;
 	u8 hpf_cut_off_freq = 0;
+	u16 adc_mux_reg = 0, adc_n = 0, adc_reg = 0;
 
 	hpf_delayed_work = to_delayed_work(work);
 	hpf_work = container_of(hpf_delayed_work, struct hpf_work, dwork);
@@ -313,6 +355,19 @@ static void tx_macro_tx_hpf_corner_freq_callback(struct work_struct *work)
 	dev_dbg(codec->dev, "%s: decimator %u hpf_cut_of_freq 0x%x\n",
 		__func__, hpf_work->decimator, hpf_cut_off_freq);
 
+	adc_mux_reg = BOLERO_CDC_TX_INP_MUX_ADC_MUX0_CFG1 +
+			TX_MACRO_ADC_MUX_CFG_OFFSET * hpf_work->decimator;
+	if (snd_soc_read(codec, adc_mux_reg) & SWR_MIC) {
+		adc_reg = BOLERO_CDC_TX_INP_MUX_ADC_MUX0_CFG0 +
+			TX_MACRO_ADC_MUX_CFG_OFFSET * hpf_work->decimator;
+		adc_n = snd_soc_read(codec, adc_reg) &
+				TX_MACRO_SWR_MIC_MUX_SEL_MASK;
+		if (adc_n >= BOLERO_ADC_MAX)
+			goto tx_hpf_set;
+		/* analog mic clear TX hold */
+		bolero_clear_amic_tx_hold(codec->dev, adc_n);
+	}
+tx_hpf_set:
 	snd_soc_update_bits(codec, dec_cfg_reg, TX_HPF_CUT_OFF_FREQ_MASK,
 			    hpf_cut_off_freq << 5);
 	snd_soc_update_bits(codec, hpf_gate_reg, 0x02, 0x02);
@@ -394,7 +449,7 @@ static int tx_macro_put_dec_enum(struct snd_kcontrol *kcontrol,
 			__func__, e->reg);
 		return -EINVAL;
 	}
-	if (strnstr(widget->name, "smic", strlen(widget->name))) {
+	if (strnstr(widget->name, "SMIC", strlen(widget->name))) {
 		if (val != 0) {
 			if (val < 5)
 				snd_soc_update_bits(codec, mic_sel_reg,
@@ -1319,6 +1374,11 @@ static int tx_macro_swrm_clock(void *handle, bool enable)
 	struct regmap *regmap = dev_get_regmap(tx_priv->dev->parent, NULL);
 	int ret = 0;
 
+	if (regmap == NULL) {
+		dev_err(tx_priv->dev, "%s: regmap is NULL\n", __func__);
+		return -EINVAL;
+	}
+
 	mutex_lock(&tx_priv->swr_clk_lock);
 
 	dev_dbg(tx_priv->dev, "%s: swrm clock %s\n",
@@ -1461,6 +1521,23 @@ static int tx_macro_init(struct snd_soc_codec *codec)
 		dev_err(tx_dev, "%s: Failed to add snd_ctls\n", __func__);
 		return ret;
 	}
+
+	snd_soc_dapm_ignore_suspend(dapm, "TX_AIF1 Capture");
+	snd_soc_dapm_ignore_suspend(dapm, "TX_AIF2 Capture");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_ADC0");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_ADC1");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_ADC2");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_ADC3");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_MIC0");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_MIC1");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_MIC2");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_MIC3");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_MIC4");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_MIC5");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_MIC6");
+	snd_soc_dapm_ignore_suspend(dapm, "TX SWR_MIC7");
+	snd_soc_dapm_sync(dapm);
+
 	for (i = 0; i < NUM_DECIMATORS; i++) {
 		tx_priv->tx_hpf_work[i].tx_priv = tx_priv;
 		tx_priv->tx_hpf_work[i].decimator = i;
@@ -1608,6 +1685,7 @@ static void tx_macro_init_ops(struct macro_ops *ops,
 	ops->dai_ptr = tx_macro_dai;
 	ops->num_dais = ARRAY_SIZE(tx_macro_dai);
 	ops->mclk_fn = tx_macro_mclk_ctrl;
+	ops->event_handler = tx_macro_event_handler;
 }
 
 static int tx_macro_probe(struct platform_device *pdev)
