@@ -1563,7 +1563,7 @@ static ssize_t stm_fts_cmd_show(struct device *dev,
 		/*read mutual raw*/
 		case 0x13:
 			logError(0, "%s Get 1 MS Frame\n", tag);
-			if (numberParameters >= 2 && typeOfComand[1] == 1)
+			if (numberParameters >= 2 && typeOfComand[1] == LOCKED_LP_ACTIVE)
 				setScanMode(SCAN_MODE_LOCKED, LOCKED_LP_ACTIVE);
 			else
 				setScanMode(SCAN_MODE_LOCKED, LOCKED_ACTIVE);
@@ -1601,7 +1601,7 @@ static ssize_t stm_fts_cmd_show(struct device *dev,
 		/*read self raw*/
 		case 0x15:
 			logError(0, "%s Get 1 SS Frame\n", tag);
-			if (numberParameters >= 2 && typeOfComand[1] == 1)
+			if (numberParameters >= 2 && typeOfComand[1] == LOCKED_LP_DETECT)
 				setScanMode(SCAN_MODE_LOCKED, LOCKED_LP_DETECT);
 			else
 				setScanMode(SCAN_MODE_LOCKED, LOCKED_ACTIVE);
@@ -1612,7 +1612,7 @@ static ssize_t stm_fts_cmd_show(struct device *dev,
 					 * touch (allow to call this function
 					 * while touching the screen without
 					 * having a flooding of the FIFO) */
-			if (numberParameters >= 2 && typeOfComand[1] == 1)
+			if (numberParameters >= 2 && typeOfComand[1] == LOCKED_LP_DETECT)
 				res = getSSFrame3(SS_DETECT_RAW, &frameSS);
 			else
 				res = getSSFrame3(SS_RAW, &frameSS);

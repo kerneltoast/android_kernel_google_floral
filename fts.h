@@ -45,9 +45,9 @@
   */
 /* **** CODE CONFIGURATION **** */
 #define FTS_TS_DRV_NAME		"fts"	/* driver name */
-#define FTS_TS_DRV_VERSION	"5.2.16"	/* driver version string
+#define FTS_TS_DRV_VERSION	"5.2.16.1"	/* driver version string
 							 * */
-#define FTS_TS_DRV_VER		0x05021000	/* driver version u32 format */
+#define FTS_TS_DRV_VER		0x05021001	/* driver version u32 format */
 
 #define DEBUG	/* /< define to print more logs in the kernel log
 		  * and better follow the code flow */
@@ -66,7 +66,7 @@
 					  * during production */
 #endif
 
-#define FW_H_FILE			/* include the FW data as header file */
+#define FW_H_FILE			 /* include the FW data as header file */
 #ifdef FW_H_FILE
 #define FW_SIZE_NAME	myArray_size	/* FW data array size */
 #define FW_ARRAY_NAME	myArray	/* FW data array name */
