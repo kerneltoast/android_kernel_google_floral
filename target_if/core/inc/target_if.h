@@ -50,6 +50,8 @@
 		target_if_logfl(QDF_TRACE_LEVEL_INFO, format, ## args)
 #define target_if_debug(format, args...) \
 		target_if_logfl(QDF_TRACE_LEVEL_DEBUG, format, ## args)
+#define target_if_err_rl(params...) \
+	QDF_TRACE_ERROR_RL(QDF_MODULE_ID_TARGET_IF, params)
 
 #define TARGET_IF_ENTER() target_if_logfl(QDF_TRACE_LEVEL_DEBUG, "enter")
 #define TARGET_IF_EXIT() target_if_logfl(QDF_TRACE_LEVEL_DEBUG, "exit")
