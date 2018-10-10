@@ -44,6 +44,10 @@ int q6audio_get_port_index(u16 port_id)
 		return IDX_AFE_PORT_ID_QUINARY_PCM_RX;
 	case AFE_PORT_ID_QUINARY_PCM_TX:
 		return IDX_AFE_PORT_ID_QUINARY_PCM_TX;
+	case AFE_PORT_ID_SENARY_PCM_RX:
+		return IDX_AFE_PORT_ID_SENARY_PCM_RX;
+	case AFE_PORT_ID_SENARY_PCM_TX:
+		return IDX_AFE_PORT_ID_SENARY_PCM_TX;
 	case SECONDARY_I2S_RX: return IDX_SECONDARY_I2S_RX;
 	case SECONDARY_I2S_TX: return IDX_SECONDARY_I2S_TX;
 	case MI2S_RX: return IDX_MI2S_RX;
@@ -79,6 +83,8 @@ int q6audio_get_port_index(u16 port_id)
 	case SLIMBUS_7_TX: return IDX_SLIMBUS_7_TX;
 	case SLIMBUS_8_RX: return IDX_SLIMBUS_8_RX;
 	case SLIMBUS_8_TX: return IDX_SLIMBUS_8_TX;
+	case SLIMBUS_9_RX: return IDX_SLIMBUS_9_RX;
+	case SLIMBUS_9_TX: return IDX_SLIMBUS_9_TX;
 	case INT_BT_SCO_RX: return IDX_INT_BT_SCO_RX;
 	case INT_BT_SCO_TX: return IDX_INT_BT_SCO_TX;
 	case INT_BT_A2DP_RX: return IDX_INT_BT_A2DP_RX;
@@ -375,6 +381,10 @@ int q6audio_get_port_id(u16 port_id)
 			return AFE_PORT_ID_QUINARY_PCM_RX;
 	case AFE_PORT_ID_QUINARY_PCM_TX:
 			return AFE_PORT_ID_QUINARY_PCM_TX;
+	case AFE_PORT_ID_SENARY_PCM_RX:
+			return AFE_PORT_ID_SENARY_PCM_RX;
+	case AFE_PORT_ID_SENARY_PCM_TX:
+			return AFE_PORT_ID_SENARY_PCM_TX;
 	case SECONDARY_I2S_RX: return AFE_PORT_ID_SECONDARY_MI2S_RX;
 	case SECONDARY_I2S_TX: return AFE_PORT_ID_SECONDARY_MI2S_TX;
 	case MI2S_RX: return AFE_PORT_ID_PRIMARY_MI2S_RX;
@@ -415,6 +425,8 @@ int q6audio_get_port_id(u16 port_id)
 	case SLIMBUS_7_TX: return AFE_PORT_ID_SLIMBUS_MULTI_CHAN_7_TX;
 	case SLIMBUS_8_RX: return AFE_PORT_ID_SLIMBUS_MULTI_CHAN_8_RX;
 	case SLIMBUS_8_TX: return AFE_PORT_ID_SLIMBUS_MULTI_CHAN_8_TX;
+	case SLIMBUS_9_RX: return AFE_PORT_ID_SLIMBUS_MULTI_CHAN_9_RX;
+	case SLIMBUS_9_TX: return AFE_PORT_ID_SLIMBUS_MULTI_CHAN_9_TX;
 	case INT_BT_SCO_RX: return AFE_PORT_ID_INTERNAL_BT_SCO_RX;
 	case INT_BT_SCO_TX: return AFE_PORT_ID_INTERNAL_BT_SCO_TX;
 	case INT_BT_A2DP_RX: return AFE_PORT_ID_INTERNAL_BT_A2DP_RX;
@@ -725,6 +737,8 @@ int q6audio_is_digital_pcm_interface(u16 port_id)
 	case AFE_PORT_ID_QUATERNARY_PCM_TX:
 	case AFE_PORT_ID_QUINARY_PCM_RX:
 	case AFE_PORT_ID_QUINARY_PCM_TX:
+	case AFE_PORT_ID_SENARY_PCM_RX:
+	case AFE_PORT_ID_SENARY_PCM_TX:
 	case SECONDARY_I2S_RX:
 	case SECONDARY_I2S_TX:
 	case MI2S_RX:
@@ -894,6 +908,8 @@ int q6audio_validate_port(u16 port_id)
 	case AFE_PORT_ID_QUATERNARY_PCM_TX:
 	case AFE_PORT_ID_QUINARY_PCM_RX:
 	case AFE_PORT_ID_QUINARY_PCM_TX:
+	case AFE_PORT_ID_SENARY_PCM_RX:
+	case AFE_PORT_ID_SENARY_PCM_TX:
 	case SECONDARY_I2S_RX:
 	case SECONDARY_I2S_TX:
 	case MI2S_RX:
@@ -925,6 +941,8 @@ int q6audio_validate_port(u16 port_id)
 	case SLIMBUS_7_TX:
 	case SLIMBUS_8_RX:
 	case SLIMBUS_8_TX:
+	case SLIMBUS_9_RX:
+	case SLIMBUS_9_TX:
 	case INT_BT_SCO_RX:
 	case INT_BT_SCO_TX:
 	case INT_BT_A2DP_RX:
