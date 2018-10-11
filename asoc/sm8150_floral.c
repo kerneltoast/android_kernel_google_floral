@@ -4705,7 +4705,8 @@ static int sm8150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret = 0;
 	int slot_width = 32;
-	int channels, slots;
+	int channels;
+	int slots = 8;
 	unsigned int slot_mask, rate, clk_freq;
 	unsigned int slot_offset[8] = {0, 4, 8, 12, 16, 20, 24, 28};
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
@@ -4718,43 +4719,43 @@ static int sm8150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
 	switch (cpu_dai->id) {
 	case AFE_PORT_ID_PRIMARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_PRI][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_PRI][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_PRI][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_SEC][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_SEC][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_SEC][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_TERTIARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_TERT][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_TERT][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_TERT][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_QUATERNARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_QUAT][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_QUAT][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_QUAT][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_QUINARY_TDM_RX:
-		slots = tdm_rx_cfg[TDM_QUIN][TDM_0].channels;
+		channels = tdm_rx_cfg[TDM_QUIN][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_QUIN][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_PRIMARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_PRI][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_PRI][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_PRI][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_SEC][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_SEC][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_SEC][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_TERTIARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_TERT][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_TERT][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_TERT][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_QUATERNARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_QUAT][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_QUAT][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_QUAT][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_QUINARY_TDM_TX:
-		slots = tdm_tx_cfg[TDM_QUIN][TDM_0].channels;
+		channels = tdm_tx_cfg[TDM_QUIN][TDM_0].channels;
 		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_QUIN][TDM_0].bit_format);
 		break;
 
@@ -4764,13 +4765,17 @@ static int sm8150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 		return -EINVAL;
 	}
 
+	if (channels < 0 || channels > PCM_FORMAT_MAX_NUM_CHANNEL) {
+		pr_err("%s: invalid channels %d\n", __func__, channels);
+		return -EINVAL;
+	}
+
 	for (i = 0 ; i < ARRAY_SIZE(slot_offset) ; i++)
 		slot_offset[i] = slot_width * i / 8;
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		/*2 slot config - bits 0 and 1 set for the first two slots */
-		slot_mask = 0x0000FFFF >> (16-slots);
-		channels = slots;
+		slot_mask = 0x0000FFFF >> (16 - channels);
 
 		pr_debug("%s: tdm rx slot_width %d slots %d\n",
 			__func__, slot_width, slots);
@@ -4792,8 +4797,7 @@ static int sm8150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 		}
 	} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		/*2 slot config - bits 0 and 1 set for the first two slots */
-		slot_mask = 0x0000FFFF >> (16-slots);
-		channels = slots;
+		slot_mask = 0x0000FFFF >> (16 - channels);
 
 		pr_debug("%s: tdm tx slot_width %d slots %d\n",
 			__func__, slot_width, slots);
