@@ -263,7 +263,7 @@ int hdd_hif_open(struct device *dev, void *bdev, const struct hif_bus_id *bid,
 
 	hif_set_ce_service_max_yield_time(hif_ctx,
 				hdd_ctx->config->ce_service_max_yield_time);
-	pmo_ucfg_psoc_set_hif_handle(hdd_ctx->hdd_psoc, hif_ctx);
+	pmo_ucfg_psoc_set_hif_handle(hdd_ctx->psoc, hif_ctx);
 	hif_set_ce_service_max_rx_ind_flush(hif_ctx,
 				hdd_ctx->config->ce_service_max_rx_ind_flush);
 	return 0;
@@ -291,7 +291,7 @@ void hdd_hif_close(struct hdd_context *hdd_ctx, void *hif_ctx)
 	hdd_deinit_cds_hif_context();
 	hif_close(hif_ctx);
 
-	pmo_ucfg_psoc_set_hif_handle(hdd_ctx->hdd_psoc, NULL);
+	pmo_ucfg_psoc_set_hif_handle(hdd_ctx->psoc, NULL);
 }
 
 /**
@@ -390,7 +390,6 @@ static int hdd_soc_probe(struct device *dev,
 
 	probe_fail_cnt = 0;
 	cds_set_driver_loaded(true);
-	cds_set_fw_down(false);
 	hdd_start_complete(0);
 	cds_set_load_in_progress(false);
 
@@ -403,7 +402,6 @@ assert_fail_count:
 	QDF_BUG(probe_fail_cnt < SSR_MAX_FAIL_CNT);
 
 unlock:
-	cds_set_fw_down(false);
 	cds_set_load_in_progress(false);
 	hdd_soc_load_unlock(dev);
 
@@ -433,7 +431,6 @@ static int hdd_soc_reinit(struct device *dev, void *bdev,
 	}
 
 	re_init_fail_cnt = 0;
-	cds_set_fw_down(false);
 	cds_set_recovery_in_progress(false);
 
 	hdd_soc_load_unlock(dev);
@@ -447,7 +444,6 @@ assert_fail_count:
 unlock:
 	cds_set_driver_in_bad_state(true);
 	cds_set_recovery_in_progress(false);
-	cds_set_fw_down(false);
 	hdd_soc_load_unlock(dev);
 
 	return check_for_probe_defer(errno);
@@ -797,7 +793,7 @@ static int __wlan_hdd_bus_suspend(struct wow_enable_params wow_params)
 		goto resume_cdp;
 	}
 
-	status = pmo_ucfg_psoc_bus_suspend_req(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_psoc_bus_suspend_req(hdd_ctx->psoc,
 					       QDF_SYSTEM_SUSPEND,
 					       &pmo_params);
 	err = qdf_status_to_os_return(status);
@@ -816,7 +812,7 @@ static int __wlan_hdd_bus_suspend(struct wow_enable_params wow_params)
 	return 0;
 
 resume_pmo:
-	status = pmo_ucfg_psoc_bus_resume_req(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_psoc_bus_resume_req(hdd_ctx->psoc,
 					      QDF_SYSTEM_SUSPEND);
 	QDF_BUG(QDF_IS_STATUS_SUCCESS(status));
 
@@ -895,7 +891,7 @@ static int __wlan_hdd_bus_suspend_noirq(void)
 	if (errno)
 		goto done;
 
-	errno = pmo_ucfg_psoc_is_target_wake_up_received(hdd_ctx->hdd_psoc);
+	errno = pmo_ucfg_psoc_is_target_wake_up_received(hdd_ctx->psoc);
 	if (errno == -EAGAIN) {
 		hdd_err("Firmware attempting wakeup, try again");
 		wlan_hdd_inc_suspend_stats(hdd_ctx,
@@ -987,7 +983,7 @@ static int __wlan_hdd_bus_resume(void)
 		goto out;
 	}
 
-	qdf_status = pmo_ucfg_psoc_bus_resume_req(hdd_ctx->hdd_psoc,
+	qdf_status = pmo_ucfg_psoc_bus_resume_req(hdd_ctx->psoc,
 			QDF_SYSTEM_SUSPEND);
 	status = qdf_status_to_os_return(qdf_status);
 	if (status) {
@@ -1069,7 +1065,7 @@ static int __wlan_hdd_bus_resume_noirq(void)
 	if (NULL == hif_ctx)
 		return -EINVAL;
 
-	qdf_status = pmo_ucfg_psoc_clear_target_wake_up(hdd_ctx->hdd_psoc);
+	qdf_status = pmo_ucfg_psoc_clear_target_wake_up(hdd_ctx->psoc);
 	QDF_BUG(!qdf_status);
 
 	status = hif_bus_resume_noirq(hif_ctx);
@@ -1167,7 +1163,7 @@ static int __wlan_hdd_runtime_suspend(struct device *dev)
 		return -EBUSY;
 	}
 
-	status = pmo_ucfg_psoc_bus_runtime_suspend(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_psoc_bus_runtime_suspend(hdd_ctx->psoc,
 						   hdd_pld_runtime_suspend_cb);
 	err = qdf_status_to_os_return(status);
 
@@ -1235,7 +1231,7 @@ static int __wlan_hdd_runtime_resume(struct device *dev)
 		return 0;
 	}
 
-	status = pmo_ucfg_psoc_bus_runtime_resume(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_psoc_bus_runtime_resume(hdd_ctx->psoc,
 						  hdd_pld_runtime_resume_cb);
 	if (status != QDF_STATUS_SUCCESS)
 		hdd_err("PMO Runtime resume failed: %d", status);
@@ -1497,7 +1493,6 @@ static void wlan_hdd_set_the_pld_uevent(struct pld_uevent_data *uevent)
 		cds_set_recovery_in_progress(true);
 		break;
 	case PLD_FW_DOWN:
-		cds_set_fw_state(CDS_FW_STATE_DOWN);
 		cds_set_target_ready(false);
 		break;
 	}
@@ -1542,6 +1537,9 @@ static void wlan_hdd_handle_the_pld_uevent(struct pld_uevent_data *uevent)
 		qdf_complete_wait_events();
 		cds_set_target_ready(false);
 		wlan_cfg80211_cleanup_scan_queue(hdd_ctx->pdev, NULL);
+		if (pld_is_fw_rejuvenate(hdd_ctx->parent_dev) &&
+		    ucfg_ipa_is_enabled())
+			ucfg_ipa_fw_rejuvenate_send_msg(hdd_ctx->pdev);
 		break;
 	default:
 		break;
@@ -1561,6 +1559,7 @@ static void wlan_hdd_pld_uevent(struct device *dev,
 	hdd_enter();
 	hdd_info("pld event %d", uevent->uevent);
 
+	wma_wmi_stop();
 	wlan_hdd_set_the_pld_uevent(uevent);
 	mutex_lock(&hdd_init_deinit_lock);
 	wlan_hdd_handle_the_pld_uevent(uevent);

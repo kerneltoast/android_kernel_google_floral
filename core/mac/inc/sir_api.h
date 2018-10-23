@@ -2866,6 +2866,8 @@ typedef struct sSirRoamOffloadScanReq {
 	uint32_t R0KH_ID_Length;
 	uint8_t RoamKeyMgmtOffloadEnabled;
 	struct pmkid_mode_bits pmkid_modes;
+	uint32_t roam_preauth_retry_count;
+	uint32_t roam_preauth_no_ack_timeout;
 #endif
 	struct roam_ext_params roam_params;
 	uint8_t  middle_of_roaming;
@@ -7237,6 +7239,16 @@ struct sir_sae_msg {
 	uint16_t length;
 	uint16_t session_id;
 	uint8_t sae_status;
+};
+
+/**
+ * struct set_pcl_req - Request message to set the PCL
+ * @chan_weights: PCL channel weights
+ * @band: Supported band
+ */
+struct set_pcl_req {
+	struct wmi_pcl_chan_weights chan_weights;
+	enum band_info band;
 };
 
 #endif /* __SIR_API_H */

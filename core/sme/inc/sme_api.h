@@ -1647,6 +1647,14 @@ QDF_STATUS sme_get_sar_power_limits(tHalHandle hal,
 QDF_STATUS sme_set_sar_power_limits(tHalHandle hal,
 		struct sar_limit_cmd_params *sar_limit_cmd);
 
+/**
+ * sme_send_coex_config_cmd() - Send COEX config params
+ * @coex_cfg_params: struct to coex config params
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS sme_send_coex_config_cmd(struct coex_config_params *coex_cfg_params);
+
 void sme_set_cc_src(tHalHandle hal_handle, enum country_src);
 
 
@@ -2140,6 +2148,18 @@ static inline QDF_STATUS sme_set_he_bss_color(tHalHandle hal,
 	return QDF_STATUS_SUCCESS;
 }
 #endif
+
+/**
+ * sme_is_conn_state_connected() -- check if SME connection state is connected
+ * @hal: global hal handle
+ * @session_id: current Session Id
+ *
+ * This API checks if the current SME connection state is connected for the
+ * given session id.
+ *
+ * Return: True if connected, false if any other state.
+ */
+bool sme_is_conn_state_connected(mac_handle_t hal, uint8_t session_id);
 
 /**
  * sme_scan_get_result_for_bssid - gets the scan result from scan cache for the

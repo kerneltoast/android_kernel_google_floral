@@ -1002,7 +1002,7 @@ static void wma_process_cli_set_cmd(tp_wma_handle wma,
 
 	switch (privcmd->param_vp_dev) {
 	case VDEV_CMD:
-		if (!wma->interfaces[privcmd->param_vdev_id].is_vdev_valid) {
+		if (!wma_is_vdev_valid(privcmd->param_vdev_id)) {
 			WMA_LOGE("%s Vdev id is not valid", __func__);
 			return;
 		}
@@ -1955,7 +1955,6 @@ static void wma_shutdown_notifier_cb(void *priv)
 
 	qdf_event_set(&wma_handle->wma_resume_event);
 	pmo_ucfg_psoc_wakeup_host_event_received(wma_handle->psoc);
-	wmi_stop(wma_handle->wmi_handle);
 
 	msg.bodyptr = priv;
 	msg.callback = wma_cleanup_vdev_resp_and_hold_req;
@@ -3047,6 +3046,30 @@ static void wma_register_apf_events(tp_wma_handle wma_handle)
 #endif /* FEATURE_WLAN_APF */
 
 /**
+ * wma_get_phy_mode_cb() - Callback to get current PHY Mode.
+ * @chan: channel number
+ * @chan_width: maximum channel width possible
+ * @phy_mode: PHY Mode
+ *
+ * Return: None
+ */
+static void wma_get_phy_mode_cb(uint8_t chan, uint32_t chan_width,
+				uint32_t *phy_mode)
+{
+	uint32_t dot11_mode;
+	struct sAniSirGlobal *mac = cds_get_context(QDF_MODULE_ID_PE);
+
+	if (!mac) {
+		wma_err("MAC context is NULL");
+		*phy_mode = MODE_UNKNOWN;
+		return;
+	}
+
+	wlan_cfg_get_int(mac, WNI_CFG_DOT11_MODE, &dot11_mode);
+	*phy_mode = wma_chan_phy_mode(chan, chan_width, dot11_mode);
+}
+
+/**
  * wma_open() - Allocate wma context and initialize it.
  * @cds_context:  cds context
  * @wma_tgt_cfg_cb: tgt config callback fun
@@ -3557,6 +3580,9 @@ QDF_STATUS wma_open(struct wlan_objmgr_psoc *psoc,
 
 
 	wma_register_debug_callback();
+	wifi_pos_register_get_phy_mode_cb(wma_handle->psoc,
+					  wma_get_phy_mode_cb);
+
 	/* Register callback with PMO so PMO can update the vdev pause bitmap*/
 	pmo_register_pause_bitmap_notifier(wma_handle->psoc,
 		wma_vdev_update_pause_bitmap);
@@ -8313,7 +8339,7 @@ static QDF_STATUS wma_mc_process_msg(struct scheduler_msg *msg)
 		break;
 	case SIR_HAL_PDEV_SET_PCL_TO_FW:
 		wma_send_pdev_set_pcl_cmd(wma_handle,
-				(struct wmi_pcl_chan_weights *)msg->bodyptr);
+				(struct set_pcl_req *)msg->bodyptr);
 		qdf_mem_free(msg->bodyptr);
 		break;
 	case SIR_HAL_PDEV_SET_HW_MODE:
@@ -8581,7 +8607,7 @@ static wmi_pcl_chan_weight wma_map_pcl_weights(uint32_t pcl_weight)
  * Return: Success if the cmd is sent successfully to the firmware
  */
 QDF_STATUS wma_send_pdev_set_pcl_cmd(tp_wma_handle wma_handle,
-				struct wmi_pcl_chan_weights *msg)
+				     struct set_pcl_req *msg)
 {
 	uint32_t i;
 	QDF_STATUS status;
@@ -8593,26 +8619,33 @@ QDF_STATUS wma_send_pdev_set_pcl_cmd(tp_wma_handle wma_handle,
 	}
 
 	for (i = 0; i < wma_handle->saved_chan.num_channels; i++) {
-		msg->saved_chan_list[i] =
+		msg->chan_weights.saved_chan_list[i] =
 			wma_handle->saved_chan.channel_list[i];
 	}
 
-	msg->saved_num_chan = wma_handle->saved_chan.num_channels;
+	msg->chan_weights.saved_num_chan = wma_handle->saved_chan.num_channels;
 	status = policy_mgr_get_valid_chan_weights(wma_handle->psoc,
-		(struct policy_mgr_pcl_chan_weights *)msg);
+		(struct policy_mgr_pcl_chan_weights *)&msg->chan_weights);
 
-	for (i = 0; i < msg->saved_num_chan; i++) {
-		msg->weighed_valid_list[i] =
-			wma_map_pcl_weights(msg->weighed_valid_list[i]);
+	for (i = 0; i < msg->chan_weights.saved_num_chan; i++) {
+		msg->chan_weights.weighed_valid_list[i] =
+			wma_map_pcl_weights(
+				msg->chan_weights.weighed_valid_list[i]);
 		/* Dont allow roaming on 2G when 5G_ONLY configured */
-		if ((wma_handle->bandcapability == BAND_5G) &&
-			(msg->saved_chan_list[i] <= MAX_24GHZ_CHANNEL)) {
-			msg->weighed_valid_list[i] =
+		if (((wma_handle->bandcapability == BAND_5G) ||
+		    (msg->band == BAND_5G)) &&
+		    (WLAN_REG_IS_24GHZ_CH(
+				msg->chan_weights.saved_chan_list[i]))) {
+			msg->chan_weights.weighed_valid_list[i] =
 				WEIGHT_OF_DISALLOWED_CHANNELS;
 		}
+		if ((msg->band == BAND_2G) &&
+		    WLAN_REG_IS_5GHZ_CH(msg->chan_weights.saved_chan_list[i]))
+			msg->chan_weights.weighed_valid_list[i] =
+				WEIGHT_OF_DISALLOWED_CHANNELS;
 		WMA_LOGD("%s: chan:%d weight[%d]=%d", __func__,
-			 msg->saved_chan_list[i], i,
-			 msg->weighed_valid_list[i]);
+			 msg->chan_weights.saved_chan_list[i], i,
+			 msg->chan_weights.weighed_valid_list[i]);
 	}
 
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
@@ -8620,7 +8653,8 @@ QDF_STATUS wma_send_pdev_set_pcl_cmd(tp_wma_handle wma_handle,
 		return status;
 	}
 
-	if (wmi_unified_pdev_set_pcl_cmd(wma_handle->wmi_handle, msg))
+	if (wmi_unified_pdev_set_pcl_cmd(wma_handle->wmi_handle,
+					 &msg->chan_weights))
 		return QDF_STATUS_E_FAILURE;
 
 	return QDF_STATUS_SUCCESS;

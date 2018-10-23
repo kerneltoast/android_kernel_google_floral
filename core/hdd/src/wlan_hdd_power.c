@@ -343,7 +343,7 @@ void hdd_enable_ns_offload(struct hdd_adapter *adapter,
 			   enum pmo_offload_trigger trigger)
 {
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	struct wlan_objmgr_psoc *psoc = hdd_ctx->hdd_psoc;
+	struct wlan_objmgr_psoc *psoc = hdd_ctx->psoc;
 	struct inet6_dev *in6_dev;
 	struct pmo_ns_req *ns_req;
 	QDF_STATUS status;
@@ -859,7 +859,7 @@ void hdd_enable_arp_offload(struct hdd_adapter *adapter,
 			    enum pmo_offload_trigger trigger)
 {
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	struct wlan_objmgr_psoc *psoc = hdd_ctx->hdd_psoc;
+	struct wlan_objmgr_psoc *psoc = hdd_ctx->psoc;
 	QDF_STATUS status;
 	struct pmo_arp_req *arp_req;
 	struct in_ifaddr *ifa;
@@ -943,7 +943,7 @@ void hdd_enable_mc_addr_filtering(struct hdd_adapter *adapter,
 	if (!hdd_adapter_is_connected_sta(adapter))
 		goto out;
 
-	status = pmo_ucfg_enable_mc_addr_filtering_in_fwr(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_enable_mc_addr_filtering_in_fwr(hdd_ctx->psoc,
 							  adapter->session_id,
 							  trigger);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -967,7 +967,7 @@ void hdd_disable_mc_addr_filtering(struct hdd_adapter *adapter,
 	if (!hdd_adapter_is_connected_sta(adapter))
 		goto out;
 
-	status = pmo_ucfg_disable_mc_addr_filtering_in_fwr(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_disable_mc_addr_filtering_in_fwr(hdd_ctx->psoc,
 							   adapter->session_id,
 							   trigger);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -1000,14 +1000,14 @@ void hdd_disable_and_flush_mc_addr_list(struct hdd_adapter *adapter,
 		goto flush_mc_list;
 
 	/* disable mc list first because the mc list is cached in PMO */
-	status = pmo_ucfg_disable_mc_addr_filtering_in_fwr(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_disable_mc_addr_filtering_in_fwr(hdd_ctx->psoc,
 							   adapter->session_id,
 							   trigger);
 	if (QDF_IS_STATUS_ERROR(status))
 		hdd_err("failed to disable mc list; status:%d", status);
 
 flush_mc_list:
-	status = pmo_ucfg_flush_mc_addr_list(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_flush_mc_addr_list(hdd_ctx->psoc,
 					     adapter->session_id);
 	if (QDF_IS_STATUS_ERROR(status))
 		hdd_err("failed to flush mc list; status:%d", status);
@@ -1088,7 +1088,7 @@ hdd_suspend_wlan(void)
 		hdd_update_conn_state_mask(adapter, &conn_state_mask);
 	}
 
-	status = pmo_ucfg_psoc_user_space_suspend_req(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_psoc_user_space_suspend_req(hdd_ctx->psoc,
 			QDF_SYSTEM_SUSPEND);
 	if (status != QDF_STATUS_SUCCESS)
 		return -EAGAIN;
@@ -1147,7 +1147,7 @@ static int hdd_resume_wlan(void)
 	}
 
 	ucfg_ipa_resume(hdd_ctx->pdev);
-	status = pmo_ucfg_psoc_user_space_resume_req(hdd_ctx->hdd_psoc,
+	status = pmo_ucfg_psoc_user_space_resume_req(hdd_ctx->psoc,
 						     QDF_SYSTEM_SUSPEND);
 	if (QDF_IS_STATUS_ERROR(status))
 		return qdf_status_to_os_return(status);
@@ -1193,7 +1193,6 @@ static void hdd_ssr_restart_sap(struct hdd_context *hdd_ctx)
 QDF_STATUS hdd_wlan_shutdown(void)
 {
 	struct hdd_context *hdd_ctx;
-	p_cds_sched_context cds_sched_context = NULL;
 	void *soc = cds_get_context(QDF_MODULE_ID_SOC);
 
 	hdd_info("WLAN driver shutting down!");
@@ -1206,10 +1205,24 @@ QDF_STATUS hdd_wlan_shutdown(void)
 	}
 
 	hdd_bus_bw_compute_timer_stop(hdd_ctx);
-	policy_mgr_clear_concurrent_session_count(hdd_ctx->hdd_psoc);
+	policy_mgr_clear_concurrent_session_count(hdd_ctx->psoc);
 
 	hdd_debug("Invoking packetdump deregistration API");
 	wlan_deregister_txrx_packetdump();
+
+	/* resume wlan threads before adapter reset which does vdev destroy */
+	if (hdd_ctx->is_scheduler_suspended) {
+		scheduler_resume();
+		hdd_ctx->is_scheduler_suspended = false;
+		hdd_ctx->is_wiphy_suspended = false;
+	}
+
+#ifdef QCA_CONFIG_SMP
+	if (hdd_ctx->is_ol_rx_thread_suspended) {
+		cds_resume_rx_thread();
+		hdd_ctx->is_ol_rx_thread_suspended = false;
+	}
+#endif
 
 	/*
 	 * After SSR, FW clear its txrx stats. In host,
@@ -1227,26 +1240,14 @@ QDF_STATUS hdd_wlan_shutdown(void)
 
 	hdd_reset_all_adapters(hdd_ctx);
 
+	ucfg_ipa_uc_ssr_cleanup(hdd_ctx->pdev);
+
 	/* Flush cached rx frame queue */
 	if (soc)
 		cdp_flush_cache_rx_queue(soc);
 
 	/* De-register the HDD callbacks */
 	hdd_deregister_cb(hdd_ctx);
-
-	cds_sched_context = get_cds_sched_ctxt();
-
-	if (hdd_ctx->is_scheduler_suspended) {
-		scheduler_resume();
-		hdd_ctx->is_scheduler_suspended = false;
-		hdd_ctx->is_wiphy_suspended = false;
-	}
-#ifdef QCA_CONFIG_SMP
-	if (true == hdd_ctx->is_ol_rx_thread_suspended) {
-		complete(&cds_sched_context->ol_resume_rx_event);
-		hdd_ctx->is_ol_rx_thread_suspended = false;
-	}
-#endif
 
 	hdd_wlan_stop_modules(hdd_ctx, false);
 
@@ -1304,6 +1305,26 @@ static void hdd_send_default_scan_ies(struct hdd_context *hdd_ctx)
 				      adapter->scan_info.default_scan_ies_len);
 		}
 	}
+}
+
+void hdd_is_interface_down_during_ssr(struct hdd_context *hdd_ctx)
+{
+	struct hdd_adapter *adapter = NULL, *pnext = NULL;
+	QDF_STATUS status;
+
+	hdd_enter();
+
+	status = hdd_get_front_adapter(hdd_ctx, &adapter);
+	while (NULL != adapter && QDF_STATUS_SUCCESS == status) {
+		if (test_bit(DOWN_DURING_SSR, &adapter->event_flags)) {
+			hdd_stop_adapter(hdd_ctx, adapter);
+			clear_bit(DEVICE_IFACE_OPENED, &adapter->event_flags);
+		}
+		status = hdd_get_next_adapter(hdd_ctx, adapter, &pnext);
+		adapter = pnext;
+	}
+
+	hdd_exit();
 }
 
 QDF_STATUS hdd_wlan_re_init(void)
@@ -1364,7 +1385,7 @@ QDF_STATUS hdd_wlan_re_init(void)
 
 	if (hdd_ctx->config->sap_internal_restart)
 		hdd_ssr_restart_sap(hdd_ctx);
-
+	hdd_is_interface_down_during_ssr(hdd_ctx);
 	hdd_wlan_ssr_reinit_event();
 	return QDF_STATUS_SUCCESS;
 
@@ -1384,6 +1405,7 @@ int wlan_hdd_set_powersave(struct hdd_adapter *adapter,
 {
 	mac_handle_t mac_handle;
 	struct hdd_context *hdd_ctx;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (NULL == adapter) {
 		hdd_err("Adapter NULL");
@@ -1415,8 +1437,10 @@ int wlan_hdd_set_powersave(struct hdd_adapter *adapter,
 		if (QDF_STA_MODE == adapter->device_mode ||
 		    QDF_P2P_CLIENT_MODE == adapter->device_mode) {
 			hdd_debug("Disabling Auto Power save timer");
-			sme_ps_disable_auto_ps_timer(mac_handle,
-						     adapter->session_id);
+			status = sme_ps_disable_auto_ps_timer(mac_handle,
+						adapter->session_id);
+			if (status != QDF_STATUS_SUCCESS)
+				goto end;
 		}
 
 		if (hdd_ctx->config && hdd_ctx->config->is_ps_enabled) {
@@ -1426,14 +1450,19 @@ int wlan_hdd_set_powersave(struct hdd_adapter *adapter,
 			 * Enter Power Save command received from GUI
 			 * this means DHCP is completed
 			 */
-			if (timeout)
-				sme_ps_enable_auto_ps_timer(mac_handle,
+			if (timeout) {
+				status = sme_ps_enable_auto_ps_timer(mac_handle,
 							    adapter->session_id,
 							    timeout);
-			else
-				sme_ps_enable_disable(mac_handle,
-						      adapter->session_id,
-						      SME_PS_ENABLE);
+				if (status != QDF_STATUS_SUCCESS)
+					goto end;
+			} else {
+				status = sme_ps_enable_disable(mac_handle,
+						adapter->session_id,
+						SME_PS_ENABLE);
+				if (status != QDF_STATUS_SUCCESS)
+					goto end;
+			}
 		} else {
 			hdd_debug("Power Save is not enabled in the cfg");
 		}
@@ -1444,13 +1473,16 @@ int wlan_hdd_set_powersave(struct hdd_adapter *adapter,
 		 * Enter Full power command received from GUI
 		 * this means we are disconnected
 		 */
-		sme_ps_disable_auto_ps_timer(mac_handle,
-					     adapter->session_id);
-		sme_ps_enable_disable(mac_handle, adapter->session_id,
-				      SME_PS_DISABLE);
+		status = sme_ps_disable_auto_ps_timer(mac_handle,
+					adapter->session_id);
+		if (status != QDF_STATUS_SUCCESS)
+			goto end;
+		status = sme_ps_enable_disable(mac_handle, adapter->session_id,
+					       SME_PS_DISABLE);
 	}
 
-	return 0;
+end:
+	return qdf_status_to_os_return(status);
 }
 
 static void wlan_hdd_print_suspend_fail_stats(struct hdd_context *hdd_ctx)
@@ -1668,8 +1700,8 @@ static int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 		}
 	}
 	/* p2p cleanup task based on scheduler */
-	ucfg_p2p_cleanup_tx_by_psoc(hdd_ctx->hdd_psoc);
-	ucfg_p2p_cleanup_roc_by_psoc(hdd_ctx->hdd_psoc);
+	ucfg_p2p_cleanup_tx_by_psoc(hdd_ctx->psoc);
+	ucfg_p2p_cleanup_roc_by_psoc(hdd_ctx->psoc);
 
 	/* Stop ongoing scan on each interface */
 	hdd_for_each_adapter(hdd_ctx, adapter) {

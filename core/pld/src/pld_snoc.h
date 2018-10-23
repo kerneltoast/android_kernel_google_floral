@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -113,6 +113,11 @@ static inline int pld_snoc_is_qmi_disable(struct device *dev)
 {
 	return 0;
 }
+
+static inline int pld_snoc_is_fw_down(struct device *dev)
+{
+	return 0;
+}
 static inline int pld_snoc_set_fw_log_mode(struct device *dev, u8 fw_log_mode)
 {
 	return 0;
@@ -121,6 +126,12 @@ static inline int pld_snoc_force_assert_target(struct device *dev)
 {
 	return 0;
 }
+
+static inline int pld_snoc_is_fw_rejuvenate(void)
+{
+	return 0;
+}
+
 #else
 int pld_snoc_register_driver(void);
 void pld_snoc_unregister_driver(void);
@@ -251,6 +262,11 @@ unsigned int pld_snoc_socinfo_get_serial_number(struct device *dev)
 	return icnss_socinfo_get_serial_number(dev);
 }
 
+static inline int pld_snoc_is_fw_down(struct device *dev)
+{
+	return icnss_is_fw_down();
+}
+
 #ifdef ICNSS_API_WITH_DEV
 static inline int pld_snoc_is_qmi_disable(struct device *dev)
 {
@@ -283,5 +299,11 @@ static inline int pld_snoc_force_assert_target(struct device *dev)
 {
 	return icnss_trigger_recovery(dev);
 }
+
+static inline int pld_snoc_is_fw_rejuvenate(void)
+{
+	return icnss_is_rejuvenate();
+}
+
 #endif
 #endif

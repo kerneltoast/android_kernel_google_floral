@@ -892,9 +892,30 @@ int wlan_hdd_del_virtual_intf(struct wiphy *wiphy, struct wireless_dev *wdev)
 	return ret;
 }
 
+/**
+ * hdd_is_qos_action_frame() - check if frame is QOS action frame
+ * @pb_frames: frame pointer
+ * @frame_len: frame length
+ *
+ * Return: true if it is QOS action frame else false.
+ */
+static inline bool
+hdd_is_qos_action_frame(uint8_t *pb_frames, uint32_t frame_len)
+{
+	if (frame_len <= WLAN_HDD_PUBLIC_ACTION_FRAME_OFFSET + 1) {
+		hdd_debug("Not a QOS frame len: %d", frame_len);
+		return false;
+	}
+
+	return ((pb_frames[WLAN_HDD_PUBLIC_ACTION_FRAME_OFFSET] ==
+		 WLAN_HDD_QOS_ACTION_FRAME) &&
+		(pb_frames[WLAN_HDD_PUBLIC_ACTION_FRAME_OFFSET + 1] ==
+		 WLAN_HDD_QOS_MAP_CONFIGURE));
+}
+
 void __hdd_indicate_mgmt_frame(struct hdd_adapter *adapter,
-			     uint32_t nFrameLength,
-			     uint8_t *pbFrames,
+			     uint32_t frm_len,
+			     uint8_t *pb_frames,
 			     uint8_t frameType, uint32_t rxChan, int8_t rxRssi)
 {
 	uint16_t freq;
@@ -903,7 +924,7 @@ void __hdd_indicate_mgmt_frame(struct hdd_adapter *adapter,
 	struct hdd_context *hdd_ctx;
 
 	hdd_debug("Frame Type = %d Frame Length = %d",
-		frameType, nFrameLength);
+		frameType, frm_len);
 
 	if (NULL == adapter) {
 		hdd_err("adapter is NULL");
@@ -911,27 +932,27 @@ void __hdd_indicate_mgmt_frame(struct hdd_adapter *adapter,
 	}
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 
-	if (0 == nFrameLength) {
+	if (!frm_len) {
 		hdd_err("Frame Length is Invalid ZERO");
 		return;
 	}
 
-	if (NULL == pbFrames) {
+	if (!pb_frames) {
 		hdd_err("pbFrames is NULL");
 		return;
 	}
 
-	type = WLAN_HDD_GET_TYPE_FRM_FC(pbFrames[0]);
-	subType = WLAN_HDD_GET_SUBTYPE_FRM_FC(pbFrames[0]);
+	type = WLAN_HDD_GET_TYPE_FRM_FC(pb_frames[0]);
+	subType = WLAN_HDD_GET_SUBTYPE_FRM_FC(pb_frames[0]);
 
 	/* Get adapter from Destination mac address of the frame */
 	if ((type == SIR_MAC_MGMT_FRAME) &&
 	    (subType != SIR_MAC_MGMT_PROBE_REQ) &&
 	    !qdf_is_macaddr_broadcast(
-	     (struct qdf_mac_addr *)&pbFrames[WLAN_HDD_80211_FRM_DA_OFFSET])) {
+	     (struct qdf_mac_addr *)&pb_frames[WLAN_HDD_80211_FRM_DA_OFFSET])) {
 		adapter =
 			hdd_get_adapter_by_macaddr(hdd_ctx,
-						   &pbFrames
+						   &pb_frames
 						   [WLAN_HDD_80211_FRM_DA_OFFSET]);
 		if (NULL == adapter) {
 			/*
@@ -941,17 +962,17 @@ void __hdd_indicate_mgmt_frame(struct hdd_adapter *adapter,
 			 */
 			hdd_err("adapter for action frame is NULL Macaddr = "
 				  MAC_ADDRESS_STR,
-				  MAC_ADDR_ARRAY(&pbFrames
+				  MAC_ADDR_ARRAY(&pb_frames
 						 [WLAN_HDD_80211_FRM_DA_OFFSET]));
 			hdd_debug("Frame Type = %d Frame Length = %d subType = %d",
-				frameType, nFrameLength, subType);
+				frameType, frm_len, subType);
 			/*
 			 * We will receive broadcast management frames
 			 * in OCB mode
 			 */
 			adapter = hdd_get_adapter(hdd_ctx, QDF_OCB_MODE);
 			if (NULL == adapter || !qdf_is_macaddr_broadcast(
-				(struct qdf_mac_addr *)&pbFrames
+				(struct qdf_mac_addr *)&pb_frames
 				[WLAN_HDD_80211_FRM_DA_OFFSET])) {
 				/*
 				 * Under assumtion that we don't
@@ -983,23 +1004,28 @@ void __hdd_indicate_mgmt_frame(struct hdd_adapter *adapter,
 		freq = ieee80211_channel_to_frequency(rxChan,
 						      NL80211_BAND_5GHZ);
 
+	if (hdd_is_qos_action_frame(pb_frames, frm_len))
+		sme_update_dsc_pto_up_mapping(hdd_ctx->mac_handle,
+					      adapter->dscp_to_up_map,
+					      adapter->session_id);
+
 	/* Indicate Frame Over Normal Interface */
 	hdd_debug("Indicate Frame over NL80211 sessionid : %d, idx :%d",
 		   adapter->session_id, adapter->dev->ifindex);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0))
 	cfg80211_rx_mgmt(adapter->dev->ieee80211_ptr,
-		 freq, rxRssi * 100, pbFrames,
-			 nFrameLength, NL80211_RXMGMT_FLAG_ANSWERED);
+		 freq, rxRssi * 100, pb_frames,
+			 frm_len, NL80211_RXMGMT_FLAG_ANSWERED);
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 12, 0))
 	cfg80211_rx_mgmt(adapter->dev->ieee80211_ptr,
-			freq, rxRssi * 100, pbFrames,
-			 nFrameLength, NL80211_RXMGMT_FLAG_ANSWERED,
+			freq, rxRssi * 100, pb_frames,
+			 frm_len, NL80211_RXMGMT_FLAG_ANSWERED,
 			 GFP_ATOMIC);
 #else
 	cfg80211_rx_mgmt(adapter->dev->ieee80211_ptr, freq,
 			rxRssi * 100,
-			pbFrames, nFrameLength, GFP_ATOMIC);
+			pb_frames, frm_len, GFP_ATOMIC);
 #endif /* LINUX_VERSION_CODE */
 }
 
@@ -1017,7 +1043,7 @@ int wlan_hdd_set_power_save(struct hdd_adapter *adapter,
 	}
 
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	psoc = hdd_ctx->hdd_psoc;
+	psoc = hdd_ctx->psoc;
 	if (!psoc) {
 		hdd_err("psoc is null");
 		return -EINVAL;
@@ -1050,7 +1076,7 @@ int wlan_hdd_listen_offload_start(struct hdd_adapter *adapter,
 	}
 
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	psoc = hdd_ctx->hdd_psoc;
+	psoc = hdd_ctx->psoc;
 	if (!psoc) {
 		hdd_err("psoc is null");
 		return -EINVAL;
@@ -1087,7 +1113,7 @@ int wlan_hdd_listen_offload_stop(struct hdd_adapter *adapter)
 
 	vdev_id = (uint32_t)adapter->session_id;
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	psoc = hdd_ctx->hdd_psoc;
+	psoc = hdd_ctx->psoc;
 	if (!psoc) {
 		hdd_err("psoc is null");
 		return -EINVAL;
@@ -1264,7 +1290,7 @@ static uint32_t set_second_connection_operating_channel(
 	uint8_t operating_channel;
 
 	operating_channel = policy_mgr_get_mcc_operating_channel(
-		hdd_ctx->hdd_psoc, vdev_id);
+		hdd_ctx->psoc, vdev_id);
 
 	if (operating_channel == 0) {
 		hdd_err("Second adapter operating channel is invalid");
@@ -1317,7 +1343,7 @@ int wlan_hdd_set_mcc_p2p_quota(struct hdd_adapter *adapter,
 	}
 
 	concurrent_state = policy_mgr_get_concurrency_mode(
-		hdd_ctx->hdd_psoc);
+		hdd_ctx->psoc);
 	/*
 	 * Check if concurrency mode is active.
 	 * Need to modify this code to support MCC modes other than STA/P2P
@@ -1377,7 +1403,7 @@ void wlan_hdd_set_mcc_latency(struct hdd_adapter *adapter, int set_value)
 	}
 
 	concurrent_state = policy_mgr_get_concurrency_mode(
-		hdd_ctx->hdd_psoc);
+		hdd_ctx->psoc);
 	/**
 	 * Check if concurrency mode is active.
 	 * Need to modify this code to support MCC modes other than STA/P2P

@@ -5547,6 +5547,107 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_MWS_COEX_5G_NR_PWR_LIMIT_MIN,
 		     CFG_MWS_COEX_5G_NR_PWR_LIMIT_MAX),
 #endif
+	REG_VARIABLE(CFG_SET_BTC_MODE_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, set_btc_mode,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_BTC_MODE_DEFAULT,
+		     CFG_SET_BTC_MODE_MIN,
+		     CFG_SET_BTC_MODE_MAX),
+
+	REG_VARIABLE(CFG_SET_ANTENNA_ISOLATION_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, set_antenna_isolation,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_ANTENNA_ISOLATION_DEFAULT,
+		     CFG_SET_ANTENNA_ISOLATION_MIN,
+		     CFG_SET_ANTENNA_ISOLATION_MAX),
+
+	REG_VARIABLE(CFG_SET_MAX_TX_POWER_FOR_BTC_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, set_max_tx_power_for_btc,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_MAX_TX_POWER_FOR_BTC_DEFAULT,
+		     CFG_SET_MAX_TX_POWER_FOR_BTC_MIN,
+		     CFG_SET_MAX_TX_POWER_FOR_BTC_MAX),
+
+	REG_VARIABLE(CFG_SET_WLAN_LOW_RSSI_THRESHOLD_NAME,
+		     WLAN_PARAM_SignedInteger,
+		     struct hdd_config, set_wlan_low_rssi_threshold,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_WLAN_LOW_RSSI_THRESHOLD_DEFAULT,
+		     CFG_SET_WLAN_LOW_RSSI_THRESHOLD_MIN,
+		     CFG_SET_WLAN_LOW_RSSI_THRESHOLD_MAX),
+
+	REG_VARIABLE(CFG_SET_BT_LOW_RSSI_THRESHOLD_NAME,
+		     WLAN_PARAM_SignedInteger,
+		     struct hdd_config, set_bt_low_rssi_threshold,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_BT_LOW_RSSI_THRESHOLD_DEFAULT,
+		     CFG_SET_BT_LOW_RSSI_THRESHOLD_MIN,
+		     CFG_SET_BT_LOW_RSSI_THRESHOLD_MAX),
+
+	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_LOW_LL_NAME,
+		     WLAN_PARAM_SignedInteger,
+		     struct hdd_config, set_bt_interference_low_ll,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_LOW_LL_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_LOW_LL_MIN,
+		     CFG_SET_BT_INTERFERENCE_LOW_LL_MAX),
+
+	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_LOW_UL_NAME,
+		     WLAN_PARAM_SignedInteger,
+		     struct hdd_config, set_bt_interference_low_ul,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_LOW_UL_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_LOW_UL_MIN,
+		     CFG_SET_BT_INTERFERENCE_LOW_UL_MAX),
+
+	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_MEDIUM_LL_NAME,
+		     WLAN_PARAM_SignedInteger,
+		     struct hdd_config, set_bt_interference_medium_ll,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_MEDIUM_LL_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_MEDIUM_LL_MIN,
+		     CFG_SET_BT_INTERFERENCE_MEDIUM_LL_MAX),
+
+	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_MEDIUM_UL_NAME,
+		     WLAN_PARAM_SignedInteger,
+		     struct hdd_config, set_bt_interference_medium_ul,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_MEDIUM_UL_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_MEDIUM_UL_MIN,
+		     CFG_SET_BT_INTERFERENCE_MEDIUM_UL_MAX),
+
+	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_HIGH_LL_NAME,
+		     WLAN_PARAM_SignedInteger,
+		     struct hdd_config, set_bt_interference_high_ll,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_HIGH_LL_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_HIGH_LL_MIN,
+		     CFG_SET_BT_INTERFERENCE_HIGH_LL_MAX),
+
+	REG_VARIABLE(CFG_SET_BT_INTERFERENCE_HIGH_UL_NAME,
+		     WLAN_PARAM_SignedInteger,
+		     struct hdd_config, set_bt_interference_high_ul,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_HIGH_UL_DEFAULT,
+		     CFG_SET_BT_INTERFERENCE_HIGH_UL_MIN,
+		     CFG_SET_BT_INTERFERENCE_HIGH_UL_MAX),
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+	REG_VARIABLE(CFG_ROAM_PREAUTH_RETRY_COUNT_NAME,
+		     WLAN_PARAM_Integer,
+		     struct hdd_config, roam_preauth_retry_count,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ROAM_PREAUTH_RETRY_COUNT_DEFAULT,
+		     CFG_ROAM_PREAUTH_RETRY_COUNT_MIN,
+		     CFG_ROAM_PREAUTH_RETRY_COUNT_MAX),
+
+	REG_VARIABLE(CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_NAME,
+		     WLAN_PARAM_Integer,
+		     struct hdd_config, roam_preauth_no_ack_timeout,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_DEFAULT,
+		     CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_MIN,
+		     CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_MAX),
+#endif
 };
 
 
@@ -6472,6 +6573,28 @@ static void hdd_cfg_print_dp_trace_params(struct hdd_context *hdd_ctx)
 #endif
 
 /**
+ * hdd_cfg_print_roam_preauth() - Print the roam preauth cfg params
+ * @hdd_ctx: Pointer to the HDD context
+ *
+ * Return: None
+ */
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+static inline void hdd_cfg_print_roam_preauth(struct hdd_context *hdd_ctx)
+{
+	hdd_debug("Name = [%s] Value = [%u]",
+		  CFG_ROAM_PREAUTH_RETRY_COUNT_NAME,
+		  hdd_ctx->config->roam_preauth_retry_count);
+	hdd_debug("Name = [%s] Value = [%u]",
+		  CFG_ROAM_PREAUTH_NO_ACK_TIMEOUT_NAME,
+		  hdd_ctx->config->roam_preauth_no_ack_timeout);
+}
+#else
+static inline void hdd_cfg_print_roam_preauth(struct hdd_context *hdd_ctx)
+{
+}
+#endif
+
+/**
  * hdd_cgf_print_11k_offload_params() - Print 11k offload related parameters
  * @hdd_ctx: Pointer to HDD context
  *
@@ -6544,6 +6667,49 @@ static void hdd_cfg_print_action_oui(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] value = [%s]",
 		  CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_NAME,
 		  config->action_oui_str[ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN]);
+}
+
+/**
+ * hdd_cfg_print_btc_params() - print btc param values
+ * @hdd_ctx: pointer to hdd context
+ *
+ * Return: None
+ */
+static void hdd_cfg_print_btc_params(struct hdd_context *hdd_ctx)
+{
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_BTC_MODE_NAME,
+		  hdd_ctx->config->set_btc_mode);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_ANTENNA_ISOLATION_NAME,
+		  hdd_ctx->config->set_antenna_isolation);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_MAX_TX_POWER_FOR_BTC_NAME,
+		  hdd_ctx->config->set_max_tx_power_for_btc);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_WLAN_LOW_RSSI_THRESHOLD_NAME,
+		  hdd_ctx->config->set_wlan_low_rssi_threshold);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_BT_LOW_RSSI_THRESHOLD_NAME,
+		  hdd_ctx->config->set_bt_low_rssi_threshold);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_BT_INTERFERENCE_LOW_LL_NAME,
+		  hdd_ctx->config->set_bt_interference_low_ll);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_BT_INTERFERENCE_LOW_UL_NAME,
+		  hdd_ctx->config->set_bt_interference_low_ul);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_BT_INTERFERENCE_MEDIUM_LL_NAME,
+		  hdd_ctx->config->set_bt_interference_medium_ll);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_BT_INTERFERENCE_MEDIUM_UL_NAME,
+		  hdd_ctx->config->set_bt_interference_medium_ul);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_BT_INTERFERENCE_HIGH_LL_NAME,
+		  hdd_ctx->config->set_bt_interference_high_ll);
+	hdd_debug("Name = [%s] value = [%d]",
+		  CFG_SET_BT_INTERFERENCE_HIGH_UL_NAME,
+		  hdd_ctx->config->set_bt_interference_high_ul);
 }
 
 /**
@@ -7491,11 +7657,10 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] Value = [%u]",
 		  CFG_ROAM_FORCE_RSSI_TRIGGER_NAME,
 		  hdd_ctx->config->roam_force_rssi_trigger);
-
 	hdd_cfg_print_action_oui(hdd_ctx);
-
+	hdd_cfg_print_btc_params(hdd_ctx);
+	hdd_cfg_print_roam_preauth(hdd_ctx);
 }
-
 
 /**
  * hdd_update_mac_config() - update MAC address from cfg file
@@ -7907,7 +8072,7 @@ static void hdd_set_fine_time_meas_cap(struct hdd_context *hdd_ctx)
 
 	/* Make sure only supported capabilities are enabled in INI */
 	capability &= CFG_FINE_TIME_MEAS_CAPABILITY_MAX;
-	ucfg_wifi_pos_set_ftm_cap(hdd_ctx->hdd_psoc, capability);
+	ucfg_wifi_pos_set_ftm_cap(hdd_ctx->psoc, capability);
 
 	hdd_debug("fine time meas capability - INI: %04x Enabled: %04x",
 		config->fine_time_meas_cap,
@@ -8613,7 +8778,7 @@ QDF_STATUS hdd_set_policy_mgr_user_cfg(struct hdd_context *hdd_ctx)
 		hdd_ctx->config->channel_select_logic_conc;
 	user_cfg->sta_sap_scc_on_lte_coex_chan =
 		hdd_ctx->config->sta_sap_scc_on_lte_coex_chan;
-	status = policy_mgr_set_user_cfg(hdd_ctx->hdd_psoc, user_cfg);
+	status = policy_mgr_set_user_cfg(hdd_ctx->psoc, user_cfg);
 	qdf_mem_free(user_cfg);
 
 	return status;
@@ -8780,6 +8945,29 @@ void hdd_update_11k_offload_params(struct hdd_config *config,
 	csr_config->neighbor_report_offload.max_neighbor_report_req_cap =
 		config->neighbor_report_offload_max_req_cap;
 }
+
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+/**
+ * sme_update_roam_preauth_params() - Update the roam preauth params
+ * @sme_config - The SME config handle
+ * @hdd_ctx - The HDD CTX handle
+ *
+ * Return: None
+ */
+static void sme_update_roam_preauth_params(tSmeConfigParams *sme_config,
+					   struct hdd_context *hdd_ctx)
+{
+	sme_config->csrConfig.roam_preauth_no_ack_timeout =
+		hdd_ctx->config->roam_preauth_no_ack_timeout;
+	sme_config->csrConfig.roam_preauth_retry_count =
+		hdd_ctx->config->roam_preauth_retry_count;
+}
+#else
+static void sme_update_roam_preauth_params(tSmeConfigParams *sme_config,
+					   struct hdd_context *hdd_ctx)
+{
+}
+#endif
 
 /**
  * hdd_set_sme_config() -initializes the sme configuration parameters
@@ -9109,6 +9297,9 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 		hdd_ctx->config->roam_bad_rssi_thresh_offset_2g;
 	smeConfig->csrConfig.ho_delay_for_rx =
 		hdd_ctx->config->ho_delay_for_rx;
+
+	sme_update_roam_preauth_params(smeConfig, hdd_ctx);
+
 	smeConfig->csrConfig.min_delay_btw_roam_scans =
 		hdd_ctx->config->min_delay_btw_roam_scans;
 	smeConfig->csrConfig.roam_trigger_reason_bitmask =

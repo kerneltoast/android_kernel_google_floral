@@ -2932,3 +2932,52 @@ void wlan_ipa_cleanup_dev_iface(struct wlan_ipa_priv *ipa_ctx,
 	if (iface_ctx)
 		wlan_ipa_cleanup_iface(iface_ctx);
 }
+
+void wlan_ipa_uc_ssr_cleanup(struct wlan_ipa_priv *ipa_ctx)
+{
+	struct wlan_ipa_iface_context *iface;
+	int i;
+
+	ipa_info("enter");
+
+	for (i = 0; i < WLAN_IPA_MAX_IFACE; i++) {
+		iface = &ipa_ctx->iface_context[i];
+		if (iface->dev) {
+			if (iface->device_mode == QDF_SAP_MODE)
+				wlan_ipa_uc_send_evt(iface->dev,
+						     QDF_IPA_AP_DISCONNECT,
+						     iface->dev->dev_addr);
+			else if (iface->device_mode == QDF_STA_MODE)
+				wlan_ipa_uc_send_evt(iface->dev,
+						     QDF_IPA_STA_DISCONNECT,
+						     iface->dev->dev_addr);
+			wlan_ipa_cleanup_iface(iface);
+		}
+	}
+}
+
+void wlan_ipa_fw_rejuvenate_send_msg(struct wlan_ipa_priv *ipa_ctx)
+{
+	qdf_ipa_msg_meta_t meta;
+	qdf_ipa_wlan_msg_t *msg;
+	int ret;
+
+	meta.msg_len = sizeof(*msg);
+	msg = qdf_mem_malloc(meta.msg_len);
+	if (!msg) {
+		ipa_debug("msg allocation failed");
+		return;
+	}
+
+	QDF_IPA_SET_META_MSG_TYPE(&meta, QDF_FWR_SSR_BEFORE_SHUTDOWN);
+	ipa_debug("ipa_send_msg(Evt:%d)",
+		  meta.msg_type);
+	ret = qdf_ipa_send_msg(&meta, msg, wlan_ipa_msg_free_fn);
+
+	if (ret) {
+		ipa_err("ipa_send_msg(Evt:%d)-fail=%d",
+			meta.msg_type, ret);
+		qdf_mem_free(msg);
+	}
+	ipa_ctx->stats.num_send_msg++;
+}
