@@ -170,6 +170,8 @@
 #define LPASS_BE_SLIMBUS_7_TX "SLIMBUS_7_TX"
 #define LPASS_BE_SLIMBUS_8_RX "SLIMBUS_8_RX"
 #define LPASS_BE_SLIMBUS_8_TX "SLIMBUS_8_TX"
+#define LPASS_BE_SLIMBUS_9_RX "SLIMBUS_9_RX"
+#define LPASS_BE_SLIMBUS_9_TX "SLIMBUS_9_TX"
 
 #define LPASS_BE_USB_AUDIO_RX "USB_AUDIO_RX"
 #define LPASS_BE_USB_AUDIO_TX "USB_AUDIO_TX"
@@ -240,6 +242,8 @@ enum {
 	MSM_FRONTEND_DAI_MULTIMEDIA19,
 	MSM_FRONTEND_DAI_MULTIMEDIA20,
 	MSM_FRONTEND_DAI_MULTIMEDIA21,
+	MSM_FRONTEND_DAI_MULTIMEDIA26,
+	MSM_FRONTEND_DAI_MULTIMEDIA27,
 	MSM_FRONTEND_DAI_MULTIMEDIA28,
 	MSM_FRONTEND_DAI_MULTIMEDIA29,
 	MSM_FRONTEND_DAI_VOIP,
@@ -451,6 +455,8 @@ enum {
 	MSM_BACKEND_DAI_PRI_SPDIF_TX,
 	MSM_BACKEND_DAI_SEC_SPDIF_RX,
 	MSM_BACKEND_DAI_SEC_SPDIF_TX,
+	MSM_BACKEND_DAI_SLIMBUS_9_RX,
+	MSM_BACKEND_DAI_SLIMBUS_9_TX,
 	MSM_BACKEND_DAI_MAX,
 };
 
@@ -523,7 +529,6 @@ struct msm_pcm_routing_bdai_data {
 	unsigned int  channel;
 	unsigned int  format;
 	unsigned int  adm_override_ch;
-	u32 passthr_mode[MSM_FRONTEND_DAI_MAX];
 	char *name;
 };
 
@@ -532,6 +537,7 @@ struct msm_pcm_routing_fdai_data {
 	int strm_id; /* ASM stream ID */
 	int perf_mode;
 	struct msm_pcm_routing_evt event_info;
+	u32 passthr_mode;
 };
 
 #define MAX_APP_TYPES	16

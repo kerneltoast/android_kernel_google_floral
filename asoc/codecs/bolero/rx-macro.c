@@ -75,6 +75,107 @@ static const struct snd_kcontrol_new name##_mux = \
 #define RX_MACRO_RX_PATH_OFFSET 0x80
 #define RX_MACRO_COMP_OFFSET 0x40
 
+#define MAX_IMPED_PARAMS 6
+
+struct wcd_imped_val {
+	u32 imped_val;
+	u8 index;
+};
+
+static const struct wcd_imped_val imped_index[] = {
+	{4, 0},
+	{5, 1},
+	{6, 2},
+	{7, 3},
+	{8, 4},
+	{9, 5},
+	{10, 6},
+	{11, 7},
+	{12, 8},
+	{13, 9},
+};
+
+struct rx_macro_reg_mask_val {
+	u16 reg;
+	u8 mask;
+	u8 val;
+};
+
+static const struct rx_macro_reg_mask_val imped_table[][MAX_IMPED_PARAMS] = {
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xf2},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xf2},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x00},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xf2},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xf2},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x00},
+	},
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xf4},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xf4},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x00},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xf4},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xf4},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x00},
+	},
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xf7},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xf7},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x01},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xf7},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xf7},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x01},
+	},
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xf9},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xf9},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x00},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xf9},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xf9},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x00},
+	},
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xfa},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xfa},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x00},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xfa},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xfa},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x00},
+	},
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xfb},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xfb},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x00},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xfb},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xfb},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x00},
+	},
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xfc},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xfc},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x00},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xfc},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xfc},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x00},
+	},
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xfd},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xfd},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x00},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xfd},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xfd},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x00},
+	},
+	{
+		{BOLERO_CDC_RX_RX0_RX_VOL_CTL, 0xff, 0xfd},
+		{BOLERO_CDC_RX_RX0_RX_VOL_MIX_CTL, 0xff, 0xfd},
+		{BOLERO_CDC_RX_RX0_RX_PATH_SEC1, 0x01, 0x01},
+		{BOLERO_CDC_RX_RX1_RX_VOL_CTL, 0xff, 0xfd},
+		{BOLERO_CDC_RX_RX1_RX_VOL_MIX_CTL, 0xff, 0xfd},
+		{BOLERO_CDC_RX_RX1_RX_PATH_SEC1, 0x01, 0x01},
+	},
+};
+
 enum {
 	INTERP_HPHL,
 	INTERP_HPHR,
@@ -158,6 +259,12 @@ static struct interp_sample_rate sr_val_tbl[] = {
 	{8000, 0x0}, {16000, 0x1}, {32000, 0x3}, {48000, 0x4}, {96000, 0x5},
 	{192000, 0x6}, {384000, 0x7}, {44100, 0x9}, {88200, 0xA},
 	{176400, 0xB}, {352800, 0xC},
+};
+
+struct rx_macro_bcl_pmic_params {
+	u8 id;
+	u8 sid;
+	u8 ppid;
 };
 
 static int rx_macro_hw_params(struct snd_pcm_substream *substream,
@@ -258,6 +365,9 @@ struct rx_macro_priv {
 	struct platform_device *pdev_child_devices
 			[RX_MACRO_CHILD_DEVICES_MAX];
 	int child_count;
+	int is_softclip_on;
+	int softclip_clk_users;
+	struct rx_macro_bcl_pmic_params bcl_pmic_params;
 };
 
 static struct snd_soc_dai_driver rx_macro_dai[];
@@ -320,6 +430,14 @@ static const char *const rx_macro_mux_text[] = {
 static const char *const rx_macro_ear_mode_text[] = {"OFF", "ON"};
 static const struct soc_enum rx_macro_ear_mode_enum =
 	SOC_ENUM_SINGLE_EXT(2, rx_macro_ear_mode_text);
+
+static const char * const rx_macro_vbat_bcl_gsm_mode_text[] = {"OFF", "ON"};
+static const struct soc_enum rx_macro_vbat_bcl_gsm_mode_enum =
+	SOC_ENUM_SINGLE_EXT(2, rx_macro_vbat_bcl_gsm_mode_text);
+
+static const struct snd_kcontrol_new rx_int2_1_vbat_mix_switch[] = {
+	SOC_DAPM_SINGLE("RX AUX VBAT Enable", SND_SOC_NOPM, 0, 1, 0)
+};
 
 RX_MACRO_DAPM_ENUM(rx_int0_2, BOLERO_CDC_RX_INP_MUX_RX_INT0_CFG1, 0,
 		rx_int_mix_mux_text);
@@ -476,6 +594,80 @@ static struct snd_soc_dai_driver rx_macro_dai[] = {
 		.ops = &rx_macro_dai_ops,
 	},
 };
+
+static int get_impedance_index(int imped)
+{
+	int i = 0;
+
+	if (imped < imped_index[i].imped_val) {
+		pr_debug("%s, detected impedance is less than %d Ohm\n",
+			__func__, imped_index[i].imped_val);
+		i = 0;
+		goto ret;
+	}
+	if (imped >= imped_index[ARRAY_SIZE(imped_index) - 1].imped_val) {
+		pr_debug("%s, detected impedance is greater than %d Ohm\n",
+			__func__,
+			imped_index[ARRAY_SIZE(imped_index) - 1].imped_val);
+		i = ARRAY_SIZE(imped_index) - 1;
+		goto ret;
+	}
+	for (i = 0; i < ARRAY_SIZE(imped_index) - 1; i++) {
+		if (imped >= imped_index[i].imped_val &&
+			imped < imped_index[i + 1].imped_val)
+			break;
+	}
+ret:
+	pr_debug("%s: selected impedance index = %d\n",
+			__func__, imped_index[i].index);
+	return imped_index[i].index;
+}
+
+/*
+ * rx_macro_wcd_clsh_imped_config -
+ * This function updates HPHL and HPHR gain settings
+ * according to the impedance value.
+ *
+ * @codec: codec pointer handle
+ * @imped: impedance value of HPHL/R
+ * @reset: bool variable to reset registers when teardown
+ */
+static void rx_macro_wcd_clsh_imped_config(struct snd_soc_codec *codec,
+					   int imped, bool reset)
+{
+	int i;
+	int index = 0;
+	int table_size;
+
+	static const struct rx_macro_reg_mask_val
+				(*imped_table_ptr)[MAX_IMPED_PARAMS];
+
+	table_size = ARRAY_SIZE(imped_table);
+	imped_table_ptr = imped_table;
+	/* reset = 1, which means request is to reset the register values */
+	if (reset) {
+		for (i = 0; i < MAX_IMPED_PARAMS; i++)
+			snd_soc_update_bits(codec,
+				imped_table_ptr[index][i].reg,
+				imped_table_ptr[index][i].mask, 0);
+		return;
+	}
+	index = get_impedance_index(imped);
+	if (index >= (ARRAY_SIZE(imped_index) - 1)) {
+		pr_debug("%s, impedance not in range = %d\n", __func__, imped);
+		return;
+	}
+	if (index >= table_size) {
+		pr_debug("%s, impedance index not in range = %d\n", __func__,
+			index);
+		return;
+	}
+	for (i = 0; i < MAX_IMPED_PARAMS; i++)
+		snd_soc_update_bits(codec,
+				imped_table_ptr[index][i].reg,
+				imped_table_ptr[index][i].mask,
+				imped_table_ptr[index][i].val);
+}
 
 static bool rx_macro_get_data(struct snd_soc_codec *codec,
 			       struct device **rx_dev,
@@ -770,14 +962,19 @@ static int rx_macro_mclk_enable(struct rx_macro_priv *rx_priv,
 	struct regmap *regmap = dev_get_regmap(rx_priv->dev->parent, NULL);
 	int ret = 0, mclk_mux = MCLK_MUX0;
 
+	if (regmap == NULL) {
+		dev_err(rx_priv->dev, "%s: regmap is NULL\n", __func__);
+		return -EINVAL;
+	}
+
 	dev_dbg(rx_priv->dev, "%s: mclk_enable = %u, dapm = %d clk_users= %d\n",
 		__func__, mclk_enable, dapm, rx_priv->rx_mclk_users);
 
-	if (rx_priv->is_native_on)
-		mclk_mux = MCLK_MUX1;
 	mutex_lock(&rx_priv->mclk_lock);
 	if (mclk_enable) {
 		if (rx_priv->rx_mclk_users == 0) {
+			if (rx_priv->is_native_on)
+				mclk_mux = MCLK_MUX1;
 			ret = bolero_request_clock(rx_priv->dev,
 					RX_MACRO, mclk_mux, true);
 			if (ret < 0) {
@@ -817,6 +1014,7 @@ static int rx_macro_mclk_enable(struct rx_macro_priv *rx_priv,
 			regmap_update_bits(regmap,
 				BOLERO_CDC_RX_CLK_RST_CTRL_MCLK_CONTROL,
 				0x01, 0x00);
+			mclk_mux = rx_priv->mclk_mux;
 			bolero_request_clock(rx_priv->dev,
 					RX_MACRO, mclk_mux, false);
 			rx_priv->mclk_mux = MCLK_MUX0;
@@ -903,6 +1101,50 @@ static int rx_macro_mclk_ctrl(struct device *dev, bool enable)
 		clk_disable_unprepare(rx_priv->rx_core_clk);
 	}
 
+	return 0;
+}
+
+static int rx_macro_event_handler(struct snd_soc_codec *codec, u16 event,
+				  u32 data)
+{
+	u16 reg = 0, reg_mix = 0, rx_idx = 0, mute = 0x0;
+	struct device *rx_dev = NULL;
+	struct rx_macro_priv *rx_priv = NULL;
+
+	if (!rx_macro_get_data(codec, &rx_dev, &rx_priv, __func__))
+		return -EINVAL;
+
+	switch (event) {
+	case BOLERO_MACRO_EVT_RX_MUTE:
+		rx_idx = data >> 0x10;
+		mute = data & 0xffff;
+		reg = BOLERO_CDC_RX_RX0_RX_PATH_CTL + (rx_idx *
+					RX_MACRO_RX_PATH_OFFSET);
+		reg_mix = BOLERO_CDC_RX_RX0_RX_PATH_MIX_CTL + (rx_idx *
+					RX_MACRO_RX_PATH_OFFSET);
+		snd_soc_update_bits(codec, reg, 0x10, mute << 0x10);
+		snd_soc_update_bits(codec, reg_mix, 0x10, mute << 0x10);
+		break;
+	case BOLERO_MACRO_EVT_IMPED_TRUE:
+		rx_macro_wcd_clsh_imped_config(codec, data, true);
+		break;
+	case BOLERO_MACRO_EVT_IMPED_FALSE:
+		rx_macro_wcd_clsh_imped_config(codec, data, false);
+		break;
+	case BOLERO_MACRO_EVT_SSR_DOWN:
+		swrm_wcd_notify(
+			rx_priv->swr_ctrl_data[0].rx_swr_pdev,
+			SWR_DEVICE_SSR_DOWN, NULL);
+		swrm_wcd_notify(
+			rx_priv->swr_ctrl_data[0].rx_swr_pdev,
+			SWR_DEVICE_DOWN, NULL);
+		break;
+	case BOLERO_MACRO_EVT_SSR_UP:
+		swrm_wcd_notify(
+			rx_priv->swr_ctrl_data[0].rx_swr_pdev,
+			SWR_DEVICE_SSR_UP, NULL);
+		break;
+	}
 	return 0;
 }
 
@@ -1056,7 +1298,6 @@ static int rx_macro_enable_mix_path(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMU:
 		snd_soc_write(codec, gain_reg,
 			snd_soc_read(codec, gain_reg));
-		snd_soc_update_bits(codec, mix_reg, 0x10, 0x00);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		/* Clk Disable */
@@ -1106,7 +1347,6 @@ static int rx_macro_enable_main_path(struct snd_soc_dapm_widget *w,
 	case SND_SOC_DAPM_POST_PMU:
 		snd_soc_write(codec, gain_reg,
 			snd_soc_read(codec, gain_reg));
-		snd_soc_update_bits(codec, reg, 0x10, 0x00);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		rx_macro_enable_interp_clk(codec, event, w->shift);
@@ -1154,6 +1394,52 @@ static int rx_macro_config_compander(struct snd_soc_codec *codec,
 		snd_soc_update_bits(codec, comp_ctl0_reg, 0x02, 0x00);
 		snd_soc_update_bits(codec, comp_ctl0_reg, 0x01, 0x00);
 		snd_soc_update_bits(codec, comp_ctl0_reg, 0x04, 0x00);
+	}
+
+	return 0;
+}
+
+static void rx_macro_enable_softclip_clk(struct snd_soc_codec *codec,
+					 struct rx_macro_priv *rx_priv,
+					 bool enable)
+{
+	if (enable) {
+		if (rx_priv->softclip_clk_users == 0)
+			snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_SOFTCLIP_CRC,
+				0x01, 0x01);
+		rx_priv->softclip_clk_users++;
+	} else {
+		rx_priv->softclip_clk_users--;
+		if (rx_priv->softclip_clk_users == 0)
+			snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_SOFTCLIP_CRC,
+				0x01, 0x00);
+	}
+}
+
+static int rx_macro_config_softclip(struct snd_soc_codec *codec,
+				struct rx_macro_priv *rx_priv,
+				int event)
+{
+	dev_dbg(codec->dev, "%s: event %d, enabled %d\n",
+		__func__, event, rx_priv->is_softclip_on);
+
+	if (!rx_priv->is_softclip_on)
+		return 0;
+
+	if (SND_SOC_DAPM_EVENT_ON(event)) {
+		/* Enable Softclip clock */
+		rx_macro_enable_softclip_clk(codec, rx_priv, true);
+		/* Enable Softclip control */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_SOFTCLIP_SOFTCLIP_CTRL, 0x01, 0x01);
+	}
+
+	if (SND_SOC_DAPM_EVENT_OFF(event)) {
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_SOFTCLIP_SOFTCLIP_CTRL, 0x01, 0x00);
+		rx_macro_enable_softclip_clk(codec, rx_priv, false);
 	}
 
 	return 0;
@@ -1391,6 +1677,191 @@ static int rx_macro_put_ear_mode(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int rx_macro_vbat_bcl_gsm_mode_func_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+
+	ucontrol->value.integer.value[0] =
+		((snd_soc_read(codec, BOLERO_CDC_RX_BCL_VBAT_CFG) & 0x04) ?
+		  1 : 0);
+
+	dev_dbg(codec->dev, "%s: value: %lu\n", __func__,
+		ucontrol->value.integer.value[0]);
+
+	return 0;
+}
+
+static int rx_macro_vbat_bcl_gsm_mode_func_put(struct snd_kcontrol *kcontrol,
+					struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+
+	dev_dbg(codec->dev, "%s: value: %lu\n", __func__,
+		ucontrol->value.integer.value[0]);
+
+	/* Set Vbat register configuration for GSM mode bit based on value */
+	if (ucontrol->value.integer.value[0])
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_BCL_VBAT_CFG,
+						0x04, 0x04);
+	else
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_BCL_VBAT_CFG,
+						0x04, 0x00);
+
+	return 0;
+}
+
+static int rx_macro_soft_clip_enable_get(struct snd_kcontrol *kcontrol,
+					  struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+	struct device *rx_dev = NULL;
+	struct rx_macro_priv *rx_priv = NULL;
+
+	if (!rx_macro_get_data(codec, &rx_dev, &rx_priv, __func__))
+		return -EINVAL;
+
+	ucontrol->value.integer.value[0] = rx_priv->is_softclip_on;
+
+	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
+		__func__, ucontrol->value.integer.value[0]);
+
+	return 0;
+}
+
+static int rx_macro_soft_clip_enable_put(struct snd_kcontrol *kcontrol,
+					  struct snd_ctl_elem_value *ucontrol)
+{
+	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
+	struct device *rx_dev = NULL;
+	struct rx_macro_priv *rx_priv = NULL;
+
+	if (!rx_macro_get_data(codec, &rx_dev, &rx_priv, __func__))
+		return -EINVAL;
+
+	rx_priv->is_softclip_on =  ucontrol->value.integer.value[0];
+
+	dev_dbg(codec->dev, "%s: soft clip enable = %d\n", __func__,
+		rx_priv->is_softclip_on);
+
+	return 0;
+}
+
+static int rx_macro_enable_vbat(struct snd_soc_dapm_widget *w,
+				 struct snd_kcontrol *kcontrol,
+				 int event)
+{
+	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
+	struct device *rx_dev = NULL;
+	struct rx_macro_priv *rx_priv = NULL;
+
+	dev_dbg(codec->dev, "%s %s %d\n", __func__, w->name, event);
+	if (!rx_macro_get_data(codec, &rx_dev, &rx_priv, __func__))
+		return -EINVAL;
+
+	switch (event) {
+	case SND_SOC_DAPM_PRE_PMU:
+		/* Enable clock for VBAT block */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_PATH_CTL, 0x10, 0x10);
+		/* Enable VBAT block */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_CFG, 0x01, 0x01);
+		/* Update interpolator with 384K path */
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_RX2_RX_PATH_CFG1,
+					0x80, 0x80);
+		/* Update DSM FS rate */
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_RX2_RX_PATH_SEC7,
+					0x02, 0x02);
+		/* Use attenuation mode */
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_BCL_VBAT_CFG,
+					0x02, 0x00);
+		/* BCL block needs softclip clock to be enabled */
+		rx_macro_enable_softclip_clk(codec, rx_priv, true);
+		/* Enable VBAT at channel level */
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_RX2_RX_PATH_CFG1,
+					0x02, 0x02);
+		/* Set the ATTK1 gain */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD1,
+			0xFF, 0xFF);
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD2,
+			0xFF, 0x03);
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD3,
+			0xFF, 0x00);
+		/* Set the ATTK2 gain */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD4,
+			0xFF, 0xFF);
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD5,
+			0xFF, 0x03);
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD6,
+			0xFF, 0x00);
+		/* Set the ATTK3 gain */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD7,
+			0xFF, 0xFF);
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD8,
+			0xFF, 0x03);
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD9,
+			0xFF, 0x00);
+		break;
+
+	case SND_SOC_DAPM_POST_PMD:
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_RX2_RX_PATH_CFG1,
+					0x80, 0x00);
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_RX2_RX_PATH_SEC7,
+					0x02, 0x00);
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_BCL_VBAT_CFG,
+					0x02, 0x02);
+		snd_soc_update_bits(codec, BOLERO_CDC_RX_RX2_RX_PATH_CFG1,
+					0x02, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD1,
+				0xFF, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD2,
+				0xFF, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD3,
+				0xFF, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD4,
+				0xFF, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD5,
+				0xFF, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD6,
+				0xFF, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD7,
+				0xFF, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD8,
+				0xFF, 0x00);
+		snd_soc_update_bits(codec,
+				BOLERO_CDC_RX_BCL_VBAT_BCL_GAIN_UPD9,
+				0xFF, 0x00);
+		rx_macro_enable_softclip_clk(codec, rx_priv, false);
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_CFG, 0x01, 0x00);
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_PATH_CTL, 0x10, 0x00);
+		break;
+	default:
+		dev_err(rx_dev, "%s: Invalid event %d\n", __func__, event);
+		break;
+	}
+	return 0;
+}
+
 static void rx_macro_idle_detect_control(struct snd_soc_codec *codec,
 					 struct rx_macro_priv *rx_priv,
 					 int interp, int event)
@@ -1504,6 +1975,9 @@ static int rx_macro_enable_interp_clk(struct snd_soc_codec *codec,
 						       event);
 			rx_macro_config_compander(codec, rx_priv,
 						interp_idx, event);
+			if (interp_idx ==  INTERP_AUX)
+				rx_macro_config_softclip(codec, rx_priv,
+							event);
 			rx_macro_config_classh(codec, rx_priv,
 						interp_idx, event);
 		}
@@ -1518,6 +1992,9 @@ static int rx_macro_enable_interp_clk(struct snd_soc_codec *codec,
 						interp_idx, event);
 			rx_macro_config_compander(codec, rx_priv,
 						interp_idx, event);
+			if (interp_idx ==  INTERP_AUX)
+				rx_macro_config_softclip(codec, rx_priv,
+							event);
 			rx_macro_hphdelay_lutbypass(codec, rx_priv, interp_idx,
 						       event);
 			rx_macro_hd2_control(codec, interp_idx, event);
@@ -1569,6 +2046,11 @@ static void rx_macro_restore_iir_coeff(struct rx_macro_priv *rx_priv, int iir_id
 {
 	u16 reg_add = 0, coeff_idx = 0, idx = 0;
 	struct regmap *regmap = dev_get_regmap(rx_priv->dev->parent, NULL);
+
+	if (regmap == NULL) {
+		dev_err(rx_priv->dev, "%s: regmap is NULL\n", __func__);
+		return;
+	}
 
 	regmap_write(regmap,
 		(BOLERO_CDC_RX_SIDETONE_IIR0_IIR_COEF_B1_CTL + 0x80 * iir_idx),
@@ -1881,6 +2363,13 @@ static const struct snd_kcontrol_new rx_macro_snd_controls[] = {
 	SOC_ENUM_EXT("RX_EAR Mode", rx_macro_ear_mode_enum,
 		rx_macro_get_ear_mode, rx_macro_put_ear_mode),
 
+	SOC_ENUM_EXT("RX_GSM mode Enable", rx_macro_vbat_bcl_gsm_mode_enum,
+			rx_macro_vbat_bcl_gsm_mode_func_get,
+			rx_macro_vbat_bcl_gsm_mode_func_put),
+	SOC_SINGLE_EXT("RX_Softclip Enable", SND_SOC_NOPM, 0, 1, 0,
+		     rx_macro_soft_clip_enable_get,
+		     rx_macro_soft_clip_enable_put),
+
 	SOC_SINGLE_SX_TLV("IIR0 INP0 Volume",
 		BOLERO_CDC_RX_SIDETONE_IIR0_IIR_GAIN_B1_CTL, 0, -84, 40,
 		digital_gain),
@@ -2079,6 +2568,12 @@ static const struct snd_soc_dapm_widget rx_macro_dapm_widgets[] = {
 		0, &rx_int2_mix2_inp_mux, rx_macro_enable_rx_path_clk,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 
+	SND_SOC_DAPM_MIXER_E("RX INT2_1 VBAT", SND_SOC_NOPM,
+		0, 0, rx_int2_1_vbat_mix_switch,
+		ARRAY_SIZE(rx_int2_1_vbat_mix_switch),
+		rx_macro_enable_vbat,
+		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+
 	SND_SOC_DAPM_MIXER("RX INT0 MIX2", SND_SOC_NOPM, 0, 0, NULL, 0),
 	SND_SOC_DAPM_MIXER("RX INT1 MIX2", SND_SOC_NOPM, 0, 0, NULL, 0),
 	SND_SOC_DAPM_MIXER("RX INT2 MIX2", SND_SOC_NOPM, 0, 0, NULL, 0),
@@ -2269,6 +2764,10 @@ static const struct snd_soc_dapm_route rx_audio_map[] = {
 	{"HPHR_OUT", NULL, "RX_MCLK"},
 
 	{"RX INT2_1 INTERP", NULL, "RX INT2_1 MIX1"},
+
+	{"RX INT2_1 VBAT", "RX AUX VBAT Enable", "RX INT2_1 INTERP"},
+	{"RX INT2 SEC MIX", NULL, "RX INT2_1 VBAT"},
+
 	{"RX INT2 SEC MIX", NULL, "RX INT2_1 INTERP"},
 	{"RX INT2 MIX2", NULL, "RX INT2 SEC MIX"},
 	{"RX INT2 MIX2", NULL, "RX INT2 MIX2 INP"},
@@ -2383,6 +2882,11 @@ static int rx_swrm_clock(void *handle, bool enable)
 	struct regmap *regmap = dev_get_regmap(rx_priv->dev->parent, NULL);
 	int ret = 0;
 
+	if (regmap == NULL) {
+		dev_err(rx_priv->dev, "%s: regmap is NULL\n", __func__);
+		return -EINVAL;
+	}
+
 	mutex_lock(&rx_priv->swr_clk_lock);
 
 	dev_dbg(rx_priv->dev, "%s: swrm clock %s\n",
@@ -2434,6 +2938,53 @@ exit:
 	return ret;
 }
 
+static void rx_macro_init_bcl_pmic_reg(struct snd_soc_codec *codec)
+{
+	struct device *rx_dev = NULL;
+	struct rx_macro_priv *rx_priv = NULL;
+
+	if (!codec) {
+		pr_err("%s: NULL codec pointer!\n", __func__);
+		return;
+	}
+
+	if (!rx_macro_get_data(codec, &rx_dev, &rx_priv, __func__))
+		return;
+
+	switch (rx_priv->bcl_pmic_params.id) {
+	case 0:
+		/* Enable ID0 to listen to respective PMIC group interrupts */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_DECODE_CTL1, 0x02, 0x02);
+		/* Update MC_SID0 */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_DECODE_CFG1, 0x0F,
+			rx_priv->bcl_pmic_params.sid);
+		/* Update MC_PPID0 */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_DECODE_CFG2, 0xFF,
+			rx_priv->bcl_pmic_params.ppid);
+		break;
+	case 1:
+		/* Enable ID1 to listen to respective PMIC group interrupts */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_DECODE_CTL1, 0x01, 0x01);
+		/* Update MC_SID1 */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_DECODE_CFG3, 0x0F,
+			rx_priv->bcl_pmic_params.sid);
+		/* Update MC_PPID1 */
+		snd_soc_update_bits(codec,
+			BOLERO_CDC_RX_BCL_VBAT_DECODE_CFG1, 0xFF,
+			rx_priv->bcl_pmic_params.ppid);
+		break;
+	default:
+		dev_err(rx_dev, "%s: PMIC ID is invalid\n",
+		       __func__, rx_priv->bcl_pmic_params.id);
+		break;
+	}
+}
+
 static int rx_macro_init(struct snd_soc_codec *codec)
 {
 	struct snd_soc_dapm_context *dapm = snd_soc_codec_get_dapm(codec);
@@ -2477,6 +3028,19 @@ static int rx_macro_init(struct snd_soc_codec *codec)
 		dev_err(rx_dev, "%s: failed to add snd_ctls\n", __func__);
 		return ret;
 	}
+	snd_soc_dapm_ignore_suspend(dapm, "RX_MACRO_AIF1 Playback");
+	snd_soc_dapm_ignore_suspend(dapm, "RX_MACRO_AIF2 Playback");
+	snd_soc_dapm_ignore_suspend(dapm, "RX_MACRO_AIF3 Playback");
+	snd_soc_dapm_ignore_suspend(dapm, "RX_MACRO_AIF4 Playback");
+	snd_soc_dapm_ignore_suspend(dapm, "HPHL_OUT");
+	snd_soc_dapm_ignore_suspend(dapm, "HPHR_OUT");
+	snd_soc_dapm_ignore_suspend(dapm, "AUX_OUT");
+	snd_soc_dapm_ignore_suspend(dapm, "RX_TX DEC0_INP");
+	snd_soc_dapm_ignore_suspend(dapm, "RX_TX DEC1_INP");
+	snd_soc_dapm_ignore_suspend(dapm, "RX_TX DEC2_INP");
+	snd_soc_dapm_ignore_suspend(dapm, "RX_TX DEC3_INP");
+	snd_soc_dapm_sync(dapm);
+
 	snd_soc_update_bits(codec, BOLERO_CDC_RX_RX0_RX_PATH_DSM_CTL, 0x01, 0x01);
 	snd_soc_update_bits(codec, BOLERO_CDC_RX_RX1_RX_PATH_DSM_CTL, 0x01, 0x01);
 	snd_soc_update_bits(codec, BOLERO_CDC_RX_RX2_RX_PATH_DSM_CTL, 0x01, 0x01);
@@ -2486,6 +3050,7 @@ static int rx_macro_init(struct snd_soc_codec *codec)
 	snd_soc_update_bits(codec, BOLERO_CDC_RX_RX0_RX_PATH_CFG3, 0x03, 0x02);
 	snd_soc_update_bits(codec, BOLERO_CDC_RX_RX1_RX_PATH_CFG3, 0x03, 0x02);
 	snd_soc_update_bits(codec, BOLERO_CDC_RX_RX2_RX_PATH_CFG3, 0x03, 0x02);
+	rx_macro_init_bcl_pmic_reg(codec);
 
 	rx_priv->codec = codec;
 
@@ -2621,6 +3186,7 @@ static void rx_macro_init_ops(struct macro_ops *ops, char __iomem *rx_io_base)
 	ops->dai_ptr = rx_macro_dai;
 	ops->num_dais = ARRAY_SIZE(rx_macro_dai);
 	ops->mclk_fn = rx_macro_mclk_ctrl;
+	ops->event_handler = rx_macro_event_handler;
 }
 
 static int rx_macro_probe(struct platform_device *pdev)
@@ -2631,6 +3197,7 @@ static int rx_macro_probe(struct platform_device *pdev)
 	char __iomem *rx_io_base = NULL, *muxsel_io = NULL;
 	int ret = 0;
 	struct clk *rx_core_clk = NULL, *rx_npl_clk = NULL;
+	u8 bcl_pmic_params[3];
 
 	rx_priv = devm_kzalloc(&pdev->dev, sizeof(struct rx_macro_priv),
 			    GFP_KERNEL);
@@ -2700,6 +3267,19 @@ static int rx_macro_probe(struct platform_device *pdev)
 		return ret;
 	}
 	rx_priv->rx_npl_clk = rx_npl_clk;
+
+	ret = of_property_read_u8_array(pdev->dev.of_node,
+				"qcom,rx-bcl-pmic-params", bcl_pmic_params,
+				sizeof(bcl_pmic_params));
+	if (ret) {
+		dev_dbg(&pdev->dev, "%s: could not find %s entry in dt\n",
+			__func__, "qcom,rx-bcl-pmic-params");
+	} else {
+		rx_priv->bcl_pmic_params.id = bcl_pmic_params[0];
+		rx_priv->bcl_pmic_params.sid = bcl_pmic_params[1];
+		rx_priv->bcl_pmic_params.ppid = bcl_pmic_params[2];
+	}
+
 	dev_set_drvdata(&pdev->dev, rx_priv);
 	mutex_init(&rx_priv->mclk_lock);
 	mutex_init(&rx_priv->swr_clk_lock);
