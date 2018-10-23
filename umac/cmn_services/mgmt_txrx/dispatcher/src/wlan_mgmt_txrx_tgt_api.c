@@ -935,8 +935,8 @@ QDF_STATUS tgt_mgmt_txrx_rx_frame_handler(
 
 	frm_type = mgmt_txrx_get_frm_type(mgmt_subtype, mpdu_data_ptr);
 	if (frm_type == MGMT_FRM_UNSPECIFIED) {
-		mgmt_txrx_err("Unspecified mgmt frame type fc: %x %x",
-			      wh->i_fc[0], wh->i_fc[1]);
+		mgmt_txrx_err_rl("Unspecified mgmt frame type fc: %x %x",
+				 wh->i_fc[0], wh->i_fc[1]);
 		qdf_nbuf_free(buf);
 		status = QDF_STATUS_E_FAILURE;
 		goto dec_peer_ref_cnt;
@@ -1024,6 +1024,10 @@ QDF_STATUS tgt_mgmt_txrx_tx_completion_handler(
 	if (!mgmt_txrx_pdev_ctx) {
 		mgmt_txrx_err("Mgmt txrx context empty for pdev %pK", pdev);
 		return QDF_STATUS_E_NULL_VALUE;
+	}
+	if (desc_id >= MGMT_DESC_POOL_MAX) {
+		mgmt_txrx_err("desc_id:%u is out of bounds", desc_id);
+		return QDF_STATUS_E_INVAL;
 	}
 	mgmt_desc = &mgmt_txrx_pdev_ctx->mgmt_desc_pool.pool[desc_id];
 	if (!mgmt_desc) {

@@ -8327,13 +8327,23 @@ static QDF_STATUS extract_wds_entry_non_tlv(wmi_unified_t wmi_handle,
 
 static bool is_management_record_non_tlv(uint32_t cmd_id)
 {
-	if ((cmd_id == WMI_BCN_TX_CMDID) ||
-		(cmd_id == WMI_PDEV_SEND_BCN_CMDID) ||
-		(cmd_id == WMI_MGMT_TX_CMDID) ||
-		(cmd_id == WMI_GPIO_OUTPUT_CMDID) ||
-		(cmd_id == WMI_HOST_SWBA_EVENTID)) {
+	switch (cmd_id) {
+	case WMI_BCN_TX_CMDID:
+	case WMI_MGMT_TX_CMDID:
+	case WMI_MGMT_RX_EVENTID:
+	case WMI_GPIO_OUTPUT_CMDID:
+	case WMI_HOST_SWBA_EVENTID:
+	case WMI_PDEV_SEND_BCN_CMDID:
 		return true;
+	default:
+		return false;
 	}
+}
+
+static bool is_diag_event_non_tlv(uint32_t event_id)
+{
+	if (WMI_DEBUG_MESG_EVENTID == event_id)
+		return true;
 
 	return false;
 }
@@ -8724,6 +8734,7 @@ struct wmi_ops non_tlv_ops =  {
 	.extract_pdev_utf_event = extract_pdev_utf_event_non_tlv,
 	.wmi_set_htc_tx_tag = wmi_set_htc_tx_tag_non_tlv,
 	.is_management_record = is_management_record_non_tlv,
+	.is_diag_event = is_diag_event_non_tlv,
 	.send_dfs_phyerr_offload_en_cmd =
 		send_dfs_phyerr_offload_en_cmd_non_tlv,
 	.send_dfs_phyerr_offload_dis_cmd =

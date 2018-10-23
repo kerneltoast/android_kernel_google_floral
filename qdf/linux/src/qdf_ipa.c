@@ -25,9 +25,9 @@
 /* Include Files */
 #include <qdf_ipa.h>
 
-static enum ipa_wlan_event __qdf_to_ipa_wlan_event(int qdf_ipa_event)
+static uint8_t __qdf_to_ipa_wlan_event(int qdf_ipa_event)
 {
-	enum ipa_wlan_event ipa_event;
+	uint8_t ipa_event;
 
 	switch (qdf_ipa_event) {
 	case QDF_IPA_CLIENT_CONNECT:
@@ -62,6 +62,9 @@ static enum ipa_wlan_event __qdf_to_ipa_wlan_event(int qdf_ipa_event)
 		break;
 	case QDF_WDI_DISABLE:
 		ipa_event = WLAN_WDI_DISABLE;
+		break;
+	case QDF_FWR_SSR_BEFORE_SHUTDOWN:
+		ipa_event = WLAN_FWR_SSR_BEFORE_SHUTDOWN;
 		break;
 	case QDF_IPA_WLAN_EVENT_MAX:
 	default:
