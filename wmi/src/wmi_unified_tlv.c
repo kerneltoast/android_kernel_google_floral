@@ -23,6 +23,7 @@
 #include "wmi_version_whitelist.h"
 #include <qdf_module.h>
 #include <wlan_defs.h>
+#include <wlan_cmn.h>
 #include <htc_services.h>
 #ifdef FEATURE_WLAN_APF
 #include "wmi_unified_apf_tlv.h"
@@ -5895,7 +5896,7 @@ static QDF_STATUS send_p2p_go_set_beacon_ie_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += WMI_TLV_HDR_SIZE;
 	qdf_mem_copy(buf_ptr, p2p_ie, ie_len);
 
-	WMI_LOGI("%s: Sending WMI_P2P_GO_SET_BEACON_IE", __func__);
+	WMI_LOGD("%s: Sending WMI_P2P_GO_SET_BEACON_IE", __func__);
 
 	ret = wmi_unified_cmd_send(wmi_handle,
 				   wmi_buf, wmi_buf_len,
@@ -5905,7 +5906,7 @@ static QDF_STATUS send_p2p_go_set_beacon_ie_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_buf_free(wmi_buf);
 	}
 
-	WMI_LOGI("%s: Successfully sent WMI_P2P_GO_SET_BEACON_IE", __func__);
+	WMI_LOGD("%s: Successfully sent WMI_P2P_GO_SET_BEACON_IE", __func__);
 	return ret;
 }
 
@@ -9968,8 +9969,8 @@ static uint8_t tdls_get_wmi_offchannel_bw(uint16_t tdls_off_ch_bw_offset)
 	case BWALL:
 		off_chan_bw = WMI_TDLS_OFFCHAN_160MHZ;
 	default:
-		WMI_LOGD(FL("unknown tdls_offchannel bw offset %d"),
-			 off_chan_bw);
+		WMI_LOGD(FL("unknown tdls offchannel bw offset %d"),
+			 tdls_off_ch_bw_offset);
 		off_chan_bw = WMI_TDLS_OFFCHAN_20MHZ;
 	}
 	return off_chan_bw;
@@ -13027,8 +13028,8 @@ static QDF_STATUS send_enable_specific_fw_logs_cmd_tlv(wmi_unified_t wmi_handle,
 	count = 0;
 
 	if (!wmi_handle->events_logs_list) {
-		WMI_LOGE("%s: Not received event/log list from FW, yet",
-				__func__);
+		WMI_LOGD("%s: Not received event/log list from FW, yet",
+			 __func__);
 		return QDF_STATUS_E_NOMEM;
 	}
 	/* total_len stores the number of events where BITS 17 and 18 are set.
@@ -13137,7 +13138,7 @@ static QDF_STATUS send_flush_logs_to_fw_cmd_tlv(wmi_unified_t wmi_handle)
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_INVAL;
 	}
-	WMI_LOGI("Sent WMI_DEBUG_MESG_FLUSH_CMDID to FW");
+	WMI_LOGD("Sent WMI_DEBUG_MESG_FLUSH_CMDID to FW");
 
 	return ret;
 }
@@ -14050,6 +14051,12 @@ static QDF_STATUS extract_gtk_rsp_event_tlv(wmi_unified_t wmi_handle,
 
 	fixed_param = (WMI_GTK_OFFLOAD_STATUS_EVENT_fixed_param *)
 		param_buf->fixed_param;
+
+	if (fixed_param->vdev_id >= WLAN_UMAC_PSOC_MAX_VDEVS) {
+		wmi_err_rl("Invalid vdev_id %u", fixed_param->vdev_id);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	gtk_rsp_param->vdev_id = fixed_param->vdev_id;
 	gtk_rsp_param->status_flag = QDF_STATUS_SUCCESS;
 	gtk_rsp_param->refresh_cnt = fixed_param->refresh_cnt;
@@ -15492,7 +15499,7 @@ static QDF_STATUS send_roam_scan_offload_ap_profile_cmd_tlv(wmi_unified_t wmi_ha
 		wmi_buf_free(buf);
 	}
 
-	WMI_LOGI("WMI --> WMI_ROAM_AP_PROFILE and other parameters");
+	WMI_LOGD("WMI --> WMI_ROAM_AP_PROFILE and other parameters");
 
 	return status;
 }
@@ -16868,8 +16875,6 @@ static QDF_STATUS extract_ndp_confirm_tlv(wmi_unified_t wmi_handle,
 	}
 
 	WMI_LOGD("ndp_cfg - %d bytes", fixed_params->ndp_cfg_len);
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
-		&event->ndp_cfg, fixed_params->ndp_cfg_len);
 
 	if (fixed_params->ndp_app_info_len > event->num_ndp_app_info) {
 		WMI_LOGE("FW message ndp app info length %d more than TLV hdr %d",
@@ -16880,8 +16885,6 @@ static QDF_STATUS extract_ndp_confirm_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD("ndp_app_info - %d bytes",
 			fixed_params->ndp_app_info_len);
-	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
-		&event->ndp_app_info, fixed_params->ndp_app_info_len);
 
 	if (fixed_params->ndp_cfg_len >
 			(WMI_SVC_MSG_MAX_SIZE - sizeof(*fixed_params))) {
@@ -17102,6 +17105,21 @@ static QDF_STATUS extract_ndp_sch_update_tlv(wmi_unified_t wmi_handle,
 		 fixed_params->flags, fixed_params->num_channels,
 		 fixed_params->num_ndp_instances);
 
+	if (fixed_params->num_channels > event->num_ndl_channel_list ||
+	    fixed_params->num_channels > event->num_nss_list) {
+		WMI_LOGE(FL("Channel count %d greater than NDP Ch list TLV len (%d) or NSS list TLV len (%d)"),
+			 fixed_params->num_channels,
+			 event->num_ndl_channel_list,
+			 event->num_nss_list);
+		return QDF_STATUS_E_INVAL;
+	}
+	if (fixed_params->num_ndp_instances > event->num_ndp_instance_list) {
+		WMI_LOGE(FL("NDP Instance count %d greater than NDP Instancei TLV len %d"),
+			 fixed_params->num_ndp_instances,
+			 event->num_ndp_instance_list);
+		return QDF_STATUS_E_INVAL;
+	}
+
 	ind->vdev =
 		wlan_objmgr_get_vdev_by_id_from_psoc(wmi_handle->soc->wmi_psoc,
 						     fixed_params->vdev_id,
@@ -17130,6 +17148,7 @@ static QDF_STATUS extract_ndp_sch_update_tlv(wmi_unified_t wmi_handle,
 		WMI_LOGE(FL("too many channels"));
 		ind->num_channels = NAN_CH_INFO_MAX_CHANNELS;
 	}
+
 	for (i = 0; i < ind->num_channels; i++) {
 		ind->ch[i].channel = event->ndl_channel_list[i].mhz;
 		ind->ch[i].nss = event->nss_list[i];
@@ -19218,7 +19237,8 @@ static QDF_STATUS extract_chainmask_tables_tlv(wmi_unified_t wmi_handle,
 	if (!hw_caps)
 		return QDF_STATUS_E_INVAL;
 
-	if (!hw_caps->num_chainmask_tables)
+	if ((!hw_caps->num_chainmask_tables) ||
+	    (hw_caps->num_chainmask_tables > PSOC_MAX_CHAINMASK_TABLES))
 		return QDF_STATUS_E_INVAL;
 
 	chainmask_caps = param_buf->mac_phy_chainmask_caps;
@@ -20459,6 +20479,7 @@ static QDF_STATUS extract_reg_11d_new_country_event_tlv(
 
 	qdf_mem_copy(reg_11d_country->alpha2,
 			&reg_11d_country_event->new_alpha2, REG_ALPHA2_LEN);
+	reg_11d_country->alpha2[REG_ALPHA2_LEN] = '\0';
 
 	WMI_LOGD("processed 11d country event, new cc %s",
 			reg_11d_country->alpha2);
@@ -21059,7 +21080,7 @@ static QDF_STATUS send_set_arp_stats_req_cmd_tlv(wmi_unified_t wmi_handle,
 		goto error;
 	}
 
-	WMI_LOGI(FL("set arp stats flag=%d, vdev=%d"),
+	WMI_LOGD(FL("set arp stats flag=%d, vdev=%d"),
 		 req_buf->flag, req_buf->vdev_id);
 	return QDF_STATUS_SUCCESS;
 error:
@@ -21805,6 +21826,11 @@ static QDF_STATUS extract_green_ap_egap_status_info_tlv(
 	chainmask_event = (wmi_ap_ps_egap_info_chainmask_list *)
 				param_buf->chainmask_list;
 
+	if (!egap_info_event || !chainmask_event) {
+		WMI_LOGE("Invalid EGAP Info event or chainmask event");
+		return QDF_STATUS_E_INVAL;
+	}
+
 	egap_status_info_params->status = egap_info_event->status;
 	egap_status_info_params->mac_id = chainmask_event->mac_id;
 	egap_status_info_params->tx_chainmask = chainmask_event->tx_chainmask;
@@ -22022,6 +22048,13 @@ static QDF_STATUS extract_comb_phyerr_tlv(wmi_unified_t wmi_handle,
 	phyerr->tsf64 = pe_hdr->tsf_l32;
 	phyerr->tsf64 |= (((uint64_t)pe_hdr->tsf_u32) << 32);
 	phyerr->bufp = param_tlvs->bufp;
+
+	if (pe_hdr->buf_len > param_tlvs->num_bufp) {
+		WMI_LOGD("Invalid buf_len %d, num_bufp %d",
+			 pe_hdr->buf_len, param_tlvs->num_bufp);
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	phyerr->buf_len = pe_hdr->buf_len;
 	phyerr->phy_err_mask0 = pe_hdr->rsPhyErrMask0;
 	phyerr->phy_err_mask1 = pe_hdr->rsPhyErrMask1;
