@@ -4835,12 +4835,23 @@ QDF_STATUS csr_roam_prepare_bss_config(tpAniSirGlobal pMac,
 				  pProfile, &cfgDot11Mode, pIes)) {
 		pBssConfig->uCfgDot11Mode = cfgDot11Mode;
 	} else {
+		/*
+		 * No matching phy mode found, force to 11b/g based on INI for
+		 * 2.4Ghz and to 11a mode for 5Ghz
+		 */
 		sme_warn("Can not find match phy mode");
-		/* force it */
-		if (BAND_2G == pBssConfig->eBand)
-			pBssConfig->uCfgDot11Mode = eCSR_CFG_DOT11_MODE_11G;
-		else
+		if (BAND_2G == pBssConfig->eBand) {
+			if (pMac->roam.configParam.phyMode &
+			    (eCSR_DOT11_MODE_11b | eCSR_DOT11_MODE_11b_ONLY)) {
+				pBssConfig->uCfgDot11Mode =
+						eCSR_CFG_DOT11_MODE_11B;
+			} else {
+				pBssConfig->uCfgDot11Mode =
+						eCSR_CFG_DOT11_MODE_11G;
+			}
+		} else {
 			pBssConfig->uCfgDot11Mode = eCSR_CFG_DOT11_MODE_11A;
+		}
 	}
 
 	sme_debug("phyMode=%d, uCfgDot11Mode=%d negotiatedAuthType %d",
@@ -17613,6 +17624,13 @@ QDF_STATUS csr_process_del_sta_session_rsp(tpAniSirGlobal mac_ctx,
 	sme_debug("Del Sta rsp status = %d", rsp->status);
 	/* This session is done. */
 	csr_cleanup_session(mac_ctx, sessionId);
+
+	/* Remove this command out of the non scan active list */
+	if (csr_nonscan_active_ll_remove_entry(mac_ctx, entry,
+					       LL_ACCESS_LOCK)) {
+		csr_release_command(mac_ctx, sme_command);
+	}
+
 	if (rsp->sme_callback) {
 		status = sme_release_global_lock(&mac_ctx->sme);
 		if (!QDF_IS_STATUS_SUCCESS(status))
@@ -17625,12 +17643,6 @@ QDF_STATUS csr_process_del_sta_session_rsp(tpAniSirGlobal mac_ctx,
 				return status;
 			}
 		}
-	}
-
-	/* Remove this command out of the non scan active list */
-	if (csr_nonscan_active_ll_remove_entry(mac_ctx, entry,
-					       LL_ACCESS_LOCK)) {
-		csr_release_command(mac_ctx, sme_command);
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -20249,7 +20261,7 @@ csr_roam_offload_scan(tpAniSirGlobal mac_ctx, uint8_t session_id,
 		roam_info->b_roam_scan_offload_started = true;
 	else if (ROAM_SCAN_OFFLOAD_STOP == command)
 		roam_info->b_roam_scan_offload_started = false;
-	policy_mgr_pdev_set_pcl(mac_ctx->psoc, QDF_STA_MODE);
+	policy_mgr_set_pcl_for_existing_combo(mac_ctx->psoc, PM_STA_MODE);
 
 	if (!QDF_IS_STATUS_SUCCESS(
 		csr_roam_send_rso_cmd(mac_ctx, session_id, req_buf))) {
@@ -20257,7 +20269,8 @@ csr_roam_offload_scan(tpAniSirGlobal mac_ctx, uint8_t session_id,
 			  "%s: Not able to post message to PE",
 			  __func__);
 		roam_info->b_roam_scan_offload_started = prev_roaming_state;
-		policy_mgr_pdev_set_pcl(mac_ctx->psoc, QDF_STA_MODE);
+		policy_mgr_set_pcl_for_existing_combo(mac_ctx->psoc,
+						      PM_STA_MODE);
 		return QDF_STATUS_E_FAILURE;
 	}
 	/* update the last sent cmd */
@@ -20739,7 +20752,18 @@ QDF_STATUS csr_set_serialization_params_to_cmd(tpAniSirGlobal mac_ctx,
 		return status;
 	}
 	cmd->umac_cmd = sme_cmd;
-	cmd->cmd_timeout_duration = SME_DEFAULT_CMD_TIMEOUT;
+
+	/*
+	 * For START BSS and STOP BSS commands for SAP, the command timeout
+	 * is set to 10 seconds. For all other commands its 30 seconds
+	 */
+	if ((cmd->vdev->vdev_mlme.vdev_opmode == QDF_SAP_MODE) &&
+	    ((cmd->cmd_type == WLAN_SER_CMD_HDD_ISSUED) ||
+	    (cmd->cmd_type == WLAN_SER_CMD_STOP_BSS)))
+		cmd->cmd_timeout_duration = SME_START_STOP_BSS_CMD_TIMEOUT;
+	else
+		cmd->cmd_timeout_duration = SME_DEFAULT_CMD_TIMEOUT;
+
 	cmd->cmd_cb = sme_ser_cmd_callback;
 	cmd->is_high_priority = high_priority;
 	return QDF_STATUS_SUCCESS;
@@ -20750,6 +20774,7 @@ QDF_STATUS csr_queue_sme_command(tpAniSirGlobal mac_ctx, tSmeCmd *sme_cmd,
 {
 	struct wlan_serialization_command cmd;
 	struct wlan_objmgr_vdev *vdev = NULL;
+	enum wlan_serialization_status ser_cmd_status;
 	QDF_STATUS status;
 
 	if (!SME_IS_START(mac_ctx)) {
@@ -20769,23 +20794,40 @@ QDF_STATUS csr_queue_sme_command(tpAniSirGlobal mac_ctx, tSmeCmd *sme_cmd,
 	qdf_mem_zero(&cmd, sizeof(struct wlan_serialization_command));
 	status = csr_set_serialization_params_to_cmd(mac_ctx, sme_cmd,
 					&cmd, high_priority);
-	if (QDF_STATUS_SUCCESS == status) {
-		vdev = cmd.vdev;
-		if (WLAN_SER_CMD_DENIED_UNSPECIFIED ==
-				wlan_serialization_request(&cmd))
-			status = QDF_STATUS_E_FAILURE;
-		if (vdev)
-			wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_SME_ID);
-		if (status == QDF_STATUS_E_FAILURE)
-			goto error;
-	} else {
+	if (QDF_IS_STATUS_ERROR(status)) {
 		sme_err("failed to set ser params");
 		goto error;
 	}
+
+	vdev = cmd.vdev;
+	ser_cmd_status = wlan_serialization_request(&cmd);
+	sme_debug("wlan_serialization_request status:%d", ser_cmd_status);
+
+	switch (ser_cmd_status) {
+	case WLAN_SER_CMD_PENDING:
+	case WLAN_SER_CMD_ACTIVE:
+		/* Command posted to active/pending list */
+		status = QDF_STATUS_SUCCESS;
+		break;
+	case WLAN_SER_CMD_DENIED_LIST_FULL:
+	case WLAN_SER_CMD_DENIED_RULES_FAILED:
+	case WLAN_SER_CMD_DENIED_UNSPECIFIED:
+		status = QDF_STATUS_E_FAILURE;
+		goto error;
+	default:
+		QDF_ASSERT(0);
+		status = QDF_STATUS_E_FAILURE;
+		goto error;
+	}
+
 	return status;
 
 error:
+	if (vdev)
+		wlan_objmgr_vdev_release_ref(vdev, WLAN_LEGACY_SME_ID);
+
 	csr_release_command_buffer(mac_ctx, sme_cmd);
+
 	return QDF_STATUS_E_FAILURE;
 }
 

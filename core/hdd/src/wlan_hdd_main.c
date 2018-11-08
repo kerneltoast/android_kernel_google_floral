@@ -5334,7 +5334,7 @@ QDF_STATUS hdd_stop_adapter_ext(struct hdd_context *hdd_ctx,
 				qdf_status =
 					qdf_wait_for_event_completion(
 					&hostapd_state->qdf_stop_bss_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 
 				if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 					hdd_err("failure waiting for wlansap_stop_bss %d",
@@ -11445,16 +11445,16 @@ void hdd_get_nud_stats_cb(void *data, struct rsp_stats *rsp, void *context)
 		return;
 	}
 
-	hdd_info("rsp->arp_req_enqueue :%x", rsp->arp_req_enqueue);
-	hdd_info("rsp->arp_req_tx_success :%x", rsp->arp_req_tx_success);
-	hdd_info("rsp->arp_req_tx_failure :%x", rsp->arp_req_tx_failure);
-	hdd_info("rsp->arp_rsp_recvd :%x", rsp->arp_rsp_recvd);
-	hdd_info("rsp->out_of_order_arp_rsp_drop_cnt :%x",
-		 rsp->out_of_order_arp_rsp_drop_cnt);
-	hdd_info("rsp->dad_detected :%x", rsp->dad_detected);
-	hdd_info("rsp->connect_status :%x", rsp->connect_status);
-	hdd_info("rsp->ba_session_establishment_status :%x",
-		 rsp->ba_session_establishment_status);
+	hdd_debug("rsp->arp_req_enqueue :%x", rsp->arp_req_enqueue);
+	hdd_debug("rsp->arp_req_tx_success :%x", rsp->arp_req_tx_success);
+	hdd_debug("rsp->arp_req_tx_failure :%x", rsp->arp_req_tx_failure);
+	hdd_debug("rsp->arp_rsp_recvd :%x", rsp->arp_rsp_recvd);
+	hdd_debug("rsp->out_of_order_arp_rsp_drop_cnt :%x",
+		  rsp->out_of_order_arp_rsp_drop_cnt);
+	hdd_debug("rsp->dad_detected :%x", rsp->dad_detected);
+	hdd_debug("rsp->connect_status :%x", rsp->connect_status);
+	hdd_debug("rsp->ba_session_establishment_status :%x",
+		  rsp->ba_session_establishment_status);
 
 	adapter->hdd_stats.hdd_arp_stats.rx_fw_cnt = rsp->arp_rsp_recvd;
 	adapter->dad |= rsp->dad_detected;
@@ -11462,8 +11462,8 @@ void hdd_get_nud_stats_cb(void *data, struct rsp_stats *rsp, void *context)
 
 	/* Flag true indicates connectivity check stats present. */
 	if (rsp->connect_stats_present) {
-		hdd_info("rsp->tcp_ack_recvd :%x", rsp->tcp_ack_recvd);
-		hdd_info("rsp->icmpv4_rsp_recvd :%x", rsp->icmpv4_rsp_recvd);
+		hdd_debug("rsp->tcp_ack_recvd :%x", rsp->tcp_ack_recvd);
+		hdd_debug("rsp->icmpv4_rsp_recvd :%x", rsp->icmpv4_rsp_recvd);
 		adapter->hdd_stats.hdd_tcp_stats.rx_fw_cnt = rsp->tcp_ack_recvd;
 		adapter->hdd_stats.hdd_icmpv4_stats.rx_fw_cnt =
 							rsp->icmpv4_rsp_recvd;
@@ -12146,7 +12146,7 @@ void wlan_hdd_stop_sap(struct hdd_adapter *ap_adapter)
 							sap_context)) {
 			qdf_status = qdf_wait_for_event_completion(&hostapd_state->
 					qdf_stop_bss_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 			if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 				mutex_unlock(&hdd_ctx->sap_lock);
 				hdd_err("SAP Stop Failed");
@@ -12218,7 +12218,7 @@ void wlan_hdd_start_sap(struct hdd_adapter *ap_adapter, bool reinit)
 
 	hdd_debug("Waiting for SAP to start");
 	qdf_status = qdf_wait_for_event_completion(&hostapd_state->qdf_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 		hdd_err("SAP Start failed");
 		goto end;
@@ -12998,6 +12998,7 @@ static void hdd_stop_present_mode(struct hdd_context *hdd_ctx,
 		hdd_abort_mac_scan_all_adapters(hdd_ctx);
 		wlan_cfg80211_cleanup_scan_queue(hdd_ctx->pdev, NULL);
 		hdd_stop_all_adapters(hdd_ctx);
+		hdd_deinit_all_adapters(hdd_ctx, false);
 
 		break;
 	default:
@@ -13016,7 +13017,6 @@ static void hdd_cleanup_present_mode(struct hdd_context *hdd_ctx,
 	case QDF_GLOBAL_MISSION_MODE:
 	case QDF_GLOBAL_MONITOR_MODE:
 	case QDF_GLOBAL_FTM_MODE:
-		hdd_deinit_all_adapters(hdd_ctx, false);
 		hdd_close_all_adapters(hdd_ctx, false);
 		break;
 	case QDF_GLOBAL_EPPING_MODE:
@@ -13693,8 +13693,10 @@ static void hdd_update_score_config(
 
 	score_config->cb_mode_24G = cfg->nChannelBondingMode24GHz;
 	score_config->cb_mode_5G = cfg->nChannelBondingMode5GHz;
-	score_config->nss = cfg->enable2x2 ? 2 : 1;
-
+	score_config->vdev_nss_24g = cfg->enable2x2 ?
+					 CFG_STA_NSS(cfg->vdev_type_nss_2g) : 1;
+	score_config->vdev_nss_5g = cfg->enable2x2 ?
+					 CFG_STA_NSS(cfg->vdev_type_nss_5g) : 1;
 	if (cfg->dot11Mode == eHDD_DOT11_MODE_AUTO ||
 	    cfg->dot11Mode == eHDD_DOT11_MODE_11ax ||
 	    cfg->dot11Mode == eHDD_DOT11_MODE_11ax_ONLY)
@@ -14050,7 +14052,7 @@ void hdd_restart_sap(struct hdd_adapter *ap_adapter)
 			qdf_status =
 				qdf_wait_for_event_completion(&hostapd_state->
 					qdf_stop_bss_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 
 			if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 				hdd_err("SAP Stop Failed");
@@ -14084,7 +14086,7 @@ void hdd_restart_sap(struct hdd_adapter *ap_adapter)
 		hdd_info("Waiting for SAP to start");
 		qdf_status =
 			qdf_wait_for_event_completion(&hostapd_state->qdf_event,
-					SME_CMD_TIMEOUT_VALUE);
+					SME_CMD_START_STOP_BSS_TIMEOUT);
 		wlansap_reset_sap_config_add_ie(sap_config,
 				eUPDATE_IE_ALL);
 		if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {

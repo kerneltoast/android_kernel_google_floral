@@ -548,6 +548,7 @@ static QDF_STATUS wma_self_peer_remove(tp_wma_handle wma_handle,
 				 vdev_id);
 			wma_remove_req(wma_handle, vdev_id,
 				WMA_DEL_P2P_SELF_STA_RSP_START);
+			qdf_mem_free(sta_self_wmi_rsp);
 			qdf_status = QDF_STATUS_E_FAILURE;
 			goto error;
 		}
@@ -790,7 +791,7 @@ QDF_STATUS wma_vdev_detach(tp_wma_handle wma_handle,
 	 * Cleanup the ObjMgr Peers for the current vdev and detach the
 	 * CDP Vdev.
 	 */
-	if (cds_is_driver_recovering() || !cds_is_target_ready()) {
+	if (!cds_is_target_ready()) {
 		wma_force_objmgr_vdev_peer_cleanup(wma_handle, vdev_id);
 		wma_cdp_vdev_detach(soc, wma_handle, vdev_id);
 		goto send_rsp;
@@ -1169,8 +1170,7 @@ int wma_vdev_start_resp_handler(void *handle, uint8_t *cmd_param_info,
 		if (!params) {
 			WMA_LOGE("%s: channel switch params is NULL for vdev %d",
 				__func__, resp_event->vdev_id);
-			policy_mgr_set_do_hw_mode_change_flag(
-				wma->psoc, false);
+			policy_mgr_set_do_hw_mode_change_flag(wma->psoc, false);
 			return -EINVAL;
 		}
 
@@ -1187,11 +1187,13 @@ int wma_vdev_start_resp_handler(void *handle, uint8_t *cmd_param_info,
 			wma->interfaces[resp_event->vdev_id].is_channel_switch =
 				false;
 		}
-		if (((resp_event->resp_type == WMI_VDEV_RESTART_RESP_EVENT) &&
-			((iface->type == WMI_VDEV_TYPE_STA) ||
-				(iface->type == WMI_VDEV_TYPE_MONITOR))) ||
-			((resp_event->resp_type == WMI_VDEV_START_RESP_EVENT) &&
-			 (iface->type == WMI_VDEV_TYPE_MONITOR))) {
+
+		if ((QDF_IS_STATUS_SUCCESS(resp_event->status) &&
+		     (resp_event->resp_type == WMI_VDEV_RESTART_RESP_EVENT) &&
+		     ((iface->type == WMI_VDEV_TYPE_STA) ||
+		      (iface->type == WMI_VDEV_TYPE_MONITOR))) ||
+		    ((resp_event->resp_type == WMI_VDEV_START_RESP_EVENT) &&
+		     (iface->type == WMI_VDEV_TYPE_MONITOR))) {
 			/* for CSA case firmware expects phymode before ch_wd */
 			err = wma_set_peer_param(wma, iface->bssid,
 					WMI_PEER_PHYMODE, iface->chanmode,
@@ -5681,7 +5683,7 @@ void wma_delete_bss(tp_wma_handle wma, tpDeleteBssParams params)
 		goto detach_peer;
 	}
 
-	WMA_LOGW(FL("Outstanding msdu packets: %d"),
+	WMA_LOGD(FL("Outstanding msdu packets: %d"),
 		 cdp_get_tx_pending(soc, pdev));
 	wma_wait_tx_complete(wma, params->smesessionId);
 

@@ -103,6 +103,12 @@ static void wma_send_bcn_buf_ll(tp_wma_handle wma,
 		WMA_LOGE("%s: Invalid beacon buffer", __func__);
 		return;
 	}
+
+	if (!param_buf->tim_info || !param_buf->p2p_noa_info) {
+		WMA_LOGE("%s: Invalid tim info or p2p noa info", __func__);
+		return;
+	}
+
 	if (WMI_UNIFIED_NOA_ATTR_NUM_DESC_GET(p2p_noa_info) >
 			WMI_P2P_MAX_NOA_DESCRIPTORS) {
 		WMA_LOGE("%s: Too many descriptors %d", __func__,
@@ -2044,7 +2050,7 @@ void wma_set_bsskey(tp_wma_handle wma_handle, tpSetBssKeyParams key_info)
 		/* vdev mac address will be passed for all other modes */
 		qdf_mem_copy(key_params.peer_mac, mac_addr,
 			     IEEE80211_ADDR_LEN);
-		WMA_LOGA("BSS Key setup with vdev_mac %pM\n",
+		WMA_LOGD("BSS Key setup with vdev_mac %pM\n",
 			 mac_addr);
 	}
 
@@ -2650,9 +2656,9 @@ static QDF_STATUS wma_store_bcn_tmpl(tp_wma_handle wma, uint8_t vdev_id,
 	}
 
 	len = *(u32 *) &bcn_info->beacon[0];
-	if (len > SIR_MAX_BEACON_SIZE) {
-		WMA_LOGE("%s: Received beacon len %d exceeding max limit %d",
-			 __func__, len, SIR_MAX_BEACON_SIZE);
+	if (len > SIR_MAX_BEACON_SIZE - sizeof(uint32_t)) {
+		WMA_LOGE("%s: Received beacon len %u exceeding max limit %lu",
+			 __func__, len, SIR_MAX_BEACON_SIZE - sizeof(uint32_t));
 		return QDF_STATUS_E_INVAL;
 	}
 	WMA_LOGD("%s: Storing received beacon template buf to local buffer",
