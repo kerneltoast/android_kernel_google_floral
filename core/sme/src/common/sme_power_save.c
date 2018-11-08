@@ -381,11 +381,13 @@ QDF_STATUS sme_ps_enable_disable(tHalHandle hal_ctx, uint32_t session_id,
 	status =  sme_enable_sta_ps_check(mac_ctx, session_id);
 	if (status != QDF_STATUS_SUCCESS) {
 		/*
-		 * In non associated state ps state will be disabled in FW.
-		 * Hence, return success if ps disable is requested
-		 * in disconnected state.
+		 * In non associated state driver wont handle the power save
+		 * But kernel expects return status success even
+		 * in the disconnected state.
+		 * TODO: If driver to remember the ps state to further use
+		 * after connection.
 		 */
-		if (command == SME_PS_DISABLE)
+		if (!csr_is_conn_state_connected_infra(mac_ctx, session_id))
 			status = QDF_STATUS_SUCCESS;
 		return status;
 	}
@@ -762,7 +764,7 @@ QDF_STATUS sme_ps_enable_auto_ps_timer(tHalHandle hal_ctx,
 	if (!QDF_IS_STATUS_SUCCESS(qdf_status)) {
 		if (QDF_STATUS_E_ALREADY == qdf_status) {
 			/* Consider this ok since the timer is already started*/
-			sme_warn("auto_ps_timer is already started");
+			sme_debug("auto_ps_timer is already started");
 		} else {
 			sme_err("Cannot start auto_ps_timer");
 			return QDF_STATUS_E_FAILURE;
