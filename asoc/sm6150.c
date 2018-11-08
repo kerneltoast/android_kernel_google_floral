@@ -22,6 +22,7 @@
 #include <linux/input.h>
 #include <linux/of_device.h>
 #include <linux/pm_qos.h>
+#include <linux/soc/qcom/fsa4480-i2c.h>
 #include <sound/core.h>
 #include <sound/soc.h>
 #include <sound/soc-dapm.h>
@@ -202,6 +203,7 @@ struct msm_asoc_mach_data {
 	struct device_node *hph_en1_gpio_p; /* used by pinctrl API */
 	struct device_node *hph_en0_gpio_p; /* used by pinctrl API */
 	bool is_afe_config_done;
+	struct device_node *fsa_handle;
 };
 
 struct msm_asoc_wcd93xx_codec {
@@ -467,6 +469,12 @@ static char const *slim_sample_rate_text[] = {"KHZ_8", "KHZ_16",
 static char const *bt_sample_rate_text[] = {"KHZ_8", "KHZ_16",
 					"KHZ_44P1", "KHZ_48",
 					"KHZ_88P2", "KHZ_96"};
+static char const *bt_sample_rate_rx_text[] = {"KHZ_8", "KHZ_16",
+					"KHZ_44P1", "KHZ_48",
+					"KHZ_88P2", "KHZ_96"};
+static char const *bt_sample_rate_tx_text[] = {"KHZ_8", "KHZ_16",
+					"KHZ_44P1", "KHZ_48",
+					"KHZ_88P2", "KHZ_96"};
 static const char *const usb_ch_text[] = {"One", "Two", "Three", "Four",
 					   "Five", "Six", "Seven",
 					   "Eight"};
@@ -532,6 +540,8 @@ static SOC_ENUM_SINGLE_EXT_DECL(slim_0_tx_sample_rate, slim_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(slim_5_rx_sample_rate, slim_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(slim_6_rx_sample_rate, slim_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(bt_sample_rate, bt_sample_rate_text);
+static SOC_ENUM_SINGLE_EXT_DECL(bt_sample_rate_rx, bt_sample_rate_rx_text);
+static SOC_ENUM_SINGLE_EXT_DECL(bt_sample_rate_tx, bt_sample_rate_tx_text);
 static SOC_ENUM_SINGLE_EXT_DECL(usb_rx_sample_rate, usb_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(usb_tx_sample_rate, usb_sample_rate_text);
 static SOC_ENUM_SINGLE_EXT_DECL(ext_disp_rx_sample_rate,
@@ -1190,7 +1200,129 @@ static int msm_bt_sample_rate_put(struct snd_kcontrol *kcontrol,
 
 	return 0;
 }
+static int msm_bt_sample_rate_rx_get(struct snd_kcontrol *kcontrol,
+				     struct snd_ctl_elem_value *ucontrol)
+{
+	switch (slim_rx_cfg[SLIM_RX_7].sample_rate) {
+	case SAMPLING_RATE_96KHZ:
+		ucontrol->value.integer.value[0] = 5;
+		break;
+	case SAMPLING_RATE_88P2KHZ:
+		ucontrol->value.integer.value[0] = 4;
+		break;
+	case SAMPLING_RATE_48KHZ:
+		ucontrol->value.integer.value[0] = 3;
+		break;
+	case SAMPLING_RATE_44P1KHZ:
+		ucontrol->value.integer.value[0] = 2;
+		break;
+	case SAMPLING_RATE_16KHZ:
+		ucontrol->value.integer.value[0] = 1;
+		break;
+	case SAMPLING_RATE_8KHZ:
+	default:
+		ucontrol->value.integer.value[0] = 0;
+		break;
+	}
+	pr_debug("%s: sample rate rx = %d", __func__,
+		 slim_rx_cfg[SLIM_RX_7].sample_rate);
 
+	return 0;
+}
+
+static int msm_bt_sample_rate_rx_put(struct snd_kcontrol *kcontrol,
+				     struct snd_ctl_elem_value *ucontrol)
+{
+	switch (ucontrol->value.integer.value[0]) {
+	case 1:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_16KHZ;
+		break;
+	case 2:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
+		break;
+	case 3:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_48KHZ;
+		break;
+	case 4:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
+		break;
+	case 5:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_96KHZ;
+		break;
+	case 0:
+	default:
+		slim_rx_cfg[SLIM_RX_7].sample_rate = SAMPLING_RATE_8KHZ;
+		break;
+	}
+	pr_debug("%s: sample rate: slim7_rx = %d, value = %d\n",
+		 __func__,
+		 slim_rx_cfg[SLIM_RX_7].sample_rate,
+		 ucontrol->value.enumerated.item[0]);
+
+	return 0;
+}
+
+static int msm_bt_sample_rate_tx_get(struct snd_kcontrol *kcontrol,
+				     struct snd_ctl_elem_value *ucontrol)
+{
+	switch (slim_tx_cfg[SLIM_TX_7].sample_rate) {
+	case SAMPLING_RATE_96KHZ:
+		ucontrol->value.integer.value[0] = 5;
+		break;
+	case SAMPLING_RATE_88P2KHZ:
+		ucontrol->value.integer.value[0] = 4;
+		break;
+	case SAMPLING_RATE_48KHZ:
+		ucontrol->value.integer.value[0] = 3;
+		break;
+	case SAMPLING_RATE_44P1KHZ:
+		ucontrol->value.integer.value[0] = 2;
+		break;
+	case SAMPLING_RATE_16KHZ:
+		ucontrol->value.integer.value[0] = 1;
+		break;
+	case SAMPLING_RATE_8KHZ:
+	default:
+		ucontrol->value.integer.value[0] = 0;
+		break;
+	}
+	pr_debug("%s: sample rate tx = %d", __func__,
+		 slim_tx_cfg[SLIM_TX_7].sample_rate);
+
+	return 0;
+}
+
+static int msm_bt_sample_rate_tx_put(struct snd_kcontrol *kcontrol,
+				     struct snd_ctl_elem_value *ucontrol)
+{
+	switch (ucontrol->value.integer.value[0]) {
+	case 1:
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_16KHZ;
+		break;
+	case 2:
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_44P1KHZ;
+		break;
+	case 3:
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_48KHZ;
+		break;
+	case 4:
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_88P2KHZ;
+		break;
+	case 5:
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_96KHZ;
+		break;
+	case 0:
+	default:
+		slim_tx_cfg[SLIM_TX_7].sample_rate = SAMPLING_RATE_8KHZ;
+		break;
+	}
+	pr_debug("%s: sample rate: slim7_tx = %d, value = %d\n",
+		 __func__,
+		 slim_tx_cfg[SLIM_TX_7].sample_rate,
+		 ucontrol->value.enumerated.item[0]);
+
+	return 0;
+}
 static int cdc_dma_get_port_idx(struct snd_kcontrol *kcontrol)
 {
 	int idx = 0;
@@ -3693,6 +3825,12 @@ static const struct snd_kcontrol_new msm_common_snd_controls[] = {
 	SOC_ENUM_EXT("BT SampleRate", bt_sample_rate,
 			msm_bt_sample_rate_get,
 			msm_bt_sample_rate_put),
+	SOC_ENUM_EXT("BT SampleRate RX", bt_sample_rate_rx,
+			msm_bt_sample_rate_rx_get,
+			msm_bt_sample_rate_rx_put),
+	SOC_ENUM_EXT("BT SampleRate TX", bt_sample_rate_tx,
+			msm_bt_sample_rate_tx_get,
+			msm_bt_sample_rate_tx_put),
 	SOC_ENUM_EXT("VI_FEED_TX Channels", vi_feed_tx_chs,
 			msm_vi_feed_tx_ch_get, msm_vi_feed_tx_ch_put),
 };
@@ -4465,88 +4603,14 @@ done:
 
 static bool msm_usbc_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 {
-	int value = 0;
-	bool ret = 0;
 	struct snd_soc_card *card = codec->component.card;
-	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
-	struct pinctrl_state *en2_pinctrl_active;
-	struct pinctrl_state *en2_pinctrl_sleep;
+	struct msm_asoc_mach_data *pdata =
+				snd_soc_card_get_drvdata(card);
 
-	if (!pdata->usbc_en2_gpio_p) {
-		if (active) {
-			/* if active and usbc_en2_gpio undefined, get pin */
-			pdata->usbc_en2_gpio_p = devm_pinctrl_get(card->dev);
-			if (IS_ERR_OR_NULL(pdata->usbc_en2_gpio_p)) {
-				dev_err(card->dev,
-					"%s: Can't get EN2 gpio pinctrl:%ld\n",
-					__func__,
-					PTR_ERR(pdata->usbc_en2_gpio_p));
-				pdata->usbc_en2_gpio_p = NULL;
-				return false;
-			}
-		} else {
-			/* if not active and usbc_en2_gpio undefined, return */
-			return false;
-		}
-	}
-
-	pdata->usbc_en2_gpio = of_get_named_gpio(card->dev->of_node,
-				    "qcom,usbc-analog-en2-gpio", 0);
-	if (!gpio_is_valid(pdata->usbc_en2_gpio)) {
-		dev_err(card->dev, "%s, property %s not in node %s",
-			__func__, "qcom,usbc-analog-en2-gpio",
-			card->dev->of_node->full_name);
+	if (!pdata->fsa_handle)
 		return false;
-	}
 
-	en2_pinctrl_active = pinctrl_lookup_state(
-					pdata->usbc_en2_gpio_p, "aud_active");
-	if (IS_ERR_OR_NULL(en2_pinctrl_active)) {
-		dev_err(card->dev,
-			"%s: Cannot get aud_active pinctrl state:%ld\n",
-			__func__, PTR_ERR(en2_pinctrl_active));
-		ret = false;
-		goto err_lookup_state;
-	}
-
-	en2_pinctrl_sleep = pinctrl_lookup_state(
-					pdata->usbc_en2_gpio_p, "aud_sleep");
-	if (IS_ERR_OR_NULL(en2_pinctrl_sleep)) {
-		dev_err(card->dev,
-			"%s: Cannot get aud_sleep pinctrl state:%ld\n",
-			__func__, PTR_ERR(en2_pinctrl_sleep));
-		ret = false;
-		goto err_lookup_state;
-	}
-
-	/* if active and usbc_en2_gpio_p defined, swap using usbc_en2_gpio_p */
-	if (active) {
-		dev_dbg(codec->dev, "%s: enter\n", __func__);
-		if (pdata->usbc_en2_gpio_p) {
-			value = gpio_get_value_cansleep(pdata->usbc_en2_gpio);
-			if (value)
-				pinctrl_select_state(pdata->usbc_en2_gpio_p,
-							en2_pinctrl_sleep);
-			else
-				pinctrl_select_state(pdata->usbc_en2_gpio_p,
-							en2_pinctrl_active);
-		} else if (pdata->usbc_en2_gpio >= 0) {
-			value = gpio_get_value_cansleep(pdata->usbc_en2_gpio);
-			gpio_set_value_cansleep(pdata->usbc_en2_gpio, !value);
-		}
-		pr_debug("%s: swap select switch %d to %d\n", __func__,
-			value, !value);
-		ret = true;
-	} else {
-		/* if not active, release usbc_en2_gpio_p pin */
-		pinctrl_select_state(pdata->usbc_en2_gpio_p,
-					en2_pinctrl_sleep);
-	}
-
-err_lookup_state:
-	devm_pinctrl_put(pdata->usbc_en2_gpio_p);
-	pdata->usbc_en2_gpio_p = NULL;
-	return ret;
+	return fsa4480_switch_event(pdata->fsa_handle, FSA_MIC_GND_SWAP);
 }
 
 static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
@@ -8458,6 +8522,18 @@ static int msm_asoc_machine_probe(struct platform_device *pdev)
 		dev_dbg(&pdev->dev, "%s detected\n",
 			"qcom,us-euro-gpios");
 		wcd_mbhc_cfg.swap_gnd_mic = msm_swap_gnd_mic;
+	}
+
+	if (wcd_mbhc_cfg.enable_usbc_analog) {
+		wcd_mbhc_cfg.swap_gnd_mic = msm_usbc_swap_gnd_mic;
+
+		pdata->fsa_handle = of_parse_phandle(pdev->dev.of_node,
+						"fsa4480-i2c-handle", 0);
+		if (!pdata->fsa_handle)
+			dev_err(&pdev->dev,
+				"property %s not detected in node %s\n",
+				"fsa4480-i2c-handle",
+				pdev->dev.of_node->full_name);
 	}
 	/* Parse pinctrl info from devicetree */
 	ret = msm_get_pinctrl(pdev);
