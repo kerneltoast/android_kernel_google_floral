@@ -110,8 +110,10 @@ struct swr_mstr_ctrl {
 	struct resource *supplies;
 	struct clk *mclk;
 	int clk_ref_count;
+	struct completion clk_off_complete;
 	struct completion reset;
 	struct completion broadcast;
+	struct mutex clklock;
 	struct mutex iolock;
 	struct mutex devlock;
 	struct mutex mlock;
@@ -135,6 +137,7 @@ struct swr_mstr_ctrl {
 	int slave_status;
 	struct swrm_mports mport_cfg[SWR_MAX_MSTR_PORT_NUM];
 	struct list_head port_req_list;
+	unsigned long port_req_pending;
 	int state;
 	struct platform_device *pdev;
 	int num_rx_chs;
@@ -150,8 +153,8 @@ struct swr_mstr_ctrl {
 	u32 clk_stop_mode0_supp;
 	struct work_struct wakeup_work;
 	u32 wakeup_req;
-
 	bool dev_up;
+	bool wakeup_triggered;
 };
 
 #endif /* _SWR_WCD_CTRL_H */

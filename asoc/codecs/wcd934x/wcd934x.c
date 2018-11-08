@@ -68,6 +68,9 @@
 
 #define WCD934X_FORMATS_S16_LE (SNDRV_PCM_FMTBIT_S16_LE)
 
+#define MICB_LOAD_PROP "qcom,vreg-micb"
+#define MICB_LOAD_DEFAULT 30400
+
 /* Macros for packing register writes into a U32 */
 #define WCD934X_PACKED_REG_SIZE sizeof(u32)
 #define WCD934X_CODEC_UNPACK_ENTRY(packed, reg, mask, val) \
@@ -637,6 +640,9 @@ struct tavil_priv {
 	struct platform_device *pdev_child_devices
 		[WCD934X_CHILD_DEVICES_MAX];
 	int child_count;
+	struct regulator *micb_load;
+	int micb_load_low;
+	int micb_load_high;
 };
 
 static const struct tavil_reg_mask_val tavil_spkr_default[] = {
@@ -2974,6 +2980,11 @@ static int __tavil_codec_enable_swr(struct snd_soc_dapm_widget *w, int event)
 			tavil->swr.rx_8_count++;
 		ch_cnt = !!(tavil->swr.rx_7_count) + tavil->swr.rx_8_count;
 
+		if (wcd9xxx_get_current_power_state(tavil->wcd9xxx,
+						WCD9XXX_DIG_CORE_REGION_1)
+					!= WCD_REGION_POWER_COLLAPSE_REMOVE)
+			goto done;
+
 		swrm_wcd_notify(tavil->swr.ctrl_data[0].swr_pdev,
 				SWR_DEVICE_UP, NULL);
 		swrm_wcd_notify(tavil->swr.ctrl_data[0].swr_pdev,
@@ -2994,6 +3005,7 @@ static int __tavil_codec_enable_swr(struct snd_soc_dapm_widget *w, int event)
 
 		break;
 	}
+done:
 	dev_dbg(tavil->dev, "%s: %s: current swr ch cnt: %d\n",
 		__func__, w->name, ch_cnt);
 
@@ -3162,8 +3174,6 @@ static int __tavil_codec_enable_mad(struct snd_soc_codec *codec, bool enable)
 		/* Undo reset for MAD */
 		snd_soc_update_bits(codec, WCD934X_CPE_SS_MAD_CTL,
 				    0x02, 0x00);
-		snd_soc_update_bits(codec, WCD934X_CODEC_RPM_CLK_MCLK_CFG,
-					0x04, 0x04);
 	} else {
 		snd_soc_update_bits(codec, WCD934X_SOC_MAD_AUDIO_CTL_2,
 				    0x03, 0x00);
@@ -3173,8 +3183,6 @@ static int __tavil_codec_enable_mad(struct snd_soc_codec *codec, bool enable)
 		/* Turn off MAD clk */
 		snd_soc_update_bits(codec, WCD934X_CPE_SS_MAD_CTL,
 				    0x01, 0x00);
-		snd_soc_update_bits(codec, WCD934X_CODEC_RPM_CLK_MCLK_CFG,
-					0x04, 0x00);
 	}
 done:
 	return rc;
@@ -4882,6 +4890,9 @@ int tavil_micbias_control(struct snd_soc_codec *codec,
 	case MICB_ENABLE:
 		tavil->micb_ref[micb_index]++;
 		if (tavil->micb_ref[micb_index] == 1) {
+			if (tavil->micb_load)
+				regulator_set_load(tavil->micb_load,
+						   tavil->micb_load_high);
 			snd_soc_update_bits(codec, micb_reg, 0xC0, 0x40);
 			if (post_on_event && tavil->mbhc)
 				blocking_notifier_call_chain(
@@ -4912,6 +4923,9 @@ int tavil_micbias_control(struct snd_soc_codec *codec,
 						&tavil->mbhc->notifier,
 						post_off_event,
 						&tavil->mbhc->wcd_mbhc);
+			if (tavil->micb_load)
+				regulator_set_load(tavil->micb_load,
+						   tavil->micb_load_low);
 		}
 		if (is_dapm && post_dapm_off && tavil->mbhc)
 			blocking_notifier_call_chain(&tavil->mbhc->notifier,
@@ -9398,6 +9412,7 @@ static const struct tavil_reg_mask_val tavil_codec_reg_defaults[] = {
 	{WCD934X_HPH_R_TEST, 0x01, 0x01},
 	{WCD934X_CPE_FLL_CONFIG_CTL_2, 0xFF, 0x20},
 	{WCD934X_MBHC_NEW_CTL_2, 0x0C, 0x00},
+	{WCD934X_CODEC_RPM_CLK_MCLK_CFG, 0x04, 0x04},
 };
 
 static const struct tavil_reg_mask_val tavil_codec_reg_init_1_1_val[] = {
@@ -10947,11 +10962,12 @@ static const struct snd_event_ops wcd934x_ssr_ops = {
 
 static int tavil_probe(struct platform_device *pdev)
 {
-	int ret = 0;
+	int ret = 0, len = 0;
 	struct tavil_priv *tavil;
 	struct clk *wcd_ext_clk;
 	struct wcd9xxx_resmgr_v2 *resmgr;
 	struct wcd9xxx_power_region *cdc_pwr;
+	const __be32 *micb_prop;
 
 	tavil = devm_kzalloc(&pdev->dev, sizeof(struct tavil_priv),
 			    GFP_KERNEL);
@@ -11078,6 +11094,26 @@ static int tavil_probe(struct platform_device *pdev)
 		ret = 0;
 	}
 
+	tavil->micb_load = NULL;
+
+	if (of_get_property(tavil->wcd9xxx->dev->of_node,
+			    "qcom,vreg-micb-supply", NULL)) {
+		micb_prop = of_get_property(tavil->wcd9xxx->dev->of_node,
+					    "qcom,cdc-vdd-mic-bias-current",
+					    &len);
+		if (!micb_prop || (len != (2 * sizeof(__be32)))) {
+			tavil->micb_load_low = MICB_LOAD_DEFAULT;
+			tavil->micb_load_high = MICB_LOAD_DEFAULT;
+		} else {
+			tavil->micb_load_low = be32_to_cpup(&micb_prop[0]);
+			tavil->micb_load_high = be32_to_cpup(&micb_prop[1]);
+		}
+		tavil->micb_load = regulator_get(&pdev->dev, MICB_LOAD_PROP);
+		if (IS_ERR(tavil->micb_load))
+			dev_dbg(tavil->dev, "%s micb load get failed\n",
+				__func__);
+	}
+
 	return ret;
 
 err_cdc_reg:
@@ -11118,6 +11154,9 @@ static int tavil_remove(struct platform_device *pdev)
 	for (count = 0; count < tavil->child_count &&
 				count < WCD934X_CHILD_DEVICES_MAX; count++)
 		platform_device_unregister(tavil->pdev_child_devices[count]);
+
+	if (tavil->micb_load)
+		regulator_put(tavil->micb_load);
 
 	mutex_destroy(&tavil->micb_lock);
 	mutex_destroy(&tavil->svs_mutex);
