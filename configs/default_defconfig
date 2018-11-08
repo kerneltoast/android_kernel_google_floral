@@ -42,6 +42,10 @@ ifeq ($(CONFIG_ICNSS), y)
 	endif
 endif
 
+# Disable BUILD_TAG
+WLAN_DISABLE_BUILD_TAG := y
+CONFIG_BUILD_TAG := n
+
 ifneq ($(DEVELOPER_DISABLE_BUILD_TIMESTAMP), y)
 ifneq ($(WLAN_DISABLE_BUILD_TAG), y)
 CONFIG_BUILD_TAG := y

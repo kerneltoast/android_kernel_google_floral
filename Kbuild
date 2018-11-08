@@ -2086,8 +2086,7 @@ CMN_IDS = $(shell cd "$(WLAN_COMMON_INC)" && \
 TIMESTAMP = $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 BUILD_TAG = "$(TIMESTAMP); cld:$(CLD_IDS); cmn:$(CMN_IDS);"
 # It's assumed that BUILD_TAG is used only in wlan_hdd_main.c
-# TODO: This is causing a build failure, so disabling for now
-#CFLAGS_wlan_hdd_main.o += -DBUILD_TAG=\"$(BUILD_TAG)\"
+CFLAGS_wlan_hdd_main.o += -DBUILD_TAG=\"$(BUILD_TAG)\"
 endif
 
 # Module information used by KBuild framework
