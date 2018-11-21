@@ -1159,8 +1159,8 @@ int production_test_main(const char *pathThresholds, int stop_on_fail,
 	res = production_test_ito(pathThresholds, todo, NULL);
 	if (res < 0) {
 		pr_err("Error during ITO TEST! ERROR %08X\n", res);
-		goto END;/* in case of ITO TEST failure is no sense keep going
-			 * */
+		/* in case of ITO TEST failure is no sense keep going */
+		goto END;
 	} else
 		pr_info("ITO TEST OK!\n");
 #endif
@@ -1611,11 +1611,14 @@ int production_test_ms_raw(const char *path_limits, int stop_on_fail,
 				maxAdjV = abs(adj[force_node + 1]);
 
 				/* skip nodes on the edges */
-				for (i = 1; i < force_node - 2; i++) {
+				for (i = 1; i < (force_node - 2); i++) {
 					for (z = 1; z < sense_node - 1; z++) {
-						maxAdjV =
-						max(maxAdjV,
-						abs(adj[(i * force_node) + z]));
+						maxAdjV = (maxAdjV <
+							abs(adj[(i *
+							force_node) + z])) ?
+							abs(adj[(i *
+							force_node) + z]) :
+							maxAdjV;
 					}
 				}
 
