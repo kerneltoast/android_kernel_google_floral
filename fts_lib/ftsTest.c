@@ -1209,18 +1209,19 @@ int production_test_main(char *pathThresholds, int stop_on_fail, int saveInit,
 
 	logError(0, "%s\n", tag);
 
+#ifndef SKIP_PRODUCTION_TEST
 	logError(0, "%s ITO TEST:\n", tag);
 	res = production_test_ito(pathThresholds, todo, NULL);
 	if (res < 0) {
-		logError(0, "%s Error during ITO TEST! ERROR %08X\n", tag, res);
-		goto END;/* in case of ITO TEST failure is no sense keep going
-			 * */
+		logError(0, "%s Error during ITO TEST! ERROR %08X\n",
+			 tag, res);
+		/* in case of ITO TEST failure is no sense keep going* */
+		goto END;
 	} else
 		logError(0, "%s ITO TEST OK!\n", tag);
 
-
 	logError(0, "%s\n", tag);
-
+#endif
 	logError(0, "%s INITIALIZATION TEST :\n", tag);
 	if (saveInit != NO_INIT) {
 		res = production_test_initialization((u8)saveInit);
@@ -1254,6 +1255,7 @@ int production_test_main(char *pathThresholds, int stop_on_fail, int saveInit,
 		logError(0, "%s\n", tag);
 	}
 
+#ifndef SKIP_PRODUCTION_TEST
 	logError(0, "%s PRODUCTION DATA TEST:\n", tag);
 	ret = production_test_data(pathThresholds, stop_on_fail, todo);
 	if (ret < OK)
@@ -1262,6 +1264,12 @@ int production_test_main(char *pathThresholds, int stop_on_fail, int saveInit,
 			 tag, ret);
 	else {
 		logError(0, "%s PRODUCTION DATA TEST OK!\n", tag);
+#endif
+	logError(0, "%s Clearing the FIFO events!!!\n", tag);
+	ret = flushFIFO();
+	if (ret < OK)
+		logError(0, "%s Error while Flushing the FIFO! ERROR\n",
+			 tag, ret);
 
 #ifdef COMPUTE_INIT_METHOD
 		if (saveInit != NO_INIT) {
@@ -1276,8 +1284,9 @@ int production_test_main(char *pathThresholds, int stop_on_fail, int saveInit,
 				logError(0, "%s MP FLAG saving OK!\n", tag);
 		}
 #endif
-
+#ifndef SKIP_PRODUCTION_TEST
 	}
+#endif
 
 	res |= ret;
 	/* the OR is important because if the data test is OK but
@@ -1742,12 +1751,14 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 						.force_node - 2); i++) {
 					for (z = 1; z < msRawFrame.header
 						.sense_node - 1; z++) {
-						if (maxAdjH < abs(adj[(i *
+						maxAdjV = (maxAdjV <
+							abs(adj[(i *
 							msRawFrame.header
-							.force_node) + z]))
-							maxAdjH = abs(adj[(i *
-							     msRawFrame.header
-							     .force_node) + z]);
+							.force_node) + z])) ?
+							abs(adj[(i *
+							msRawFrame.header
+							.force_node) + z]) :
+							maxAdjV;
 
 					}
 				}

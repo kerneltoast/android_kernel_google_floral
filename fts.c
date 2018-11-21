@@ -1946,6 +1946,148 @@ END:
 	return count;
 }
 
+static ssize_t fts_infoblock_getdata_show(struct device *dev,
+					  struct device_attribute *attr,
+					  char *buf)
+{
+	int count = 0;
+	int res = 0;
+	u8 control_reg = 0;
+	u8 flash_status = 0;
+	u8 *data = NULL;
+	int addr = 0;
+	int i = 0;
+
+	res = fts_writeReadU8UX(FTS_CMD_HW_REG_R, ADDR_SIZE_HW_REG,
+				ADDR_FLASH_STATUS, &control_reg, 1, DUMMY_HW_REG);
+
+	if (res < OK) {
+		count += snprintf(&buf[count],
+				  "ADDR_FLASH_STATUS read failed\n");
+		return count;
+	}
+	flash_status = (control_reg & 0xFC);
+
+	count += snprintf(&buf[count], "The value:0x%X 0x%X\n", control_reg, flash_status);
+
+	res = fts_writeU8UX(FTS_CMD_HW_REG_W, ADDR_SIZE_HW_REG,
+			    ADDR_FLASH_STATUS, &flash_status, 1);
+	if (res < OK) {
+		count += snprintf(&buf[count],
+				  "ADDR_FLASH_STATUS write failed\n");
+		return count;
+	}
+	data = kmalloc(INFO_BLOCK_SIZE * sizeof(u8), GFP_KERNEL);
+	if (data == NULL) {
+		count += snprintf(&buf[count], "kmalloc failed\n");
+		goto END;
+	}
+	res = fts_writeReadU8UX(FTS_CMD_HW_REG_R, ADDR_SIZE_HW_REG,
+				ADDR_INFOBLOCK, data, INFO_BLOCK_SIZE,
+				DUMMY_HW_REG);
+	if (res < OK) {
+		count += snprintf(&buf[count], "ADDR_INFOBLOCK read failed\n");
+		goto END;
+	}
+	addr = INFO_BLOCK_LOCKDOWN;
+	count += snprintf(&buf[count],
+			  "Lock down info the first 4bytes:0X%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count],
+			  "Lock down info the second 4bytes:0X%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	count += snprintf(&buf[count], "0x%04X\n", addr);
+	addr = INFO_BLOCK_AOFFSET;
+	count += snprintf(&buf[count],
+			  "Aoffset magic number:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "Aoffset crc:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "Aoffset ~crcr:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "Aoffset len:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "Aoffset ~len:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "Aoffset ver:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "0x%04X\n", addr);
+	for (i = 0; i < 38; i++) {
+		count += snprintf(&buf[count],
+				  "Aoffset CH[%d] Quar:0X%02X,Half:0X%02X,Full:0X%02X%02X\n",
+				  i, data[addr+3], data[addr+2], data[addr+1],
+				  data[addr]);
+		addr += 4;
+	}
+	count += snprintf(&buf[count], "0x%04X\n", addr);
+	for (i = 0; i < 4; i++) {
+		count += snprintf(&buf[count],
+				  "Aoffset CA[%d] Quar:0X%02X,Half:0X%02X,Full:0X%02X%02X\n",
+				  i, data[addr+3], data[addr+2], data[addr+1],
+				  data[addr]);
+		addr += 4;
+	}
+	addr = INFO_BLOCK_OSC;
+	count += snprintf(&buf[count],
+			  "OscTrim magic number:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "OscTrim crc:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "OscTrim len:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "OscTrim ~crcr:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "OscTrim ~len:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "OscTrim ver:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "OscTrim major ver:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count], "OscTrim cen bg:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count],
+			  "OscTrim frequency bg:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count],
+			  "OscTrim frequency afe:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count],
+			  "OscTrim cen bg valid:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+	addr += 4;
+	count += snprintf(&buf[count],
+			  "OscTrim cen afe valid:0x%02X%02X%02X%02X\n",
+			  data[addr+3], data[addr+2], data[addr+1], data[addr]);
+
+END:
+        if(data != NULL)
+        {
+		kfree(data);
+		data = NULL;
+        }
+	fts_writeU8UX(FTS_CMD_HW_REG_W, ADDR_SIZE_HW_REG,
+		      ADDR_FLASH_STATUS, &control_reg, 1);
+	return count;
+}
+static DEVICE_ATTR(infoblock_getdata, (0444),
+		   fts_infoblock_getdata_show, NULL);
 static DEVICE_ATTR(fwupdate, (S_IRUGO | S_IWUSR | S_IWGRP), fts_fwupdate_show,
 		   fts_fwupdate_store);
 static DEVICE_ATTR(appid, (S_IRUGO), fts_appid_show, NULL);
@@ -1995,6 +2137,7 @@ static DEVICE_ATTR(gesture_coordinates, (S_IRUGO | S_IWUSR | S_IWGRP),
 
 /*  /sys/devices/soc.0/f9928000.i2c/i2c-6/6-0049 */
 static struct attribute *fts_attr_group[] = {
+	 &dev_attr_infoblock_getdata.attr,
 	&dev_attr_fwupdate.attr,
 	&dev_attr_appid.attr,
 	&dev_attr_mode_active.attr,

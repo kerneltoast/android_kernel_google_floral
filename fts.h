@@ -45,9 +45,9 @@
   */
 /* **** CODE CONFIGURATION **** */
 #define FTS_TS_DRV_NAME		"fts"	/* driver name */
-#define FTS_TS_DRV_VERSION	"5.2.16.1"	/* driver version string
+#define FTS_TS_DRV_VERSION	"5.2.16.3"	/* driver version string
 							 * */
-#define FTS_TS_DRV_VER		0x05021001	/* driver version u32 format */
+#define FTS_TS_DRV_VER		0x05021003	/* driver version u32 format */
 
 #define DEBUG	/* /< define to print more logs in the kernel log
 		  * and better follow the code flow */
@@ -61,6 +61,8 @@
  * driver will be automatically configured as GOLDEN_VALUE_METHOD */
 #define COMPUTE_INIT_METHOD  /*Allow to compute init data on phone during
 								production */
+#define SKIP_PRODUCTION_TEST /* Allow to skip Production test*/
+
 #ifndef COMPUTE_INIT_METHOD
 		#define PRE_SAVED_METHOD /* Pre-Saved Method used
 					  * during production */
