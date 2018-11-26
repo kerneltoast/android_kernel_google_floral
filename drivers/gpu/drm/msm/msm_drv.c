@@ -900,23 +900,10 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 		priv->fbdev = msm_fbdev_init(ddev);
 #endif
 
-	ret = msm_debugfs_late_init(ddev);
-	if (ret)
-		goto fail;
-
-	priv->debug_root = debugfs_create_dir("debug",
-					ddev->primary->debugfs_root);
-	if (IS_ERR_OR_NULL(priv->debug_root)) {
-		pr_err("debugfs_root create_dir fail, error %ld\n",
-		       PTR_ERR(priv->debug_root));
-		priv->debug_root = NULL;
-		goto fail;
-	}
-
-	ret = sde_dbg_debugfs_register(priv->debug_root);
-	if (ret) {
-		dev_err(dev, "failed to reg sde dbg debugfs: %d\n", ret);
-		goto fail;
+	if (!msm_debugfs_late_init(ddev)) {
+		priv->debug_root = debugfs_create_dir("debug",
+						ddev->primary->debugfs_root);
+		sde_dbg_debugfs_register(priv->debug_root);
 	}
 
 	/* perform subdriver post initialization */
