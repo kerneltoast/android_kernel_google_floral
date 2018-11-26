@@ -5553,12 +5553,9 @@ err:
 
 static int __init _qcrypto_init(void)
 {
-	int rc;
 	struct crypto_priv *pcp = &qcrypto_dev;
 
-	rc = _qcrypto_debug_init();
-	if (rc)
-		return rc;
+	_qcrypto_debug_init();
 	INIT_LIST_HEAD(&pcp->alg_list);
 	INIT_LIST_HEAD(&pcp->engine_list);
 	init_llist_head(&pcp->ordered_resp_list);
