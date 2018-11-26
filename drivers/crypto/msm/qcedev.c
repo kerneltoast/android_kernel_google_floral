@@ -2323,11 +2323,7 @@ err:
 
 static int qcedev_init(void)
 {
-	int rc;
-
-	rc = _qcedev_debug_init();
-	if (rc)
-		return rc;
+	_qcedev_debug_init();
 	return platform_driver_register(&qcedev_plat_driver);
 }
 
