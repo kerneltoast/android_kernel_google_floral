@@ -2030,6 +2030,45 @@ END:
 	return index;
 }
 
+static ssize_t fts_autotune_store(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+	int ret = 0;
+	bool val = false;
+
+	if ((kstrtobool(buf, &val) < 0) || !val) {
+		ret = -EINVAL;
+		goto err_args;
+	}
+
+	fts_set_bus_ref(info, FTS_BUS_REF_SYSFS, true);
+
+	ret = production_test_main(info->board->limits_name, 1,
+				   SPECIAL_FULL_PANEL_INIT, &tests,
+				   MP_FLAG_BOOT);
+
+	cleanUp(true);
+
+	info->autotune_stat = ret;
+
+	fts_set_bus_ref(info, FTS_BUS_REF_SYSFS, false);
+
+err_args:
+
+	return ret < 0 ? ret : count;
+}
+
+static ssize_t fts_autotune_show(struct device *dev,
+				 struct device_attribute *attr,
+				 char *buf)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "{ %08X }\n", info->autotune_stat);
+}
+
 static DEVICE_ATTR(fwupdate, 0664, fts_fwupdate_show,
 		   fts_fwupdate_store);
 static DEVICE_ATTR(appid, 0444, fts_appid_show, NULL);
@@ -2077,6 +2116,7 @@ static DEVICE_ATTR(gesture_mask, 0664,
 static DEVICE_ATTR(gesture_coordinates, 0664,
 		   fts_gesture_coordinates_show, NULL);
 #endif
+static DEVICE_ATTR(autotune, 0664, fts_autotune_show, fts_autotune_store);
 
 /*  /sys/devices/soc.0/f9928000.i2c/i2c-6/6-0049 */
 static struct attribute *fts_attr_group[] = {
@@ -2112,6 +2152,7 @@ static struct attribute *fts_attr_group[] = {
 	&dev_attr_gesture_mask.attr,
 	&dev_attr_gesture_coordinates.attr,
 #endif
+	&dev_attr_autotune.attr,
 	NULL,
 };
 
