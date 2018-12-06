@@ -4925,6 +4925,8 @@ static inline void wma_update_target_services(struct wmi_unified *wmi_handle,
 		cfg->twt_requestor = true;
 	if (wmi_service_enabled(wmi_handle, wmi_service_twt_responder))
 		cfg->twt_responder = true;
+	if (wmi_service_enabled(wmi_handle, wmi_service_vdev_latency_config))
+		g_fw_wlan_feat_caps |= (1 << VDEV_LATENCY_CONFIG);
 }
 
 /**
