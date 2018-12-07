@@ -42,6 +42,7 @@
 
 #define SWR_INVALID_PARAM 0xFF
 
+#define SWRM_INTERRUPT_STATUS_MASK 0x1FDFD
 /* pm runtime auto suspend timer in msecs */
 static int auto_suspend_timer = SWR_AUTO_SUSPEND_DELAY * 1000;
 module_param(auto_suspend_timer, int, 0664);
@@ -68,7 +69,7 @@ enum {
 #define FALSE 0
 
 #define SWRM_MAX_PORT_REG    120
-#define SWRM_MAX_INIT_REG    10
+#define SWRM_MAX_INIT_REG    11
 
 #define SWR_MSTR_MAX_REG_ADDR	0x1740
 #define SWR_MSTR_START_REG_ADDR	0x00
@@ -1191,6 +1192,7 @@ static int swrm_disconnect_port(struct swr_master *master,
 		if (!port_req) {
 			dev_err(&master->dev, "%s:port not enabled : port %d\n",
 					 __func__, portinfo->port_id[i]);
+			mutex_unlock(&swrm->mlock);
 			return -EINVAL;
 		}
 		port_req->req_ch &= ~portinfo->ch_en[i];
@@ -1264,7 +1266,8 @@ static irqreturn_t swr_mstr_interrupt(int irq, void *dev)
 	mutex_unlock(&swrm->reslock);
 
 	intr_sts = swr_master_read(swrm, SWRM_INTERRUPT_STATUS);
-	intr_sts &= SWRM_INTERRUPT_STATUS_RMSK;
+	intr_sts &= SWRM_INTERRUPT_STATUS_MASK;
+handle_irq:
 	for (i = 0; i < SWRM_INTERRUPT_MAX; i++) {
 		value = intr_sts & (1 << i);
 		if (!value)
@@ -1386,6 +1389,15 @@ static irqreturn_t swr_mstr_interrupt(int irq, void *dev)
 	}
 	swr_master_write(swrm, SWRM_INTERRUPT_CLEAR, intr_sts);
 	swr_master_write(swrm, SWRM_INTERRUPT_CLEAR, 0x0);
+
+	intr_sts = swr_master_read(swrm, SWRM_INTERRUPT_STATUS);
+	intr_sts &= SWRM_INTERRUPT_STATUS_MASK;
+
+	if (intr_sts) {
+		dev_dbg(swrm->dev, "%s: new interrupt received\n", __func__);
+		goto handle_irq;
+	}
+
 	mutex_lock(&swrm->reslock);
 	swrm_clk_request(swrm, false);
 	mutex_unlock(&swrm->reslock);
@@ -1526,9 +1538,12 @@ static int swrm_master_init(struct swr_mstr_ctrl *swrm)
 	reg[len] = SWRM_MCP_BUS_CTRL_ADDR;
 	value[len++] = 0x2;
 
-	/* Set IRQ to LEVEL */
+	/* Set IRQ to PULSE */
 	reg[len] = SWRM_COMP_CFG_ADDR;
-	value[len++] = 0x01;
+	value[len++] = 0x02;
+
+	reg[len] = SWRM_COMP_CFG_ADDR;
+	value[len++] = 0x03;
 
 	reg[len] = SWRM_INTERRUPT_CLEAR;
 	value[len++] = 0xFFFFFFFF;
@@ -1538,7 +1553,7 @@ static int swrm_master_init(struct swr_mstr_ctrl *swrm)
 	value[len++] = 0x1FFFD;
 
 	reg[len] = SWR_MSTR_RX_SWRM_CPU_INTERRUPT_EN;
-	value[len++] = 0x1FDFD;
+	value[len++] = SWRM_INTERRUPT_STATUS_MASK;
 
 	swr_master_bulk_write(swrm, reg, value, len);
 
@@ -1787,7 +1802,7 @@ static int swrm_probe(struct platform_device *pdev)
 
 		ret = request_threaded_irq(swrm->irq, NULL,
 					   swr_mstr_interrupt,
-					   IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
+					   IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 					   "swr_master_irq", swrm);
 		if (ret) {
 			dev_err(swrm->dev, "%s: Failed to request irq %d\n",
@@ -2108,29 +2123,20 @@ int swrm_wcd_notify(struct platform_device *pdev, u32 id, void *data)
 	case SWR_DEVICE_UP:
 		dev_dbg(swrm->dev, "%s: swr master up called\n", __func__);
 		mutex_lock(&swrm->mlock);
+		pm_runtime_mark_last_busy(&pdev->dev);
+		pm_runtime_get_sync(&pdev->dev);
 		mutex_lock(&swrm->reslock);
-		if (swrm->state == SWR_MSTR_UP) {
-			dev_dbg(swrm->dev, "%s: SWR master is already UP: %d\n",
-				__func__, swrm->state);
-			list_for_each_entry(swr_dev, &mstr->devices, dev_list)
-				swr_reset_device(swr_dev);
-		} else {
-			pm_runtime_mark_last_busy(&pdev->dev);
-			mutex_unlock(&swrm->reslock);
-			pm_runtime_get_sync(&pdev->dev);
-			mutex_lock(&swrm->reslock);
-			list_for_each_entry(swr_dev, &mstr->devices, dev_list) {
-				ret = swr_reset_device(swr_dev);
-				if (ret) {
-					dev_err(swrm->dev,
-						"%s: failed to reset swr device %d\n",
-						__func__, swr_dev->dev_num);
-					swrm_clk_request(swrm, false);
-				}
+		list_for_each_entry(swr_dev, &mstr->devices, dev_list) {
+			ret = swr_reset_device(swr_dev);
+			if (ret) {
+				dev_err(swrm->dev,
+					"%s: failed to reset swr device %d\n",
+					__func__, swr_dev->dev_num);
+				swrm_clk_request(swrm, false);
 			}
-			pm_runtime_mark_last_busy(&pdev->dev);
-			pm_runtime_put_autosuspend(&pdev->dev);
 		}
+		pm_runtime_mark_last_busy(&pdev->dev);
+		pm_runtime_put_autosuspend(&pdev->dev);
 		mutex_unlock(&swrm->reslock);
 		mutex_unlock(&swrm->mlock);
 		break;

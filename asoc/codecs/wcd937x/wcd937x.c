@@ -166,7 +166,7 @@ static int wcd937x_parse_port_mapping(struct device *dev,
 			char *prop, u8 path)
 {
 	u32 *dt_array, map_size, map_length;
-	u32 port_num, ch_mask, ch_rate, old_port_num = 0;
+	u32 port_num = 0, ch_mask, ch_rate, old_port_num = 0;
 	u32 slave_port_type, master_port_type;
 	u32 i, ch_iter = 0;
 	int ret = 0;
@@ -188,7 +188,8 @@ static int wcd937x_parse_port_mapping(struct device *dev,
 	if (!of_find_property(dev->of_node, prop,
 				&map_size)) {
 		dev_err(dev, "missing port mapping prop %s\n", prop);
-		goto err_pdata_fail;
+		ret = -EINVAL;
+		goto err;
 	}
 
 	map_length = map_size / (NUM_SWRS_DT_PARAMS * sizeof(u32));
@@ -197,13 +198,14 @@ static int wcd937x_parse_port_mapping(struct device *dev,
 
 	if (!dt_array) {
 		ret = -ENOMEM;
-		goto err_pdata_fail;
+		goto err;
 	}
 	ret = of_property_read_u32_array(dev->of_node, prop, dt_array,
 				NUM_SWRS_DT_PARAMS * map_length);
 	if (ret) {
 		dev_err(dev, "%s: Failed to read  port mapping from prop %s\n",
 					__func__, prop);
+		ret = -EINVAL;
 		goto err_pdata_fail;
 	}
 
@@ -230,7 +232,8 @@ static int wcd937x_parse_port_mapping(struct device *dev,
 
 err_pdata_fail:
 	kfree(dt_array);
-	return -EINVAL;
+err:
+	return ret;
 }
 
 static int wcd937x_tx_connect_port(struct snd_soc_codec *codec,
@@ -2324,6 +2327,7 @@ static int wcd937x_bind(struct device *dev)
 	}
 	wcd937x->tx_swr_dev->slave_irq = wcd937x->virq;
 
+	mutex_init(&wcd937x->micb_lock);
 	ret = snd_soc_register_codec(dev, &soc_codec_dev_wcd937x,
 				     NULL, 0);
 	if (ret) {
@@ -2347,6 +2351,7 @@ static void wcd937x_unbind(struct device *dev)
 	wcd_irq_exit(&wcd937x->irq_info, wcd937x->virq);
 	snd_soc_unregister_codec(dev);
 	component_unbind_all(dev, wcd937x);
+	mutex_destroy(&wcd937x->micb_lock);
 }
 
 static const struct of_device_id wcd937x_dt_match[] = {
