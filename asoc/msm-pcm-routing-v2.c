@@ -794,7 +794,7 @@ static struct msm_pcm_stream_app_type_cfg
 
 static int last_be_id_configured[MSM_FRONTEND_DAI_MAX][MAX_SESSION_TYPES];
 
-/* The caller of this should aqcuire routing lock */
+/* The caller of this should acquire routing lock */
 void msm_pcm_routing_get_bedai_info(int be_idx,
 				    struct msm_pcm_routing_bdai_data *be_dai)
 {
@@ -803,7 +803,7 @@ void msm_pcm_routing_get_bedai_info(int be_idx,
 		       sizeof(struct msm_pcm_routing_bdai_data));
 }
 
-/* The caller of this should aqcuire routing lock */
+/* The caller of this should acquire routing lock */
 void msm_pcm_routing_get_fedai_info(int fe_idx, int sess_type,
 				    struct msm_pcm_routing_fdai_data *fe_dai)
 {
@@ -1932,6 +1932,12 @@ static void msm_pcm_routing_process_audio(u16 reg, u16 val, int set)
 				if (test_bit(idx, &copp))
 					break;
 
+			if (idx >= MAX_COPPS_PER_PORT) {
+				pr_debug("%s: copp idx is invalid, exiting\n",
+								__func__);
+				mutex_unlock(&routing_lock);
+				return;
+			}
 			port_id = msm_bedais[reg].port_id;
 			topology = adm_get_topology_for_port_copp_idx(port_id,
 								      idx);
@@ -3935,6 +3941,14 @@ static int msm_routing_ec_ref_rx_put(struct snd_kcontrol *kcontrol,
 		msm_route_ec_ref_rx = 34;
 		ec_ref_port_id = AFE_PORT_ID_TX_CODEC_DMA_TX_0;
 		break;
+	case 35:
+		msm_route_ec_ref_rx = 35;
+		ec_ref_port_id = AFE_PORT_ID_TERTIARY_TDM_RX_2;
+		break;
+	case 36:
+		msm_route_ec_ref_rx = 36;
+		ec_ref_port_id = AFE_PORT_ID_SECONDARY_TDM_TX;
+		break;
 	default:
 		msm_route_ec_ref_rx = 0; /* NONE */
 		pr_err("%s EC ref rx %ld not valid\n",
@@ -3961,7 +3975,7 @@ static const char *const ec_ref_rx[] = { "None", "SLIM_RX", "I2S_RX",
 	"WSA_CDC_DMA_RX_0", "WSA_CDC_DMA_RX_1",
 	"WSA_CDC_DMA_TX_0", "WSA_CDC_DMA_TX_1", "WSA_CDC_DMA_TX_2",
 	"SLIM_7_RX", "RX_CDC_DMA_RX_0", "RX_CDC_DMA_RX_1", "RX_CDC_DMA_RX_2",
-	"RX_CDC_DMA_RX_3", "TX_CDC_DMA_TX_0",
+	"RX_CDC_DMA_RX_3", "TX_CDC_DMA_TX_0", "TERT_TDM_RX_2", "SEC_TDM_TX_0",
 };
 
 static const struct soc_enum msm_route_ec_ref_rx_enum[] = {
@@ -21556,6 +21570,8 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"AUDIO_REF_EC_UL1 MUX", "QUAT_TDM_RX_1", "QUAT_TDM_RX_1"},
 	{"AUDIO_REF_EC_UL1 MUX", "QUAT_TDM_RX_2", "QUAT_TDM_RX_2"},
 	{"AUDIO_REF_EC_UL1 MUX", "TERT_TDM_TX_0", "TERT_TDM_TX_0"},
+	{"AUDIO_REF_EC_UL1 MUX", "TERT_TDM_RX_2", "TERT_TDM_RX_2"},
+	{"AUDIO_REF_EC_UL1 MUX", "SEC_TDM_TX_0", "SEC_TDM_TX_0"},
 
 	{"AUDIO_REF_EC_UL2 MUX", "PRI_MI2S_TX", "PRI_MI2S_TX"},
 	{"AUDIO_REF_EC_UL2 MUX", "SEC_MI2S_TX", "SEC_MI2S_TX"},
@@ -21602,6 +21618,8 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"AUDIO_REF_EC_UL10 MUX", "QUAT_TDM_RX_1", "QUAT_TDM_RX_1"},
 	{"AUDIO_REF_EC_UL10 MUX", "QUAT_TDM_RX_2", "QUAT_TDM_RX_2"},
 	{"AUDIO_REF_EC_UL10 MUX", "TERT_TDM_TX_0", "TERT_TDM_TX_0"},
+	{"AUDIO_REF_EC_UL10 MUX", "TERT_TDM_RX_2", "TERT_TDM_RX_2"},
+	{"AUDIO_REF_EC_UL10 MUX", "SEC_TDM_TX_0", "SEC_TDM_TX_0"},
 
 	{"AUDIO_REF_EC_UL16 MUX", "PRI_MI2S_TX", "PRI_MI2S_TX"},
 	{"AUDIO_REF_EC_UL16 MUX", "SEC_MI2S_TX", "SEC_MI2S_TX"},
@@ -22898,6 +22916,12 @@ static int msm_pcm_routing_close(struct snd_pcm_substream *substream)
 			for (idx = 0; idx < MAX_COPPS_PER_PORT; idx++)
 				if (test_bit(idx, &copp))
 					break;
+
+			if (idx >= MAX_COPPS_PER_PORT) {
+				pr_debug("%s: copp idx is invalid, exiting\n",
+								__func__);
+				continue;
+			}
 			fdai->be_srate = bedai->sample_rate;
 			port_id = bedai->port_id;
 			topology = adm_get_topology_for_port_copp_idx(port_id,
