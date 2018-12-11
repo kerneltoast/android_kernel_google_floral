@@ -701,8 +701,9 @@ int flash_erase_page_by_page(ErasePage keep_cx)
 int start_flash_dma(void)
 {
 	int status;
-	u8 cmd[6] = { FLASH_CMD_WRITE_REGISTER, 0x20, 0x00, 0x00,
-		      FLASH_DMA_CODE0,		FLASH_DMA_CODE1 };
+	u8 cmd[12] = { FLASH_CMD_WRITE_REGISTER, 0x20, 0x00, 0x00,
+		      0x6B, 0x00, 0x40, 0x42, 0x0F, 0x00, 0x00,
+			FLASH_DMA_CODE1 };
 
 	/* write the command to erase the flash */
 
