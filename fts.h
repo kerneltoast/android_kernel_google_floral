@@ -39,7 +39,7 @@
 #include "fts_lib/ftsHardware.h"
 
 #ifdef CONFIG_TOUCHSCREEN_TBN
-#include "../touch_bus_negotiator.h"
+#include <linux/input/touch_bus_negotiator.h>
 #endif
 
 
