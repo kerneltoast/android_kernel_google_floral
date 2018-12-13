@@ -92,6 +92,22 @@ QDF_STATUS wmi_unified_vdev_delete_send(void *wmi_hdl,
 	return QDF_STATUS_E_FAILURE;
 }
 
+QDF_STATUS
+wmi_unified_vdev_nss_chain_params_send(void *wmi_hdl,
+				       uint8_t vdev_id,
+				       struct mlme_nss_chains *user_cfg)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->send_vdev_nss_chain_params_cmd)
+		return wmi_handle->ops->send_vdev_nss_chain_params_cmd(
+							wmi_handle,
+							vdev_id,
+							user_cfg);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
 /**
  * wmi_unified_vdev_stop_send() - send vdev stop command to fw
  * @wmi: wmi handle
@@ -222,6 +238,29 @@ QDF_STATUS wmi_unified_peer_delete_send(void *wmi_hdl,
 	if (wmi_handle->ops->send_peer_delete_cmd)
 		return wmi_handle->ops->send_peer_delete_cmd(wmi_handle,
 				  peer_addr, vdev_id);
+
+	return QDF_STATUS_E_FAILURE;
+}
+
+/**
+ * wmi_unified_peer_unmap_conf_send() - send PEER unmap conf command to fw
+ * @wmi: wmi handle
+ * @vdev_id: vdev id
+ * @peer_id_cnt: number of peer id
+ * @peer_id_list: list of peer ids
+ *
+ * Return: QDF_STATUS_SUCCESS on success and QDF_STATUS_E_FAILURE for failure
+ */
+QDF_STATUS wmi_unified_peer_unmap_conf_send(void *wmi_hdl,
+					    uint8_t vdev_id,
+					    uint32_t peer_id_cnt,
+					    uint16_t *peer_id_list)
+{
+	wmi_unified_t wmi_handle = (wmi_unified_t)wmi_hdl;
+
+	if (wmi_handle->ops->send_peer_unmap_conf_cmd)
+		return wmi_handle->ops->send_peer_unmap_conf_cmd(wmi_handle,
+				  vdev_id, peer_id_cnt, peer_id_list);
 
 	return QDF_STATUS_E_FAILURE;
 }

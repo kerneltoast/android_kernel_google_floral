@@ -30,6 +30,7 @@
 #include <wmi_unified.h>
 #endif
 #include "qdf_atomic.h"
+#include <wbuff.h>
 
 #ifdef CONVERGED_P2P_ENABLE
 #include <wlan_p2p_public_struct.h>
@@ -55,14 +56,35 @@
 
 #ifdef WMI_INTERFACE_EVENT_LOGGING
 
+#ifndef WMI_EVENT_DEBUG_MAX_ENTRY
 #define WMI_EVENT_DEBUG_MAX_ENTRY (1024)
+#endif
 #define WMI_EVENT_DEBUG_ENTRY_MAX_LENGTH (16)
 /* wmi_mgmt commands */
+#ifndef WMI_MGMT_EVENT_DEBUG_MAX_ENTRY
 #define WMI_MGMT_EVENT_DEBUG_MAX_ENTRY (256)
+#endif
 /* wmi diag rx events max buffer */
 #ifndef WMI_DIAG_RX_EVENT_DEBUG_MAX_ENTRY
 #define WMI_DIAG_RX_EVENT_DEBUG_MAX_ENTRY (256)
 #endif
+
+#define wmi_alert(params...) QDF_TRACE_FATAL(QDF_MODULE_ID_WMI, ## params)
+#define wmi_err(params...) QDF_TRACE_ERROR(QDF_MODULE_ID_WMI, ## params)
+#define wmi_warn(params...) QDF_TRACE_WARN(QDF_MODULE_ID_WMI, ## params)
+#define wmi_info(params...) QDF_TRACE_INFO(QDF_MODULE_ID_WMI, ## params)
+#define wmi_debug(params...) QDF_TRACE_DEBUG(QDF_MODULE_ID_WMI, ## params)
+
+#define wmi_nofl_alert(params...) \
+	QDF_TRACE_FATAL_NO_FL(QDF_MODULE_ID_WMI, ## params)
+#define wmi_nofl_err(params...) \
+	QDF_TRACE_ERROR_NO_FL(QDF_MODULE_ID_WMI, ## params)
+#define wmi_nofl_warn(params...) \
+	QDF_TRACE_WARN_NO_FL(QDF_MODULE_ID_WMI, ## params)
+#define wmi_nofl_info(params...) \
+	QDF_TRACE_INFO_NO_FL(QDF_MODULE_ID_WMI, ## params)
+#define wmi_nofl_debug(params...) \
+	QDF_TRACE_DEBUG_NO_FL(QDF_MODULE_ID_WMI, ## params)
 
 #define wmi_alert_rl(params...) QDF_TRACE_FATAL_RL(QDF_MODULE_ID_WMI, params)
 #define wmi_err_rl(params...) QDF_TRACE_ERROR_RL(QDF_MODULE_ID_WMI, params)
@@ -206,6 +228,10 @@ QDF_STATUS (*send_vdev_create_cmd)(wmi_unified_t wmi_handle,
 QDF_STATUS (*send_vdev_delete_cmd)(wmi_unified_t wmi_handle,
 					  uint8_t if_id);
 
+QDF_STATUS (*send_vdev_nss_chain_params_cmd)(wmi_unified_t wmi_handle,
+					 uint8_t vdev_id,
+					 struct mlme_nss_chains *user_cfg);
+
 QDF_STATUS (*send_vdev_stop_cmd)(wmi_unified_t wmi,
 					uint8_t vdev_id);
 
@@ -228,6 +254,11 @@ QDF_STATUS (*send_peer_flush_tids_cmd)(wmi_unified_t wmi,
 QDF_STATUS (*send_peer_delete_cmd)(wmi_unified_t wmi,
 				    uint8_t peer_addr[IEEE80211_ADDR_LEN],
 				    uint8_t vdev_id);
+
+QDF_STATUS (*send_peer_unmap_conf_cmd)(wmi_unified_t wmi,
+				       uint8_t vdev_id,
+				       uint32_t peer_id_cnt,
+				       uint16_t *peer_id_list);
 
 QDF_STATUS (*send_peer_param_cmd)(wmi_unified_t wmi,
 				uint8_t peer_addr[IEEE80211_ADDR_LEN],
@@ -1712,6 +1743,7 @@ struct wmi_host_abi_version {
 struct wmi_unified {
 	void *scn_handle;    /* handle to device */
 	osdev_t  osdev; /* handle to use OS-independent services */
+	struct wbuff_mod_handle *wbuff_handle; /* handle to wbuff */
 	qdf_atomic_t pending_cmds;
 	HTC_ENDPOINT_ID wmi_endpoint_id;
 	uint16_t max_msg_len;

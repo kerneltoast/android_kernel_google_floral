@@ -149,6 +149,33 @@ static inline void copy_vdev_create_pdev_id(
 #endif
 
 /**
+ * wmi_mtrace() - Wrappper function for qdf_mtrace api
+ * @message_id: 32-Bit Wmi message ID
+ * @vdev_id: Vdev ID
+ * @data: Actual message contents
+ *
+ * This function converts the 32-bit WMI message ID in 15-bit message ID
+ * format for qdf_mtrace as in qdf_mtrace message there are only 15
+ * bits reserved for message ID.
+ * out of these 15-bits, 8-bits (From MSB) specifies the WMI_GRP_ID
+ * and remaining 7-bits specifies the actual WMI command. With this
+ * notation there can be maximum 256 groups and each group can have
+ * max 128 commands can be supported.
+ *
+ * Return: None
+ */
+static void wmi_mtrace(uint32_t message_id, uint16_t vdev_id, uint32_t data)
+{
+	uint16_t mtrace_message_id;
+
+	mtrace_message_id = QDF_WMI_MTRACE_CMD_ID(message_id) |
+		(QDF_WMI_MTRACE_GRP_ID(message_id) <<
+						QDF_WMI_MTRACE_CMD_NUM_BITS);
+	qdf_mtrace(QDF_MODULE_ID_WMI, QDF_MODULE_ID_TARGET,
+		   mtrace_message_id, vdev_id, data);
+}
+
+/**
  * send_vdev_create_cmd_tlv() - send VDEV create command to fw
  * @wmi_handle: wmi handle
  * @param: pointer to hold vdev create parameter
@@ -212,6 +239,7 @@ static QDF_STATUS send_vdev_create_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(&txrx_streams->tlv_header,
 		       WMITLV_TAG_STRUC_wmi_vdev_txrx_streams,
 		       WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_txrx_streams));
+	wmi_mtrace(WMI_VDEV_CREATE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len, WMI_VDEV_CREATE_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		WMI_LOGE("Failed to send WMI_VDEV_CREATE_CMDID");
@@ -247,6 +275,7 @@ static QDF_STATUS send_vdev_delete_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_vdev_delete_cmd_fixed_param));
 	cmd->vdev_id = if_id;
+	wmi_mtrace(WMI_VDEV_DELETE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf,
 				   sizeof(wmi_vdev_delete_cmd_fixed_param),
 				   WMI_VDEV_DELETE_CMDID);
@@ -255,6 +284,64 @@ static QDF_STATUS send_vdev_delete_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_buf_free(buf);
 	}
 	WMI_LOGD("%s:vdev id = %d", __func__, if_id);
+
+	return ret;
+}
+
+/**
+ * send_vdev_nss_chain_params_cmd_tlv() - send VDEV nss chain params to fw
+ * @wmi_handle: wmi handle
+ * @vdev_id: vdev id
+ * @nss_chains_user_cfg: user configured nss chain params
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS
+send_vdev_nss_chain_params_cmd_tlv(wmi_unified_t wmi_handle,
+				   uint8_t vdev_id,
+				   struct mlme_nss_chains *user_cfg)
+{
+	wmi_vdev_chainmask_config_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	QDF_STATUS ret;
+
+	buf = wmi_buf_alloc(wmi_handle, sizeof(*cmd));
+	if (!buf) {
+		WMI_LOGP("%s:wmi_buf_alloc failed", __func__);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	cmd = (wmi_vdev_chainmask_config_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		     WMITLV_TAG_STRUC_wmi_vdev_chainmask_config_cmd_fixed_param,
+		     WMITLV_GET_STRUCT_TLVLEN
+			       (wmi_vdev_chainmask_config_cmd_fixed_param));
+	cmd->vdev_id = vdev_id;
+	cmd->disable_rx_mrc_2g = user_cfg->disable_rx_mrc[NSS_CHAINS_BAND_2GHZ];
+	cmd->disable_tx_mrc_2g = user_cfg->disable_tx_mrc[NSS_CHAINS_BAND_2GHZ];
+	cmd->disable_rx_mrc_5g = user_cfg->disable_rx_mrc[NSS_CHAINS_BAND_5GHZ];
+	cmd->disable_tx_mrc_5g = user_cfg->disable_tx_mrc[NSS_CHAINS_BAND_5GHZ];
+	cmd->num_rx_chains_2g = user_cfg->num_rx_chains[NSS_CHAINS_BAND_2GHZ];
+	cmd->num_tx_chains_2g = user_cfg->num_tx_chains[NSS_CHAINS_BAND_2GHZ];
+	cmd->num_rx_chains_5g = user_cfg->num_rx_chains[NSS_CHAINS_BAND_5GHZ];
+	cmd->num_tx_chains_5g = user_cfg->num_tx_chains[NSS_CHAINS_BAND_5GHZ];
+	cmd->rx_nss_2g = user_cfg->rx_nss[NSS_CHAINS_BAND_2GHZ];
+	cmd->tx_nss_2g = user_cfg->tx_nss[NSS_CHAINS_BAND_2GHZ];
+	cmd->rx_nss_5g = user_cfg->rx_nss[NSS_CHAINS_BAND_5GHZ];
+	cmd->tx_nss_5g = user_cfg->tx_nss[NSS_CHAINS_BAND_5GHZ];
+	cmd->num_tx_chains_a = user_cfg->num_tx_chains_11a;
+	cmd->num_tx_chains_b = user_cfg->num_tx_chains_11b;
+	cmd->num_tx_chains_g = user_cfg->num_tx_chains_11g;
+
+	wmi_mtrace(WMI_VDEV_CHAINMASK_CONFIG_CMDID, cmd->vdev_id, 0);
+	ret = wmi_unified_cmd_send(wmi_handle, buf,
+			sizeof(wmi_vdev_chainmask_config_cmd_fixed_param),
+			WMI_VDEV_CHAINMASK_CONFIG_CMDID);
+	if (QDF_IS_STATUS_ERROR(ret)) {
+		WMI_LOGE("Failed to send WMI_VDEV_CHAINMASK_CONFIG_CMDID");
+		wmi_buf_free(buf);
+	}
+	WMI_LOGD("%s: vdev_id %d", __func__, vdev_id);
 
 	return ret;
 }
@@ -283,6 +370,7 @@ static QDF_STATUS send_vdev_stop_cmd_tlv(wmi_unified_t wmi,
 		       WMITLV_TAG_STRUC_wmi_vdev_stop_cmd_fixed_param,
 		       WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_stop_cmd_fixed_param));
 	cmd->vdev_id = vdev_id;
+	wmi_mtrace(WMI_VDEV_STOP_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_VDEV_STOP_CMDID)) {
 		WMI_LOGP("%s: Failed to send vdev stop command", __func__);
 		wmi_buf_free(buf);
@@ -316,6 +404,7 @@ static QDF_STATUS send_vdev_down_cmd_tlv(wmi_unified_t wmi, uint8_t vdev_id)
 		       WMITLV_TAG_STRUC_wmi_vdev_down_cmd_fixed_param,
 		       WMITLV_GET_STRUCT_TLVLEN(wmi_vdev_down_cmd_fixed_param));
 	cmd->vdev_id = vdev_id;
+	wmi_mtrace(WMI_VDEV_DOWN_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_VDEV_DOWN_CMDID)) {
 		WMI_LOGP("%s: Failed to send vdev down", __func__);
 		wmi_buf_free(buf);
@@ -486,13 +575,16 @@ static QDF_STATUS send_vdev_start_cmd_tlv(wmi_unified_t wmi_handle,
 		req->regdomain, req->he_ops,
 		req->dis_hw_ack);
 
-	if (req->is_restart)
+	if (req->is_restart) {
+		wmi_mtrace(WMI_VDEV_RESTART_REQUEST_CMDID, cmd->vdev_id, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 					   WMI_VDEV_RESTART_REQUEST_CMDID);
-	else
+	} else {
+		wmi_mtrace(WMI_VDEV_START_REQUEST_CMDID, cmd->vdev_id, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 					   WMI_VDEV_START_REQUEST_CMDID);
-	 if (ret) {
+	}
+	if (ret) {
 		WMI_LOGP("%s: Failed to send vdev start command", __func__);
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
@@ -562,6 +654,7 @@ static QDF_STATUS send_hidden_ssid_vdev_restart_cmd_tlv(wmi_unified_t wmi_handle
 		       cmd->num_noa_descriptors *
 		       sizeof(wmi_p2p_noa_descriptor));
 
+	wmi_mtrace(WMI_VDEV_RESTART_REQUEST_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_VDEV_RESTART_REQUEST_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -604,6 +697,7 @@ static QDF_STATUS send_peer_flush_tids_cmd_tlv(wmi_unified_t wmi,
 	WMI_LOGD("%s: peer_addr %pM vdev_id %d and peer bitmap %d", __func__,
 				peer_addr, param->vdev_id,
 				param->peer_tid_bitmap);
+	wmi_mtrace(WMI_PEER_FLUSH_TIDS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_PEER_FLUSH_TIDS_CMDID)) {
 		WMI_LOGP("%s: Failed to send flush tid command", __func__);
 		wmi_buf_free(buf);
@@ -611,6 +705,76 @@ static QDF_STATUS send_peer_flush_tids_cmd_tlv(wmi_unified_t wmi,
 	}
 
 	return 0;
+}
+
+/**
+ * send_peer_unmap_conf_cmd_tlv() - send PEER UNMAP conf command to fw
+ * @wmi: wmi handle
+ * @vdev_id: vdev id
+ * @peer_id_cnt: no. of peer ids
+ * @peer_id_list: list of peer ids
+ *
+ * Return: QDF_STATUS_SUCCESS for success or error code
+ */
+static QDF_STATUS send_peer_unmap_conf_cmd_tlv(wmi_unified_t wmi,
+					       uint8_t vdev_id,
+					       uint32_t peer_id_cnt,
+					       uint16_t *peer_id_list)
+{
+	int i;
+	wmi_buf_t buf;
+	uint8_t *buf_ptr;
+	A_UINT32 *peer_ids;
+	wmi_peer_unmap_response_cmd_fixed_param *cmd;
+	uint32_t peer_id_list_len;
+	uint32_t len = sizeof(*cmd);
+
+	if (!peer_id_cnt || !peer_id_list)
+		return QDF_STATUS_E_FAILURE;
+
+	len += WMI_TLV_HDR_SIZE;
+
+	peer_id_list_len = peer_id_cnt * sizeof(A_UINT32);
+
+	len += peer_id_list_len;
+
+	buf = wmi_buf_alloc(wmi, len);
+
+	if (!buf) {
+		WMI_LOGP("%s: wmi_buf_alloc failed", __func__);
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	cmd = (wmi_peer_unmap_response_cmd_fixed_param *)wmi_buf_data(buf);
+	buf_ptr = (uint8_t *)wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(&cmd->tlv_header,
+		       WMITLV_TAG_STRUC_wmi_peer_unmap_response_cmd_fixed_param,
+		       WMITLV_GET_STRUCT_TLVLEN
+			       (wmi_peer_unmap_response_cmd_fixed_param));
+
+	buf_ptr += sizeof(wmi_peer_unmap_response_cmd_fixed_param);
+
+	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32,
+		       peer_id_list_len);
+
+	peer_ids = (A_UINT32 *)(buf_ptr + WMI_TLV_HDR_SIZE);
+
+	for (i = 0; i < peer_id_cnt; i++)
+		peer_ids[i] = peer_id_list[i];
+
+	WMI_LOGD("%s: vdev_id %d peer_id_cnt %d", __func__,
+		 vdev_id, peer_id_cnt);
+	wmi_mtrace(WMI_PEER_UNMAP_RESPONSE_CMDID, vdev_id, 0);
+	if (wmi_unified_cmd_send(wmi, buf, len,
+				 WMI_PEER_UNMAP_RESPONSE_CMDID)) {
+		WMI_LOGP("%s: Failed to send peer delete conf command",
+			 __func__);
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
 }
 
 /**
@@ -642,6 +806,7 @@ static QDF_STATUS send_peer_delete_cmd_tlv(wmi_unified_t wmi,
 	cmd->vdev_id = vdev_id;
 
 	WMI_LOGD("%s: peer_addr %pM vdev_id %d", __func__, peer_addr, vdev_id);
+	wmi_mtrace(WMI_PEER_DELETE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_PEER_DELETE_CMDID)) {
 		WMI_LOGP("%s: Failed to send peer delete command", __func__);
 		wmi_buf_free(buf);
@@ -794,6 +959,7 @@ static QDF_STATUS send_peer_param_cmd_tlv(wmi_unified_t wmi,
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(peer_addr, &cmd->peer_macaddr);
 	cmd->param_id = param_id;
 	cmd->param_value = param->param_value;
+	wmi_mtrace(WMI_PEER_SET_PARAM_CMDID, cmd->vdev_id, 0);
 	err = wmi_unified_cmd_send(wmi, buf,
 				   sizeof(wmi_peer_set_param_cmd_fixed_param),
 				   WMI_PEER_SET_PARAM_CMDID);
@@ -837,6 +1003,7 @@ static QDF_STATUS send_vdev_up_cmd_tlv(wmi_unified_t wmi,
 	cmd->vdev_id = params->vdev_id;
 	cmd->vdev_assoc_id = params->assoc_id;
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(bssid, &cmd->vdev_bssid);
+	wmi_mtrace(WMI_VDEV_UP_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_VDEV_UP_CMDID)) {
 		WMI_LOGP("%s: Failed to send vdev up command", __func__);
 		wmi_buf_free(buf);
@@ -876,6 +1043,7 @@ static QDF_STATUS send_peer_create_cmd_tlv(wmi_unified_t wmi,
 	cmd->peer_type = param->peer_type;
 	cmd->vdev_id = param->vdev_id;
 
+	wmi_mtrace(WMI_PEER_CREATE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_PEER_CREATE_CMDID)) {
 		WMI_LOGP("%s: failed to send WMI_PEER_CREATE_CMDID", __func__);
 		wmi_buf_free(buf);
@@ -920,11 +1088,12 @@ QDF_STATUS send_peer_rx_reorder_queue_setup_cmd_tlv(wmi_unified_t wmi,
 	cmd->queue_ptr_hi = param->hw_qdesc_paddr_hi;
 	cmd->queue_no = param->queue_no;
 
+	wmi_mtrace(WMI_PEER_REORDER_QUEUE_SETUP_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len,
 			WMI_PEER_REORDER_QUEUE_SETUP_CMDID)) {
 		WMI_LOGP("%s: fail to send WMI_PEER_REORDER_QUEUE_SETUP_CMDID",
 			__func__);
-		qdf_nbuf_free(buf);
+		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
 	WMI_LOGD("%s: peer_macaddr %pM vdev_id %d, tid %d\n", __func__,
@@ -964,11 +1133,12 @@ QDF_STATUS send_peer_rx_reorder_queue_remove_cmd_tlv(wmi_unified_t wmi,
 	cmd->vdev_id = param->vdev_id;
 	cmd->tid_mask = param->peer_tid_bitmap;
 
+	wmi_mtrace(WMI_PEER_REORDER_QUEUE_REMOVE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len,
 			WMI_PEER_REORDER_QUEUE_REMOVE_CMDID)) {
 		WMI_LOGP("%s: fail to send WMI_PEER_REORDER_QUEUE_REMOVE_CMDID",
 			__func__);
-		qdf_nbuf_free(buf);
+		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
 	WMI_LOGD("%s: peer_macaddr %pM vdev_id %d, tid_map %d", __func__,
@@ -1006,6 +1176,7 @@ static QDF_STATUS send_peer_add_wds_entry_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->flags = (param->flags & WMI_HOST_WDS_FLAG_STATIC) ? WMI_WDS_FLAG_STATIC : 0;
 	cmd->vdev_id = param->vdev_id;
 
+	wmi_mtrace(WMI_PEER_ADD_WDS_ENTRY_CMDID, cmd->vdev_id, 0);
 	return wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PEER_ADD_WDS_ENTRY_CMDID);
 }
@@ -1036,6 +1207,7 @@ static QDF_STATUS send_peer_del_wds_entry_cmd_tlv(wmi_unified_t wmi_handle,
 				(wmi_peer_remove_wds_entry_cmd_fixed_param));
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(param->dest_addr, &cmd->wds_macaddr);
 	cmd->vdev_id = param->vdev_id;
+	wmi_mtrace(WMI_PEER_REMOVE_WDS_ENTRY_CMDID, cmd->vdev_id, 0);
 	return wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PEER_REMOVE_WDS_ENTRY_CMDID);
 }
@@ -1074,6 +1246,7 @@ static QDF_STATUS send_peer_update_wds_entry_cmd_tlv(wmi_unified_t wmi_handle,
 	if (param->peer_macaddr)
 		WMI_CHAR_ARRAY_TO_MAC_ADDR(param->peer_macaddr,
 				&cmd->peer_macaddr);
+	wmi_mtrace(WMI_PEER_UPDATE_WDS_ENTRY_CMDID, cmd->vdev_id, 0);
 	return wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PEER_UPDATE_WDS_ENTRY_CMDID);
 }
@@ -1105,6 +1278,7 @@ send_pdev_get_tpc_config_cmd_tlv(wmi_unified_t wmi_handle,
 		(wmi_pdev_get_tpc_config_cmd_fixed_param));
 
 	cmd->param = param;
+	wmi_mtrace(WMI_PDEV_GET_TPC_CONFIG_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PDEV_GET_TPC_CONFIG_CMDID)) {
 		WMI_LOGE("Send pdev get tpc config cmd failed");
@@ -1149,6 +1323,7 @@ static QDF_STATUS send_green_ap_ps_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(pdev_id);
 	cmd->enable = value;
 
+	wmi_mtrace(WMI_PDEV_GREEN_AP_PS_ENABLE_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PDEV_GREEN_AP_PS_ENABLE_CMDID)) {
 		WMI_LOGE("Set Green AP PS param Failed val %d", value);
@@ -1231,6 +1406,7 @@ send_pdev_utf_cmd_tlv(wmi_unified_t wmi_handle,
 		memcpy(cmd, &segHdrInfo, sizeof(segHdrInfo));   /* 4 bytes */
 		memcpy(&cmd[sizeof(segHdrInfo)], bufpos, chunk_len);
 
+		wmi_mtrace(WMI_PDEV_UTF_CMDID, NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf,
 					   (chunk_len + sizeof(segHdrInfo) +
 					    WMI_TLV_HDR_SIZE),
@@ -1307,6 +1483,7 @@ send_pdev_param_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->param_value = param->param_value;
 	WMI_LOGD("Setting pdev param = %x, value = %u", param->param_id,
 				param->param_value);
+	wmi_mtrace(WMI_PDEV_SET_PARAM_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_PDEV_SET_PARAM_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -1354,6 +1531,7 @@ static QDF_STATUS send_suspend_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(mac_id);
 
+	wmi_mtrace(WMI_PDEV_SUSPEND_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, wmibuf, len,
 				 WMI_PDEV_SUSPEND_CMDID);
 	if (ret) {
@@ -1387,6 +1565,7 @@ static QDF_STATUS send_resume_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_pdev_resume_cmd_fixed_param));
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(mac_id);
+	wmi_mtrace(WMI_PDEV_RESUME_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, wmibuf, sizeof(*cmd),
 				   WMI_PDEV_RESUME_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -1428,6 +1607,7 @@ static QDF_STATUS send_d0wow_enable_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd->enable = true;
 
+	wmi_mtrace(WMI_D0_WOW_ENABLE_DISABLE_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_D0_WOW_ENABLE_DISABLE_CMDID);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -1466,6 +1646,7 @@ static QDF_STATUS send_d0wow_disable_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd->enable = false;
 
+	wmi_mtrace(WMI_D0_WOW_ENABLE_DISABLE_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_D0_WOW_ENABLE_DISABLE_CMDID);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -1515,6 +1696,7 @@ static QDF_STATUS send_wow_enable_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd->pause_iface_config == WOW_IFACE_PAUSE_ENABLED ?
 		"WOW_IFACE_PAUSE_ENABLED" : "WOW_IFACE_PAUSE_DISABLED");
 
+	wmi_mtrace(WMI_WOW_ENABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_WOW_ENABLE_CMDID);
 	if (ret)
@@ -1553,6 +1735,7 @@ static QDF_STATUS send_set_ap_ps_param_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(peer_addr, &cmd->peer_macaddr);
 	cmd->param = param->param;
 	cmd->value = param->value;
+	wmi_mtrace(WMI_AP_PS_PEER_PARAM_CMDID, cmd->vdev_id, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 				   sizeof(*cmd), WMI_AP_PS_PEER_PARAM_CMDID);
 	if (err) {
@@ -1594,6 +1777,7 @@ static QDF_STATUS send_set_sta_ps_param_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->param = param->param;
 	cmd->value = param->value;
 
+	wmi_mtrace(WMI_STA_POWERSAVE_PARAM_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_STA_POWERSAVE_PARAM_CMDID)) {
 		WMI_LOGE("Set Sta Ps param Failed vdevId %d Param %d val %d",
@@ -1634,6 +1818,7 @@ static QDF_STATUS send_crash_inject_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->type = param->type;
 	cmd->delay_time_ms = param->delay_time_ms;
 
+	wmi_mtrace(WMI_FORCE_FW_HANG_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 		WMI_FORCE_FW_HANG_CMDID);
 	if (ret) {
@@ -1699,6 +1884,7 @@ send_dbglog_cmd_tlv(wmi_unified_t wmi_handle,
 		}
 	}
 
+	wmi_mtrace(WMI_DBGLOG_CFG_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_DBGLOG_CFG_CMDID);
 
@@ -1765,6 +1951,7 @@ static QDF_STATUS send_vdev_set_param_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->param_value = param->param_value;
 	WMI_LOGD("Setting vdev %d param = %x, value = %u",
 		 cmd->vdev_id, cmd->param_id, cmd->param_value);
+	wmi_mtrace(WMI_VDEV_SET_PARAM_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_VDEV_SET_PARAM_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -1812,6 +1999,7 @@ static QDF_STATUS send_stats_request_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("STATS REQ STATS_ID:%d VDEV_ID:%d PDEV_ID:%d-->",
 				cmd->stats_id, cmd->vdev_id, cmd->pdev_id);
 
+	wmi_mtrace(WMI_REQUEST_STATS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 					 WMI_REQUEST_STATS_CMDID);
 
@@ -1853,6 +2041,7 @@ static QDF_STATUS send_packet_log_enable_cmd_tlv(wmi_unified_t wmi_handle,
 			       (wmi_pdev_pktlog_enable_cmd_fixed_param));
 	cmd->evlist = PKTLOG_EVENT;
 	cmd->pdev_id = mac_id;
+	wmi_mtrace(WMI_PDEV_PKTLOG_ENABLE_CMDID, cmd->pdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 					 WMI_PDEV_PKTLOG_ENABLE_CMDID);
 	if (ret) {
@@ -1890,6 +2079,7 @@ static QDF_STATUS send_packet_log_disable_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_pdev_pktlog_disable_cmd_fixed_param));
 	cmd->pdev_id = mac_id;
+	wmi_mtrace(WMI_PDEV_PKTLOG_DISABLE_CMDID, cmd->pdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 					 WMI_PDEV_PKTLOG_DISABLE_CMDID);
 	if (ret) {
@@ -1974,6 +2164,7 @@ static void send_time_stamp_sync_cmd_tlv(wmi_unified_t wmi_handle)
 		time_stamp->mode, time_stamp->time_stamp_low,
 		time_stamp->time_stamp_high);
 
+	wmi_mtrace(WMI_DBGLOG_TIME_STAMP_SYNC_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_DBGLOG_TIME_STAMP_SYNC_CMDID);
 	if (status) {
@@ -2041,6 +2232,7 @@ send_vdev_fils_enable_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGI("Setting FD period to %d vdev id : %d\n",
 		 param->fd_period, param->vdev_id);
 
+	wmi_mtrace(WMI_ENABLE_FILS_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_ENABLE_FILS_CMDID);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -2083,6 +2275,7 @@ send_fils_discovery_send_cmd_tlv(wmi_unified_t wmi_handle,
 	qdf_dmaaddr_to_32s(dma_addr, &cmd->frag_ptr_lo, &cmd->frag_ptr_hi);
 	cmd->frame_ctrl = param->frame_ctrl;
 
+	wmi_mtrace(WMI_PDEV_SEND_FD_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, wmi_buf, sizeof(*cmd),
 				   WMI_PDEV_SEND_FD_CMDID);
 	if (ret != QDF_STATUS_SUCCESS) {
@@ -2132,6 +2325,7 @@ static QDF_STATUS send_beacon_send_cmd_tlv(wmi_unified_t wmi_handle,
 #endif
 	cmd->bcn_antenna = param->bcn_txant;
 
+	wmi_mtrace(WMI_PDEV_SEND_BCN_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 			wmi_buf, sizeof(*cmd), WMI_PDEV_SEND_BCN_CMDID);
 	if (ret != QDF_STATUS_SUCCESS) {
@@ -2191,6 +2385,7 @@ static QDF_STATUS send_beacon_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += WMI_TLV_HDR_SIZE;
 	qdf_mem_copy(buf_ptr, param->frm, param->tmpl_len);
 
+	wmi_mtrace(WMI_BCN_TMPL_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				   wmi_buf, wmi_buf_len, WMI_BCN_TMPL_CMDID);
 	if (ret) {
@@ -2458,6 +2653,7 @@ static QDF_STATUS send_peer_assoc_cmd_tlv(wmi_unified_t wmi_handle,
 		 cmd->peer_he_cap_phy[1], cmd->peer_he_cap_phy[2],
 		 cmd->peer_bw_rxnss_override);
 
+	wmi_mtrace(WMI_PEER_ASSOC_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_PEER_ASSOC_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -2809,6 +3005,7 @@ static QDF_STATUS send_scan_start_cmd_tlv(wmi_unified_t wmi_handle,
 		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_BYTE, 0);
 	}
 
+	wmi_mtrace(WMI_START_SCAN_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, wmi_buf,
 				   len, WMI_START_SCAN_CMDID);
 	if (ret) {
@@ -2870,6 +3067,7 @@ static QDF_STATUS send_scan_stop_cmd_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 	}
 
+	wmi_mtrace(WMI_STOP_SCAN_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, wmi_buf,
 				   len, WMI_STOP_SCAN_CMDID);
 	if (ret) {
@@ -2948,6 +3146,7 @@ static QDF_STATUS send_scan_chan_list_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 							chan_list->pdev_id);
 
+	wmi_mtrace(WMI_SCAN_CHAN_LIST_CMDID, NO_SESSION, 0);
 	qdf_status = wmi_unified_cmd_send(wmi_handle,
 			buf, len, WMI_SCAN_CHAN_LIST_CMDID);
 
@@ -3054,6 +3253,7 @@ static QDF_STATUS send_scan_chan_list_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 							chan_list->pdev_id);
 
+	wmi_mtrace(WMI_SCAN_CHAN_LIST_CMDID, cmd->pdev_id, 0);
 	qdf_status = wmi_unified_cmd_send(
 			wmi_handle,
 			buf, len, WMI_SCAN_CHAN_LIST_CMDID);
@@ -3186,6 +3386,7 @@ static QDF_STATUS send_mgmt_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd_len += sizeof(wmi_tx_send_params);
 	}
 
+	wmi_mtrace(WMI_MGMT_TX_SEND_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, cmd_len,
 				      WMI_MGMT_TX_SEND_CMDID)) {
 		WMI_LOGE("%s: Failed to send mgmt Tx", __func__);
@@ -3271,6 +3472,7 @@ static QDF_STATUS send_offchan_data_tx_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd_len += sizeof(wmi_tx_send_params);
 	}
 
+	wmi_mtrace(WMI_OFFCHAN_DATA_TX_SEND_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, cmd_len,
 				WMI_OFFCHAN_DATA_TX_SEND_CMDID)) {
 		WMI_LOGE("%s: Failed to offchan data Tx", __func__);
@@ -3312,6 +3514,7 @@ static QDF_STATUS send_modem_power_state_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->modem_power_state = param_value;
 	WMI_LOGD("%s: Setting cmd->modem_power_state = %u", __func__,
 		 param_value);
+	wmi_mtrace(WMI_MODEM_POWER_STATE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				     WMI_MODEM_POWER_STATE_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -3355,6 +3558,7 @@ static QDF_STATUS send_set_sta_ps_mode_cmd_tlv(wmi_unified_t wmi_handle,
 	else
 		cmd->sta_ps_mode = WMI_STA_PS_MODE_DISABLED;
 
+	wmi_mtrace(WMI_STA_POWERSAVE_MODE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_STA_POWERSAVE_MODE_CMDID)) {
 		WMI_LOGE("Set Sta Mode Ps Failed vdevId %d val %d",
@@ -3419,6 +3623,7 @@ static QDF_STATUS send_set_mimops_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD("Setting vdev %d value = %u", vdev_id, value);
 
+	wmi_mtrace(WMI_STA_SMPS_FORCE_MODE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_STA_SMPS_FORCE_MODE_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -3464,6 +3669,7 @@ static QDF_STATUS send_set_smps_params_cmd_tlv(wmi_unified_t wmi_handle, uint8_t
 	WMI_LOGD("Setting vdev %d value = %x param %x", vdev_id, cmd->value,
 		 cmd->param);
 
+	wmi_mtrace(WMI_STA_SMPS_PARAM_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_STA_SMPS_PARAM_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -3529,6 +3735,7 @@ static QDF_STATUS send_set_p2pgo_noa_req_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGI("SET P2P GO NOA:vdev_id:%d count:%d duration:%d interval:%d",
 		 cmd->vdev_id, noa->count, noa_discriptor->duration,
 		 noa->interval);
+	wmi_mtrace(WMI_FWTEST_P2P_SET_NOA_PARAM_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_FWTEST_P2P_SET_NOA_PARAM_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -3576,6 +3783,7 @@ static QDF_STATUS send_set_p2pgo_oppps_req_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_UNIFIED_OPPPS_ATTR_CTWIN_SET(cmd, oppps->ctwindow);
 	WMI_LOGI("SET P2P GO OPPPS:vdev_id:%d ctwindow:%d",
 		 cmd->vdev_id, oppps->ctwindow);
+	wmi_mtrace(WMI_P2P_SET_OPPPS_PARAM_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 				      WMI_P2P_SET_OPPPS_PARAM_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -3665,6 +3873,7 @@ static QDF_STATUS send_p2p_lo_start_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("%s: Sending WMI_P2P_LO_START command, channel=%d, period=%d, interval=%d, count=%d", __func__,
 	cmd->channel, cmd->period, cmd->interval, cmd->count);
 
+	wmi_mtrace(WMI_P2P_LISTEN_OFFLOAD_START_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle,
 				buf, len,
 				WMI_P2P_LISTEN_OFFLOAD_START_CMDID);
@@ -3715,6 +3924,7 @@ static QDF_STATUS send_p2p_lo_stop_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD("%s: Sending WMI_P2P_LO_STOP command", __func__);
 
+	wmi_mtrace(WMI_P2P_LISTEN_OFFLOAD_STOP_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle,
 				buf, len,
 				WMI_P2P_LISTEN_OFFLOAD_STOP_CMDID);
@@ -3763,6 +3973,7 @@ static QDF_STATUS send_get_temperature_cmd_tlv(wmi_unified_t wmi_handle)
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_pdev_get_temperature_cmd_fixed_param));
 
+	wmi_mtrace(WMI_PDEV_GET_TEMPERATURE_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_PDEV_GET_TEMPERATURE_CMDID)) {
 		WMI_LOGE(FL("failed to send get temperature command"));
@@ -3845,6 +4056,7 @@ static QDF_STATUS send_set_sta_uapsd_auto_trig_cmd_tlv(wmi_unified_t wmi_handle,
 		uapsd_param++;
 	}
 
+	wmi_mtrace(WMI_STA_UAPSD_AUTO_TRIG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, cmd_len,
 				   WMI_STA_UAPSD_AUTO_TRIG_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -3892,6 +4104,7 @@ static QDF_STATUS send_ocb_set_utc_time_cmd_tlv(wmi_unified_t wmi_handle,
 	for (i = 0; i < SIZE_UTC_TIME_ERROR; i++)
 		WMI_TIME_ERROR_SET(cmd, i, utc->time_error[i]);
 
+	wmi_mtrace(WMI_OCB_SET_UTC_TIME_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_OCB_SET_UTC_TIME_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -3955,6 +4168,7 @@ static QDF_STATUS send_ocb_start_timing_advert_cmd_tlv(wmi_unified_t wmi_handle,
 		     (uint8_t *)timing_advert->template_value,
 		     timing_advert->template_length);
 
+	wmi_mtrace(WMI_OCB_START_TIMING_ADVERT_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_OCB_START_TIMING_ADVERT_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -3998,6 +4212,7 @@ static QDF_STATUS send_ocb_stop_timing_advert_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->vdev_id = timing_advert->vdev_id;
 	cmd->channel_freq = timing_advert->chan_freq;
 
+	wmi_mtrace(WMI_OCB_STOP_TIMING_ADVERT_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_OCB_STOP_TIMING_ADVERT_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -4041,6 +4256,7 @@ static QDF_STATUS send_ocb_get_tsf_timer_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->vdev_id = vdev_id;
 
 	/* Send the WMI command */
+	wmi_mtrace(WMI_OCB_GET_TSF_TIMER_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_OCB_GET_TSF_TIMER_CMDID);
 	/* If there is an error, set the completion event */
@@ -4115,6 +4331,7 @@ static QDF_STATUS send_dcc_get_stats_cmd_tlv(wmi_unified_t wmi_handle,
 			    wmi_dcc_channel_stats_request));
 
 	/* Send the WMI command */
+	wmi_mtrace(WMI_DCC_GET_STATS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_DCC_GET_STATS_CMDID);
 
@@ -4166,6 +4383,7 @@ static QDF_STATUS send_dcc_clear_stats_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->dcc_stats_bitmap = dcc_stats_bitmap;
 
 	/* Send the WMI command */
+	wmi_mtrace(WMI_DCC_CLEAR_STATS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_DCC_CLEAR_STATS_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -4270,6 +4488,7 @@ static QDF_STATUS send_dcc_update_ndl_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += update_ndl_param->dcc_ndl_active_state_list_len;
 
 	/* Send the WMI command */
+	wmi_mtrace(WMI_DCC_UPDATE_NDL_CMDID, cmd->vdev_id, 0);
 	qdf_status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_DCC_UPDATE_NDL_CMDID);
 	/* If there is an error, set the completion event */
@@ -4478,6 +4697,7 @@ static QDF_STATUS send_ocb_set_config_cmd_tlv(wmi_unified_t wmi_handle,
 	}
 
 
+	wmi_mtrace(WMI_OCB_SET_CONFIG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_OCB_SET_CONFIG_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -4639,6 +4859,7 @@ static QDF_STATUS send_set_enable_disable_mcc_adaptive_scheduler_cmd_tlv(
 	cmd->enable = mcc_adaptive_scheduler;
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(pdev_id);
 
+	wmi_mtrace(WMI_RESMGR_ADAPTIVE_OCS_ENABLE_DISABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_RESMGR_ADAPTIVE_OCS_ENABLE_DISABLE_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -4713,6 +4934,7 @@ static QDF_STATUS send_set_mcc_channel_time_latency_cmd_tlv(wmi_unified_t wmi_ha
 	chan_latency.chan_mhz = chan1_freq;
 	chan_latency.latency = latency_chan1;
 	qdf_mem_copy(buf_ptr, &chan_latency, sizeof(chan_latency));
+	wmi_mtrace(WMI_RESMGR_SET_CHAN_LATENCY_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_RESMGR_SET_CHAN_LATENCY_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -4799,6 +5021,7 @@ static QDF_STATUS send_set_mcc_channel_time_quota_cmd_tlv(wmi_unified_t wmi_hand
 	chan_quota.channel_time_quota = quota_chan2;
 	qdf_mem_copy(buf_ptr, &chan_quota, sizeof(chan_quota));
 
+	wmi_mtrace(WMI_RESMGR_SET_CHAN_TIME_QUOTA_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_RESMGR_SET_CHAN_TIME_QUOTA_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -4850,6 +5073,7 @@ static QDF_STATUS send_set_thermal_mgmt_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGE("TM Sending thermal mgmt cmd: low temp %d, upper temp %d, enabled %d",
 		cmd->lower_thresh_degreeC, cmd->upper_thresh_degreeC, cmd->enable);
 
+	wmi_mtrace(WMI_THERMAL_MGMT_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_THERMAL_MGMT_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -4934,6 +5158,7 @@ static QDF_STATUS send_lro_config_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("WMI_LRO_CONFIG: lro_enable %d, tcp_flag 0x%x",
 		cmd->lro_enable, cmd->tcp_flag_u32);
 
+	wmi_mtrace(WMI_LRO_CONFIG_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 		 sizeof(*cmd), WMI_LRO_CONFIG_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -4999,6 +5224,7 @@ static QDF_STATUS send_peer_rate_report_cmd_tlv(wmi_unified_t wmi_handle,
 		 cmd->enable_rate_report,
 		 cmd->report_backoff_time, cmd->report_timer_period);
 
+	wmi_mtrace(WMI_PEER_SET_RATE_REPORT_CONDITION_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PEER_SET_RATE_REPORT_CONDITION_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -5040,6 +5266,7 @@ static QDF_STATUS send_bcn_buf_ll_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->frag_ptr = param->frag_ptr;
 	cmd->dtim_flag = param->dtim_flag;
 
+	wmi_mtrace(WMI_PDEV_SEND_BCN_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, wmi_buf, sizeof(*cmd),
 				      WMI_PDEV_SEND_BCN_CMDID);
 
@@ -5091,6 +5318,7 @@ static QDF_STATUS send_set_sta_sa_query_param_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD(FL("STA sa query: vdev_id:%d interval:%u retry count:%d"),
 		 vdev_id, retry_interval, max_retries);
 
+	wmi_mtrace(WMI_PMF_OFFLOAD_SET_SA_QUERY_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PMF_OFFLOAD_SET_SA_QUERY_CMDID)) {
 		WMI_LOGE(FL("Failed to offload STA SA Query"));
@@ -5168,6 +5396,7 @@ static QDF_STATUS send_set_sta_keep_alive_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd->method = WMI_STA_KEEPALIVE_METHOD_NULL_FRAME;
 	}
 
+	wmi_mtrace(WMI_STA_KEEPALIVE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_STA_KEEPALIVE_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -5224,6 +5453,7 @@ static QDF_STATUS send_vdev_set_gtx_cfg_cmd_tlv(wmi_unified_t wmi_handle, uint32
 		 cmd->userGtxMask, cmd->gtxPERThreshold, cmd->gtxPERMargin,
 		 cmd->gtxTPCstep, cmd->gtxTPCMin, cmd->gtxBWMask);
 
+	wmi_mtrace(WMI_VDEV_SET_GTX_PARAMS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				    WMI_VDEV_SET_GTX_PARAMS_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -5288,6 +5518,7 @@ static QDF_STATUS send_process_update_edca_param_cmd_tlv(wmi_unified_t wmi_handl
 		wmm_param->no_ack = twmm_param->noackpolicy;
 	}
 
+	wmi_mtrace(WMI_VDEV_SET_WMM_PARAMS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_SET_WMM_PARAMS_CMDID))
 		goto fail;
@@ -5362,6 +5593,7 @@ static QDF_STATUS send_probe_rsp_tmpl_send_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += WMI_TLV_HDR_SIZE;
 	qdf_mem_copy(buf_ptr, probe_rsp_info->prb_rsp_template_frm, tmpl_len);
 
+	wmi_mtrace(WMI_PRB_TMPL_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				   wmi_buf, wmi_buf_len, WMI_PRB_TMPL_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -5468,6 +5700,7 @@ static QDF_STATUS send_setup_install_key_cmd_tlv(wmi_unified_t wmi_handle,
 			 sizeof(wmi_key_seq_counter));
 	cmd->key_len = key_params->key_len;
 
+	wmi_mtrace(WMI_VDEV_INSTALL_KEY_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 					      WMI_VDEV_INSTALL_KEY_CMDID);
 	if (QDF_IS_STATUS_ERROR(status))
@@ -5546,6 +5779,7 @@ static QDF_STATUS send_sar_limit_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_sar_rows_list++;
 	}
 send_sar_limits:
+	wmi_mtrace(WMI_SAR_LIMITS_CMDID, NO_SESSION, 0);
 	qdf_status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_SAR_LIMITS_CMDID);
 
@@ -5583,6 +5817,7 @@ static QDF_STATUS get_sar_limit_cmd_tlv(wmi_unified_t wmi_handle)
 
 	cmd->reserved = 0;
 
+	wmi_mtrace(WMI_SAR_GET_LIMITS_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				      WMI_SAR_GET_LIMITS_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -5604,6 +5839,7 @@ static QDF_STATUS get_sar_limit_cmd_tlv(wmi_unified_t wmi_handle)
  * Return: string conversion of sar 2 result, if match found;
  *	   "Unknown response" otherwise.
  */
+#ifdef WLAN_DEBUG
 static const char *wmi_sar2_result_string(uint32_t result)
 {
 	switch (result) {
@@ -5616,6 +5852,7 @@ static const char *wmi_sar2_result_string(uint32_t result)
 		return "Unknown response";
 	}
 }
+#endif
 
 /**
  * extract_sar2_result_event_tlv() -  process sar response event from FW.
@@ -5696,14 +5933,18 @@ static QDF_STATUS extract_sar_limit_event_tlv(wmi_unified_t wmi_handle,
 	}
 
 	row_in = param_buf->sar_get_limits;
-	row_out = &event->sar_limit_row[0];
-	for (row = 0; row < event->num_limit_rows; row++) {
-		row_out->band_id = row_in->band_id;
-		row_out->chain_id = row_in->chain_id;
-		row_out->mod_id = row_in->mod_id;
-		row_out->limit_value = row_in->limit_value;
-		row_out++;
-		row_in++;
+	if (!row_in) {
+		WMI_LOGD("sar_get_limits is NULL");
+	} else {
+		row_out = &event->sar_limit_row[0];
+		for (row = 0; row < event->num_limit_rows; row++) {
+			row_out->band_id = row_in->band_id;
+			row_out->chain_id = row_in->chain_id;
+			row_out->mod_id = row_in->mod_id;
+			row_out->limit_value = row_in->limit_value;
+			row_out++;
+			row_in++;
+		}
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -5781,6 +6022,7 @@ QDF_STATUS send_encrypt_decrypt_send_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->pn[1] = encrypt_decrypt_params->pn[4];
 	cmd->pn[0] = encrypt_decrypt_params->pn[5];
 
+	wmi_mtrace(WMI_VDEV_ENCRYPT_DECRYPT_DATA_REQ_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				   wmi_buf, len,
 				   WMI_VDEV_ENCRYPT_DECRYPT_DATA_REQ_CMDID);
@@ -5898,6 +6140,7 @@ static QDF_STATUS send_p2p_go_set_beacon_ie_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD("%s: Sending WMI_P2P_GO_SET_BEACON_IE", __func__);
 
+	wmi_mtrace(WMI_P2P_GO_SET_BEACON_IE, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				   wmi_buf, wmi_buf_len,
 				   WMI_P2P_GO_SET_BEACON_IE);
@@ -5957,6 +6200,7 @@ static QDF_STATUS send_set_gateway_params_cmd_tlv(wmi_unified_t wmi_handle,
 	if (req->ipv6_addr_type)
 		WMI_SET_ROAM_SUBNET_CHANGE_FLAG_IP6_ENABLED(cmd->flag);
 
+	wmi_mtrace(WMI_ROAM_SUBNET_CHANGE_CONFIG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_ROAM_SUBNET_CHANGE_CONFIG_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -6015,6 +6259,7 @@ static QDF_STATUS send_set_rssi_monitoring_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd->hi_rssi_breach_threshold[0] = 0;
 	}
 
+	wmi_mtrace(WMI_RSSI_BREACH_MONITOR_CONFIG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_RSSI_BREACH_MONITOR_CONFIG_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -6092,6 +6337,7 @@ static QDF_STATUS send_scan_probe_setoui_cmd_tlv(wmi_unified_t wmi_handle,
 		buf_ptr += cmd->num_vendor_oui * sizeof(wmi_vendor_oui);
 	}
 
+	wmi_mtrace(WMI_SCAN_PROB_REQ_OUI_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_SCAN_PROB_REQ_OUI_CMDID)) {
 		WMI_LOGE("%s: failed to send command", __func__);
@@ -6535,6 +6781,7 @@ static QDF_STATUS send_roam_scan_offload_mode_cmd_tlv(wmi_unified_t wmi_handle,
 #endif /* WLAN_FEATURE_ROAM_OFFLOAD */
 
 send_roam_scan_mode_cmd:
+	wmi_mtrace(WMI_ROAM_SCAN_MODE, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_SCAN_MODE);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -6590,6 +6837,7 @@ static QDF_STATUS send_roam_mawc_params_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_roam_mawc_params->rssi_stationary_high_adjust,
 		wmi_roam_mawc_params->rssi_stationary_low_adjust);
 
+	wmi_mtrace(WMI_ROAM_CONFIGURE_MAWC_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_CONFIGURE_MAWC_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -6733,6 +6981,7 @@ static QDF_STATUS send_roam_scan_offload_rssi_thresh_cmd_tlv(wmi_unified_t wmi_h
 			WMITLV_GET_STRUCT_TLVLEN
 			(wmi_roam_bg_scan_roaming_param));
 
+	wmi_mtrace(WMI_ROAM_SCAN_RSSI_THRESHOLD, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_SCAN_RSSI_THRESHOLD);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -6796,6 +7045,7 @@ QDF_STATUS send_adapt_dwelltime_params_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->adapative_lpf_weight = dwelltime_params->lpf_weight;
 	cmd->passive_monitor_interval_ms = dwelltime_params->passive_mon_intval;
 	cmd->wifi_activity_threshold_pct = dwelltime_params->wifi_act_threshold;
+	wmi_mtrace(WMI_SCAN_ADAPTIVE_DWELL_CONFIG_CMDID, NO_SESSION, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 			len, WMI_SCAN_ADAPTIVE_DWELL_CONFIG_CMDID);
 	if (err) {
@@ -6862,6 +7112,7 @@ static QDF_STATUS send_dbs_scan_sel_params_cmd_tlv(wmi_unified_t wmi_handle,
 		buf_ptr = buf_ptr + (uint8_t) sizeof(*cmd);
 	}
 
+	wmi_mtrace(WMI_SET_SCAN_DBS_DUTY_CYCLE_CMDID, NO_SESSION, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 				   len, WMI_SET_SCAN_DBS_DUTY_CYCLE_CMDID);
 	if (QDF_IS_STATUS_ERROR(err)) {
@@ -7039,6 +7290,7 @@ static QDF_STATUS send_roam_scan_filter_cmd_tlv(wmi_unified_t wmi_handle,
 			(sizeof(wmi_roam_rssi_rejection_oce_config_param));
 	}
 
+	wmi_mtrace(WMI_ROAM_FILTER_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 		len, WMI_ROAM_FILTER_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -7090,6 +7342,7 @@ static QDF_STATUS send_roam_scan_send_hlp_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD(FL("send FILS HLP pkt vdev %d len %d"),
 			hlp_params->vdev_id, hlp_params->size);
+	wmi_mtrace(WMI_PDEV_UPDATE_FILS_HLP_PKT_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PDEV_UPDATE_FILS_HLP_PKT_CMDID)) {
 		WMI_LOGE(FL("Failed to send FILS HLP pkt cmd"));
@@ -7138,6 +7391,7 @@ static QDF_STATUS send_ipa_offload_control_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->vdev_id = ipa_offload->vdev_id;
 	cmd->enable = ipa_offload->enable;
 
+	wmi_mtrace(WMI_IPA_OFFLOAD_ENABLE_DISABLE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 		WMI_IPA_OFFLOAD_ENABLE_DISABLE_CMDID)) {
 		WMI_LOGE("%s: failed to command", __func__);
@@ -7188,6 +7442,7 @@ static QDF_STATUS send_plm_stop_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->meas_token = plm->meas_token;
 	WMI_LOGD("vdev %d meas token %d", cmd->vdev_id, cmd->meas_token);
 
+	wmi_mtrace(WMI_VDEV_PLMREQ_STOP_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_VDEV_PLMREQ_STOP_CMDID);
 	if (ret) {
@@ -7277,6 +7532,7 @@ static QDF_STATUS send_plm_start_cmd_tlv(wmi_unified_t wmi_handle,
 		buf_ptr += cmd->num_chans * sizeof(uint32_t);
 	}
 
+	wmi_mtrace(WMI_VDEV_PLMREQ_START_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_VDEV_PLMREQ_START_CMDID);
 	if (ret) {
@@ -7339,6 +7595,7 @@ static QDF_STATUS send_pno_stop_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_i
 	buf_ptr += WMI_TLV_HDR_SIZE;
 
 
+	wmi_mtrace(WMI_NETWORK_LIST_OFFLOAD_CONFIG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_NETWORK_LIST_OFFLOAD_CONFIG_CMDID);
 	if (ret) {
@@ -7428,6 +7685,7 @@ static QDF_STATUS send_nlo_mawc_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_nlo_mawc_params->init_scan_interval,
 		wmi_nlo_mawc_params->max_scan_interval);
 
+	wmi_mtrace(WMI_NLO_CONFIGURE_MAWC_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_NLO_CONFIGURE_MAWC_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -7665,6 +7923,7 @@ static QDF_STATUS send_pno_start_cmd_tlv(wmi_unified_t wmi_handle,
 	}
 	buf_ptr += cmd->num_cnlo_band_pref * sizeof(*nlo_band_rssi);
 
+	wmi_mtrace(WMI_NETWORK_LIST_OFFLOAD_CONFIG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_NETWORK_LIST_OFFLOAD_CONFIG_CMDID);
 	if (ret) {
@@ -7758,6 +8017,7 @@ static QDF_STATUS send_set_ric_req_cmd_tlv(wmi_unified_t wmi_handle,
 	}
 	WMI_LOGI("%s: Set RIC Req is_add_ts:%d", __func__, is_add_ts);
 
+	wmi_mtrace(WMI_ROAM_SET_RIC_REQUEST_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_ROAM_SET_RIC_REQUEST_CMDID)) {
 		WMI_LOGP("%s: Failed to send vdev Set RIC Req command",
@@ -7820,6 +8080,7 @@ static QDF_STATUS send_process_ll_stats_clear_cmd_tlv(wmi_unified_t wmi_handle,
 	/* WMI_LOGD("Peer MAC Addr   : %pM",
 		 cmd->peer_macaddr); */
 
+	wmi_mtrace(WMI_CLEAR_LINK_STATS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_CLEAR_LINK_STATS_CMDID);
 	if (ret) {
@@ -7873,6 +8134,7 @@ static QDF_STATUS send_process_ll_stats_set_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("MPDU Size Thresh : %d", cmd->mpdu_size_threshold);
 	WMI_LOGD("Aggressive Gather: %d", cmd->aggressive_statistics_gathering);
 
+	wmi_mtrace(WMI_START_LINK_STATS_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_START_LINK_STATS_CMDID);
 	if (ret) {
@@ -7932,6 +8194,7 @@ static QDF_STATUS send_process_ll_stats_get_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("Vdev ID         : %d", cmd->vdev_id);
 	WMI_LOGD("Peer MAC Addr   : %pM", addr);
 
+	wmi_mtrace(WMI_REQUEST_LINK_STATS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_REQUEST_LINK_STATS_CMDID);
 	if (ret) {
@@ -7978,6 +8241,7 @@ static QDF_STATUS send_congestion_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("STATS REQ VDEV_ID:%d stats_id %d -->",
 			cmd->vdev_id, cmd->stats_id);
 
+	wmi_mtrace(WMI_REQUEST_STATS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_REQUEST_STATS_CMDID)) {
 		WMI_LOGE("%s: Failed to send WMI_REQUEST_STATS_CMDID",
@@ -8014,6 +8278,7 @@ static QDF_STATUS send_snr_request_cmd_tlv(wmi_unified_t wmi_handle)
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_request_stats_cmd_fixed_param));
 	cmd->stats_id = WMI_REQUEST_VDEV_STAT;
+	wmi_mtrace(WMI_REQUEST_STATS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send
 		    (wmi_handle, buf, len, WMI_REQUEST_STATS_CMDID)) {
 		WMI_LOGE("Failed to send host stats request to fw");
@@ -8051,6 +8316,7 @@ static QDF_STATUS send_snr_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id)
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_request_stats_cmd_fixed_param));
 	cmd->stats_id = WMI_REQUEST_VDEV_STAT;
+	wmi_mtrace(WMI_REQUEST_STATS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_REQUEST_STATS_CMDID)) {
 		WMI_LOGE("Failed to send host stats request to fw");
@@ -8088,6 +8354,7 @@ static QDF_STATUS send_link_status_req_cmd_tlv(wmi_unified_t wmi_handle,
 			       (wmi_request_stats_cmd_fixed_param));
 	cmd->stats_id = WMI_REQUEST_VDEV_RATE_STAT;
 	cmd->vdev_id = link_status->session_id;
+	wmi_mtrace(WMI_REQUEST_STATS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_REQUEST_STATS_CMDID)) {
 		WMI_LOGE("Failed to send WMI link  status request to fw");
@@ -8136,6 +8403,7 @@ static QDF_STATUS send_process_dhcp_ind_cmd_tlv(wmi_unified_t wmi_handle,
 				   &ta_dhcp_ind->peer_macaddr,
 				   sizeof(ta_dhcp_ind->peer_macaddr));
 
+	wmi_mtrace(WMI_PEER_SET_PARAM_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_PEER_SET_PARAM_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -8182,6 +8450,7 @@ static QDF_STATUS send_get_link_speed_cmd_tlv(wmi_unified_t wmi_handle,
 				   sizeof(peer_macaddr));
 
 
+	wmi_mtrace(WMI_PEER_GET_ESTIMATED_LINKSPEED_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_PEER_GET_ESTIMATED_LINKSPEED_CMDID)) {
 		WMI_LOGE("%s: failed to send link speed command", __func__);
@@ -8221,6 +8490,7 @@ static QDF_STATUS send_egap_conf_params_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->inactivity_time = egap_params->egap_inactivity_time;
 	cmd->wait_time = egap_params->egap_wait_time;
 	cmd->flags = egap_params->egap_feature_flags;
+	wmi_mtrace(WMI_AP_PS_EGAP_PARAM_CMDID, NO_SESSION, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 				   sizeof(*cmd), WMI_AP_PS_EGAP_PARAM_CMDID);
 	if (err) {
@@ -8269,6 +8539,7 @@ static QDF_STATUS send_fw_profiling_cmd_tlv(wmi_unified_t wmi_handle,
 		     WMITLV_GET_STRUCT_TLVLEN
 		    (wmi_wlan_profile_trigger_cmd_fixed_param));
 		prof_trig_cmd->enable = value1;
+		wmi_mtrace(WMI_WLAN_PROFILE_TRIGGER_CMDID, NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_WLAN_PROFILE_TRIGGER_CMDID);
 		if (ret) {
@@ -8293,6 +8564,8 @@ static QDF_STATUS send_fw_profiling_cmd_tlv(wmi_unified_t wmi_handle,
 		      WMITLV_TAG_STRUC_wmi_wlan_profile_get_prof_data_cmd_fixed_param,
 		      WMITLV_GET_STRUCT_TLVLEN
 		      (wmi_wlan_profile_get_prof_data_cmd_fixed_param));
+		wmi_mtrace(WMI_WLAN_PROFILE_GET_PROFILE_DATA_CMDID,
+			   NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_WLAN_PROFILE_GET_PROFILE_DATA_CMDID);
 		if (ret) {
@@ -8319,6 +8592,8 @@ static QDF_STATUS send_fw_profiling_cmd_tlv(wmi_unified_t wmi_handle,
 		      (wmi_wlan_profile_set_hist_intvl_cmd_fixed_param));
 		hist_intvl_cmd->profile_id = value1;
 		hist_intvl_cmd->value = value2;
+		wmi_mtrace(WMI_WLAN_PROFILE_SET_HIST_INTVL_CMDID,
+			   NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_WLAN_PROFILE_SET_HIST_INTVL_CMDID);
 		if (ret) {
@@ -8346,6 +8621,8 @@ static QDF_STATUS send_fw_profiling_cmd_tlv(wmi_unified_t wmi_handle,
 		      (wmi_wlan_profile_enable_profile_id_cmd_fixed_param));
 		profile_enable_cmd->profile_id = value1;
 		profile_enable_cmd->enable = value2;
+		wmi_mtrace(WMI_WLAN_PROFILE_ENABLE_PROFILE_ID_CMDID,
+			   NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_WLAN_PROFILE_ENABLE_PROFILE_ID_CMDID);
 		if (ret) {
@@ -8387,6 +8664,7 @@ static QDF_STATUS send_wlm_latency_level_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->ul_latency = ll[params->wlm_latency_level];
 	cmd->dl_latency = ll[params->wlm_latency_level];
 	cmd->flags = params->wlm_latency_flags;
+	wmi_mtrace(WMI_WLM_CONFIG_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_WLM_CONFIG_CMDID)) {
 		WMI_LOGE("%s: Failed to send setting latency config command",
@@ -8424,6 +8702,7 @@ static QDF_STATUS send_nat_keepalive_en_cmd_tlv(wmi_unified_t wmi_handle, uint8_
 		  (WMI_VDEV_IPSEC_NATKEEPALIVE_FILTER_CMD_fixed_param));
 	cmd->vdev_id = vdev_id;
 	cmd->action = IPSEC_NATKEEPALIVE_FILTER_ENABLE;
+	wmi_mtrace(WMI_VDEV_IPSEC_NATKEEPALIVE_FILTER_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_IPSEC_NATKEEPALIVE_FILTER_CMDID)) {
 		WMI_LOGP("%s: Failed to send NAT keepalive enable command",
@@ -8462,6 +8741,7 @@ static QDF_STATUS send_csa_offload_enable_cmd_tlv(wmi_unified_t wmi_handle,
 			       (wmi_csa_offload_enable_cmd_fixed_param));
 	cmd->vdev_id = vdev_id;
 	cmd->csa_offload_enable = WMI_CSA_OFFLOAD_ENABLE;
+	wmi_mtrace(WMI_CSA_OFFLOAD_ENABLE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_CSA_OFFLOAD_ENABLE_CMDID)) {
 		WMI_LOGP("%s: Failed to send CSA offload enable command",
@@ -8503,6 +8783,7 @@ static QDF_STATUS send_oem_dma_cfg_cmd_tlv(wmi_unified_t wmi_handle,
 	qdf_mem_copy(cmd, cfg, sizeof(*cfg));
 	WMI_LOGI(FL("Sending OEM Data Request to target, data len %lu"),
 		sizeof(*cfg));
+	wmi_mtrace(WMI_OEM_DMA_RING_CFG_REQ_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cfg),
 				WMI_OEM_DMA_RING_CFG_REQ_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -8566,6 +8847,7 @@ static QDF_STATUS send_dbr_cfg_cmd_tlv(wmi_unified_t wmi_handle,
 		  cmd->tail_idx_paddr_lo, cmd->tail_idx_paddr_hi,
 		  cmd->num_elems, cmd->buf_size, cmd->num_resp_per_event,
 		  cmd->event_timeout_ms);
+	wmi_mtrace(WMI_PDEV_DMA_RING_CFG_REQ_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PDEV_DMA_RING_CFG_REQ_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -8613,6 +8895,7 @@ static QDF_STATUS send_start_11d_scan_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD("vdev %d sending 11D scan start req", cmd->vdev_id);
 
+	wmi_mtrace(WMI_11D_SCAN_START_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_11D_SCAN_START_CMDID);
 	if (ret) {
@@ -8659,6 +8942,7 @@ static QDF_STATUS send_stop_11d_scan_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD("vdev %d sending 11D scan stop req", cmd->vdev_id);
 
+	wmi_mtrace(WMI_11D_SCAN_STOP_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_11D_SCAN_STOP_CMDID);
 	if (ret) {
@@ -8702,6 +8986,7 @@ static QDF_STATUS send_start_oem_data_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD(FL("Sending OEM Data Request to target, data len %d"),
 		 data_len);
 
+	wmi_mtrace(WMI_OEM_REQ_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf,
 				   (data_len +
 				    WMI_TLV_HDR_SIZE), WMI_OEM_REQ_CMDID);
@@ -8760,6 +9045,7 @@ send_dfs_phyerr_filter_offload_en_cmd_tlv(wmi_unified_t wmi_handle,
 		 * to the firmware to disable the phyerror
 		 * filtering offload.
 		 */
+		wmi_mtrace(WMI_DFS_PHYERR_FILTER_DIS_CMDID, NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 					   WMI_DFS_PHYERR_FILTER_DIS_CMDID);
 		if (QDF_IS_STATUS_ERROR(ret)) {
@@ -8795,6 +9081,7 @@ send_dfs_phyerr_filter_offload_en_cmd_tlv(wmi_unified_t wmi_handle,
 		 * to the firmware to enable the phyerror
 		 * filtering offload.
 		 */
+		wmi_mtrace(WMI_DFS_PHYERR_FILTER_ENA_CMDID, NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 					   WMI_DFS_PHYERR_FILTER_ENA_CMDID);
 
@@ -8886,6 +9173,7 @@ static QDF_STATUS send_wow_timer_pattern_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("%s: send wake timer pattern with time[%d] to fw vdev = %d",
 		__func__, time, vdev_id);
 
+	wmi_mtrace(WMI_WOW_ADD_WAKE_PATTERN_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_WOW_ADD_WAKE_PATTERN_CMDID);
 	if (ret) {
@@ -8940,6 +9228,7 @@ static QDF_STATUS send_pktlog_wmi_send_cmd_tlv(wmi_unified_t wmi_handle,
 					: WMI_PKTLOG_ENABLE_AUTO;
 		cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 							WMI_HOST_PDEV_ID_SOC);
+		wmi_mtrace(WMI_PDEV_PKTLOG_ENABLE_CMDID, NO_SESSION, 0);
 		if (wmi_unified_cmd_send(wmi_handle, buf, len,
 					 WMI_PDEV_PKTLOG_ENABLE_CMDID)) {
 			WMI_LOGE("failed to send pktlog enable cmdid");
@@ -8962,6 +9251,7 @@ static QDF_STATUS send_pktlog_wmi_send_cmd_tlv(wmi_unified_t wmi_handle,
 		disable_cmd->pdev_id =
 			wmi_handle->ops->convert_pdev_id_host_to_target(
 							WMI_HOST_PDEV_ID_SOC);
+		wmi_mtrace(WMI_PDEV_PKTLOG_DISABLE_CMDID, NO_SESSION, 0);
 		if (wmi_unified_cmd_send(wmi_handle, buf, len,
 					 WMI_PDEV_PKTLOG_DISABLE_CMDID)) {
 			WMI_LOGE("failed to send pktlog disable cmdid");
@@ -9019,6 +9309,7 @@ static QDF_STATUS send_wow_delete_pattern_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGI("Deleting pattern id: %d vdev id %d in fw",
 		cmd->pattern_id, vdev_id);
 
+	wmi_mtrace(WMI_WOW_DEL_WAKE_PATTERN_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_WOW_DEL_WAKE_PATTERN_CMDID);
 	if (ret) {
@@ -9063,6 +9354,7 @@ static QDF_STATUS send_host_wakeup_ind_to_fw_cmd_tlv(wmi_unified_t wmi_handle)
 	       (wmi_wow_hostwakeup_from_sleep_cmd_fixed_param));
 
 
+	wmi_mtrace(WMI_WOW_HOSTWAKEUP_FROM_SLEEP_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_WOW_HOSTWAKEUP_FROM_SLEEP_CMDID);
 	if (ret) {
@@ -9103,6 +9395,7 @@ static QDF_STATUS send_del_ts_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id,
 
 	WMI_LOGD("Delts vdev:%d, ac:%d, %s:%d",
 		 cmd->vdev_id, cmd->ac, __func__, __LINE__);
+	wmi_mtrace(WMI_VDEV_WMM_DELTS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_WMM_DELTS_CMDID)) {
 		WMI_LOGP("%s: Failed to send vdev DELTS command", __func__);
@@ -9164,6 +9457,7 @@ static QDF_STATUS send_aggr_qos_cmd_tlv(wmi_unified_t wmi_handle,
 			WMI_LOGD("%s:%d: Addts vdev:%d, ac:%d, mediumTime:%d downgrade_type:%d",
 				__func__, __LINE__, cmd->vdev_id, cmd->ac,
 				cmd->medium_time_us, cmd->downgrade_type);
+			wmi_mtrace(WMI_VDEV_WMM_ADDTS_CMDID, cmd->vdev_id, 0);
 			if (wmi_unified_cmd_send
 				    (wmi_handle, buf, len,
 				    WMI_VDEV_WMM_ADDTS_CMDID)) {
@@ -9213,6 +9507,7 @@ static QDF_STATUS send_add_ts_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("Addts vdev:%d, ac:%d, mediumTime:%d, downgrade_type:%d %s:%d",
 		 cmd->vdev_id, cmd->ac, cmd->medium_time_us,
 		 cmd->downgrade_type, __func__, __LINE__);
+	wmi_mtrace(WMI_VDEV_WMM_ADDTS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_WMM_ADDTS_CMDID)) {
 		WMI_LOGP("%s: Failed to send vdev ADDTS command", __func__);
@@ -9279,6 +9574,7 @@ static QDF_STATUS send_process_add_periodic_tx_ptrn_cmd_tlv(wmi_unified_t wmi_ha
 	WMI_LOGD("%s: Add ptrn id: %d vdev_id: %d",
 		 __func__, cmd->pattern_id, cmd->vdev_id);
 
+	wmi_mtrace(WMI_ADD_PROACTIVE_ARP_RSP_PATTERN_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_ADD_PROACTIVE_ARP_RSP_PATTERN_CMDID)) {
 		WMI_LOGE("%s: failed to add pattern set state command",
@@ -9325,6 +9621,7 @@ static QDF_STATUS send_process_del_periodic_tx_ptrn_cmd_tlv(wmi_unified_t wmi_ha
 	WMI_LOGD("%s: Del ptrn id: %d vdev_id: %d",
 		 __func__, cmd->pattern_id, cmd->vdev_id);
 
+	wmi_mtrace(WMI_DEL_PROACTIVE_ARP_RSP_PATTERN_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_DEL_PROACTIVE_ARP_RSP_PATTERN_CMDID)) {
 		WMI_LOGE("%s: failed to send del pattern command", __func__);
@@ -9377,6 +9674,7 @@ static QDF_STATUS send_stats_ext_req_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += WMI_TLV_HDR_SIZE;
 	qdf_mem_copy(buf_ptr, preq->request_data, cmd->data_len);
 
+	wmi_mtrace(WMI_REQUEST_STATS_EXT_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_REQUEST_STATS_EXT_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -9424,6 +9722,7 @@ static QDF_STATUS send_enable_ext_wow_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("%s: vdev_id %d type %d Wakeup_pin_num %x",
 		 __func__, cmd->vdev_id, cmd->type, cmd->wakeup_pin_num);
 
+	wmi_mtrace(WMI_EXTWOW_ENABLE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_EXTWOW_ENABLE_CMDID);
 	if (ret) {
@@ -9480,6 +9779,7 @@ static QDF_STATUS send_app_type1_params_in_fw_cmd_tlv(wmi_unified_t wmi_handle,
 		 __func__, cmd->vdev_id, app_type1_params->wakee_mac_addr.bytes,
 		 cmd->ident, cmd->ident_len, cmd->passwd, cmd->passwd_len);
 
+	wmi_mtrace(WMI_EXTWOW_SET_APP_TYPE1_PARAMS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_EXTWOW_SET_APP_TYPE1_PARAMS_CMDID);
 	if (ret) {
@@ -9560,6 +9860,7 @@ static QDF_STATUS send_set_app_type2_params_in_fw_cmd_tlv(wmi_unified_t wmi_hand
 		 cmd->keepalive_max, cmd->keepalive_inc,
 		 cmd->tcp_tx_timeout_val, cmd->tcp_rx_timeout_val);
 
+	wmi_mtrace(WMI_EXTWOW_SET_APP_TYPE2_PARAMS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_EXTWOW_SET_APP_TYPE2_PARAMS_CMDID);
 	if (ret) {
@@ -9607,6 +9908,7 @@ static QDF_STATUS send_set_auto_shutdown_timer_cmd_tlv(wmi_unified_t wmi_handle,
 	       WMITLV_GET_STRUCT_TLVLEN
 	       (wmi_host_auto_shutdown_cfg_cmd_fixed_param));
 
+	wmi_mtrace(WMI_HOST_AUTO_SHUTDOWN_CFG_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_HOST_AUTO_SHUTDOWN_CFG_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -9679,6 +9981,7 @@ static QDF_STATUS send_nan_req_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += WMI_TLV_HDR_SIZE;
 	qdf_mem_copy(buf_ptr, nan_req->request_data, cmd->data_len);
 
+	wmi_mtrace(WMI_NAN_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_NAN_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -9723,6 +10026,7 @@ send_process_dhcpserver_offload_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->num_client = params->dhcp_client_num;
 	cmd->srv_ipv4 = params->dhcp_srv_addr;
 	cmd->start_lsb = 0;
+	wmi_mtrace(WMI_SET_DHCP_SERVER_OFFLOAD_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				   sizeof(*cmd),
 				   WMI_SET_DHCP_SERVER_OFFLOAD_CMDID);
@@ -9768,6 +10072,7 @@ static QDF_STATUS send_set_led_flashing_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->led_x0 = flashing->led_x0;
 	cmd->led_x1 = flashing->led_x1;
 
+	wmi_mtrace(WMI_PDEV_SET_LED_FLASHING_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_PDEV_SET_LED_FLASHING_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -9808,6 +10113,7 @@ static QDF_STATUS send_process_ch_avoid_update_cmd_tlv(wmi_unified_t wmi_handle)
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_chan_avoid_update_cmd_param));
 
+	wmi_mtrace(WMI_CHAN_AVOID_UPDATE_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_CHAN_AVOID_UPDATE_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -9856,6 +10162,7 @@ send_pdev_set_regdomain_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 							param->pdev_id);
 
+	wmi_mtrace(WMI_PDEV_SET_REGDOMAIN_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PDEV_SET_REGDOMAIN_CMDID)) {
 		WMI_LOGE("%s: Failed to send pdev set regdomain command",
@@ -9904,6 +10211,7 @@ static QDF_STATUS send_regdomain_info_to_fw_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->conformance_test_limit_2G = ctl2G;
 	cmd->conformance_test_limit_5G = ctl5G;
 
+	wmi_mtrace(WMI_PDEV_SET_REGDOMAIN_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PDEV_SET_REGDOMAIN_CMDID)) {
 		WMI_LOGP("%s: Failed to send pdev set regdomain command",
@@ -10043,6 +10351,7 @@ static QDF_STATUS send_set_tdls_offchan_mode_cmd_tlv(wmi_unified_t wmi_handle,
 		 cmd->is_peer_responder,
 		 cmd->offchan_oper_class);
 
+	wmi_mtrace(WMI_TDLS_SET_OFFCHAN_MODE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 		WMI_TDLS_SET_OFFCHAN_MODE_CMDID)) {
 		WMI_LOGP(FL("failed to send tdls off chan command"));
@@ -10129,6 +10438,7 @@ static QDF_STATUS send_update_fw_tdls_state_cmd_tlv(wmi_unified_t wmi_handle,
 		 cmd->teardown_notification_ms,
 		 cmd->tdls_peer_kickout_threshold);
 
+	wmi_mtrace(WMI_TDLS_SET_STATE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_TDLS_SET_STATE_CMDID)) {
 		WMI_LOGP("%s: failed to send tdls set state command", __func__);
@@ -10295,6 +10605,7 @@ static QDF_STATUS send_update_tdls_peer_state_cmd_tlv(wmi_unified_t wmi_handle,
 		chan_info++;
 	}
 
+	wmi_mtrace(WMI_TDLS_PEER_UPDATE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_TDLS_PEER_UPDATE_CMDID)) {
 		WMI_LOGE("%s: failed to send tdls peer update state command",
@@ -10361,6 +10672,7 @@ static QDF_STATUS send_process_set_ie_info_cmd_tlv(wmi_unified_t wmi_handle,
 
 	qdf_mem_copy(buf_ptr, ie_info->data, cmd->ie_len);
 
+	wmi_mtrace(WMI_VDEV_SET_IE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_VDEV_SET_IE_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -10451,6 +10763,7 @@ static QDF_STATUS send_smart_ant_enable_cmd_tlv(wmi_unified_t wmi_handle,
 		gpio_param++;
 	}
 
+	wmi_mtrace(WMI_PDEV_SMART_ANT_ENABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				buf,
 				len,
@@ -10507,6 +10820,7 @@ static QDF_STATUS send_smart_ant_set_rx_ant_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 								param->pdev_id);
 
+	wmi_mtrace(WMI_PDEV_SMART_ANT_SET_RX_ANTENNA_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				buf,
 				len,
@@ -10579,6 +10893,7 @@ send_set_ctl_table_cmd_tlv(wmi_unified_t wmi_handle,
 					param->ctl_cmd_len -
 					sizeof(param->ctl_band));
 
+	wmi_mtrace(WMI_PDEV_SET_CTL_TABLE_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PDEV_SET_CTL_TABLE_CMDID)) {
 		WMI_LOGE("%s:Failed to send command\n", __func__);
@@ -10653,6 +10968,7 @@ send_set_mimogain_table_cmd_tlv(wmi_unified_t wmi_handle,
 					param->array_gain,
 					param->tbl_len);
 
+	wmi_mtrace(WMI_PDEV_SET_MIMOGAIN_TABLE_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PDEV_SET_MIMOGAIN_TABLE_CMDID)) {
 		return QDF_STATUS_E_FAILURE;
@@ -10804,6 +11120,7 @@ send_packet_power_info_get_cmd_tlv(wmi_unified_t wmi_handle,
 		__func__, __LINE__, WMI_PDEV_GET_TPC_CMDID, *((u_int32_t *)cmd),
 		cmd->rate_flags, cmd->nss, cmd->preamble, cmd->hw_rate);
 
+	wmi_mtrace(WMI_PDEV_GET_TPC_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmibuf, len,
 				 WMI_PDEV_GET_TPC_CMDID)) {
 			WMI_LOGE(FL("Failed to get tpc command\n"));
@@ -10845,6 +11162,7 @@ static QDF_STATUS send_vdev_config_ratemask_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGI("Setting vdev ratemask vdev id = 0x%X, type = 0x%X, mask_l32 = 0x%X mask_h32 = 0x%X\n",
 		 param->vdev_id, param->type, param->lower32, param->higher32);
 
+	wmi_mtrace(WMI_VDEV_RATEMASK_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_RATEMASK_CMDID)) {
 			WMI_LOGE("Seting vdev ratemask failed\n");
@@ -10915,6 +11233,7 @@ static QDF_STATUS send_vdev_set_custom_aggr_size_cmd_tlv(
 		param->ac, param->aggr_type, param->tx_aggr_size_disable,
 		param->rx_aggr_size_disable, param->tx_ac_enable);
 
+	wmi_mtrace(WMI_VDEV_SET_CUSTOM_AGGR_SIZE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_SET_CUSTOM_AGGR_SIZE_CMDID)) {
 		WMI_LOGE("Seting custom aggregation size failed\n");
@@ -11003,6 +11322,8 @@ static QDF_STATUS send_vdev_set_qdepth_thresh_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd_update++;
 	}
 
+	wmi_mtrace(WMI_PEER_TID_MSDUQ_QDEPTH_THRESH_UPDATE_CMDID,
+		   cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PEER_TID_MSDUQ_QDEPTH_THRESH_UPDATE_CMDID);
 
@@ -11043,6 +11364,7 @@ send_set_vap_dscp_tid_map_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->enable_override = 0;
 
 	WMI_LOGI("Setting dscp for vap id: %d\n", cmd->vdev_id);
+	wmi_mtrace(WMI_VDEV_SET_DSCP_TID_MAP_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_SET_DSCP_TID_MAP_CMDID)) {
 			WMI_LOGE("Failed to set dscp cmd\n");
@@ -11086,6 +11408,7 @@ static QDF_STATUS send_vdev_set_neighbour_rx_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(macaddr, &cmd->addr);
 	cmd->flag = 0;
 
+	wmi_mtrace(WMI_VDEV_FILTER_NEIGHBOR_RX_PACKETS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_FILTER_NEIGHBOR_RX_PACKETS_CMDID)) {
 			WMI_LOGE("Failed to set neighbour rx param\n");
@@ -11153,6 +11476,7 @@ static QDF_STATUS send_smart_ant_set_tx_ant_cmd_tlv(wmi_unified_t wmi_handle,
 		ant_tx_series++;
 	}
 
+	wmi_mtrace(WMI_PEER_SMART_ANT_SET_TX_ANTENNA_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				   buf,
 				   len,
@@ -11217,6 +11541,7 @@ send_set_ant_switch_tbl_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_handle->ops->convert_pdev_id_host_to_target(param->pdev_id);
 	ctrl_chain->antCtrlChain = param->antCtrlChain;
 
+	wmi_mtrace(WMI_PDEV_SET_ANTENNA_SWITCH_TABLE_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_PDEV_SET_ANTENNA_SWITCH_TABLE_CMDID)) {
 		wmi_buf_free(buf);
@@ -11293,6 +11618,7 @@ static QDF_STATUS send_smart_ant_set_training_info_cmd_tlv(
 		train_param++;
 	}
 
+	wmi_mtrace(WMI_PEER_SMART_ANT_SET_TRAIN_INFO_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				buf,
 				len,
@@ -11367,6 +11693,8 @@ static QDF_STATUS send_smart_ant_set_node_config_cmd_tlv(
 		WMI_LOGI("%d", param->args_arr[i]);
 	}
 
+	wmi_mtrace(WMI_PEER_SMART_ANT_SET_NODE_CONFIG_OPS_CMDID,
+		   cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 			   buf,
 			   len,
@@ -11451,6 +11779,7 @@ send_set_atf_cmd_tlv(wmi_unified_t wmi_handle,
 		peer_info++;
 	}
 
+	wmi_mtrace(WMI_PEER_ATF_REQUEST_CMDID, NO_SESSION, 0);
 	retval = wmi_unified_cmd_send(wmi_handle, buf, len,
 		WMI_PEER_ATF_REQUEST_CMDID);
 
@@ -11491,6 +11820,7 @@ static QDF_STATUS send_vdev_set_fwtest_param_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->param_id = param->arg;
 	cmd->param_value = param->value;
 
+	wmi_mtrace(WMI_FWTEST_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len, WMI_FWTEST_CMDID)) {
 		WMI_LOGE("Setting FW test param failed\n");
 		wmi_buf_free(buf);
@@ -11535,6 +11865,7 @@ send_set_qboost_param_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(macaddr, &cmd->peer_macaddr);
 	cmd->qb_enable = param->value;
 
+	wmi_mtrace(WMI_QBOOST_CFG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 			WMI_QBOOST_CFG_CMDID);
 
@@ -11586,6 +11917,7 @@ send_gpio_config_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->pull_type = param->pull_type;
 	cmd->intr_mode = param->intr_mode;
 
+	wmi_mtrace(WMI_GPIO_CONFIG_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 			WMI_GPIO_CONFIG_CMDID);
 
@@ -11629,6 +11961,7 @@ send_gpio_output_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->gpio_num = param->gpio_num;
 	cmd->set = param->set;
 
+	wmi_mtrace(WMI_GPIO_OUTPUT_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 			WMI_GPIO_OUTPUT_CMDID);
 
@@ -11671,6 +12004,7 @@ static QDF_STATUS send_phyerr_disable_cmd_tlv(wmi_unified_t wmi_handle)
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 							WMI_HOST_PDEV_ID_SOC);
 
+	wmi_mtrace(WMI_PDEV_DFS_DISABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 			WMI_PDEV_DFS_DISABLE_CMDID);
 
@@ -11711,6 +12045,7 @@ static QDF_STATUS send_phyerr_enable_cmd_tlv(wmi_unified_t wmi_handle)
 	/* Reserved for future use */
 	cmd->reserved0 = 0;
 
+	wmi_mtrace(WMI_PDEV_DFS_ENABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 			WMI_PDEV_DFS_ENABLE_CMDID);
 
@@ -11758,6 +12093,7 @@ send_periodic_chan_stats_config_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 						param->pdev_id);
 
+	wmi_mtrace(WMI_SET_PERIODIC_CHANNEL_STATS_CONFIG_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cmd),
 			WMI_SET_PERIODIC_CHANNEL_STATS_CONFIG_CMDID);
 
@@ -11795,6 +12131,7 @@ send_nf_dbr_dbm_info_get_cmd_tlv(wmi_unified_t wmi_handle, uint8_t mac_id)
 				(wmi_pdev_get_nfcal_power_fixed_param));
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(mac_id);
 
+	wmi_mtrace(WMI_PDEV_GET_NFCAL_POWER_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_PDEV_GET_NFCAL_POWER_CMDID);
 	if (ret != 0) {
@@ -11849,6 +12186,7 @@ send_set_ht_ie_cmd_tlv(wmi_unified_t wmi_handle,
 		WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(buf_ptr, param->ie_data,
 						cmd->ie_len);
 
+	wmi_mtrace(WMI_PDEV_SET_HT_CAP_IE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_PDEV_SET_HT_CAP_IE_CMDID);
 
@@ -11904,6 +12242,7 @@ send_set_vht_ie_cmd_tlv(wmi_unified_t wmi_handle,
 		WMI_HOST_IF_MSG_COPY_CHAR_ARRAY(buf_ptr, param->ie_data,
 						cmd->ie_len);
 
+	wmi_mtrace(WMI_PDEV_SET_VHT_CAP_IE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_PDEV_SET_VHT_CAP_IE_CMDID);
 
@@ -11951,6 +12290,7 @@ send_set_quiet_mode_cmd_tlv(wmi_unified_t wmi_handle,
 	quiet_cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 							WMI_HOST_PDEV_ID_SOC);
 
+	wmi_mtrace(WMI_PDEV_SET_QUIET_MODE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_PDEV_SET_QUIET_MODE_CMDID);
 
@@ -12024,6 +12364,7 @@ send_set_bwf_cmd_tlv(wmi_unified_t wmi_handle,
 		peer_info++;
 	}
 
+	wmi_mtrace(WMI_PEER_BWF_REQUEST_CMDID, NO_SESSION, 0);
 	retval = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_PEER_BWF_REQUEST_CMDID);
 
@@ -12114,6 +12455,7 @@ send_mcast_group_update_cmd_tlv(wmi_unified_t wmi_handle,
 			     param->nsrcs * param->mcast_ip_addr_bytes);
 	}
 
+	wmi_mtrace(WMI_PEER_MCAST_GROUP_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_PEER_MCAST_GROUP_CMDID);
 
@@ -12174,6 +12516,7 @@ static QDF_STATUS send_vdev_spectral_configure_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->spectral_scan_dBm_adj = param->dbm_adj;
 	cmd->spectral_scan_chn_mask = param->chn_mask;
 
+	wmi_mtrace(WMI_VDEV_SPECTRAL_SCAN_CONFIGURE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_VDEV_SPECTRAL_SCAN_CONFIGURE_CMDID);
 
@@ -12273,6 +12616,7 @@ static QDF_STATUS send_vdev_spectral_enable_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd->enable_cmd = 0; /* 0: Ignore */
 	}
 
+	wmi_mtrace(WMI_VDEV_SPECTRAL_SCAN_ENABLE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_VDEV_SPECTRAL_SCAN_ENABLE_CMDID);
 
@@ -12353,6 +12697,7 @@ static QDF_STATUS send_thermal_mitigation_param_cmd_tlv(
 		lvl_conf++;
 	}
 
+	wmi_mtrace(WMI_THERM_THROT_SET_CONF_CMDID, NO_SESSION, 0);
 	error = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_THERM_THROT_SET_CONF_CMDID);
 	if (QDF_IS_STATUS_ERROR(error)) {
@@ -12421,6 +12766,7 @@ send_pdev_qvit_cmd_tlv(wmi_unified_t wmi_handle,
 		qdf_mem_copy(cmd, &seghdrinfo, sizeof(seghdrinfo));
 		qdf_mem_copy(&cmd[sizeof(seghdrinfo)], bufpos, chunk_len);
 
+		wmi_mtrace(WMI_PDEV_QVIT_CMDID, NO_SESSION, 0);
 		ret = wmi_unified_cmd_send(wmi_handle, buf,
 					   (chunk_len + sizeof(seghdrinfo) +
 					    WMI_TLV_HDR_SIZE),
@@ -12492,6 +12838,7 @@ send_wmm_update_cmd_tlv(wmi_unified_t wmi_handle,
 		wmm_param->no_ack = wmep->wmep_noackPolicy;
 		buf_ptr += sizeof(wmi_wmm_params);
 	}
+	wmi_mtrace(WMI_PDEV_SET_WMM_PARAMS_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_PDEV_SET_WMM_PARAMS_CMDID);
 
@@ -12541,6 +12888,7 @@ send_coex_config_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->config_arg5 = param->config_arg5;
 	cmd->config_arg6 = param->config_arg6;
 
+	wmi_mtrace(WMI_COEX_CONFIG_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_COEX_CONFIG_CMDID);
 
@@ -12654,6 +13002,15 @@ void wmi_copy_resource_config(wmi_resource_config *resource_cfg,
 			resource_cfg->flag1, 1);
 	if (tgt_res_cfg->cce_disable)
 		WMI_RSRC_CFG_FLAG_TCL_CCE_DISABLE_SET(resource_cfg->flag1, 1);
+
+	if (tgt_res_cfg->new_htt_msg_format) {
+		WMI_RSRC_CFG_FLAG_HTT_H2T_NO_HTC_HDR_LEN_IN_MSG_LEN_SET(
+			resource_cfg->flag1, 1);
+	}
+
+	if (tgt_res_cfg->peer_unmap_conf_support)
+		WMI_RSRC_CFG_FLAG_PEER_UNMAP_RESPONSE_SUPPORT_SET(
+						resource_cfg->flag1, 1);
 
 	wmi_copy_twt_resource_config(resource_cfg, tgt_res_cfg);
 }
@@ -12859,6 +13216,7 @@ static QDF_STATUS send_set_base_macaddr_indicate_cmd_tlv(wmi_unified_t wmi_handl
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(custom_addr, &cmd->base_macaddr);
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(
 							WMI_HOST_PDEV_ID_SOC);
+	wmi_mtrace(WMI_PDEV_SET_BASE_MACADDR_CMDID, NO_SESSION, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 				   sizeof(*cmd),
 				   WMI_PDEV_SET_BASE_MACADDR_CMDID);
@@ -12992,6 +13350,7 @@ static QDF_STATUS send_log_supported_evt_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_handle->events_logs_list[i] = evt_args[i];
 	}
 
+	wmi_mtrace(WMI_DIAG_EVENT_LOG_CONFIG_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, buf_len,
 				WMI_DIAG_EVENT_LOG_CONFIG_CMDID)) {
 		WMI_LOGE("%s: WMI_DIAG_EVENT_LOG_CONFIG_CMDID failed",
@@ -13089,6 +13448,7 @@ static QDF_STATUS send_enable_specific_fw_logs_cmd_tlv(wmi_unified_t wmi_handle,
 		}
 	}
 
+	wmi_mtrace(WMI_DIAG_EVENT_LOG_CONFIG_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_DIAG_EVENT_LOG_CONFIG_CMDID)) {
 		WMI_LOGE("%s: WMI_DIAG_EVENT_LOG_CONFIG_CMDID failed",
@@ -13129,6 +13489,7 @@ static QDF_STATUS send_flush_logs_to_fw_cmd_tlv(wmi_unified_t wmi_handle)
 				wmi_debug_mesg_flush_fixed_param));
 	cmd->reserved0 = 0;
 
+	wmi_mtrace(WMI_DEBUG_MESG_FLUSH_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 			buf,
 			len,
@@ -13202,6 +13563,7 @@ static QDF_STATUS send_pdev_set_pcl_cmd_tlv(wmi_unified_t wmi_handle,
 		WMI_LOGD("%s: chan:%d weight:%d", __func__,
 			msg->saved_chan_list[i], cmd_args[i]);
 	}
+	wmi_mtrace(WMI_PDEV_SET_PCL_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PDEV_SET_PCL_CMDID)) {
 		WMI_LOGE("%s: Failed to send WMI_PDEV_SET_PCL_CMDID", __func__);
@@ -13250,6 +13612,7 @@ static QDF_STATUS send_pdev_set_hw_mode_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->hw_mode_index = hw_mode_index;
 	WMI_LOGI("%s: HW mode index:%d", __func__, cmd->hw_mode_index);
 
+	wmi_mtrace(WMI_PDEV_SET_HW_MODE_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PDEV_SET_HW_MODE_CMDID)) {
 		WMI_LOGE("%s: Failed to send WMI_PDEV_SET_HW_MODE_CMDID",
@@ -13300,11 +13663,13 @@ QDF_STATUS send_pdev_set_dual_mac_config_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("%s: scan_config:%x fw_mode_config:%x",
 		 __func__, msg->scan_config, msg->fw_mode_config);
 
+	wmi_mtrace(WMI_PDEV_SET_MAC_CONFIG_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PDEV_SET_MAC_CONFIG_CMDID)) {
 		WMI_LOGE("%s: Failed to send WMI_PDEV_SET_MAC_CONFIG_CMDID",
 				__func__);
 		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
 	}
 	return QDF_STATUS_SUCCESS;
 }
@@ -13504,6 +13869,7 @@ send_pdev_fips_cmd_tlv(wmi_unified_t wmi_handle,
 
 		buf_ptr += param->data_len;
 
+		wmi_mtrace(WMI_PDEV_FIPS_CMDID, NO_SESSION, 0);
 		retval = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PDEV_FIPS_CMDID);
 		qdf_print("%s return value %d\n", __func__, retval);
@@ -13556,6 +13922,7 @@ static QDF_STATUS send_add_wow_wakeup_event_cmd_tlv(wmi_unified_t wmi_handle,
 		 cmd->event_bitmaps[1], cmd->event_bitmaps[2],
 		 cmd->event_bitmaps[3], enable ? "enabled" : "disabled");
 
+	wmi_mtrace(WMI_WOW_ENABLE_DISABLE_WAKE_EVENT_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_WOW_ENABLE_DISABLE_WAKE_EVENT_CMDID);
 	if (ret) {
@@ -13687,6 +14054,7 @@ static QDF_STATUS send_wow_patterns_to_fw_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += WMI_TLV_HDR_SIZE;
 	*(uint32_t *) buf_ptr = 0;
 
+	wmi_mtrace(WMI_WOW_ADD_WAKE_PATTERN_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_WOW_ADD_WAKE_PATTERN_CMDID);
 	if (ret) {
@@ -13961,6 +14329,7 @@ static QDF_STATUS send_enable_arp_ns_offload_cmd_tlv(wmi_unified_t wmi_handle,
 	if (num_ns_ext_tuples)
 		fill_nsoffload_ext_tlv(wmi_handle, ns_offload_req, &buf_ptr);
 
+	wmi_mtrace(WMI_SET_ARP_NS_OFFLOAD_CMDID, cmd->vdev_id, 0);
 	res = wmi_unified_cmd_send(wmi_handle, buf, len,
 				     WMI_SET_ARP_NS_OFFLOAD_CMDID);
 	if (res) {
@@ -14012,10 +14381,11 @@ QDF_STATUS send_enable_enhance_multicast_offload_tlv(
 			ENHANCED_MCAST_FILTER_ENABLED);
 	WMI_LOGD("%s: config enhance multicast offload action %d for vdev %d",
 		__func__, action, vdev_id);
+	wmi_mtrace(WMI_CONFIG_ENHANCED_MCAST_FILTER_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 			sizeof(*cmd), WMI_CONFIG_ENHANCED_MCAST_FILTER_CMDID);
 	if (status != QDF_STATUS_SUCCESS) {
-		qdf_nbuf_free(buf);
+		wmi_buf_free(buf);
 		WMI_LOGE("%s:Failed to send ENHANCED_MCAST_FILTER_CMDID",
 			__func__);
 	}
@@ -14146,6 +14516,7 @@ static QDF_STATUS send_wow_sta_ra_filter_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("%s: send RA rate limit [%d] to fw vdev = %d", __func__,
 		 rate_limit_interval, vdev_id);
 
+	wmi_mtrace(WMI_WOW_ADD_WAKE_PATTERN_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_WOW_ADD_WAKE_PATTERN_CMDID);
 	if (ret) {
@@ -14198,6 +14569,7 @@ static QDF_STATUS send_add_clear_mcbc_filter_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("Action:%d; vdev_id:%d; clearList:%d; MCBC MAC Addr: %pM",
 		 cmd->action, vdev_id, clearList, multicast_addr.bytes);
 
+	wmi_mtrace(WMI_SET_MCASTBCAST_FILTER_CMDID, cmd->vdev_id, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 				   sizeof(*cmd),
 				   WMI_SET_MCASTBCAST_FILTER_CMDID);
@@ -14275,6 +14647,7 @@ static QDF_STATUS send_multiple_add_clear_mcbc_filter_cmd_tlv(
 	}
 
 send_cmd:
+	wmi_mtrace(WMI_SET_MULTIPLE_MCAST_FILTER_CMDID, cmd->vdev_id, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 				   len,
 				   WMI_SET_MULTIPLE_MCAST_FILTER_CMDID);
@@ -14375,6 +14748,7 @@ QDF_STATUS send_gtk_offload_cmd_tlv(wmi_unified_t wmi_handle, uint8_t vdev_id,
 
 	WMI_LOGD("VDEVID: %d, GTK_FLAGS: x%x kek len %d", vdev_id, cmd->flags, params->kek_len);
 	/* send the wmi command */
+	wmi_mtrace(WMI_GTK_OFFLOAD_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_GTK_OFFLOAD_CMDID)) {
 		WMI_LOGE("Failed to send WMI_GTK_OFFLOAD_CMDID");
@@ -14425,6 +14799,7 @@ static QDF_STATUS send_process_gtk_offload_getinfo_cmd_tlv(
 	cmd->vdev_id = vdev_id;
 
 	/* send the wmi command */
+	wmi_mtrace(WMI_GTK_OFFLOAD_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_GTK_OFFLOAD_CMDID)) {
 		WMI_LOGE("Failed to send WMI_GTK_OFFLOAD_CMDID for req info");
@@ -14482,6 +14857,7 @@ static QDF_STATUS send_action_frame_patterns_cmd_tlv(wmi_unified_t wmi_handle,
 	for (i = 0; i < PMO_SUPPORTED_ACTION_CATE; i++)
 		cmd_args[i] = action_params->action_per_category[i];
 
+	wmi_mtrace(WMI_WOW_SET_ACTION_WAKE_UP_CMDID, cmd->vdev_id, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 			len, WMI_WOW_SET_ACTION_WAKE_UP_CMDID);
 	if (err) {
@@ -14531,6 +14907,7 @@ static QDF_STATUS send_lphb_config_hbenable_cmd_tlv(wmi_unified_t wmi_handle,
 	hb_enable_fp->item = params->item;
 	hb_enable_fp->session = params->session;
 
+	wmi_mtrace(WMI_HB_SET_ENABLE_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_HB_SET_ENABLE_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -14585,6 +14962,7 @@ static QDF_STATUS send_lphb_config_tcp_params_cmd_tlv(wmi_unified_t wmi_handle,
 				   &lphb_conf_req->gateway_mac,
 				   sizeof(hb_tcp_params_fp->gateway_mac));
 
+	wmi_mtrace(WMI_HB_SET_TCP_PARAMS_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_HB_SET_TCP_PARAMS_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -14636,6 +15014,7 @@ QDF_STATUS send_lphb_config_tcp_pkt_filter_cmd_tlv(wmi_unified_t wmi_handle,
 	       (void *)&g_hb_tcp_filter_fp->filter,
 	       WMI_WLAN_HB_MAX_FILTER_SIZE);
 
+	wmi_mtrace(WMI_HB_SET_TCP_PKT_FILTER_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_HB_SET_TCP_PKT_FILTER_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -14689,6 +15068,7 @@ static QDF_STATUS send_lphb_config_udp_params_cmd_tlv(wmi_unified_t wmi_handle,
 				   &lphb_conf_req->gateway_mac,
 				   sizeof(lphb_conf_req->gateway_mac));
 
+	wmi_mtrace(WMI_HB_SET_UDP_PARAMS_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_HB_SET_UDP_PARAMS_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -14740,6 +15120,7 @@ QDF_STATUS send_lphb_config_udp_pkt_filter_cmd_tlv(wmi_unified_t wmi_handle,
 	       (void *)&lphb_conf_req->filter,
 	       WMI_WLAN_HB_MAX_FILTER_SIZE);
 
+	wmi_mtrace(WMI_HB_SET_UDP_PKT_FILTER_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_HB_SET_UDP_PKT_FILTER_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -14786,6 +15167,7 @@ static QDF_STATUS send_conf_hw_filter_cmd_tlv(wmi_unified_t wmi,
 		 req->enable ? "enable" : "disable", req->mode_bitmap,
 		 req->vdev_id);
 
+	wmi_mtrace(WMI_HW_DATA_FILTER_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi, wmi_buf, sizeof(*cmd),
 				      WMI_HW_DATA_FILTER_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -14835,6 +15217,7 @@ static QDF_STATUS send_enable_disable_packet_filter_cmd_tlv(
 	WMI_LOGE("%s: Packet filter enable %d for vdev_id %d",
 		__func__, cmd->enable, vdev_id);
 
+	wmi_mtrace(WMI_PACKET_FILTER_ENABLE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 			 WMI_PACKET_FILTER_ENABLE_CMDID);
 	if (ret) {
@@ -14914,6 +15297,7 @@ static QDF_STATUS send_config_packet_filter_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGE("Packet filter action %d filter with id: %d, num_params=%d",
 		cmd->filter_action, cmd->filter_id, cmd->num_params);
 	/* send the command along with data */
+	wmi_mtrace(WMI_PACKET_FILTER_CONFIG_CMDID, cmd->vdev_id, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PACKET_FILTER_CONFIG_CMDID);
 	if (err) {
@@ -15004,6 +15388,8 @@ send_set_ssid_hotlist_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd->mode = WMI_EXTSCAN_MODE_STOP;
 	}
 
+	wmi_mtrace(WMI_EXTSCAN_CONFIGURE_HOTLIST_SSID_MONITOR_CMDID,
+		   cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send
 		(wmi_handle, wmi_buf, len,
 		 WMI_EXTSCAN_CONFIGURE_HOTLIST_SSID_MONITOR_CMDID)) {
@@ -15045,6 +15431,7 @@ static QDF_STATUS send_process_roam_synch_complete_cmd_tlv(wmi_unified_t wmi_han
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_roam_synch_complete_fixed_param));
 	cmd->vdev_id = vdev_id;
+	wmi_mtrace(WMI_ROAM_SYNCH_COMPLETE, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_ROAM_SYNCH_COMPLETE)) {
 		WMI_LOGP("%s: failed to send roam synch confirmation",
@@ -15089,10 +15476,11 @@ QDF_STATUS send_fw_test_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->param_id = wmi_fwtest->arg;
 	cmd->param_value = wmi_fwtest->value;
 
+	wmi_mtrace(WMI_FWTEST_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_FWTEST_CMDID)) {
 		WMI_LOGP("%s: failed to send fw test command", __func__);
-		qdf_nbuf_free(wmi_buf);
+		wmi_buf_free(wmi_buf);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -15149,6 +15537,7 @@ static QDF_STATUS send_unit_test_cmd_tlv(wmi_unified_t wmi_handle,
 		unit_test_cmd_args[i] = wmi_utest->args[i];
 		WMI_LOGI("%d,", wmi_utest->args[i]);
 	}
+	wmi_mtrace(WMI_UNIT_TEST_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 				 WMI_UNIT_TEST_CMDID)) {
 		WMI_LOGP("%s: failed to send unit test command", __func__);
@@ -15256,6 +15645,7 @@ static QDF_STATUS send_roam_invoke_cmd_tlv(wmi_unified_t wmi_handle,
 			cmd->num_chan, cmd->num_bssid);
 	WMI_LOGD(FL("BSSID: %pM, channel: %d"), roaminvoke->bssid, ch_hz);
 
+	wmi_mtrace(WMI_ROAM_INVOKE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
 					WMI_ROAM_INVOKE_CMDID)) {
 		WMI_LOGP("%s: failed to send roam invoke command", __func__);
@@ -15301,6 +15691,7 @@ static QDF_STATUS send_roam_scan_offload_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd_fp->vdev_id = vdev_id;
 	cmd_fp->command_arg = command;
 
+	wmi_mtrace(WMI_ROAM_SCAN_CMD, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_SCAN_CMD);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -15491,6 +15882,7 @@ static QDF_STATUS send_roam_scan_offload_ap_profile_cmd_tlv(wmi_unified_t wmi_ha
 		 score_param->oce_wan_scoring.score_pcnt11_to_8,
 		 score_param->oce_wan_scoring.score_pcnt15_to_12);
 
+	wmi_mtrace(WMI_ROAM_AP_PROFILE, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_AP_PROFILE);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -15545,6 +15937,7 @@ static QDF_STATUS send_roam_scan_offload_scan_period_cmd_tlv(wmi_unified_t wmi_h
 	scan_period_fp->roam_scan_period = scan_period; /* 20 seconds */
 	scan_period_fp->roam_scan_age = scan_age;
 
+	wmi_mtrace(WMI_ROAM_SCAN_PERIOD, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_SCAN_PERIOD);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -15630,6 +16023,7 @@ static QDF_STATUS send_roam_scan_offload_chan_list_cmd_tlv(wmi_unified_t wmi_han
 		WMI_LOGD("%d,", roam_chan_list_array[i]);
 	}
 
+	wmi_mtrace(WMI_ROAM_CHAN_LIST, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_CHAN_LIST);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -15698,6 +16092,7 @@ static QDF_STATUS send_per_roam_config_cmd_tlv(wmi_unified_t wmi_handle,
 			req_buf->per_config.min_candidate_rssi;
 
 	/* Send per roam config parameters */
+	wmi_mtrace(WMI_ROAM_PER_CONFIG_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 			len, WMI_ROAM_PER_CONFIG_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -15756,6 +16151,7 @@ static QDF_STATUS send_roam_scan_offload_rssi_change_cmd_tlv(wmi_unified_t wmi_h
 	rssi_change_fp->bcn_rssi_weight = bcn_rssi_weight;
 	rssi_change_fp->hirssi_delay_btw_scans = hirssi_delay_btw_scans;
 
+	wmi_mtrace(WMI_ROAM_SCAN_RSSI_CHANGE_THRESHOLD, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_SCAN_RSSI_CHANGE_THRESHOLD);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -15824,6 +16220,7 @@ static QDF_STATUS send_power_dbg_cmd_tlv(wmi_unified_t wmi_handle,
 		WMI_LOGI("%d,", param->args[i]);
 	}
 
+	wmi_mtrace(WMI_PDEV_WAL_POWER_DEBUG_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_PDEV_WAL_POWER_DEBUG_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -15947,6 +16344,7 @@ static QDF_STATUS send_multiple_vdev_restart_req_cmd_tlv(
 		tchan_info->maxregpower, tchan_info->reg_class_id,
 		tchan_info->maxregpower);
 
+	wmi_mtrace(WMI_PDEV_MULTIPLE_VDEV_RESTART_REQUEST_CMDID, NO_SESSION, 0);
 	qdf_status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				WMI_PDEV_MULTIPLE_VDEV_RESTART_REQUEST_CMDID);
 
@@ -15995,6 +16393,7 @@ static QDF_STATUS send_dfs_phyerr_offload_en_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_pdev_dfs_phyerr_offload_enable_cmd_fixed_param));
 
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(pdev_id);
+	wmi_mtrace(WMI_PDEV_DFS_PHYERR_OFFLOAD_ENABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PDEV_DFS_PHYERR_OFFLOAD_ENABLE_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -16043,6 +16442,7 @@ static QDF_STATUS send_dfs_phyerr_offload_dis_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_pdev_dfs_phyerr_offload_disable_cmd_fixed_param));
 
 	cmd->pdev_id = wmi_handle->ops->convert_pdev_id_host_to_target(pdev_id);
+	wmi_mtrace(WMI_PDEV_DFS_PHYERR_OFFLOAD_DISABLE_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PDEV_DFS_PHYERR_OFFLOAD_DISABLE_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -16134,6 +16534,7 @@ static QDF_STATUS init_cmd_send_tlv(wmi_unified_t wmi_handle,
 	/* Fill fw_abi_vers */
 	copy_fw_abi_version_tlv(wmi_handle, cmd);
 
+	wmi_mtrace(WMI_INIT_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len, WMI_INIT_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		WMI_LOGE("wmi_unified_cmd_send WMI_INIT_CMDID returned Error %d",
@@ -16183,6 +16584,7 @@ send_addba_send_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->tid = param->tidno;
 	cmd->buffersize = param->buffersize;
 
+	wmi_mtrace(WMI_ADDBA_SEND_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len, WMI_ADDBA_SEND_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		WMI_LOGE("%s: Failed to send cmd to fw, ret=%d", __func__, ret);
@@ -16232,6 +16634,7 @@ send_delba_send_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->initiator = param->initiator;
 	cmd->reasoncode = param->reasoncode;
 
+	wmi_mtrace(WMI_DELBA_SEND_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len, WMI_DELBA_SEND_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
 		WMI_LOGE("%s: Failed to send cmd to fw, ret=%d", __func__, ret);
@@ -16276,6 +16679,7 @@ send_addba_clearresponse_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->vdev_id = param->vdev_id;
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(macaddr, &cmd->peer_macaddr);
 
+	wmi_mtrace(WMI_ADDBA_CLEAR_RESP_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle,
 				buf, len, WMI_ADDBA_CLEAR_RESP_CMDID);
 	if (QDF_IS_STATUS_ERROR(ret)) {
@@ -16337,6 +16741,7 @@ QDF_STATUS send_bcn_offload_control_cmd_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_FAILURE;
 		break;
 	}
+	wmi_mtrace(WMI_BCN_OFFLOAD_CTRL_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_BCN_OFFLOAD_CTRL_CMDID);
 
@@ -16485,6 +16890,7 @@ static QDF_STATUS nan_ndp_initiator_req_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("sending WMI_NDP_INITIATOR_REQ_CMDID(0x%X)",
 		 WMI_NDP_INITIATOR_REQ_CMDID);
 
+	wmi_mtrace(WMI_NDP_INITIATOR_REQ_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_NDP_INITIATOR_REQ_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -16638,6 +17044,7 @@ static QDF_STATUS nan_ndp_responder_req_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGD("sending WMI_NDP_RESPONDER_REQ_CMDID(0x%X)",
 		 WMI_NDP_RESPONDER_REQ_CMDID);
+	wmi_mtrace(WMI_NDP_RESPONDER_REQ_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				      WMI_NDP_RESPONDER_REQ_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -16689,6 +17096,7 @@ static QDF_STATUS nan_ndp_end_req_tlv(wmi_unified_t wmi_handle,
 	}
 
 	WMI_LOGD("Sending WMI_NDP_END_REQ_CMDID to FW");
+	wmi_mtrace(WMI_NDP_END_REQ_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 				   WMI_NDP_END_REQ_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -19238,7 +19646,9 @@ static QDF_STATUS extract_chainmask_tables_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 
 	if ((!hw_caps->num_chainmask_tables) ||
-	    (hw_caps->num_chainmask_tables > PSOC_MAX_CHAINMASK_TABLES))
+	    (hw_caps->num_chainmask_tables > PSOC_MAX_CHAINMASK_TABLES) ||
+	    (hw_caps->num_chainmask_tables >
+	     param_buf->num_mac_phy_chainmask_combo))
 		return QDF_STATUS_E_INVAL;
 
 	chainmask_caps = param_buf->mac_phy_chainmask_caps;
@@ -19351,6 +19761,13 @@ static QDF_STATUS extract_service_ready_ext_tlv(wmi_unified_t wmi_handle,
 	} else
 		param->num_chainmask_tables = 0;
 
+	if (param->num_chainmask_tables > PSOC_MAX_CHAINMASK_TABLES ||
+	    param->num_chainmask_tables >
+		param_buf->num_mac_phy_chainmask_combo) {
+		wmi_err_rl("num_chainmask_tables is OOB: %u",
+			   param->num_chainmask_tables);
+		return QDF_STATUS_E_INVAL;
+	}
 	chain_mask_combo = param_buf->mac_phy_chainmask_combo;
 
 	if (chain_mask_combo == NULL)
@@ -19573,6 +19990,9 @@ static QDF_STATUS extract_reg_cap_service_ready_ext_tlv(
 		return QDF_STATUS_E_INVAL;
 
 	if (phy_idx >= reg_caps->num_phy)
+		return QDF_STATUS_E_INVAL;
+
+	if (!param_buf->hal_reg_caps)
 		return QDF_STATUS_E_INVAL;
 
 	ext_reg_cap = &param_buf->hal_reg_caps[phy_idx];
@@ -20404,6 +20824,25 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 
 	reg_info->num_2g_reg_rules = chan_list_event_hdr->num_2g_reg_rules;
 	reg_info->num_5g_reg_rules = chan_list_event_hdr->num_5g_reg_rules;
+	num_2g_reg_rules = reg_info->num_2g_reg_rules;
+	num_5g_reg_rules = reg_info->num_5g_reg_rules;
+	if ((num_2g_reg_rules > MAX_REG_RULES) ||
+	    (num_5g_reg_rules > MAX_REG_RULES) ||
+	    (num_2g_reg_rules + num_5g_reg_rules > MAX_REG_RULES) ||
+	    (num_2g_reg_rules + num_5g_reg_rules !=
+	     param_buf->num_reg_rule_array)) {
+		wmi_err_rl("Invalid num_2g_reg_rules: %u, num_5g_reg_rules: %u",
+			   num_2g_reg_rules, num_5g_reg_rules);
+		return QDF_STATUS_E_FAILURE;
+	}
+	if (param_buf->num_reg_rule_array >
+		(WMI_SVC_MSG_MAX_SIZE - sizeof(*chan_list_event_hdr)) /
+		sizeof(*wmi_reg_rule)) {
+		wmi_err_rl("Invalid num_reg_rule_array: %u",
+			   param_buf->num_reg_rule_array);
+		return QDF_STATUS_E_FAILURE;
+	}
+
 	qdf_mem_copy(reg_info->alpha2, &(chan_list_event_hdr->alpha2),
 		     REG_ALPHA2_LEN);
 	reg_info->dfs_region = chan_list_event_hdr->dfs_region;
@@ -20435,9 +20874,6 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 	reg_info->max_bw_2g = chan_list_event_hdr->max_bw_2g;
 	reg_info->min_bw_5g = chan_list_event_hdr->min_bw_5g;
 	reg_info->max_bw_5g = chan_list_event_hdr->max_bw_5g;
-
-	num_2g_reg_rules = reg_info->num_2g_reg_rules;
-	num_5g_reg_rules = reg_info->num_5g_reg_rules;
 
 	WMI_LOGD("%s:cc %s dsf %d BW: min_2g %d max_2g %d min_5g %d max_5g %d",
 			__func__, reg_info->alpha2, reg_info->dfs_region,
@@ -20739,6 +21175,7 @@ static QDF_STATUS send_get_rcpi_cmd_tlv(wmi_unified_t wmi_handle,
 		break;
 	}
 	WMI_LOGD("RCPI REQ VDEV_ID:%d-->", cmd->vdev_id);
+	wmi_mtrace(WMI_REQUEST_RCPI_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_REQUEST_RCPI_CMDID)) {
 
@@ -20872,6 +21309,7 @@ static QDF_STATUS send_set_country_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd->pdev_id = params->pdev_id;
 
+	wmi_mtrace(WMI_SET_CURRENT_COUNTRY_CMDID, NO_SESSION, 0);
 	qdf_status = wmi_unified_cmd_send(wmi_handle,
 			buf, len, WMI_SET_CURRENT_COUNTRY_CMDID);
 
@@ -20926,6 +21364,7 @@ static QDF_STATUS send_user_country_code_cmd_tlv(wmi_unified_t wmi_handle,
 		cmd->country_code.domain_code = rd->cc.regdmn_id;
 	}
 
+	wmi_mtrace(WMI_SET_INIT_COUNTRY_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_SET_INIT_COUNTRY_CMDID);
 	if (ret) {
@@ -20983,6 +21422,7 @@ QDF_STATUS send_limit_off_chan_cmd_tlv(wmi_unified_t wmi_handle,
 			__func__, cmd->vdev_id, cmd->flags, cmd->max_offchan_time,
 			cmd->rest_time);
 
+	wmi_mtrace(WMI_VDEV_LIMIT_OFFCHAN_CMDID, cmd->vdev_id, 0);
 	err = wmi_unified_cmd_send(wmi_handle, buf,
 			len, WMI_VDEV_LIMIT_OFFCHAN_CMDID);
 	if (QDF_IS_STATUS_ERROR(err)) {
@@ -21072,6 +21512,7 @@ static QDF_STATUS send_set_arp_stats_req_cmd_tlv(wmi_unified_t wmi_handle,
 	}
 
 	/* Send per roam config parameters */
+	wmi_mtrace(WMI_VDEV_SET_ARP_STAT_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_VDEV_SET_ARP_STAT_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -21125,6 +21566,7 @@ static QDF_STATUS send_get_arp_stats_req_cmd_tlv(wmi_unified_t wmi_handle,
 
 	WMI_LOGI(FL("vdev=%d"), req_buf->vdev_id);
 	/* Send per roam config parameters */
+	wmi_mtrace(WMI_VDEV_GET_ARP_STAT_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_VDEV_GET_ARP_STAT_CMDID);
 	if (QDF_IS_STATUS_ERROR(status)) {
@@ -21209,6 +21651,7 @@ static QDF_STATUS send_set_del_pmkid_cache_cmd_tlv(wmi_unified_t wmi_handle,
 	pmksa->action_flag = pmk_info->action_flag;
 
 send_cmd:
+	wmi_mtrace(WMI_PDEV_UPDATE_PMK_CACHE_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PDEV_UPDATE_PMK_CACHE_CMDID);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -21246,6 +21689,7 @@ send_pdev_caldata_version_check_cmd_tlv(wmi_unified_t wmi_handle,
 			WMITLV_GET_STRUCT_TLVLEN
 			(wmi_pdev_check_cal_version_cmd_fixed_param));
 	cmd->pdev_id = param; /* set to 0x0 as expected from FW */
+	wmi_mtrace(WMI_PDEV_CHECK_CAL_VERSION_CMDID, NO_SESSION, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_PDEV_CHECK_CAL_VERSION_CMDID)) {
 		wmi_buf_free(buf);
@@ -21321,6 +21765,7 @@ static QDF_STATUS send_btm_config_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->solicited_timeout_ms = params->btm_solicited_timeout;
 	cmd->stick_time_seconds = params->btm_sticky_time;
 
+	wmi_mtrace(WMI_ROAM_BTM_CONFIG_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 	    WMI_ROAM_BTM_CONFIG_CMDID)) {
 		WMI_LOGE("%s: failed to send WMI_ROAM_BTM_CONFIG_CMDID",
@@ -21371,6 +21816,7 @@ static QDF_STATUS send_obss_detection_cfg_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->ht_mixed_detect_mode = obss_cfg_param->obss_ht_mixed_detect_mode;
 	cmd->ht_20mhz_detect_mode = obss_cfg_param->obss_ht_20mhz_detect_mode;
 
+	wmi_mtrace(WMI_SAP_OBSS_DETECTION_CFG_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_SAP_OBSS_DETECTION_CFG_CMDID)) {
 		WMI_LOGE("Failed to send WMI_SAP_OBSS_DETECTION_CFG_CMDID");
@@ -21508,7 +21954,7 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	uint32_t total_len;
 	struct wmi_roam_scan_stats_res *res;
 	uint32_t i, j;
-	uint32_t num_scans;
+	uint32_t num_scans, scan_param_size;
 
 	*res_param = NULL;
 	*vdev_id = 0xFF; /* Initialize to invalid vdev id */
@@ -21519,11 +21965,17 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	}
 
 	fixed_param = param_buf->fixed_param;
-	total_len = sizeof(*res) + fixed_param->num_roam_scans *
-		    sizeof(struct wmi_roam_scan_stats_params);
 
-	*vdev_id = fixed_param->vdev_id;
 	num_scans = fixed_param->num_roam_scans;
+	scan_param_size = sizeof(struct wmi_roam_scan_stats_params);
+	*vdev_id = fixed_param->vdev_id;
+	if (num_scans > WMI_ROAM_SCAN_STATS_MAX) {
+		wmi_err_rl("%u exceeded maximum roam scan stats: %u",
+			   num_scans, WMI_ROAM_SCAN_STATS_MAX);
+		return QDF_STATUS_E_INVAL;
+	}
+
+	total_len = sizeof(*res) + num_scans * scan_param_size;
 
 	res = qdf_mem_malloc(total_len);
 	if (!res) {
@@ -21565,8 +22017,16 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		uint32_t count, chan_info_sum = 0;
 
 		num_channels = param_buf->num_channels;
-		for (count = 0; count < param_buf->num_num_channels; count++)
+		for (count = 0; count < param_buf->num_num_channels; count++) {
+			if (param_buf->num_channels[count] >
+			    WMI_ROAM_SCAN_STATS_CHANNELS_MAX) {
+				wmi_err_rl("%u exceeded max scan channels %u",
+					   param_buf->num_channels[count],
+					   WMI_ROAM_SCAN_STATS_CHANNELS_MAX);
+				goto error;
+			}
 			chan_info_sum += param_buf->num_channels[count];
+		}
 
 		if (param_buf->chan_info &&
 		    param_buf->num_chan_info == chan_info_sum)
@@ -21575,12 +22035,19 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 
 	if (param_buf->num_roam_candidates &&
 	    param_buf->num_num_roam_candidates == num_scans) {
-		uint32_t count, roam_cand_sum = 0;
+		uint32_t cnt, roam_cand_sum = 0;
 
 		num_roam_candidates = param_buf->num_roam_candidates;
-		for (count = 0; count < param_buf->num_num_roam_candidates;
-		     count++)
-			roam_cand_sum += param_buf->num_roam_candidates[count];
+		for (cnt = 0; cnt < param_buf->num_num_roam_candidates; cnt++) {
+			if (param_buf->num_roam_candidates[cnt] >
+			    WMI_ROAM_SCAN_STATS_CANDIDATES_MAX) {
+				wmi_err_rl("%u exceeded max scan cand %u",
+					   param_buf->num_roam_candidates[cnt],
+					   WMI_ROAM_SCAN_STATS_CANDIDATES_MAX);
+				goto error;
+			}
+			roam_cand_sum += param_buf->num_roam_candidates[cnt];
+		}
 
 		if (param_buf->bssid &&
 		    param_buf->num_bssid == roam_cand_sum)
@@ -21660,6 +22127,9 @@ extract_roam_scan_stats_res_evt_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	*res_param = res;
 
 	return QDF_STATUS_SUCCESS;
+error:
+	qdf_mem_free(res);
+	return QDF_STATUS_E_FAILURE;
 }
 
 /**
@@ -21744,6 +22214,7 @@ static QDF_STATUS send_offload_11k_cmd_tlv(wmi_unified_t wmi_handle,
 			neighbor_report_offload->ssid.ssid_len);
 	}
 
+	wmi_mtrace(WMI_11K_OFFLOAD_REPORT_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_11K_OFFLOAD_REPORT_CMDID);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -21795,6 +22266,7 @@ static QDF_STATUS send_invoke_neighbor_report_cmd_tlv(wmi_unified_t wmi_handle,
 		     &params->ssid.mac_ssid,
 		     cmd->ssid.ssid_len);
 
+	wmi_mtrace(WMI_11K_INVOKE_NEIGHBOR_REPORT_CMDID, cmd->vdev_id, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf, len,
 			WMI_11K_INVOKE_NEIGHBOR_REPORT_CMDID);
 	if (status != QDF_STATUS_SUCCESS) {
@@ -21872,6 +22344,7 @@ static QDF_STATUS send_bss_color_change_enable_cmd_tlv(wmi_unified_t wmi_handle,
 		       (wmi_bss_color_change_enable_fixed_param));
 	cmd->vdev_id = vdev_id;
 	cmd->enable = enable;
+	wmi_mtrace(WMI_BSS_COLOR_CHANGE_ENABLE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_BSS_COLOR_CHANGE_ENABLE_CMDID)) {
 		WMI_LOGE("Failed to send WMI_BSS_COLOR_CHANGE_ENABLE_CMDID");
@@ -21939,6 +22412,7 @@ static QDF_STATUS send_obss_color_collision_cfg_cmd_tlv(
 		return QDF_STATUS_E_FAILURE;
 	}
 
+	wmi_mtrace(WMI_OBSS_COLOR_COLLISION_DET_CONFIG_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_OBSS_COLOR_COLLISION_DET_CONFIG_CMDID)) {
 		WMI_LOGE("%s: Sending OBSS color det cmd failed, vdev_id: %d",
@@ -22141,6 +22615,7 @@ static QDF_STATUS extract_single_phyerr_tlv(wmi_unified_t wmi_handle,
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
 	.send_vdev_delete_cmd = send_vdev_delete_cmd_tlv,
+	.send_vdev_nss_chain_params_cmd = send_vdev_nss_chain_params_cmd_tlv,
 	.send_vdev_down_cmd = send_vdev_down_cmd_tlv,
 	.send_vdev_start_cmd = send_vdev_start_cmd_tlv,
 	.send_hidden_ssid_vdev_restart_cmd =
@@ -22151,6 +22626,7 @@ struct wmi_ops tlv_ops =  {
 	.send_vdev_stop_cmd = send_vdev_stop_cmd_tlv,
 	.send_peer_create_cmd = send_peer_create_cmd_tlv,
 	.send_peer_delete_cmd = send_peer_delete_cmd_tlv,
+	.send_peer_unmap_conf_cmd = send_peer_unmap_conf_cmd_tlv,
 	.send_peer_rx_reorder_queue_setup_cmd =
 		send_peer_rx_reorder_queue_setup_cmd_tlv,
 	.send_peer_rx_reorder_queue_remove_cmd =
@@ -23144,7 +23620,12 @@ static void populate_tlv_service(uint32_t *wmi_service)
 	wmi_service[wmi_service_twt_responder] = WMI_SERVICE_AP_TWT;
 	wmi_service[wmi_service_listen_interval_offload_support] =
 			WMI_SERVICE_LISTEN_INTERVAL_OFFLOAD_SUPPORT;
-
+	wmi_service[wmi_service_per_vdev_chain_support] =
+			WMI_SERVICE_PER_VDEV_CHAINMASK_CONFIG_SUPPORT;
+	wmi_service[wmi_service_new_htt_msg_format] =
+			WMI_SERVICE_HTT_H2T_NO_HTC_HDR_LEN_IN_MSG_LEN;
+	wmi_service[wmi_service_peer_unmap_cnf_support] =
+			WMI_SERVICE_PEER_UNMAP_RESPONSE_SUPPORT;
 }
 
 #ifndef CONFIG_MCL
