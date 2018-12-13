@@ -145,4 +145,42 @@ struct ol_txrx_stats_req_internal
 	*ol_txrx_fw_stats_desc_get_req(struct ol_txrx_pdev_t *pdev,
 				       uint8_t desc_id);
 
+/**
+ * ol_txrx_get_new_htt_msg_format() - check htt h2t msg feature
+ * @pdev - datapath device instance
+ *
+ * Check if h2t message length includes htc header length
+ *
+ * return if new htt h2t msg feature enabled
+ */
+bool ol_txrx_get_new_htt_msg_format(struct ol_txrx_pdev_t *pdev);
+
+/**
+ * ol_txrx_set_new_htt_msg_format() - set htt h2t msg feature
+ * @val - enable or disable new htt h2t msg feature
+ *
+ * Set if h2t message length includes htc header length
+ *
+ * return NONE
+ */
+void ol_txrx_set_new_htt_msg_format(uint8_t val);
+
+/**
+ * ol_txrx_set_peer_unmap_conf_support() - set peer unmap conf feature
+ * @val - enable or disable peer unmap conf feature
+ *
+ * Set if peer unamp conf feature is supported by both FW and in INI
+ *
+ * return NONE
+ */
+void ol_txrx_set_peer_unmap_conf_support(bool val);
+
+/**
+ * ol_txrx_get_peer_unmap_conf_support() - check peer unmap conf feature
+ *
+ * Check if peer unmap conf feature is enabled
+ *
+ * return true is peer unmap conf feature is enabled else false
+ */
+bool ol_txrx_get_peer_unmap_conf_support(void);
 #endif /* _OL_TXRX__H_ */

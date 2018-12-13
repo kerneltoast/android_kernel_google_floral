@@ -361,6 +361,16 @@ struct htt_pdev_t {
 		uint32_t listnode_offset;
 		bool smmu_map;
 	} rx_ring;
+
+#ifndef CONFIG_HL_SUPPORT
+	struct {
+		qdf_atomic_t fill_cnt;          /* # of buffers in pool */
+		qdf_atomic_t refill_low_mem;    /* if set refill the ring */
+		qdf_nbuf_t *netbufs_ring;
+		qdf_spinlock_t rx_buff_pool_lock;
+	} rx_buff_pool;
+#endif
+
 #ifdef CONFIG_HL_SUPPORT
 	int rx_desc_size_hl;
 #endif
@@ -430,6 +440,9 @@ struct htt_pdev_t {
 	tp_rx_pkt_dump_cb rx_pkt_dump_cb;
 
 	struct mon_channel mon_ch_info;
+
+	/* Flag to indicate whether new htt format is supported */
+	bool new_htt_format_enabled;
 };
 
 #define HTT_EPID_GET(_htt_pdev_hdl)  \
