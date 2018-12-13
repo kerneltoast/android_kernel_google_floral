@@ -269,6 +269,7 @@ struct fts_hw_platform_data {
 	const char *limits_name;
 	int x_axis_max;
 	int y_axis_max;
+	bool auto_fw_update;
 };
 
 /* Bits for the bus reference mask */
@@ -340,10 +341,8 @@ struct fts_ts_info {
 
 	struct v4l2_heatmap v4l2;
 
-#ifndef FW_UPDATE_ON_PROBE
 	struct delayed_work fwu_work;	/* Work for fw update */
 	struct workqueue_struct *fwu_workqueue;	/* Fw update work queue */
-#endif
 	event_dispatch_handler_t *event_dispatch_table;	/* Dispatch table */
 
 	struct attribute_group attrs;	/* SysFS attributes */

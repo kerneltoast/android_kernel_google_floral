@@ -3005,27 +3005,31 @@ static int fts_fw_update(struct fts_ts_info *info)
 		pr_info("%s: NO CRC Error or Impossible to read CRC register!\n",
 			__func__);
 	}
-	ret = flashProcedure(info->board->fw_name, info->reflash_fw, keep_cx);
-	if ((ret & 0xF000000F) == ERROR_FILE_NOT_FOUND) {
-		pr_err("%s: firmware file not found. Bypassing update.\n",
-			__func__);
-		ret = 0;
-		goto out;
-	} else if ((ret & 0xFF000000) == ERROR_FLASH_PROCEDURE) {
-		pr_err("%s: firmware update failed; retrying. ERROR %08X\n",
-			__func__, ret);
-		/* Power cycle the touch IC */
-		fts_chip_powercycle(info);
+
+	if (info->board->auto_fw_update) {
 		ret = flashProcedure(info->board->fw_name, info->reflash_fw,
 				     keep_cx);
-		if ((ret & 0xFF000000) == ERROR_FLASH_PROCEDURE) {
-			pr_err("%s: firmware update failed again! ERROR %08X\n",
+		if ((ret & 0xF000000F) == ERROR_FILE_NOT_FOUND) {
+			pr_err("%s: firmware file not found. Bypassing update.\n",
+				__func__);
+			ret = 0;
+			goto out;
+		} else if ((ret & 0xFF000000) == ERROR_FLASH_PROCEDURE) {
+			pr_err("%s: firmware update failed; retrying. ERROR %08X\n",
 				__func__, ret);
-			pr_err("Fw Auto Update Failed!\n");
-			return ret;
+			/* Power cycle the touch IC */
+			fts_chip_powercycle(info);
+			ret = flashProcedure(info->board->fw_name,
+					     info->reflash_fw, keep_cx);
+			if ((ret & 0xFF000000) == ERROR_FLASH_PROCEDURE) {
+				pr_err("%s: firmware update failed again! ERROR %08X\n",
+					__func__, ret);
+				pr_err("Fw Auto Update Failed!\n");
+				return ret;
+			}
 		}
+		info->reflash_fw = 0;
 	}
-	info->reflash_fw = 0;
 
 	pr_info("%s: Verifying if CX CRC Error...\n", __func__);
 	ret = fts_system_reset();
@@ -3124,7 +3128,6 @@ out:
 	return error;
 }
 
-#ifndef FW_UPDATE_ON_PROBE
 /**
   *	Function called by the delayed workthread executed after the probe in
   * order to perform the fw update flow
@@ -3141,7 +3144,6 @@ static void fts_fw_update_auto(struct work_struct *work)
 	fts_fw_update(info);
 	fts_set_bus_ref(info, FTS_BUS_REF_FW_UPDATE, false);
 }
-#endif
 
 /* TODO: define if need to do the full mp at the boot */
 /**
@@ -4038,9 +4040,15 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 		bdata->reset_gpio = of_get_named_gpio_flags(np,
 							    "st,reset-gpio", 0,
 							    NULL);
-		pr_info("reset_gpio =%d\n", bdata->reset_gpio);
+		pr_info("reset_gpio = %d\n", bdata->reset_gpio);
 	} else
 		bdata->reset_gpio = GPIO_NOT_DEFINED;
+
+	bdata->auto_fw_update = true;
+	if (of_property_read_bool(np, "st,disable-auto-fw-update")) {
+		bdata->auto_fw_update = false;
+		pr_info("Automatic firmware update disabled\n");
+	}
 
 	name = NULL;
 	if (panel)
@@ -4383,8 +4391,9 @@ static int fts_probe(struct spi_device *client)
 
 #else
 	pr_info("SET Auto Fw Update:\n");
-	info->fwu_workqueue = alloc_workqueue("fts-fwu-queue", WQ_UNBOUND |
-					      WQ_HIGHPRI | WQ_CPU_INTENSIVE, 1);
+	info->fwu_workqueue = alloc_workqueue("fts-fwu-queue",
+					      WQ_UNBOUND | WQ_HIGHPRI |
+					      WQ_CPU_INTENSIVE, 1);
 	if (!info->fwu_workqueue) {
 		pr_err("ERROR: Cannot create fwu work thread\n");
 		goto ProbeErrorExit_7;
@@ -4406,10 +4415,9 @@ static int fts_probe(struct spi_device *client)
 	if (error < OK)
 		pr_err("Error: can not create /proc file!\n");
 
-#ifndef FW_UPDATE_ON_PROBE
-	queue_delayed_work(info->fwu_workqueue, &info->fwu_work,
-			   msecs_to_jiffies(EXP_FN_WORK_DELAY_MS));
-#endif
+	if (info->fwu_workqueue)
+		queue_delayed_work(info->fwu_workqueue, &info->fwu_work,
+				   msecs_to_jiffies(EXP_FN_WORK_DELAY_MS));
 
 	pr_info("Probe Finished!\n");
 
@@ -4417,9 +4425,7 @@ static int fts_probe(struct spi_device *client)
 
 
 ProbeErrorExit_7:
-#ifdef FW_UPDATE_ON_PROBE
 	msm_drm_unregister_client(&info->notifier);
-#endif
 
 	heatmap_remove(&info->v4l2);
 
@@ -4499,9 +4505,8 @@ static int fts_remove(struct spi_device *client)
 	/* Remove the work thread */
 	destroy_workqueue(info->event_wq);
 	wakeup_source_trash(&info->wakesrc);
-#ifndef FW_UPDATE_ON_PROBE
-	destroy_workqueue(info->fwu_workqueue);
-#endif
+	if (info->fwu_workqueue)
+		destroy_workqueue(info->fwu_workqueue);
 
 	fts_enable_reg(info, false);
 	fts_get_reg(info, false);
