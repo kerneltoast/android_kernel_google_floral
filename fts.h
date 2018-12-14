@@ -263,6 +263,7 @@ struct fts_hw_platform_data {
 	int irq_gpio;	/* /< number of the gpio associated to the interrupt pin
 			 * */
 	int reset_gpio;	/* /< number of the gpio associated to the reset pin */
+	int disp_rate_gpio; /* disp_rate gpio: LOW=60Hz, HIGH=90Hz */
 	const char *vdd_reg_name;	/* /< name of the VDD regulator */
 	const char *avdd_reg_name;	/* /< name of the AVDD regulator */
 	const char *fw_name;
@@ -372,7 +373,8 @@ struct fts_ts_info {
 	int autotune_stat;	/* Attempt to autotune */
 
 	struct notifier_block notifier;	/* Notify on suspend/resume */
-	bool sensor_sleep;	/* True if suspend called */
+	int display_refresh_rate;	/* Display rate in Hz */
+	bool sensor_sleep;		/* True if suspend called */
 	struct wakeup_source wakesrc;	/* Wake Lock struct */
 
 	/* input lock */

@@ -3815,6 +3815,16 @@ static int fts_screen_state_chg_callback(struct notifier_block *nb,
 		}
 		break;
 	}
+
+	if (info->display_refresh_rate != evdata->refresh_rate) {
+		info->display_refresh_rate = evdata->refresh_rate;
+		if (gpio_is_valid(info->board->disp_rate_gpio))
+			gpio_set_value(info->board->disp_rate_gpio,
+				(info->display_refresh_rate == 90));
+		pr_info("Refresh rate changed to %d Hz.\n",
+			info->display_refresh_rate);
+	}
+
 	return NOTIFY_OK;
 }
 
@@ -3990,6 +4000,10 @@ static int fts_set_gpio(struct fts_ts_info *info)
 				__func__);
 	}
 
+	if (gpio_is_valid(bdata->disp_rate_gpio))
+		gpio_set_value(bdata->disp_rate_gpio,
+			       (info->display_refresh_rate == 90));
+
 	if (bdata->reset_gpio >= 0) {
 		retval = fts_gpio_setup(bdata->reset_gpio, true, 1, 0);
 		if (retval < 0) {
@@ -4053,9 +4067,7 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 	pr_info("switch_gpio = %d\n", bdata->switch_gpio);
 
 	bdata->irq_gpio = of_get_named_gpio_flags(np, "st,irq-gpio", 0, NULL);
-
 	pr_info("irq_gpio = %d\n", bdata->irq_gpio);
-
 
 	retval = of_property_read_string(np, "st,regulator_dvdd", &name);
 	if (retval == -EINVAL)
@@ -4084,6 +4096,13 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 		pr_info("reset_gpio = %d\n", bdata->reset_gpio);
 	} else
 		bdata->reset_gpio = GPIO_NOT_DEFINED;
+
+	if (of_property_read_bool(np, "st,disp-rate-gpio")) {
+		bdata->disp_rate_gpio =
+		    of_get_named_gpio_flags(np, "st,disp-rate-gpio", 0, NULL);
+		pr_info("disp_rate_gpio = %d\n", bdata->disp_rate_gpio);
+	} else
+		bdata->disp_rate_gpio = GPIO_NOT_DEFINED;
 
 	bdata->auto_fw_update = true;
 	if (of_property_read_bool(np, "st,disable-auto-fw-update")) {
@@ -4193,6 +4212,9 @@ static int fts_probe(struct spi_device *client)
 
 	info->client = client;
 	info->dev = &info->client->dev;
+
+	/* Set default display refresh rate */
+	info->display_refresh_rate = 60;
 
 	dev_set_drvdata(info->dev, info);
 
@@ -4559,6 +4581,8 @@ static int fts_remove(struct spi_device *client)
 		gpio_free(info->board->switch_gpio);
 	if (gpio_is_valid(info->board->reset_gpio))
 		gpio_free(info->board->reset_gpio);
+	if (gpio_is_valid(info->board->disp_rate_gpio))
+		gpio_free(info->board->disp_rate_gpio);
 
 	/* free all */
 	kfree(info);
