@@ -38,10 +38,10 @@
 
 
 /* Flash timing parameters */
-#define FLASH_RETRY_COUNT	200	/* /< number of attemps to read the
+#define FLASH_RETRY_COUNT	200	/* /< number of attempts to read the
 					 * flash status */
 #define FLASH_WAIT_BEFORE_RETRY 50	/* /< time to wait in ms between status
-					  * readings */
+					 * readings */
 
 
 #ifdef FW_H_FILE
@@ -51,9 +51,8 @@
 #endif
 
 #define FLASH_CHUNK		(64 * 1024)	/* /< Max number of bytes that
-						 * the
-						  * DMA can burn on the flash in
-						  *one shot in FTI */
+						 * the DMA can burn on the flash
+						 * in one shot in FTI */
 #define DMA_CHUNK		32	/* /< Max number of bytes that can be
 					 * written in I2C to the DMA */
 
@@ -78,7 +77,7 @@ typedef struct {
 	u8 *data;	/* /< pointer to an array of bytes which represent the
 			 * FW data */
 	u16 fw_ver;	/* /< FW version of the FW file */
-	u16 config_id;	/* /< Config ID of the FW file */
+	u16 config_ver;	/* Config version of the FW file */
 	u16 cx_ver;	/* /< Cx version of the FW file */
 	u8 externalRelease[EXTERNAL_RELEASE_INFO_SIZE];	/* /< External Release
 							 * Info of the FW file

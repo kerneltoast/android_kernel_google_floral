@@ -31,34 +31,29 @@
 
 /* CHUNKS */
 #define READ_CHUNK			1024	/* /< chunk dimension of
-						  * a single i2c read,
-						  * max allowed value is 2kB */
+						 * a single i2c read,
+						 * max allowed value is 2kB */
 #define WRITE_CHUNK			1024	/* /< chunk dimension of
-						  * a single i2c write,
-						  * max allowed value is 2kB */
+						 * a single i2c write,
+						 * max allowed value is 2kB */
 #define MEMORY_CHUNK			1024	/* /< chunk dimenasion of
-						  * a single i2c write on mem,
-						  * max allowed value is 2kB */
+						 * a single i2c write on mem,
+						 * max allowed value is 2kB */
 
 /* PROTOCOL INFO */
-/*#define I2C_INTERFACE	 /< comment if the chip use SPI bus */
+#define SPI_INETERFACE
 #ifdef I2C_INTERFACE
 #define I2C_SAD				0x49	/* /< slave address of the IC */
 #else
-#define SPI4_WIRE			/* /< comment if the master is SPI3
-					 * wires
-					  * (MOSI and MISO share same line) */
 #define SPI_DELAY_CS			10	/* /< time in usec to wait
 						 * before rising the CS */
-#define SPI_CLOCK_FREQ			7000000	/* /< clock frequency in Hz of
-						 * the SPI bus */
 #endif
 
 #define IER_ENABLE			0x41	/* /< value to write in IER_ADDR
-						  *  to enable the interrupts */
+						 *  to enable the interrupts */
 #define IER_DISABLE			0x00	/* /< value to write in IER_ADDR
-						  *  to disable the interrupts
-						  **/
+						 *  to disable the interrupts
+						 **/
 
 /* FLASH COMMAND */
 /** @defgroup flash_command Flash Commands
@@ -76,7 +71,6 @@
 #define FLASH_UNLOCK_CODE2		0x6B
 #define FLASH_UNLOCK_CODE3		0x00
 
-
 /* FLASH UVLO ENABLE PARAMETER */
 #define FLASH_UVLO_ENABLE_CODE0		0x1B
 #define FLASH_UVLO_ENABLE_CODE1		0x66
@@ -91,7 +85,6 @@
 #define INFO_BLOCK_OSC			0x1EAC
 #define INFO_BLOCK_AOFFSET		0x1D48
 #define INFO_BLOCK_CG			0x1E08
-
 
 /* FLASH ERASE and DMA PARAMETER */
 #define FLASH_ERASE_START		0x80
@@ -124,15 +117,15 @@
 
 /* SIZES FW, CODE, CONFIG, MEMH */
 /** @defgroup fw_file FW file info
-  *	All the info related to the fw file
-  *	@{
-  */
+ *	All the info related to the fw file
+ *	@{
+ */
 #define FW_HEADER_SIZE			64	/* /< dimension of the header in
 						 * .fts file */
 #define FW_HEADER_SIGNATURE		0xAA55AA55	/* /< header signature
 							 * */
 #define FW_FTB_VER			0x00000001	/* /< .ftb version */
-#define FW_BYTES_ALLIGN			4	/* /< allignment of the info */
+#define FW_BYTES_ALIGN			4	/* /< allignment of the info */
 #define FW_BIN_VER_OFFSET		16	/* /< offset of the fw version
 						 * in the .ftb file */
 #define FW_BIN_CONFIG_ID_OFFSET		20	/* /< offset of the config id in
@@ -166,8 +159,9 @@
 					 * FTI */
 #define FTS_CMD_HW_REG_W	0xFA	/* /< command to write an hw register if
 					 * FTI */
-#define FTS_CMD_FRAMEBUFFER_W	0xA6	/* /< command to write the framebuffer if
-					 * FTI */
+#define FTS_CMD_FRAMEBUFFER_W	0xA6	/* /< command to write the framebuffer
+					 * if FTI
+					 */
 #define FTS_CMD_FRAMEBUFFER_R	0xA6	/* /< command to read the framebuffer if
 					 * FTI */
 #define FTS_CMD_CONFIG_R	0xA8	/* /< command to read the config memory
@@ -179,8 +173,9 @@
 					 * FTI */
 #define FTS_CMD_HW_REG_W	0xFA	/* /< command to write an hw register if
 					 * FTI */
-#define FTS_CMD_FRAMEBUFFER_W	0xA6	/* /< command to write the framebuffer if
-					 * FTI */
+#define FTS_CMD_FRAMEBUFFER_W	0xA6	/* /< command to write the framebuffer
+					 * if FTI
+					 */
 #define FTS_CMD_FRAMEBUFFER_R	0xA7	/* /< command to read the framebuffer if
 					 * FTI */
 #define FTS_CMD_CONFIG_R	0xA9	/* /< command to read the config memory
@@ -213,7 +208,7 @@
 /** @defgroup hw_adr HW Address
   * @ingroup address
   * Important addresses of hardware registers (and sometimes their important
-  *values)
+  * values)
   * @{
   */
 
@@ -238,17 +233,15 @@
 
 /* REMAP REGISTER */
 #define ADDR_BOOT_OPTION	((u64)0x0000000020000025)	/* /< address of
-								 * Boot
-								  * option
-								  *register */
+								 * Boot option
+								 * register */
 
 /* INTERRUPT INFO */
 #define ADDR_IER		((u64)0x0000000020000029)	/* /< address of
-								 * the
-								  * Interrupt
-								  *enable
-								  *register in
-								  *FTMI */
+								 * the Interrupt
+								 * enable
+								 * register in
+								 * FTMI */
 
 /* Chip ID/Fw Version */
 #define ADDR_DCHIP_ID		((u64)0x0000000020000000)	/* /< chip id
@@ -261,12 +254,12 @@
 /* INTERFACE REGISTER */
 #define ADDR_ICR		((u64)0x000000002000002D)	/* /< address of
 								 * Device
-								  * control
-								  *register
-								  * to set the
-								  *comunication
-								  * protocol
-								  *(SPI/I2C) */
+								 * control
+								 * register
+								 * to set the
+								 * communication
+								 * protocol
+								 * (SPI/I2C) */
 
 #define SPI4_MASK		0x02	/* /< bit to set spi4 */
 
@@ -281,7 +274,7 @@
 								 * register in
 								 * FTI */
 #define CRC_MASK		0x03	/* /< bitmask which reveal if
-					  * there is a CRC error in the flash */
+					 * there is a CRC error in the flash */
 
 #define ADDR_CONFIG_OFFSET	((u64)0x0000000000000000)	/* /< config
 								 * address in

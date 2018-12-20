@@ -1,7 +1,8 @@
-#
-# Makefile for the touchscreen drivers.
-#
+KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
+M ?= $(shell pwd)
 
-obj-y		+= fts.o fts_proc.o fts_lib/
+KBUILD_OPTIONS += CONFIG_TOUCHSCREEN_FTS=m
 
+modules modules_install clean:
+	$(MAKE) -C $(KERNEL_SRC) M=$(M) $(KBUILD_OPTIONS) $(@)
 

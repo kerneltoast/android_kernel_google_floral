@@ -1,5 +1,5 @@
 /*
-  * fts.c
+  * fts.h
   *
   * FTS Capacitive touch screen controller (FingerTipS)
   *
@@ -33,8 +33,14 @@
 #define _LINUX_FTS_I2C_H_
 
 #include <linux/device.h>
+#include <linux/input/heatmap.h>
+#include <linux/pm_qos.h>
 #include "fts_lib/ftsSoftware.h"
 #include "fts_lib/ftsHardware.h"
+
+#ifdef CONFIG_TOUCHSCREEN_TBN
+#include <linux/input/touch_bus_negotiator.h>
+#endif
 
 
 /****************** CONFIGURATION SECTION ******************/
@@ -49,26 +55,32 @@
 							 * */
 #define FTS_TS_DRV_VER		0x05021003	/* driver version u32 format */
 
-#define DEBUG	/* /< define to print more logs in the kernel log
-		  * and better follow the code flow */
-
-#define DRIVER_TEST	/* /< if defined allow to use and test special functions
-			  * of the driver and fts_lib from comand shell
-			  * (usefull for enginering/debug operations) */
-
-
-/* If both COMPUTE_INIT_METHOD and PRE_SAVED_METHOD are not defined,
- * driver will be automatically configured as GOLDEN_VALUE_METHOD */
-#define COMPUTE_INIT_METHOD  /*Allow to compute init data on phone during
-								production */
-#define SKIP_PRODUCTION_TEST /* Allow to skip Production test*/
-
-#ifndef COMPUTE_INIT_METHOD
-		#define PRE_SAVED_METHOD /* Pre-Saved Method used
-					  * during production */
+/* #define DEBUG */	/* /< define to print more logs in the kernel log
+			 * and better follow the code flow */
+#ifdef pr_fmt
+#undef pr_fmt
+#define pr_fmt(fmt) "[ FTS ] " fmt
 #endif
 
-#define FW_H_FILE			 /* include the FW data as header file */
+#define DRIVER_TEST	/* /< if defined allow to use and test special functions
+			  * of the driver and fts_lib from command shell
+			  * (useful for enginering/debug operations) */
+
+/* If both COMPUTE_INIT_METHOD and PRE_SAVED_METHOD are not defined,
+ * driver will be automatically configured as GOLDEN_VALUE_METHOD
+ */
+#define COMPUTE_INIT_METHOD  /* Allow to compute init data on phone during
+			      * production
+			      */
+#define SKIP_PRODUCTION_TEST /* Allow to skip Production test */
+
+#ifndef COMPUTE_INIT_METHOD
+#define PRE_SAVED_METHOD /* Pre-Saved Method used
+			  * during production
+			  */
+#endif
+
+/*#define FW_H_FILE*/			/* include the FW data as header file */
 #ifdef FW_H_FILE
 #define FW_SIZE_NAME	myArray_size	/* FW data array size */
 #define FW_ARRAY_NAME	myArray	/* FW data array name */
@@ -78,7 +90,7 @@
 #ifndef FW_UPDATE_ON_PROBE
 /* Include the Production Limit File as header file, can be commented to use a
   * .csv file instead */
-#define LIMITS_H_FILE
+/* #define LIMITS_H_FILE */
 #ifdef LIMITS_H_FILE
 	#define LIMITS_SIZE_NAME	myArray2_size	/* /< name of the
 							 * variable
@@ -115,8 +127,8 @@
 							  *array */
 #endif
 
-#define USE_ONE_FILE_NODE
-/* allow to enable/disable all the features just using one file node */
+/* #define USE_ONE_FILE_NODE */	/* /< allow to enable/disable all the features
+  * just using one file node */
 
 #ifndef FW_UPDATE_ON_PROBE
 #define EXP_FN_WORK_DELAY_MS 1000	/* /< time in ms elapsed after the probe
@@ -161,10 +173,10 @@
 
 
 /* **** PANEL SPECIFICATION **** */
-#define X_AXIS_MAX	1440	/* /< Max X coordinate of the display */
 #define X_AXIS_MIN	0	/* /< min X coordinate of the display */
-#define Y_AXIS_MAX	2959	/* /< Max Y coordinate of the display */
 #define Y_AXIS_MIN	0	/* /< min Y coordinate of the display */
+#define Y_AXIS_MAX	2959	/* /< Max Y coordinate of the display */
+#define X_AXIS_MAX	1440	/* /< Max X coordinate of the display */
 
 #define PRESSURE_MIN	0	/* /< min value of pressure reported */
 #define PRESSURE_MAX	127	/* /< Max value of pressure reported */
@@ -188,6 +200,24 @@
 /**@}*/
 /*********************************************************/
 
+/* **** LOCAL HEATMAP FEATURE *** */
+#define LOCAL_HEATMAP_WIDTH 7
+#define LOCAL_HEATMAP_HEIGHT 7
+#define LOCAL_HEATMAP_MODE 0xC1
+
+struct heatmap_report {
+	uint8_t prefix; /* always should be 0xA0 */
+	uint8_t mode; /* mode should be 0xC1 for heatmap */
+
+	uint16_t counter; /* LE order, should increment on each heatmap read */
+	int8_t offset_x;
+	uint8_t size_x;
+	int8_t offset_y;
+	uint8_t size_y;
+	/* data is in LE order; order should be enforced after data is read */
+	strength_t data[LOCAL_HEATMAP_WIDTH * LOCAL_HEATMAP_HEIGHT];
+} __attribute__((packed));
+/* **** END **** */
 
 /*
   * Configuration mode
@@ -205,11 +235,11 @@
   * @{
   */
 #define MODE_NOTHING 0x00000000	/* /< nothing enabled (sense off) */
-#define MODE_ACTIVE(_mask, _sett)	(_mask |= (SCAN_MODE_ACTIVE << 24) | \
-						  (_sett << 16))
+#define MODE_ACTIVE(_mask, _sett)	\
+	(_mask |= (SCAN_MODE_ACTIVE << 24) | (_sett << 16))
 /* /< store the status of scan mode active and its setting */
-#define MODE_LOW_POWER(_mask, _sett)	(_mask |= (SCAN_MODE_LOW_POWER << 24) | \
-						  (_sett << 16))
+#define MODE_LOW_POWER(_mask, _sett)	\
+	(_mask |= (SCAN_MODE_LOW_POWER << 24) | (_sett << 16))
 /* /< store the status of scan mode low power and its setting */
 #define IS_POWER_MODE(_mask, _mode)	((_mask&(_mode<<24)) != 0x00)
 /* /< check the current mode of the IC */
@@ -234,23 +264,35 @@ struct fts_hw_platform_data {
 	int irq_gpio;	/* /< number of the gpio associated to the interrupt pin
 			 * */
 	int reset_gpio;	/* /< number of the gpio associated to the reset pin */
+	int disp_rate_gpio; /* disp_rate gpio: LOW=60Hz, HIGH=90Hz */
 	const char *vdd_reg_name;	/* /< name of the VDD regulator */
 	const char *avdd_reg_name;	/* /< name of the AVDD regulator */
+	const char *fw_name;
+	const char *limits_name;
 	int x_axis_max;
 	int y_axis_max;
+	bool auto_fw_update;
+};
+
+/* Bits for the bus reference mask */
+enum {
+	FTS_BUS_REF_SCREEN_ON		= 0x01,
+	FTS_BUS_REF_IRQ			= 0x02,
+	FTS_BUS_REF_FW_UPDATE		= 0x04,
+	FTS_BUS_REF_SYSFS		= 0x08,
+	FTS_BUS_REF_FORCE_ACTIVE	= 0x10
 };
 
 /*
   * Forward declaration
   */
 struct fts_ts_info;
-extern char tag[8];	/* /< forward the definition of the label used
-			  * to print the log in the kernel log */
 
 /*
   * Dispatch event handler
+  * Return true if the handler has processed a pointer event
   */
-typedef void (*event_dispatch_handler_t)
+typedef bool (*event_dispatch_handler_t)
 	(struct fts_ts_info *info, unsigned char *data);
 
 /**
@@ -265,7 +307,7 @@ typedef void (*event_dispatch_handler_t)
   * - mode            Device operating mode (bitmask) \n
   * - touch_id        Bitmask for touch id (mapped to input slots) \n
   * - stylus_id       Bitmask for tracking the stylus touches (mapped using the
-  * touchId) \n
+  *                   touchId) \n
   * - timer           Timer when operating in polling mode \n
   * - power           Power on/off routine \n
   * - board           HW info retrieved from device tree \n
@@ -278,7 +320,8 @@ typedef void (*event_dispatch_handler_t)
   * - wakesrc         Wakeup Source struct \n
   * - input_report_mutex  mutex for handling the pressure of keys \n
   * - series_of_switches  to store the enabling status of a particular feature
-  * from the host \n
+  *                       from the host \n
+  * - tbn             Touch Bus Negotiator context
   */
 struct fts_ts_info {
 	struct device           *dev;	/* Pointer to the device */
@@ -289,16 +332,19 @@ struct fts_ts_info {
 #endif
 	struct input_dev        *input_dev;	/* Input device structure */
 
-	struct work_struct work;	/* Event work thread */
 	struct work_struct suspend_work;	/* Suspend work thread */
 	struct work_struct resume_work;	/* Resume work thread */
 	struct workqueue_struct *event_wq;	/* Used for event handler, */
 						/* suspend, resume threads */
 
-#ifndef FW_UPDATE_ON_PROBE
+	struct completion bus_resumed;		/* resume_work complete */
+
+	struct pm_qos_request pm_qos_req;
+
+	struct v4l2_heatmap v4l2;
+
 	struct delayed_work fwu_work;	/* Work for fw update */
 	struct workqueue_struct *fwu_workqueue;	/* Fw update work queue */
-#endif
 	event_dispatch_handler_t *event_dispatch_table;	/* Dispatch table */
 
 	struct attribute_group attrs;	/* SysFS attributes */
@@ -310,16 +356,26 @@ struct fts_ts_info {
 	unsigned long stylus_id;	/* Bitmask for the stylus */
 #endif
 
+	u64 timestamp; /* nanoseconds, acquired during hard interrupt */
+
 	struct fts_hw_platform_data     *board;	/* HW info from device tree */
 	struct regulator        *vdd_reg;	/* DVDD power regulator */
 	struct regulator        *avdd_reg;	/* AVDD power regulator */
 
+	spinlock_t fts_int;	/* Spinlock to protect interrupt toggling */
+	bool irq_enabled;	/* Interrupt state */
+
+	struct mutex bus_mutex;	/* Protect access to the bus */
+	unsigned int bus_refmask; /* References to the bus */
+
 	int resume_bit;	/* Indicate if screen off/on */
 	int fwupdate_stat;	/* Result of a fw update */
 	int reflash_fw;	/* Attempt to reflash fw */
+	int autotune_stat;	/* Attempt to autotune */
 
 	struct notifier_block notifier;	/* Notify on suspend/resume */
-	bool sensor_sleep;	/* True if suspend called */
+	int display_refresh_rate;	/* Display rate in Hz */
+	bool sensor_sleep;		/* True if suspend called */
 	struct wakeup_source wakesrc;	/* Wake Lock struct */
 
 	/* input lock */
@@ -332,6 +388,18 @@ struct fts_ts_info {
 	int stylus_enabled;	/* Stylus mode */
 	int cover_enabled;	/* Cover mode */
 	int grip_enabled;	/* Grip mode */
+
+#ifdef CONFIG_TOUCHSCREEN_TBN
+	struct tbn_context	*tbn;
+#endif
+
+	/* Preallocated i/o read buffer */
+	u8 io_read_buf[READ_CHUNK + DUMMY_FIFO];
+	/* Preallocated i/o write buffer */
+	u8 io_write_buf[WRITE_CHUNK + BITS_64 + DUMMY_FIFO];
+	/* Preallocated i/o extra write buffer */
+	u8 io_extra_write_buf[WRITE_CHUNK + BITS_64 + DUMMY_FIFO];
+
 };
 
 int fts_chip_powercycle(struct fts_ts_info *info);
@@ -341,5 +409,8 @@ extern int input_unregister_notifier_client(struct notifier_block *nb);
 /* export declaration of functions in fts_proc.c */
 extern int fts_proc_init(void);
 extern int fts_proc_remove(void);
+
+/* Bus reference tracking */
+int fts_set_bus_ref(struct fts_ts_info *info, u16 ref, bool enable);
 
 #endif

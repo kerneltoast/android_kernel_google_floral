@@ -36,8 +36,8 @@
 #define COMP_DATA_HEADER	DATA_HEADER	/* /< size in bytes of
 						 * initialization data header */
 #define COMP_DATA_GLOBAL	(16 - COMP_DATA_HEADER)	/* /< size in bytes
-							  * of initialization
-							  *data general info */
+							 * of initialization
+							 * data general info */
 
 
 #define HEADER_SIGNATURE	0xA5	/* /< signature used as starting byte of
@@ -61,7 +61,7 @@ typedef struct {
   */
 typedef struct {
 	DataHeader header;	/* /< Header */
-	i8 cx1;	/* /< Cx1 value (can be negative)) */
+	i8 cx1;			/* /< Cx1 value (can be negative)) */
 	i8 *node_data;	/* /< Pointer to an array of bytes which contains the
 			 * CX2 data (can be negative) */
 	int node_data_size;	/* /< size of the data */
@@ -86,10 +86,10 @@ typedef struct {
 			 * Ix2 data node */
 	i8 *cx2_fm;	/* /< pointer to an array of bytes which contains Force
 			 * Cx2 data node
-			  * (can be negative) */
+			 * (can be negative) */
 	i8 *cx2_sn;	/* /< pointer to an array of bytes which contains Sense
 			 * Cx2 data node
-			  * (can be negative)) */
+			 * (can be negative)) */
 } SelfSenseData;
 
 /**
@@ -114,10 +114,10 @@ typedef struct {
 			 * SS IX Sense data */
 	short *cx_fm;	/* /< pointer to an array of ushort which contains TOT
 			 * SS CX Force data
-			  * (can be negative) */
+			 * (can be negative) */
 	short *cx_sn;	/* /< pointer to an array of ushort which contains TOT
 			 * SS CX Sense data
-			  * (can be negative) */
+			 * (can be negative) */
 } TotSelfSenseData;
 
 /**

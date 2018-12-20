@@ -62,9 +62,8 @@ int elapsedMillisecond(StopWatch *w)
 {
 	int result;
 
-	result = ((w->end.tv_sec - w->start.tv_sec) * 1000) + (w->end.tv_nsec -
-							       w->start.tv_nsec)
-		 / 1000000;
+	result = ((w->end.tv_sec - w->start.tv_sec) * 1000) +
+		 (w->end.tv_nsec - w->start.tv_nsec) / 1000000;
 	return result;
 }
 

@@ -27,15 +27,15 @@
 
 /* HW DATA */
 #define GPIO_NOT_DEFINED	-1	/* /< value assumed by reset_gpio when
-					  * the reset pin of the IC is not
-					  * connected */
+					 * the reset pin of the IC is not
+					 * connected */
 
 
 #define ADDR_SIZE_HW_REG	BITS_32	/* /< value of AddrSize for Hw register
-					  * in FTI @see AddrSize */
+					 * in FTI @see AddrSize */
 
 #define DATA_HEADER		4	/* /< size in byte of the header loaded
-					  * with the data in the frambuffer */
+					 * with the data in the frambuffer */
 
 /**
   * Type of CRC errors
@@ -49,7 +49,7 @@ typedef enum {
 
 /* CHIP INFO */
 /** @defgroup system_info	System Info
-  * System Info Data collect the most important informations about hw and fw
+  * System Info Data collect the most important information about hw and fw
   * @{
   */
 /* Size in bytes of System Info data */
@@ -58,26 +58,26 @@ typedef enum {
 						 * in config */
 #define EXTERNAL_RELEASE_INFO_SIZE	8	/* Num bytes of release info in
 						 * sys info
-						  *  (first bytes are external
-						  *release) */
+						 *  (first bytes are external
+						 * release) */
 #define RELEASE_INFO_SIZE		(EXTERNAL_RELEASE_INFO_SIZE)
 /** @}*/
 
 /* RETRY MECHANISM */
-#define RETRY_MAX_REQU_DATA		2	/* /< Max number of attemps
+#define RETRY_MAX_REQU_DATA		2	/* /< Max number of attempts
 						 * performed
-						  * when requesting data */
-#define RETRY_SYSTEM_RESET		3	/* /< Max number of attemps
+						 * when requesting data */
+#define RETRY_SYSTEM_RESET		3	/* /< Max number of attempts
 						 * performed
-						  * to reset the IC */
+						 * to reset the IC */
 
 /** @addtogroup system_info
   * @{
   */
 
 /**
-  * Struct which contains fundamental informations about the chip and its
-  *configuration
+  * Struct which contains fundamental information about the chip and its
+  * configuration
   */
 typedef struct {
 	u16 u16_apiVer_rev;	/* /< API revision version */
@@ -149,7 +149,7 @@ typedef struct {
 	u16 u16_ssHvrTxFilterAddr;	/* /< Offset of SS hover Force filter
 					 * frame */
 	u16 u16_ssHvrTxStrenAddr;/* /< Offset of SS hover Force strength frame
-				 * */
+				  * */
 	u16 u16_ssHvrTxBaselineAddr;	/* /< Offset of SS hover Force baseline
 					 * frame */
 
@@ -173,18 +173,17 @@ typedef struct {
 	u16 u16_ssPrxRxFilterAddr;	/* /< Offset of SS proximity sense
 					 * filter frame */
 	u16 u16_ssPrxRxStrenAddr;/* /< Offset of SS proximity sense strength
-				 * frame */
+				  * frame */
 	u16 u16_ssPrxRxBaselineAddr;	/* /< Offset of SS proximity sense
 					 * baseline frame */
 
 	u16 u16_ssDetRawAddr;		/* /< Offset of SS detect raw frame */
 	u16 u16_ssDetFilterAddr;	/* /< Offset of SS detect filter
 					 * frame */
-	u16 u16_ssDetStrenAddr;	/* /< Offset of SS detect strength
+	u16 u16_ssDetStrenAddr;		/* /< Offset of SS detect strength
 					 * frame */
 	u16 u16_ssDetBaselineAddr;	/* /< Offset of SS detect baseline
 					 * frame */
-
 } SysInfo;
 
 /** @}*/
@@ -206,14 +205,11 @@ int writeSysCmd(u8 sys_cmd, u8 *sett, int size);
 int readSysInfo(int request);
 int readConfig(u16 offset, u8 *outBuf, int len);
 int writeConfig(u16 offset, u8 *data, int len);
-int fts_disableInterrupt(void);
-int fts_disableInterruptNoSync(void);
-int fts_resetDisableIrqCount(void);
-int fts_enableInterrupt(void);
+int fts_enableInterrupt(bool enable);
 int fts_crc_check(void);
 int requestSyncFrame(u8 type);
 int setActiveScanFrequency(u32 freq);
-int writeHostDataMemory(u8 type, u8 *data, u8 msForceLen, u8 msSenseLen, u8
-			ssForceLen, u8 ssSenseLen, int save);
+int writeHostDataMemory(u8 type, u8 *data, u8 msForceLen, u8 msSenseLen,
+			u8 ssForceLen, u8 ssSenseLen, int save);
 int saveMpFlag(u8 mpflag);
 #endif	/* FTS_CORE_H */

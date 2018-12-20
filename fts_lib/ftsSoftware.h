@@ -25,14 +25,6 @@
 #include <linux/types.h>
 #include "ftsHardware.h"
 
-
-
-/* unsigned types */
-typedef uint8_t u8;	/* /< basic type that represent one byte (or 8 bits) */
-typedef uint16_t u16;	/* /< basic type that represent 2 bytes (or 16 bits) */
-typedef uint32_t u32;	/* /< basic type that represent 4 bytes (or 32 bits) */
-typedef uint64_t u64;	/* /< basic type that represent 8 bytes (or 64 bits) */
-
 /* signed type */
 typedef signed char i8;	/* /< basic type that represent one signed byte (or 8
 			 * bits) */
@@ -108,7 +100,7 @@ typedef enum {
 /** @defgroup active_bitmask Active Mode Bitmask
   * @ingroup scan_opt
   * Bitmask to use to enables the specific scanning with the SCAN_MODE_ACTIVE
-  *option
+  * option
   * @{
   */
 #define ACTIVE_MULTI_TOUCH	0x01	/* /< Bit 0 MS/SS scan */
@@ -122,7 +114,7 @@ typedef enum {
 /** @defgroup locked_opt Locked Mode Option
   * @ingroup scan_opt
   * Options to enable and lock specific scanning with the SCAN_MODE_LOCKED
-  *option
+  * option
   * @{
   */
 #define LOCKED_ACTIVE		0x00	/* /< Active Scan Mode */
@@ -135,9 +127,11 @@ typedef enum {
 #define LOCKED_ONLY_MUTUAL_2	0x06	/* /< Only Mutual Sense scan mode */
 #define LOCKED_ONLY_MUTUAL_3	0x07	/* /< Only Mutual Sense scan mode at
 					 * highest freq */
-#define LOCKED_SINGLE_ENDED_ONLY_MUTUAL_0	0x20	/* /< Only Mutual Sense scan mode at
-					 * lowest freq in single ended mode */
-
+#define LOCKED_SINGLE_ENDED_ONLY_MUTUAL_0	0x20	/* /< Only Mutual Sense
+							 * scan mode at lowest
+							 * freq in single ended
+							 * mode
+							 */
 #define LOCKED_LP_DETECT	0x10	/* /< Low Power SS */
 #define LOCKED_LP_ACTIVE	0x11	/* /< Low Power MS */
 /** @}*/
@@ -155,8 +149,8 @@ typedef enum {
 #define FEAT_SEL_GESTURE	0x03	/* /< Gesture Mode */
 #define FEAT_SEL_GRIP		0x04	/* /< Grip Detection */
 #define FEAT_SEL_STYLUS		0x07	/* /< Stylus Mode
-					  * (this is a driver define, not
-					  *available in FW) */
+					 * (this is a driver define, not
+					 * available in FW) */
 /** @}*/
 
 /* Feature Settings */
@@ -170,7 +164,7 @@ typedef enum {
 /** @defgroup charger_opt	 Charger Mode Option
   * @ingroup feat_sel
   * Option for Charger Mode, it is a bitmask where the each bit indicate a
-  *different kind of chager
+  * different kind of chager
   * @{
   */
 #define CHARGER_CABLE	0x01	/* /< normal usb charger */
@@ -182,7 +176,7 @@ typedef enum {
   * @ingroup feat_sel
   * Gesture IDs of the predefined gesture recognized by the fw.
   * The ID represent also the position of the corresponding bit in the gesture
-  *mask
+  * mask
   * @{
   */
 #define GEST_ID_UP_1F		0x01	/* /< Bottom to Top line */
@@ -379,7 +373,7 @@ typedef enum {
 #define EVT_ID_ERROR		0xF3	/* /< Error Event */
 
 /* /< Max number of unique event IDs supported */
-#define NUM_EVT_ID		(((EVT_ID_ERROR & 0xF0) >> 4)+1)
+#define NUM_EVT_ID		(((EVT_ID_ERROR & 0xF0) >> 4) + 1)
 
 /** @}*/
 
@@ -390,10 +384,10 @@ typedef enum {
   * @{
   */
 #define EVT_TYPE_STATUS_ECHO		0x01	/* /< Echo event,
-						  * contain the first 5 bytes of
-						  * the FW command sent */
+						 * contain the first 5 bytes of
+						 * the FW command sent */
 #define EVT_TYPE_STATUS_FRAME_DROP	0x03	/* /< Some frame was skipped
-						  * during the elaboration */
+						 * during the elaboration */
 #define EVT_TYPE_STATUS_FORCE_CAL	0x05	/* /< Force Calibration has
 						 * triggered */
 #define EVT_TYPE_STATUS_WATER		0x06	/* /< Water Mode */
@@ -470,7 +464,7 @@ typedef enum {
 /** @defgroup config_adr SW Address
   * @ingroup address
   * Important addresses of data stored into Config memory (and sometimes their
-  *dimensions)
+  * dimensions)
   * @{
   */
 #define ADDR_CONFIG_ID		0x0010	/* /< Starting Address of the config ID
@@ -490,22 +484,22 @@ typedef enum {
 					 * register */
 #define ADDR_CONFIG_R0_CYCLE	0x01F2	/* /< Address where is stored the first
 					 * R cycle */
-
 /** @}*/
 
 /** @}*/
 
-/** @defgroup mp_flags MP Flags value
-  * @ingroup mp_test
-  * Specify the MP flags value which are written into the flash after performing
-  * a full panel initialization which pass all the tests.
-  * @{
-  */
+/* @defgroup mp_flags MP Flags value
+ * @ingroup mp_test
+ * Specify the MP flags value which are written into the flash after performing
+ * a full panel initialization which pass all the tests.
+ * @{
+ */
 
 #define MP_FLAG_FACTORY		0xA5	/* /< Full Panel Init done in factory */
 #define MP_FLAG_BOOT		0x5A	/* /< Full Panel Init done at boot */
 #define MP_FLAG_OTHERS		0xFF   /* /< Full Panel Init done somewhere
-					 * else */
+					* else
+					*/
 
 /** @}*/
 

@@ -50,22 +50,22 @@
   * @param count size of buff
   * @param result pointer to the array of characters that compose the HEX final
   * string
+  * @param size size of result
   * @return pointer to the array of characters that compose the HEX string,
   * (same address of result)
   * @warning result MUST be allocated outside the function and should be
   * big enough to contain the data converted as HEX!
   */
-char *printHex(char *label, u8 *buff, int count, u8 *result)
+char *printHex(char *label, u8 *buff, int count, u8 *result, int size)
 {
-	int i, offset;
+	int i, offset = 0;
 
-	offset = strlen(label);
-	strlcpy(result, label, offset+1); /* +1 for terminator char */
-
+	offset = scnprintf(result + offset, size - offset, "%s", label);
 	for (i = 0; i < count; i++) {
-		snprintf(&result[offset], 4, "%02X ", buff[i]);
-		/* this append automatically a null terminator char */
-		offset += 3;
+		offset +=
+			scnprintf(result + offset,
+				 size - offset, "%02X ", buff[i]);
+			/* this append automatically a null terminator char */
 	}
 	return result;
 }
@@ -81,11 +81,11 @@ int flushFIFO(void)
 
 	ret = writeSysCmd(SYS_CMD_SPECIAL, &sett, 1);	/* flush the FIFO */
 	if (ret < OK) {
-		logError(1, "%s flushFIFO: ERROR %08X\n", tag, ret);
+		pr_err("flushFIFO: ERROR %08X\n", ret);
 		return ret;
 	}
 
-	logError(0, "%s FIFO flushed!\n", tag);
+	pr_info("FIFO flushed!\n");
 	return OK;
 }
 
@@ -111,8 +111,8 @@ int u8ToU16n(u8 *src, int src_length, u16 *dst)
 		dst = (u16 *)kmalloc((src_length / 2) * sizeof(u16),
 				     GFP_KERNEL);
 		for (i = 0; i < src_length; i += 2) {
-			dst[j] = ((src[i + 1] & 0x00FF) << 8) + (src[i] &
-								 0x00FF);
+			dst[j] = ((src[i + 1] & 0x00FF) << 8) +
+				 (src[i] & 0x00FF);
 			j++;
 		}
 	}
@@ -255,9 +255,9 @@ int u32ToU8_be(u32 src, u8 *dst)
   * Execute a function passed as argment and retry it defined number of times if
   * not successful
   * @param code pointer to a function which return an int and doesn't have any
-  *parameters
+  * parameters
   * @param wait_before_retry interval of time in ms to wait between one trial
-  *and another one
+  * and another one
   * @param retry_count max number of retry to attemp
   * @return last return value obtained from the last execution of the code
   *function
@@ -271,7 +271,7 @@ int attempt_function(int (*code)(void), unsigned long wait_before_retry, int
 	do {
 		result = code();
 		count++;
-		msleep(wait_before_retry);
+		mdelay(wait_before_retry);
 	} while (count < retry_count && result < 0);
 
 
@@ -291,11 +291,11 @@ int senseOn(void)
 
 	ret = setScanMode(SCAN_MODE_ACTIVE, 0xFF);	/* enable all */
 	if (ret < OK) {
-		logError(1, "%s senseOn: ERROR %08X\n", tag, ret);
+		pr_err("senseOn: ERROR %08X\n", ret);
 		return ret;
 	}
 
-	logError(0, "%s senseOn: SENSE ON\n", tag);
+	pr_info("senseOn: SENSE ON\n");
 	return OK;
 }
 
@@ -309,11 +309,11 @@ int senseOff(void)
 
 	ret = setScanMode(SCAN_MODE_ACTIVE, 0x00);
 	if (ret < OK) {
-		logError(1, "%s senseOff: ERROR %08X\n", tag, ret);
+		pr_err("senseOff: ERROR %08X\n", ret);
 		return ret;
 	}
 
-	logError(0, "%s senseOff: SENSE OFF\n", tag);
+	pr_info("senseOff: SENSE OFF\n");
 	return OK;
 }
 
@@ -329,17 +329,17 @@ int cleanUp(int enableTouch)
 {
 	int res;
 
-	logError(0, "%s cleanUp: system reset...\n", tag);
+	pr_info("cleanUp: system reset...\n");
 	res = fts_system_reset();
 	if (res < OK)
 		return res;
 	if (enableTouch) {
-		logError(0, "%s cleanUp: enabling touches...\n", tag);
+		pr_info("cleanUp: enabling touches...\n");
 		res = senseOn();	/* already enable everything */
 		if (res < OK)
 			return res;
-		logError(0, "%s cleanUp: enabling interrupts...\n", tag);
-		res = fts_enableInterrupt();
+		pr_info("cleanUp: enabling interrupts...\n");
+		res = fts_enableInterrupt(true);
 		if (res < OK)
 			return res;
 	}
@@ -353,25 +353,26 @@ int cleanUp(int enableTouch)
   * @param size size of data
   * @param columns number of columns that the resulting matrix should have.
   * @return a reference to a matrix of short where for each row there are
-  *columns elements
+  * columns elements
   */
 short **array1dTo2d_short(short *data, int size, int columns)
 {
 	int i;
 	short **matrix = NULL;
+
 	if (size == 0) {
-		matrix = (short **)kmalloc(1 *
-					   sizeof(short *), GFP_KERNEL);
-		matrix[0] = (short *)kmalloc(0 *
-					   sizeof(short), GFP_KERNEL);
+		matrix = (short **)kmalloc_array(1,
+				sizeof(short *), GFP_KERNEL);
+		matrix[0] = (short *)kmalloc_array(0,
+				sizeof(short), GFP_KERNEL);
 	} else {
-		matrix = (short **)kmalloc(((int)(size / columns)) *
-						   sizeof(short *), GFP_KERNEL);
+		matrix = (short **)kmalloc_array(((int)(size / columns)),
+				sizeof(short *), GFP_KERNEL);
 
 		if (matrix != NULL) {
 			for (i = 0; i < (int)(size / columns); i++)
-				matrix[i] = (short *)kmalloc(columns * sizeof(short),
-							     GFP_KERNEL);
+				matrix[i] = (short *)kmalloc_array(columns,
+						sizeof(short), GFP_KERNEL);
 
 			for (i = 0; i < size; i++)
 				matrix[i / columns][i % columns] = data[i];
@@ -388,27 +389,24 @@ short **array1dTo2d_short(short *data, int size, int columns)
   * @param size size of data
   * @param columns number of columns that the resulting matrix should have.
   * @return a reference to a matrix of u16 where for each row there are columns
-  *elements
+  * elements
   */
 u16 **array1dTo2d_u16(u16 *data, int size, int columns)
 {
 	int i;
 	u16 **matrix = NULL;
 
-
 	if (size == 0) {
-		matrix = (u16 **)kmalloc(1 *
-					   sizeof(u16 *), GFP_KERNEL);
-		matrix[0] = (u16 *)kmalloc(0 *
-					   sizeof(u16), GFP_KERNEL);
+		matrix = (u16 **)kmalloc_array(1, sizeof(u16 *), GFP_KERNEL);
+		matrix[0] = (u16 *)kmalloc_array(0, sizeof(u16), GFP_KERNEL);
 	} else {
-		matrix = (u16 **)kmalloc(((int)(size / columns)) *
+		matrix = (u16 **)kmalloc_array(((int)(size / columns)),
 				sizeof(u16 *), GFP_KERNEL);
 
 		if (matrix != NULL) {
 			for (i = 0; i < (int)(size / columns); i++)
-				matrix[i] = (u16 *)kmalloc(columns *
-					sizeof(u16), GFP_KERNEL);
+				matrix[i] = (u16 *)kmalloc_array(columns,
+						sizeof(u16), GFP_KERNEL);
 
 			for (i = 0; i < size; i++)
 				matrix[i / columns][i % columns] = data[i];
@@ -425,29 +423,26 @@ u16 **array1dTo2d_u16(u16 *data, int size, int columns)
   * @param size size of data
   * @param columns number of columns that the resulting matrix should have.
   * @return a reference to a matrix of short where for each row there are
-  *columns elements
+  * columns elements
   */
 u8 **array1dTo2d_u8(u8 *data, int size, int columns)
 {
 	int i;
 	u8 **matrix = NULL;
 
-
 	if (size == 0) {
-		matrix = (u8 **)kmalloc(1 *
-					   sizeof(u8 *), GFP_KERNEL);
+		matrix = (u8 **)kmalloc_array(1, sizeof(u8 *), GFP_KERNEL);
 
-		matrix[0] = (u8 *)kmalloc(0 *
-					   sizeof(u8), GFP_KERNEL);
+		matrix[0] = (u8 *)kmalloc_array(0, sizeof(u8), GFP_KERNEL);
 	} else {
 
-		matrix = (u8 **)kmalloc(((int)(size / columns)) * sizeof(u8 *),
-				     GFP_KERNEL);
+		matrix = (u8 **)kmalloc_array(((int)(size / columns)),
+				sizeof(u8 *), GFP_KERNEL);
 
 		if (matrix != NULL) {
 			for (i = 0; i < (int)(size / columns); i++)
-				matrix[i] = (u8 *)kmalloc(columns * sizeof(u8),
-							  GFP_KERNEL);
+				matrix[i] = (u8 *)kmalloc_array(columns,
+						sizeof(u8), GFP_KERNEL);
 
 			for (i = 0; i < size; i++)
 				matrix[i / columns][i % columns] = data[i];
@@ -464,7 +459,7 @@ u8 **array1dTo2d_u8(u8 *data, int size, int columns)
   * @param size size of data
   * @param columns number of columns that the resulting matrix should have.
   * @return a reference to a matrix of short where for each row there are
-  *columns elements
+  * columns elements
   */
 i8 **array1dTo2d_i8(i8 *data, int size, int columns)
 {
@@ -472,18 +467,16 @@ i8 **array1dTo2d_i8(i8 *data, int size, int columns)
 	i8 **matrix = NULL;
 
 	if (size == 0) {
-		matrix = (i8 **)kmalloc(1 *
-					   sizeof(i8 *), GFP_KERNEL);
-		matrix[0] = (i8 *)kmalloc(0 *
-					   sizeof(i8), GFP_KERNEL);
+		matrix = (i8 **)kmalloc_array(1, sizeof(i8 *), GFP_KERNEL);
+		matrix[0] = (i8 *)kmalloc_array(0, sizeof(i8), GFP_KERNEL);
 	} else {
-		matrix = (i8 **)kmalloc(((int)(size / columns)) * sizeof(i8 *),
-					     GFP_KERNEL);
+		matrix = (i8 **)kmalloc_array(((int)(size / columns)),
+				sizeof(i8 *), GFP_KERNEL);
 
 		if (matrix != NULL) {
 			for (i = 0; i < (int)(size / columns); i++)
-				matrix[i] = (i8 *)kmalloc(columns * sizeof(i8),
-							  GFP_KERNEL);
+				matrix[i] = (i8 *)kmalloc_array(columns,
+						sizeof(i8), GFP_KERNEL);
 
 			for (i = 0; i < size; i++)
 				matrix[i / columns][i % columns] = data[i];
@@ -495,7 +488,7 @@ i8 **array1dTo2d_i8(i8 *data, int size, int columns)
 
 /**
   * Print in the kernel log a label followed by a matrix of short row x columns
-  *and free its memory
+  * and free its memory
   * @param label pointer to the string to print before the actual matrix
   * @param matrix reference to the matrix of short which contain the actual data
   * @param row number of rows on which the matrix should be print
@@ -504,21 +497,32 @@ i8 **array1dTo2d_i8(i8 *data, int size, int columns)
 void print_frame_short(char *label, short **matrix, int row, int column)
 {
 	int i, j;
+	int buff_len, index;
+	char *buff;
 
-	logError(0, "%s %s\n", tag, label);
+	buff_len = (6 + 1) * column + 1; /* -32768 str len: 6 */
+	buff = kzalloc(buff_len, GFP_KERNEL);
+	if (buff == NULL) {
+		pr_err("%s: fail to allocate buffer\n", __func__);
+		return;
+	}
+
+	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
-		logError(0, "%s ", tag);
+		index = 0;
 		for (j = 0; j < column; j++)
-			printk("%d ", matrix[i][j]);
-		logError(0, "\n");
+			index += scnprintf(buff + index, buff_len - index,
+					"%d ", matrix[i][j]);
+		pr_info("%s\n", buff);
 		kfree(matrix[i]);
 	}
 	kfree(matrix);
+	kfree(buff);
 }
 
 /**
   * Print in the kernel log a label followed by a matrix of u16 row x columns
-  *and free its memory
+  * and free its memory
   * @param label pointer to the string to print before the actual matrix
   * @param matrix reference to the matrix of u16 which contain the actual data
   * @param row number of rows on which the matrix should be print
@@ -527,21 +531,32 @@ void print_frame_short(char *label, short **matrix, int row, int column)
 void print_frame_u16(char *label, u16 **matrix, int row, int column)
 {
 	int i, j;
+	int buff_len, index;
+	char *buff;
 
-	logError(0, "%s %s\n", tag, label);
+	buff_len = (5 + 1) * column + 1; /* 65535 str len: 5 */
+	buff = kzalloc(buff_len, GFP_KERNEL);
+	if (buff == NULL) {
+		pr_err("%s: fail to allocate buffer\n", __func__);
+		return;
+	}
+
+	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
-		logError(0, "%s ", tag);
+		index = 0;
 		for (j = 0; j < column; j++)
-			printk("%d ", matrix[i][j]);
-		logError(0, "\n");
+			index += scnprintf(buff + index, buff_len - index,
+					"%d ", matrix[i][j]);
+		pr_info("%s\n", buff);
 		kfree(matrix[i]);
 	}
 	kfree(matrix);
+	kfree(buff);
 }
 
 /**
   * Print in the kernel log a label followed by a matrix of u8 row x columns and
-  *free its memory
+  * free its memory
   * @param label pointer to the string to print before the actual matrix
   * @param matrix reference to the matrix of u8 which contain the actual data
   * @param row number of rows on which the matrix should be print
@@ -550,21 +565,32 @@ void print_frame_u16(char *label, u16 **matrix, int row, int column)
 void print_frame_u8(char *label, u8 **matrix, int row, int column)
 {
 	int i, j;
+	int buff_len, index;
+	char *buff;
 
-	logError(0, "%s %s\n", tag, label);
+	buff_len = (3 + 1) * column + 1; /* 255 str len: 3 */
+	buff = kzalloc(buff_len, GFP_KERNEL);
+	if (buff == NULL) {
+		pr_err("%s: fail to allocate buffer\n", __func__);
+		return;
+	}
+
+	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
-		logError(0, "%s ", tag);
+		index = 0;
 		for (j = 0; j < column; j++)
-			printk("%d ", matrix[i][j]);
-		logError(0, "\n");
+			index += scnprintf(buff + index, buff_len - index,
+					"%d ", matrix[i][j]);
+		pr_info("%s\n", buff);
 		kfree(matrix[i]);
 	}
 	kfree(matrix);
+	kfree(buff);
 }
 
 /**
   * Print in the kernel log a label followed by a matrix of i8 row x columns and
-  *free its memory
+  * free its memory
   * @param label pointer to the string to print before the actual matrix
   * @param matrix reference to the matrix of u8 which contain the actual data
   * @param row number of rows on which the matrix should be print
@@ -573,21 +599,32 @@ void print_frame_u8(char *label, u8 **matrix, int row, int column)
 void print_frame_i8(char *label, i8 **matrix, int row, int column)
 {
 	int i, j;
+	int buff_len, index;
+	char *buff;
 
-	logError(0, "%s %s\n", tag, label);
+	buff_len = (4 + 1) * column + 1; /* -128 str len: 4 */
+	buff = kzalloc(buff_len, GFP_KERNEL);
+	if (buff == NULL) {
+		pr_err("%s: fail to allocate buffer\n", __func__);
+		return;
+	}
+
+	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
-		logError(0, "%s ", tag);
+		index = 0;
 		for (j = 0; j < column; j++)
-			printk("%d ", matrix[i][j]);
-		logError(0, "\n");
+			index += scnprintf(buff + index, buff_len - index,
+					"%d ", matrix[i][j]);
+		pr_info("%s\n", buff);
 		kfree(matrix[i]);
 	}
 	kfree(matrix);
+	kfree(buff);
 }
 
 /**
   * Print in the kernel log a label followed by a matrix of u32 row x columns
-  *and free its memory
+  * and free its memory
   * @param label pointer to the string to print before the actual matrix
   * @param matrix reference to the matrix of u32 which contain the actual data
   * @param row number of rows on which the matrix should be print
@@ -596,21 +633,32 @@ void print_frame_i8(char *label, i8 **matrix, int row, int column)
 void print_frame_u32(char *label, u32 **matrix, int row, int column)
 {
 	int i, j;
+	int buff_len, index;
+	char *buff;
 
-	logError(0, "%s %s\n", tag, label);
+	buff_len = (10 + 1) * column + 1; /* 4294967295 str len: 10 */
+	buff = kzalloc(buff_len, GFP_KERNEL);
+	if (buff == NULL) {
+		pr_err("%s: fail to allocate buffer\n", __func__);
+		return;
+	}
+
+	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
-		logError(0, "%s ", tag);
+		index = 0;
 		for (j = 0; j < column; j++)
-			printk("%d ", matrix[i][j]);
-		logError(0, "\n");
+			index += scnprintf(buff + index, buff_len - index,
+					"%d ", matrix[i][j]);
+		pr_info("%s\n", buff);
 		kfree(matrix[i]);
 	}
 	kfree(matrix);
+	kfree(buff);
 }
 
 /**
   * Print in the kernel log a label followed by a matrix of int row x columns
-  *and free its memory
+  * and free its memory
   * @param label pointer to the string to print before the actual matrix
   * @param matrix reference to the matrix of int which contain the actual data
   * @param row number of rows on which the matrix should be print
@@ -619,16 +667,27 @@ void print_frame_u32(char *label, u32 **matrix, int row, int column)
 void print_frame_int(char *label, int **matrix, int row, int column)
 {
 	int i, j;
+	int buff_len, index;
+	char *buff;
 
-	logError(0, "%s %s\n", tag, label);
+	buff_len = (11 + 1) * column + 1; /* -2147483648 str len: 11 */
+	buff = kzalloc(buff_len, GFP_KERNEL);
+	if (buff == NULL) {
+		pr_err("%s: fail to allocate buffer\n", __func__);
+		return;
+	}
+
+	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
-		logError(0, "%s ", tag);
+		index = 0;
 		for (j = 0; j < column; j++)
-			printk("%d ", matrix[i][j]);
-		logError(0, "\n");
+			index += scnprintf(buff + index, buff_len - index,
+					"%d ", matrix[i][j]);
+		pr_info("%s\n", buff);
 		kfree(matrix[i]);
 	}
 	kfree(matrix);
+	kfree(buff);
 }
 
 
@@ -646,15 +705,12 @@ int u8ToU64_be(u8 *src, u64 *dest, int size)
 	/* u64 temp =0; */
 	if (size > sizeof(u64))
 		return ERROR_OP_NOT_ALLOW;
-	else {
-		*dest = 0;
 
-		for (i = 0; i < size; i++)
-			*dest |= (u64)(src[i]) << ((size - 1 - i) * 8);
+	*dest = 0;
+	for (i = 0; i < size; i++)
+		*dest |= (u64)(src[i]) << ((size - 1 - i) * 8);
 
-
-		return OK;
-	}
+	return OK;
 }
 
 /**
@@ -683,25 +739,24 @@ int u64ToU8_be(u64 src, u8 *dest, int size)
 
 /**
   * Convert a value of an id in a bitmask with a 1 in the position of the value
-  *of the id
+  * of the id
   * @param id Value of the ID to convert
   * @param mask pointer to the bitmask that will be updated with the value of id
   * @param size dimension in bytes of mask
   * @return OK if success or ERROR_OP_NOT_ALLOW if size of mask is not enough to
-  *contain ID
+  * contain ID
   */
 int fromIDtoMask(u8 id, u8 *mask, int size)
 {
 	if (((int)((id) / 8)) < size) {
-		logError(0, "%s %s: ID = %d Index = %d Position = %d !\n", tag,
+		pr_info("%s: ID = %d Index = %d Position = %d !\n",
 			 __func__, id, ((int)((id) / 8)), (id % 8));
 		mask[((int)((id) / 8))] |= 0x01 << (id % 8);
 		return OK;
 	} else {
-		logError(1,
-			 "%s %s: Bitmask too small! Impossible contain ID = %d %d>=%d! ERROR %08X\n",
-			 tag, __func__, id, ((int)((id) / 8)), size,
-			 ERROR_OP_NOT_ALLOW);
+		pr_err("%s: Bitmask too small! Impossible contain ID = %d %d>=%d! ERROR %08X\n",
+			__func__, id, ((int)((id) / 8)), size,
+			ERROR_OP_NOT_ALLOW);
 		return ERROR_OP_NOT_ALLOW;
 	}
 }

@@ -41,7 +41,7 @@ static u16 I2CSAD;	/* /< slave address of the IC in the i2c bus */
 #endif
 
 static void *client;	/* /< bus client retrived by the OS and
-				  * used to execute the bus transfers */
+			 * used to execute the bus transfers */
 
 
 
@@ -63,17 +63,16 @@ int openChannel(void *clt)
 	client = clt;
 #ifdef I2C_INTERFACE
 	I2CSAD = ((struct i2c_client *)clt)->addr;
-	logError(1, "%s openChannel: SAD: %02X\n", tag, I2CSAD);
+	pr_info("openChannel: SAD: %02X\n", I2CSAD);
 #else
-	logError(1, "%s %s: spi_master: flags = %04X !\n", tag, __func__,
+	pr_info("%s: spi_master: flags = %04X !\n", __func__,
 		 ((struct spi_device *)client)->master->flags);
-	logError(1,
-		 "%s %s: spi_device: max_speed = %d chip select = %02X bits_per_words = %d mode = %04X !\n",
-		 tag, __func__, ((struct spi_device *)client)->max_speed_hz,
-		 ((struct spi_device *)client)->chip_select,
-		 ((struct spi_device *)client)->bits_per_word,
-		 ((struct spi_device *)client)->mode);
-	logError(1, "%s openChannel: completed!\n", tag);
+	pr_info("%s: spi_device: max_speed = %d chip select = %02X bits_per_words = %d mode = %04X !\n",
+		__func__, ((struct spi_device *)client)->max_speed_hz,
+		((struct spi_device *)client)->chip_select,
+		((struct spi_device *)client)->bits_per_word,
+		((struct spi_device *)client)->mode);
+	pr_info("openChannel: completed!\n");
 #endif
 	return OK;
 }
@@ -110,7 +109,7 @@ struct device *getDev(void)
 #ifdef I2C_INTERFACE
 /**
   * Retrieve the pointer of the i2c_client struct representing the IC as i2c
-  *slave
+  * slave
   * @return client if it was previously set or NULL in all the other cases
   */
 struct i2c_client *getClient()
@@ -123,7 +122,7 @@ struct i2c_client *getClient()
 #else
 /**
   * Retrieve the pointer of the spi_device struct representing the IC as spi
-  *slave
+  * slave
   * @return client if it was previously set or NULL in all the other cases
   */
 struct spi_device *getClient()
@@ -135,42 +134,62 @@ struct spi_device *getClient()
 }
 #endif
 
+struct fts_ts_info *getDrvInfo(void)
+{
+	struct device *dev = getDev();
+	struct fts_ts_info *info = NULL;
 
+	if (dev != NULL)
+		info = dev_get_drvdata(dev);
+	return info;
+}
 
 /****************** New I2C API *********************/
 
 /**
   * Perform a direct bus read
   * @param outBuf pointer of a byte array which should contain the byte read
-  *from the IC
+  * from the IC
   * @param byteToRead number of bytes to read
   * @return OK if success or an error code which specify the type of error
   */
-int fts_read(u8 *outBuf, int byteToRead)
+static int fts_read_internal(u8 *outBuf, int byteToRead, bool dma_safe)
 {
 	int ret = -1;
 	int retry = 0;
-
+	struct fts_ts_info *info = getDrvInfo();
 #ifdef I2C_INTERFACE
 	struct i2c_msg I2CMsg[1];
-
-	I2CMsg[0].addr = (__u16)I2CSAD;
-	I2CMsg[0].flags = (__u16)I2C_M_RD;
-	I2CMsg[0].len = (__u16)byteToRead;
-	I2CMsg[0].buf = (__u8 *)outBuf;
 #else
 	struct spi_message msg;
 	struct spi_transfer transfer[1] = { { 0 } };
+#endif
 
+	if (dma_safe == false && byteToRead > sizeof(info->io_read_buf)) {
+		pr_err("%s: preallocated buffers are too small!\n", __func__);
+		return ERROR_ALLOC;
+	}
+
+#ifdef I2C_INTERFACE
+	I2CMsg[0].addr = (__u16)I2CSAD;
+	I2CMsg[0].flags = (__u16)I2C_M_RD;
+	I2CMsg[0].len = (__u16)byteToRead;
+	if (dma_safe == false)
+		I2CMsg[0].buf = (__u8 *)info->io_read_buf;
+	else
+		I2CMsg[0].buf = (__u8 *)outBuf;
+#else
 	spi_message_init(&msg);
 
 	transfer[0].len = byteToRead;
 	transfer[0].delay_usecs = SPI_DELAY_CS;
 	transfer[0].tx_buf = NULL;
-	transfer[0].rx_buf = outBuf;
+	if (dma_safe == false)
+		transfer[0].rx_buf = info->io_read_buf;
+	else
+		transfer[0].rx_buf = outBuf;
 	spi_message_add_tail(&transfer[0], &msg);
 #endif
-
 
 	if (client == NULL)
 		return ERROR_BUS_O;
@@ -183,13 +202,17 @@ int fts_read(u8 *outBuf, int byteToRead)
 
 		retry++;
 		if (ret < OK)
-			msleep(I2C_WAIT_BEFORE_RETRY);
-		/* logError(1,"%s fts_writeCmd: attempt %d\n", tag, retry); */
+			mdelay(I2C_WAIT_BEFORE_RETRY);
+		/* pr_err("fts_writeCmd: attempt %d\n", retry); */
 	}
 	if (ret < 0) {
-		logError(1, "%s %s: ERROR %08X\n", tag, __func__, ERROR_BUS_R);
+		pr_err("%s: ERROR %08X\n", __func__, ERROR_BUS_R);
 		return ERROR_BUS_R;
 	}
+
+	if (dma_safe == false)
+		memcpy(outBuf, info->io_read_buf, byteToRead);
+
 	return OK;
 }
 
@@ -199,17 +222,34 @@ int fts_read(u8 *outBuf, int byteToRead)
   * @param cmd byte array containing the command to write
   * @param cmdLength size of cmd
   * @param outBuf pointer of a byte array which should contain the bytes read
-  *from the IC
+  * from the IC
   * @param byteToRead number of bytes to read
   * @return OK if success or an error code which specify the type of error
   */
-int fts_writeRead(u8 *cmd, int cmdLength, u8 *outBuf, int byteToRead)
+static int fts_writeRead_internal(u8 *cmd, int cmdLength, u8 *outBuf,
+				  int byteToRead, bool dma_safe)
 {
 	int ret = -1;
 	int retry = 0;
-
+	struct fts_ts_info *info = getDrvInfo();
 #ifdef I2C_INTERFACE
 	struct i2c_msg I2CMsg[2];
+#else
+	struct spi_message msg;
+	struct spi_transfer transfer[2] = { { 0 }, { 0 } };
+#endif
+
+	if (dma_safe == false && (cmdLength > sizeof(info->io_write_buf) ||
+	    byteToRead > sizeof(info->io_read_buf))) {
+		pr_err("%s: preallocated buffers are too small!\n", __func__);
+		return ERROR_ALLOC;
+	}
+
+#ifdef I2C_INTERFACE
+	if (dma_safe == false) {
+		memcpy(info->io_write_buf, cmd, cmdLength);
+		cmd = info->io_write_buf;
+	}
 
 	/* write msg */
 	I2CMsg[0].addr = (__u16)I2CSAD;
@@ -221,11 +261,15 @@ int fts_writeRead(u8 *cmd, int cmdLength, u8 *outBuf, int byteToRead)
 	I2CMsg[1].addr = (__u16)I2CSAD;
 	I2CMsg[1].flags = I2C_M_RD;
 	I2CMsg[1].len = byteToRead;
-	I2CMsg[1].buf = (__u8 *)outBuf;
-
+	if (dma_safe == false)
+		I2CMsg[1].buf = (__u8 *)info->io_read_buf;
+	else
+		I2CMsg[1].buf = (__u8 *)outBuf;
 #else
-	struct spi_message msg;
-	struct spi_transfer transfer[2] = { { 0 }, { 0 } };
+	if (dma_safe == false) {
+		memcpy(info->io_write_buf, cmd, cmdLength);
+		cmd = info->io_write_buf;
+	}
 
 	spi_message_init(&msg);
 
@@ -237,7 +281,10 @@ int fts_writeRead(u8 *cmd, int cmdLength, u8 *outBuf, int byteToRead)
 	transfer[1].len = byteToRead;
 	transfer[1].delay_usecs = SPI_DELAY_CS;
 	transfer[1].tx_buf = NULL;
-	transfer[1].rx_buf = outBuf;
+	if (dma_safe == false)
+		transfer[1].rx_buf = info->io_read_buf;
+	else
+		transfer[1].rx_buf = outBuf;
 	spi_message_add_tail(&transfer[1], &msg);
 
 #endif
@@ -254,12 +301,16 @@ int fts_writeRead(u8 *cmd, int cmdLength, u8 *outBuf, int byteToRead)
 
 		retry++;
 		if (ret < OK)
-			msleep(I2C_WAIT_BEFORE_RETRY);
+			mdelay(I2C_WAIT_BEFORE_RETRY);
 	}
 	if (ret < 0) {
-		logError(1, "%s %s: ERROR %08X\n", tag, __func__, ERROR_BUS_WR);
+		pr_err("%s: ERROR %08X\n", __func__, ERROR_BUS_WR);
 		return ERROR_BUS_WR;
 	}
+
+	if (dma_safe == false)
+		memcpy(outBuf, info->io_read_buf, byteToRead);
+
 	return OK;
 }
 
@@ -270,21 +321,38 @@ int fts_writeRead(u8 *cmd, int cmdLength, u8 *outBuf, int byteToRead)
   * @param cmdLength size of cmd
   * @return OK if success or an error code which specify the type of error
   */
-int fts_write(u8 *cmd, int cmdLength)
+static int fts_write_internal(u8 *cmd, int cmdLength, bool dma_safe)
 {
 	int ret = -1;
 	int retry = 0;
-
+	struct fts_ts_info *info = getDrvInfo();
 #ifdef I2C_INTERFACE
 	struct i2c_msg I2CMsg[1];
+#else
+	struct spi_message msg;
+	struct spi_transfer transfer[1] = { { 0 } };
+#endif
+
+	if (dma_safe == false && cmdLength > sizeof(info->io_write_buf)) {
+		pr_err("%s: preallocated buffers are too small!\n", __func__);
+		return ERROR_ALLOC;
+	}
+
+#ifdef I2C_INTERFACE
+	if (dma_safe == false) {
+		memcpy(info->io_write_buf, cmd, cmdLength);
+		cmd = info->io_write_buf;
+	}
 
 	I2CMsg[0].addr = (__u16)I2CSAD;
 	I2CMsg[0].flags = (__u16)0;
 	I2CMsg[0].len = (__u16)cmdLength;
 	I2CMsg[0].buf = (__u8 *)cmd;
 #else
-	struct spi_message msg;
-	struct spi_transfer transfer[1] = { { 0 } };
+	if (dma_safe == false) {
+		memcpy(info->io_write_buf, cmd, cmdLength);
+		cmd = info->io_write_buf;
+	}
 
 	spi_message_init(&msg);
 
@@ -307,11 +375,11 @@ int fts_write(u8 *cmd, int cmdLength)
 
 		retry++;
 		if (ret < OK)
-			msleep(I2C_WAIT_BEFORE_RETRY);
-		/* logError(1,"%s fts_writeCmd: attempt %d\n", tag, retry); */
+			mdelay(I2C_WAIT_BEFORE_RETRY);
+		/* pr_err("fts_writeCmd: attempt %d\n", retry); */
 	}
 	if (ret < 0) {
-		logError(1, "%s %s: ERROR %08X\n", tag, __func__, ERROR_BUS_W);
+		pr_err("%s: ERROR %08X\n", __func__, ERROR_BUS_W);
 		return ERROR_BUS_W;
 	}
 	return OK;
@@ -323,22 +391,39 @@ int fts_write(u8 *cmd, int cmdLength)
   * @param cmdLength size of cmd
   * @return OK if success, or an error code which specify the type of error
   */
-int fts_writeFwCmd(u8 *cmd, int cmdLength)
+static int fts_writeFwCmd_internal(u8 *cmd, int cmdLength, bool dma_safe)
 {
 	int ret = -1;
 	int ret2 = -1;
 	int retry = 0;
-
+	struct fts_ts_info *info = getDrvInfo();
 #ifdef I2C_INTERFACE
 	struct i2c_msg I2CMsg[1];
+#else
+	struct spi_message msg;
+	struct spi_transfer transfer[1] = { { 0 } };
+#endif
+
+	if (dma_safe == false && cmdLength > sizeof(info->io_write_buf)) {
+		pr_err("%s: preallocated buffers are too small!\n", __func__);
+		return ERROR_ALLOC;
+	}
+
+#ifdef I2C_INTERFACE
+	if (dma_safe == false) {
+		memcpy(info->io_write_buf, cmd, cmdLength);
+		cmd = info->io_write_buf;
+	}
 
 	I2CMsg[0].addr = (__u16)I2CSAD;
 	I2CMsg[0].flags = (__u16)0;
 	I2CMsg[0].len = (__u16)cmdLength;
 	I2CMsg[0].buf = (__u8 *)cmd;
 #else
-	struct spi_message msg;
-	struct spi_transfer transfer[1] = { { 0 } };
+	if (dma_safe == false) {
+		memcpy(info->io_write_buf, cmd, cmdLength);
+		cmd = info->io_write_buf;
+	}
 
 	spi_message_init(&msg);
 
@@ -362,17 +447,15 @@ int fts_writeFwCmd(u8 *cmd, int cmdLength)
 		if (ret >= 0)
 			ret2 = checkEcho(cmd, cmdLength);
 		if (ret < OK || ret2 < OK)
-			msleep(I2C_WAIT_BEFORE_RETRY);
-		/* logError(1,"%s fts_writeCmd: attempt %d\n", tag, retry); */
+			mdelay(I2C_WAIT_BEFORE_RETRY);
+		/* pr_err("fts_writeCmd: attempt %d\n", retry); */
 	}
 	if (ret < 0) {
-		logError(1, "%s fts_writeFwCmd: ERROR %08X\n", tag,
-			 ERROR_BUS_W);
+		pr_err("fts_writeFwCmd: ERROR %08X\n", ERROR_BUS_W);
 		return ERROR_BUS_W;
 	}
 	if (ret2 < OK) {
-		logError(1, "%s fts_writeFwCmd: check echo ERROR %08X\n", tag,
-			 ret2);
+		pr_err("fts_writeFwCmd: check echo ERROR %08X\n", ret2);
 		return ret2;
 	}
 	return OK;
@@ -392,14 +475,35 @@ int fts_writeFwCmd(u8 *cmd, int cmdLength)
   * @param byteToRead number of bytes to read
   * @return OK if success or an error code which specify the type of error
   */
-int fts_writeThenWriteRead(u8 *writeCmd1, int writeCmdLength, u8 *readCmd1, int
-			   readCmdLength, u8 *outBuf, int byteToRead)
+static int fts_writeThenWriteRead_internal(u8 *writeCmd1, int writeCmdLength,
+				    u8 *readCmd1, int readCmdLength,
+				    u8 *outBuf, int byteToRead,
+				    bool dma_safe)
 {
 	int ret = -1;
 	int retry = 0;
-
+	struct fts_ts_info *info = getDrvInfo();
 #ifdef I2C_INTERFACE
 	struct i2c_msg I2CMsg[3];
+#else
+	struct spi_message msg;
+	struct spi_transfer transfer[3] = { { 0 }, { 0 }, { 0 } };
+#endif
+
+	if (dma_safe == false && (writeCmdLength > sizeof(info->io_write_buf) ||
+	    readCmdLength > sizeof(info->io_extra_write_buf) ||
+	    byteToRead > sizeof(info->io_read_buf))) {
+		pr_err("%s: preallocated buffers are too small!\n", __func__);
+		return ERROR_ALLOC;
+	}
+
+#ifdef I2C_INTERFACE
+	if (dma_safe == false) {
+		memcpy(info->io_write_buf, writeCmd1, writeCmdLength);
+		writeCmd1 = info->io_write_buf;
+		memcpy(info->io_extra_write_buf, readCmd1, readCmdLength);
+		readCmd1 = info->io_extra_write_buf;
+	}
 
 	/* write msg */
 	I2CMsg[0].addr = (__u16)I2CSAD;
@@ -417,10 +521,17 @@ int fts_writeThenWriteRead(u8 *writeCmd1, int writeCmdLength, u8 *readCmd1, int
 	I2CMsg[2].addr = (__u16)I2CSAD;
 	I2CMsg[2].flags = I2C_M_RD;
 	I2CMsg[2].len = byteToRead;
-	I2CMsg[2].buf = (__u8 *)outBuf;
+	if (dma_safe == false)
+		I2CMsg[2].buf = (__u8 *)info->io_read_buf;
+	else
+		I2CMsg[2].buf = (__u8 *)outBuf;
 #else
-	struct spi_message msg;
-	struct spi_transfer transfer[3] = { { 0 }, { 0 }, { 0 } };
+	if (dma_safe == false) {
+		memcpy(info->io_write_buf, writeCmd1, writeCmdLength);
+		writeCmd1 = info->io_write_buf;
+		memcpy(info->io_extra_write_buf, readCmd1, readCmdLength);
+		readCmd1 = info->io_extra_write_buf;
+	}
 
 	spi_message_init(&msg);
 
@@ -437,7 +548,10 @@ int fts_writeThenWriteRead(u8 *writeCmd1, int writeCmdLength, u8 *readCmd1, int
 	transfer[2].len = byteToRead;
 	transfer[2].delay_usecs = SPI_DELAY_CS;
 	transfer[2].tx_buf = NULL;
-	transfer[2].rx_buf = outBuf;
+	if (dma_safe == false)
+		transfer[2].rx_buf = info->io_read_buf;
+	else
+		transfer[2].rx_buf = outBuf;
 	spi_message_add_tail(&transfer[2], &msg);
 #endif
 
@@ -451,17 +565,79 @@ int fts_writeThenWriteRead(u8 *writeCmd1, int writeCmdLength, u8 *readCmd1, int
 #endif
 		retry++;
 		if (ret < OK)
-			msleep(I2C_WAIT_BEFORE_RETRY);
+			mdelay(I2C_WAIT_BEFORE_RETRY);
 	}
 
 	if (ret < 0) {
-		logError(1, "%s %s: ERROR %08X\n", tag, __func__, ERROR_BUS_WR);
+		pr_err("%s: ERROR %08X\n", __func__, ERROR_BUS_WR);
 		return ERROR_BUS_WR;
 	}
+
+	if (dma_safe == false)
+		memcpy(outBuf, info->io_read_buf, byteToRead);
+
 	return OK;
 }
 
+/* Wrapper API for i2c read and write */
+int fts_read(u8 *outBuf, int byteToRead)
+{
+	return fts_read_internal(outBuf, byteToRead, false);
+}
 
+int fts_read_heap(u8 *outBuf, int byteToRead)
+{
+	return fts_read_internal(outBuf, byteToRead, true);
+}
+
+int fts_writeRead(u8 *cmd, int cmdLength, u8 *outBuf, int byteToRead)
+{
+	return fts_writeRead_internal(cmd, cmdLength, outBuf, byteToRead,
+					false);
+}
+
+int fts_writeRead_heap(u8 *cmd, int cmdLength, u8 *outBuf, int byteToRead)
+{
+	return fts_writeRead_internal(cmd, cmdLength, outBuf, byteToRead, true);
+}
+
+int fts_write(u8 *cmd, int cmdLength)
+{
+	return fts_write_internal(cmd, cmdLength, false);
+}
+
+int fts_write_heap(u8 *cmd, int cmdLength)
+{
+	return fts_write_internal(cmd, cmdLength, true);
+}
+
+int fts_writeFwCmd(u8 *cmd, int cmdLength)
+{
+	return fts_writeFwCmd_internal(cmd, cmdLength, false);
+}
+
+int fts_writeFwCmd_heap(u8 *cmd, int cmdLength)
+{
+	return fts_writeFwCmd_internal(cmd, cmdLength, true);
+}
+
+int fts_writeThenWriteRead(u8 *writeCmd1, int writeCmdLength,
+			   u8 *readCmd1, int readCmdLength,
+			   u8 *outBuf, int byteToRead)
+{
+	return fts_writeThenWriteRead_internal(writeCmd1, writeCmdLength,
+						readCmd1, readCmdLength,
+						outBuf, byteToRead, false);
+}
+
+int fts_writeThenWriteRead_heap(u8 *writeCmd1, int writeCmdLength,
+				u8 *readCmd1, int readCmdLength,
+				u8 *outBuf, int byteToRead)
+{
+	return fts_writeThenWriteRead_internal(writeCmd1, writeCmdLength,
+						readCmd1, readCmdLength,
+						outBuf, byteToRead, true);
+}
 
 /**
   * Perform a chunked write with one byte op code and 1 to 8 bytes address
@@ -473,12 +649,15 @@ int fts_writeThenWriteRead(u8 *writeCmd1, int writeCmdLength, u8 *readCmd1, int
   * @return OK if success or an error code which specify the type of error
   */
 /* this function works only if the address is max 8 bytes */
-int fts_writeU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *data, int
-		  dataSize)
+int fts_writeU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *data,
+		  int dataSize)
 {
-	u8 finalCmd[1 + addrSize + WRITE_CHUNK];
+	u8 *finalCmd;
 	int remaining = dataSize;
 	int toWrite = 0, i = 0;
+	struct fts_ts_info *info = getDrvInfo();
+
+	finalCmd = info->io_write_buf;
 
 	if (addrSize <= sizeof(u64)) {
 		while (remaining > 0) {
@@ -491,20 +670,20 @@ int fts_writeU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *data, int
 			}
 
 			finalCmd[0] = cmd;
-			logError(0, "%s %s: addrSize = %d\n", tag, __func__,
-				 addrSize);
+			pr_debug("%s: addrSize = %d\n", __func__, addrSize);
 			for (i = 0; i < addrSize; i++) {
 				finalCmd[i + 1] = (u8)((address >> ((addrSize -
 								     1 - i) *
 								    8)) & 0xFF);
-				logError(1, "%s %s: cmd[%d] = %02X\n", tag,
+				pr_debug("%s: cmd[%d] = %02X\n",
 					 __func__, i + 1, finalCmd[i + 1]);
 			}
 
 			memcpy(&finalCmd[addrSize + 1], data, toWrite);
 
-			if (fts_write(finalCmd, 1 + addrSize + toWrite) < OK) {
-				logError(1, "%s %s: ERROR %08X\n", tag,
+			if (fts_write_heap(finalCmd, 1 + addrSize + toWrite)
+				< OK) {
+				pr_err(" %s: ERROR %08X\n",
 					 __func__, ERROR_BUS_W);
 				return ERROR_BUS_W;
 			}
@@ -514,9 +693,8 @@ int fts_writeU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *data, int
 			data += toWrite;
 		}
 	} else
-		logError(1,
-			 "%s %s: address size bigger than max allowed %ld... ERROR %08X\n",
-			 tag, __func__, sizeof(u64), ERROR_OP_NOT_ALLOW);
+		pr_err("%s: address size bigger than max allowed %lu... ERROR %08X\n",
+			__func__, sizeof(u64), ERROR_OP_NOT_ALLOW);
 
 	return OK;
 }
@@ -534,13 +712,17 @@ int fts_writeU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *data, int
   * set to 1, otherwise if it is valid set to 0 (or any other value)
   * @return OK if success or an error code which specify the type of error
   */
-int fts_writeReadU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *outBuf, int
-		      byteToRead, int hasDummyByte)
+int fts_writeReadU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *outBuf,
+		      int byteToRead, int hasDummyByte)
 {
-	u8 finalCmd[1 + addrSize];
-	u8 buff[READ_CHUNK + 1];/* worst case has dummy byte */
+	u8 *finalCmd;
+	u8 *buff;
 	int remaining = byteToRead;
 	int toRead = 0, i = 0;
+	struct fts_ts_info *info = getDrvInfo();
+
+	finalCmd = info->io_write_buf;
+	buff = info->io_read_buf;
 
 	while (remaining > 0) {
 		if (remaining >= READ_CHUNK) {
@@ -557,22 +739,18 @@ int fts_writeReadU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *outBuf, int
 							    8)) & 0xFF);
 
 		if (hasDummyByte == 1) {
-			if (fts_writeRead(finalCmd, 1 + addrSize, buff, toRead +
-					  1) < OK) {
-				logError(1,
-					 "%s %s: read error... ERROR %08X\n",
-					 tag,
-					 __func__, ERROR_BUS_WR);
+			if (fts_writeRead_heap(finalCmd, 1 + addrSize, buff,
+					toRead + 1) < OK) {
+				pr_err("%s: read error... ERROR %08X\n",
+					__func__, ERROR_BUS_WR);
 				return ERROR_BUS_WR;
 			}
 			memcpy(outBuf, buff + 1, toRead);
 		} else {
-			if (fts_writeRead(finalCmd, 1 + addrSize, buff,
-					  toRead) < OK) {
-				logError(1,
-					 "%s %s: read error... ERROR %08X\n",
-					 tag,
-					 __func__, ERROR_BUS_WR);
+			if (fts_writeRead_heap(finalCmd, 1 + addrSize, buff,
+					toRead) < OK) {
+				pr_err("%s: read error... ERROR %08X\n",
+					__func__, ERROR_BUS_WR);
 				return ERROR_BUS_WR;
 			}
 			memcpy(outBuf, buff, toRead);
@@ -601,13 +779,18 @@ int fts_writeReadU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *outBuf, int
   */
 /* this function works only if the sum of two addresses in the two commands is
  * max 8 bytes */
-int fts_writeU8UXthenWriteU8UX(u8 cmd1, AddrSize addrSize1, u8 cmd2, AddrSize
-			       addrSize2, u64 address, u8 *data, int dataSize)
+int fts_writeU8UXthenWriteU8UX(u8 cmd1, AddrSize addrSize1, u8 cmd2,
+			       AddrSize addrSize2, u64 address, u8 *data,
+			       int dataSize)
 {
-	u8 finalCmd1[1 + addrSize1];
-	u8 finalCmd2[1 + addrSize2 + WRITE_CHUNK];
+	u8 *finalCmd1;
+	u8 *finalCmd2;
 	int remaining = dataSize;
 	int toWrite = 0, i = 0;
+	struct fts_ts_info *info = getDrvInfo();
+
+	finalCmd1 = info->io_write_buf;
+	finalCmd2 = info->io_extra_write_buf;
 
 	while (remaining > 0) {
 		if (remaining >= WRITE_CHUNK) {
@@ -633,17 +816,15 @@ int fts_writeU8UXthenWriteU8UX(u8 cmd1, AddrSize addrSize1, u8 cmd2, AddrSize
 
 		memcpy(&finalCmd2[addrSize2 + 1], data, toWrite);
 
-		if (fts_write(finalCmd1, 1 + addrSize1) < OK) {
-			logError(1, "%s %s: first write error... ERROR %08X\n",
-				 tag, __func__, ERROR_BUS_W);
+		if (fts_write_heap(finalCmd1, 1 + addrSize1) < OK) {
+			pr_err("%s: first write error... ERROR %08X\n",
+				__func__, ERROR_BUS_W);
 			return ERROR_BUS_W;
 		}
 
-		if (fts_write(finalCmd2, 1 + addrSize2 + toWrite) < OK) {
-			logError(1,
-				 "%s %s: second write error... ERROR %08X\n",
-				 tag,
-				 __func__, ERROR_BUS_W);
+		if (fts_write_heap(finalCmd2, 1 + addrSize2 + toWrite) < OK) {
+			pr_err("%s: second write error... ERROR %08X\n",
+				__func__, ERROR_BUS_W);
 			return ERROR_BUS_W;
 		}
 
@@ -676,12 +857,16 @@ int fts_writeU8UXthenWriteReadU8UX(u8 cmd1, AddrSize addrSize1, u8 cmd2,
 				   AddrSize addrSize2, u64 address, u8 *outBuf,
 				   int byteToRead, int hasDummyByte)
 {
-	u8 finalCmd1[1 + addrSize1];
-	u8 finalCmd2[1 + addrSize2];
-	u8 buff[READ_CHUNK + 1];/* worst case has dummy byte */
+	u8 *finalCmd1;
+	u8 *finalCmd2;
+	u8 *buff;
 	int remaining = byteToRead;
 	int toRead = 0, i = 0;
+	struct fts_ts_info *info = getDrvInfo();
 
+	finalCmd1 = info->io_write_buf;
+	finalCmd2 = info->io_extra_write_buf;
+	buff = info->io_read_buf;
 
 	while (remaining > 0) {
 		if (remaining >= READ_CHUNK) {
@@ -698,8 +883,6 @@ int fts_writeU8UXthenWriteReadU8UX(u8 cmd1, AddrSize addrSize1, u8 cmd2,
 			finalCmd1[i + 1] = (u8)((address >> ((addrSize1 +
 							      addrSize2 - 1 -
 							      i) * 8)) & 0xFF);
-		/* logError(1, "%s %s: finalCmd1[%d] =  %02X\n",
-		  *	tag, __func__, i+1, finalCmd1[i + 1]); */
 
 		finalCmd2[0] = cmd2;
 		for (i = addrSize1; i < addrSize1 + addrSize2; i++)
@@ -708,29 +891,25 @@ int fts_writeU8UXthenWriteReadU8UX(u8 cmd1, AddrSize addrSize1, u8 cmd2,
 							       addrSize2 - 1 -
 							       i) * 8)) & 0xFF);
 
-		if (fts_write(finalCmd1, 1 + addrSize1) < OK) {
-			logError(1, "%s %s: first write error... ERROR %08X\n",
-				 tag, __func__, ERROR_BUS_W);
+		if (fts_write_heap(finalCmd1, 1 + addrSize1) < OK) {
+			pr_err("%s: first write error... ERROR %08X\n",
+				__func__, ERROR_BUS_W);
 			return ERROR_BUS_W;
 		}
 
 		if (hasDummyByte == 1) {
-			if (fts_writeRead(finalCmd2, 1 + addrSize2, buff,
-					  toRead + 1) < OK) {
-				logError(1,
-					 "%s %s: read error... ERROR %08X\n",
-					 tag,
-					 __func__, ERROR_BUS_WR);
+			if (fts_writeRead_heap(finalCmd2, 1 + addrSize2, buff,
+					toRead + 1) < OK) {
+				pr_err("%s: read error... ERROR %08X\n",
+					__func__, ERROR_BUS_WR);
 				return ERROR_BUS_WR;
 			}
 			memcpy(outBuf, buff + 1, toRead);
 		} else {
-			if (fts_writeRead(finalCmd2, 1 + addrSize2, buff,
-					  toRead) < OK) {
-				logError(1,
-					 "%s %s: read error... ERROR %08X\n",
-					 tag,
-					 __func__, ERROR_BUS_WR);
+			if (fts_writeRead_heap(finalCmd2, 1 + addrSize2, buff,
+					toRead) < OK) {
+				pr_err("%s: read error... ERROR %08X\n",
+					__func__, ERROR_BUS_WR);
 				return ERROR_BUS_WR;
 			}
 			memcpy(outBuf, buff, toRead);

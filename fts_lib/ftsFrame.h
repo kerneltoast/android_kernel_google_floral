@@ -82,7 +82,6 @@ typedef enum {
 	SS_DETECT_FILTER = 13,  /* /< Self Sense Detect Filter Frame */
 	SS_DETECT_STRENGTH = 14,  /* /< Self Sense Detect Strength Frame */
 	SS_DETECT_BASELINE = 15  /* /< Self Sense Detect Baseline Frame */
-
 } SSFrameType;
 
 
