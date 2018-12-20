@@ -507,6 +507,22 @@ struct vss_icommon_cmd_set_param {
 #define VSS_ICOMMON_VOICE_ACTIVITY_MIC_BREAK		0x000131F3
 /* Mic path is restored. */
 #define VSS_ICOMMON_VOICE_ACITIVTY_MIC_UNBREAK		0x000131F4
+/* Mic break status base. */
+#define VSS_ICOMMON_VOICE_ACTIVITY_MIC_BREAK_STAT_BASE  0x00013300
+
+enum mic_break_stat {
+	MIC_BREAK_STAT_OK = 0,
+	MIC_BREAK_STAT_MIC1_BREAK = 0x1,
+	MIC_BREAK_STAT_MIC2_BREAK = 0x2,
+	MIC_BREAK_STAT_MIC3_BREAK = 0x4,
+	MIC_BREAK_STAT_MIC_BREAK_MASK = 0x07,
+	MIC_BREAK_STAT_MIC1_DEGRADE = 0x8,
+	MIC_BREAK_STAT_MIC2_DEGRADE = 0x10,
+	MIC_BREAK_STAT_MIC3_DEGRADE = 0x20,
+	MIC_BREAK_STAT_MIC_DEGRADE_MASK = 0x38,
+	MIC_BREAK_STAT_MAX = 0x3F,
+};
+#define MIC_DEGRADE_SHIFT_BITS 3
 
 enum msm_audio_voc_rate {
 		VOC_0_RATE, /* Blank frame */
@@ -1896,7 +1912,7 @@ struct voice_data {
 
 	struct voice_rec_route_state rec_route_state;
 
-	bool mic_break_status;
+	uint8_t mic_break_status;
 	struct work_struct voice_mic_break_work;
 };
 
