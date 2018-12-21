@@ -385,8 +385,8 @@ policy_mgr_modify_sap_pcl_based_on_srd(struct wlan_objmgr_psoc *psoc,
 		weight_list[pcl_len++] = weight_list_org[i];
 	}
 
-	qdf_mem_zero(pcl_list_org, QDF_ARRAY_SIZE(pcl_list_org));
-	qdf_mem_zero(weight_list_org, QDF_ARRAY_SIZE(weight_list_org));
+	qdf_mem_zero(pcl_list_org, *pcl_len_org);
+	qdf_mem_zero(weight_list_org, *pcl_len_org);
 	qdf_mem_copy(pcl_list_org, pcl_list, pcl_len);
 	qdf_mem_copy(weight_list_org, weight_list, pcl_len);
 	*pcl_len_org = pcl_len;
