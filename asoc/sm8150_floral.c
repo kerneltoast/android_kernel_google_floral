@@ -3899,6 +3899,7 @@ static void msm_adsp_power_up_config_work(struct work_struct *work)
 	codec = pdata->codec;
 	card = codec->component.card->snd_card;
 	msm_adsp_power_up_config(codec, card);
+	snd_soc_card_change_online_state(codec->component.card, 1);
 }
 
 static int sm8150_notifier_service_cb(struct notifier_block *this,
@@ -3923,6 +3924,10 @@ static int sm8150_notifier_service_cb(struct notifier_block *this,
 		 */
 		if (is_initial_boot)
 			break;
+		if (!spdev)
+			return -EINVAL;
+		card = platform_get_drvdata(spdev);
+		snd_soc_card_change_online_state(card, 0);
 		msm_afe_clear_config();
 		break;
 	case AUDIO_NOTIFIER_SERVICE_UP:
