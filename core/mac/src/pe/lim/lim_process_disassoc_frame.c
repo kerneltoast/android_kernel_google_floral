@@ -145,9 +145,11 @@ lim_process_disassoc_frame(tpAniSirGlobal pMac, uint8_t *pRxPacketInfo,
 	/* Get reasonCode from Disassociation frame body */
 	reasonCode = sir_read_u16(pBody);
 
-	pe_debug("Received Disassoc frame for Addr: " MAC_ADDRESS_STR
-		 "(mlm state=%s, sme state=%d RSSI=%d),"
-		 "with reason code %d [%s] from " MAC_ADDRESS_STR,
+	pe_info("Rx Disassoc frame SN=%d for Addr: " MAC_ADDRESS_STR
+		 "(mlmST=%s, smeST=%d RSSI=%d),"
+		 "with rc %d [%s] from " MAC_ADDRESS_STR,
+		 ((pHdr->seqControl.seqNumHi << 4) |
+		 pHdr->seqControl.seqNumLo),
 		 MAC_ADDR_ARRAY(pHdr->da),
 		 lim_mlm_state_str(psessionEntry->limMlmState),
 		 psessionEntry->limSmeState, frame_rssi, reasonCode,
