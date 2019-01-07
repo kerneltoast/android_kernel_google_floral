@@ -4183,9 +4183,13 @@ static int fts_set_gpio(struct fts_ts_info *info)
 				__func__);
 	}
 
-	if (gpio_is_valid(bdata->disp_rate_gpio))
-		gpio_set_value(bdata->disp_rate_gpio,
-			       (info->display_refresh_rate == 90));
+	if (gpio_is_valid(bdata->disp_rate_gpio)) {
+		retval = fts_gpio_setup(bdata->disp_rate_gpio, true, 1,
+					(info->display_refresh_rate == 90));
+		if (retval < 0)
+			pr_err("%s: Failed to configure disp_rate_gpio\n",
+				__func__);
+	}
 
 	if (bdata->reset_gpio >= 0) {
 		retval = fts_gpio_setup(bdata->reset_gpio, true, 1, 0);
