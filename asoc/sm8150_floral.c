@@ -4740,23 +4740,23 @@ static int sm8150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 		break;
 	case AFE_PORT_ID_PRIMARY_TDM_TX:
 		channels = tdm_tx_cfg[TDM_PRI][TDM_0].channels;
-		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_PRI][TDM_0].bit_format);
+		slot_width = sm8150_tdm_get_slot_width(tdm_tx_cfg[TDM_PRI][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_SECONDARY_TDM_TX:
 		channels = tdm_tx_cfg[TDM_SEC][TDM_0].channels;
-		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_SEC][TDM_0].bit_format);
+		slot_width = sm8150_tdm_get_slot_width(tdm_tx_cfg[TDM_SEC][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_TERTIARY_TDM_TX:
 		channels = tdm_tx_cfg[TDM_TERT][TDM_0].channels;
-		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_TERT][TDM_0].bit_format);
+		slot_width = sm8150_tdm_get_slot_width(tdm_tx_cfg[TDM_TERT][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_QUATERNARY_TDM_TX:
 		channels = tdm_tx_cfg[TDM_QUAT][TDM_0].channels;
-		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_QUAT][TDM_0].bit_format);
+		slot_width = sm8150_tdm_get_slot_width(tdm_tx_cfg[TDM_QUAT][TDM_0].bit_format);
 		break;
 	case AFE_PORT_ID_QUINARY_TDM_TX:
 		channels = tdm_tx_cfg[TDM_QUIN][TDM_0].channels;
-		slot_width = sm8150_tdm_get_slot_width(tdm_rx_cfg[TDM_QUIN][TDM_0].bit_format);
+		slot_width = sm8150_tdm_get_slot_width(tdm_tx_cfg[TDM_QUIN][TDM_0].bit_format);
 		break;
 
 	default:
