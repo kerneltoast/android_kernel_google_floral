@@ -185,7 +185,7 @@ static int crus_afe_get_param(int port, int module, int param, int length,
 	int index = afe_get_port_index(port);
 	int ret = 0, count = 0;
 
-	pr_info("port = 0x%x module = 0x%x param = 0x%x length = %d\n",
+	pr_debug("port = 0x%x module = 0x%x param = 0x%x length = %d\n",
 		port, module, param, length);
 
 	if (!msm_crus_is_cirrus_afe_topology()) {
@@ -199,7 +199,7 @@ static int crus_afe_get_param(int port, int module, int param, int length,
 		return -ENOMEM;
 	}
 
-	pr_info("Preparing to send apr packet\n");
+	pr_debug("Preparing to send apr packet\n");
 
 	mutex_lock(&crus_sp_get_param_lock);
 	atomic_set(&crus_sp_get_param_flag, 0);
@@ -218,7 +218,7 @@ static int crus_afe_get_param(int port, int module, int param, int length,
 		pr_err("crus get_param for port 0x%x failed with code %d\n",
 			port, ret);
 	else
-		pr_info("crus get_param sent packet with param id 0x%08x to module 0x%08x.\n",
+		pr_debug("crus get_param sent packet with param id 0x%08x to module 0x%08x.\n",
 			param, module);
 
 	/* Wait for afe callback to populate data */
@@ -1078,6 +1078,7 @@ int msm_crus_store_imped(char channel)
 {
 	/* cs35l36 speaker amp constant value */
 	const int amp_factor = CRUS_AMP_FACTOR;
+	const int scale_factor = 100000000;
 	int32_t *buffer = NULL;
 	int out_cal0;
 	int out_cal1;
@@ -1108,7 +1109,9 @@ int msm_crus_store_imped(char channel)
 
 		crus_spk.imp_l =  buffer[LEFT_OFFSET_R] * amp_factor;
 
-		pr_debug("left impedance %d", crus_spk.imp_l);
+		pr_info("%s: left impedance %d.%d ohms", __func__,
+			crus_spk.imp_l / scale_factor,
+			crus_spk.imp_l % scale_factor);
 
 	} else if (channel == 'r') {
 		out_cal0 = buffer[RIGHT_OFFSET_OUT_CAL0];
@@ -1121,7 +1124,9 @@ int msm_crus_store_imped(char channel)
 
 		crus_spk.imp_r = buffer[RIGHT_OFFSET_R] * amp_factor;
 
-		pr_debug("right impedance %d", crus_spk.imp_r);
+		pr_info("%s: right impedance %d.%d ohms", __func__,
+			crus_spk.imp_r / scale_factor,
+			crus_spk.imp_r % scale_factor);
 
 	} else
 		pr_err("unknown channel");
