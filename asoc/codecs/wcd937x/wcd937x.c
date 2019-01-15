@@ -1352,6 +1352,8 @@ static int wcd937x_event_notify(struct notifier_block *block,
 		snd_soc_update_bits(codec, WCD937X_AUX_AUXPA, 0x80, 0x00);
 		break;
 	case BOLERO_WCD_EVT_SSR_DOWN:
+		mbhc = &wcd937x->mbhc->wcd_mbhc;
+		wcd937x_mbhc_ssr_down(wcd937x->mbhc, codec);
 		wcd937x_reset_low(wcd937x->dev);
 		break;
 	case BOLERO_WCD_EVT_SSR_UP:
@@ -2000,6 +2002,36 @@ int wcd937x_info_create_codec_entry(struct snd_info_entry *codec_root,
 }
 EXPORT_SYMBOL(wcd937x_info_create_codec_entry);
 
+static int wcd937x_set_micbias_data(struct wcd937x_priv *wcd937x,
+			      struct wcd937x_pdata *pdata)
+{
+	int vout_ctl_1 = 0, vout_ctl_2 = 0, vout_ctl_3 = 0;
+	int rc = 0;
+
+	if (!pdata) {
+		dev_err(wcd937x->dev, "%s: NULL pdata\n", __func__);
+		return -ENODEV;
+	}
+
+	/* set micbias voltage */
+	vout_ctl_1 = wcd937x_get_micb_vout_ctl_val(pdata->micbias.micb1_mv);
+	vout_ctl_2 = wcd937x_get_micb_vout_ctl_val(pdata->micbias.micb2_mv);
+	vout_ctl_3 = wcd937x_get_micb_vout_ctl_val(pdata->micbias.micb3_mv);
+	if (vout_ctl_1 < 0 || vout_ctl_2 < 0 || vout_ctl_3 < 0) {
+		rc = -EINVAL;
+		goto done;
+	}
+	regmap_update_bits(wcd937x->regmap, WCD937X_ANA_MICB1, 0x3F,
+			   vout_ctl_1);
+	regmap_update_bits(wcd937x->regmap, WCD937X_ANA_MICB2, 0x3F,
+			   vout_ctl_2);
+	regmap_update_bits(wcd937x->regmap, WCD937X_ANA_MICB3, 0x3F,
+			   vout_ctl_3);
+
+done:
+	return rc;
+}
+
 static int wcd937x_soc_codec_probe(struct snd_soc_codec *codec)
 {
 	struct wcd937x_priv *wcd937x = snd_soc_codec_get_drvdata(codec);
@@ -2351,6 +2383,25 @@ struct wcd937x_pdata *wcd937x_populate_dt_data(struct device *dev)
 	return pdata;
 }
 
+static int wcd937x_wakeup(void *handle, bool enable)
+{
+	struct wcd937x_priv *priv;
+
+	if (!handle) {
+		pr_err("%s: NULL handle\n", __func__);
+		return -EINVAL;
+	}
+	priv = (struct wcd937x_priv *)handle;
+	if (!priv->tx_swr_dev) {
+		pr_err("%s: tx swr dev is NULL\n", __func__);
+		return -EINVAL;
+	}
+	if (enable)
+		return swr_device_wakeup_vote(priv->tx_swr_dev);
+	else
+		return swr_device_wakeup_unvote(priv->tx_swr_dev);
+}
+
 static int wcd937x_bind(struct device *dev)
 {
 	int ret = 0, i = 0;
@@ -2420,6 +2471,7 @@ static int wcd937x_bind(struct device *dev)
 	 * as per HW requirement.
 	 */
 	usleep_range(5000, 5010);
+	wcd937x->wakeup = wcd937x_wakeup;
 
 	ret = component_bind_all(dev, wcd937x);
 	if (ret) {
@@ -2478,6 +2530,12 @@ static int wcd937x_bind(struct device *dev)
 		goto err;
 	}
 	wcd937x->tx_swr_dev->slave_irq = wcd937x->virq;
+
+	ret = wcd937x_set_micbias_data(wcd937x, pdata);
+	if (ret < 0) {
+		dev_err(dev, "%s: bad micbias pdata\n", __func__);
+		goto err_irq;
+	}
 
 	mutex_init(&wcd937x->micb_lock);
 	ret = snd_soc_register_codec(dev, &soc_codec_dev_wcd937x,

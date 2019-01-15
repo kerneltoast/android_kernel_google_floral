@@ -643,7 +643,7 @@ int adm_programable_channel_mixer(int port_id, int copp_idx, int session_id,
 	index = index + ch_mixer->input_channels[channel_index];
 	ret = adm_populate_channel_weight(&adm_pspd_params[index],
 					ch_mixer, channel_index);
-	if (!ret) {
+	if (ret) {
 		pr_err("%s: fail to get channel weight with error %d\n",
 			__func__, ret);
 		goto fail_cmd;
@@ -1388,7 +1388,7 @@ static int adm_process_get_param_response(u32 opcode, u32 idx, u32 *payload,
 	 */
 	if ((payload_size >= struct_size + data_size) &&
 	    (ARRAY_SIZE(adm_get_parameters) > idx) &&
-	    (ARRAY_SIZE(adm_get_parameters) >= idx + 1 + data_size)) {
+	    (ARRAY_SIZE(adm_get_parameters) > idx + 1 + data_size)) {
 		pr_debug("%s: Received parameter data in band\n",
 					__func__);
 		/*
