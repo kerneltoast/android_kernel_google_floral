@@ -861,7 +861,7 @@ static void wma_data_tx_ack_work_handler(void *ack_work)
 	/* Call the Ack Cb registered by UMAC */
 	if (ack_cb)
 		ack_cb((tpAniSirGlobal) (wma_handle->mac_context), NULL,
-			work->status ? 0 : 1, NULL);
+			work->status, NULL);
 	else
 		WMA_LOGE("Data Tx Ack Cb is NULL");
 
@@ -3124,8 +3124,7 @@ wma_indicate_err(
 			return;
 		}
 
-		qdf_mem_set((void *) mic_err_ind, 0,
-			 sizeof(*mic_err_ind));
+		qdf_mem_set((void *) mic_err_ind, sizeof(*mic_err_ind), 0);
 		mic_err_ind->messageType = eWNI_SME_MIC_FAILURE_IND;
 		mic_err_ind->length = sizeof(*mic_err_ind);
 		vdev_id = err_info->u.mic_err.vdev_id;

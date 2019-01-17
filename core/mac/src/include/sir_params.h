@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -687,7 +687,8 @@ struct sir_mgmt_msg {
 #define SIR_HAL_SEND_ADDBA_REQ              (SIR_HAL_ITC_MSG_TYPES_BEGIN + 398)
 #define SIR_HAL_GET_ROAM_SCAN_STATS         (SIR_HAL_ITC_MSG_TYPES_BEGIN + 399)
 #define SIR_HAL_SEND_BCN_RSP                (SIR_HAL_ITC_MSG_TYPES_BEGIN + 401)
-
+#define SIR_HAL_BEACON_DEBUG_STATS_REQ       (SIR_HAL_ITC_MSG_TYPES_BEGIN + 403)
+#define SIR_HAL_ROAM_BLACKLIST_MSG          (SIR_HAL_ITC_MSG_TYPES_BEGIN + 404)
 #define SIR_HAL_MSG_TYPES_END               (SIR_HAL_MSG_TYPES_BEGIN + 0x1FF)
 
 /* CFG message types */
@@ -763,8 +764,6 @@ struct sir_mgmt_msg {
 #define SIR_LIM_PERIODIC_JOIN_PROBE_REQ_TIMEOUT \
 					 (SIR_LIM_TIMEOUT_MSG_START + 0x28)
 
-#define SIR_LIM_CONVERT_ACTIVE_CHANNEL_TO_PASSIVE \
-					 (SIR_LIM_TIMEOUT_MSG_START + 0x2C)
 #define SIR_LIM_AUTH_RETRY_TIMEOUT     (SIR_LIM_TIMEOUT_MSG_START + 0x2D)
 
 #define SIR_LIM_AUTH_SAE_TIMEOUT     (SIR_LIM_TIMEOUT_MSG_START + 0x2E)

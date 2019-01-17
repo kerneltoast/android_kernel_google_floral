@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1135,29 +1135,6 @@ void lim_get_random_bssid(tpAniSirGlobal pMac, uint8_t *data)
 	random[0] |= (random[0] << 15);
 	random[1] = random[0] >> 1;
 	qdf_mem_copy(data, (uint8_t *) random, sizeof(tSirMacAddr));
-}
-
-/**
- * __lim_process_clear_dfs_channel_list()
- *
- ***FUNCTION:
- ***Clear DFS channel list  when country is changed/acquired.
-   .*This message is sent from SME.
- *
- ***LOGIC:
- *
- ***ASSUMPTIONS:
- *
- ***NOTE:
- *
- * @param  pMac      Pointer to Global MAC structure
- * @param  *pMsgBuf  A pointer to the SME message buffer
- * @return None
- */
-static void __lim_process_clear_dfs_channel_list(tpAniSirGlobal pMac,
-						 struct scheduler_msg *pMsg)
-{
-	qdf_mem_set(&pMac->lim.dfschannelList, sizeof(tSirDFSChannelList), 0);
 }
 
 #ifdef WLAN_FEATURE_SAE
@@ -2993,7 +2970,7 @@ __lim_handle_sme_stop_bss_request(tpAniSirGlobal pMac, uint32_t *pMsgBuf)
 			dph_get_hash_entry(pMac, i, &psessionEntry->dph.dphHashTable);
 		if (NULL == pStaDs)
 			continue;
-		status = lim_del_sta(pMac, pStaDs, false, psessionEntry);
+		status = lim_del_sta(pMac, pStaDs, false, psessionEntry, false);
 		if (QDF_STATUS_SUCCESS == status) {
 			lim_delete_dph_hash_entry(pMac, pStaDs->staAddr,
 						  pStaDs->assocId, psessionEntry);
@@ -4613,9 +4590,6 @@ bool lim_process_sme_req_messages(tpAniSirGlobal pMac,
 		bufConsumed = __lim_process_sme_start_bss_req(pMac, pMsg);
 		break;
 
-	case eWNI_SME_CLEAR_DFS_CHANNEL_LIST:
-		__lim_process_clear_dfs_channel_list(pMac, pMsg);
-		break;
 	case eWNI_SME_JOIN_REQ:
 		__lim_process_sme_join_req(pMac, pMsgBuf);
 		break;
@@ -6151,3 +6125,96 @@ void lim_process_obss_color_collision_info(tpAniSirGlobal mac_ctx,
 	}
 }
 #endif
+
+void lim_remove_duplicate_bssid_node(struct sir_rssi_disallow_lst *entry,
+				     qdf_list_t *list)
+{
+	qdf_list_node_t *cur_list = NULL;
+	qdf_list_node_t *next_list = NULL;
+	struct sir_rssi_disallow_lst *cur_entry;
+	QDF_STATUS status;
+
+	qdf_list_peek_front(list, &cur_list);
+	while (cur_list) {
+		qdf_list_peek_next(list, cur_list, &next_list);
+		cur_entry = qdf_container_of(cur_list,
+					     struct sir_rssi_disallow_lst,
+					     node);
+
+		/*
+		 * Remove the node from blacklisting if the timeout is 0 and
+		 * rssi is 0 dbm i.e btm blacklisted entry
+		 */
+		if ((lim_assoc_rej_get_remaining_delta(cur_entry) == 0) &&
+		    cur_entry->expected_rssi == LIM_MIN_RSSI) {
+			status = qdf_list_remove_node(list, cur_list);
+			if (QDF_IS_STATUS_SUCCESS(status))
+				qdf_mem_free(cur_entry);
+		} else if (qdf_is_macaddr_equal(&entry->bssid,
+						&cur_entry->bssid)) {
+			/*
+			 * Remove the node if we try to add the same bssid again
+			 * Copy the old rssi value alone
+			 */
+			entry->expected_rssi = cur_entry->expected_rssi;
+			status = qdf_list_remove_node(list, cur_list);
+			if (QDF_IS_STATUS_SUCCESS(status)) {
+				qdf_mem_free(cur_entry);
+				break;
+			}
+		}
+		cur_list = next_list;
+		next_list = NULL;
+	}
+}
+
+void lim_add_roam_blacklist_ap(tpAniSirGlobal mac_ctx,
+			       struct roam_blacklist_event *src_lst)
+{
+	uint32_t i;
+	struct sir_rssi_disallow_lst *entry;
+	struct roam_blacklist_timeout *blacklist;
+	QDF_STATUS status = QDF_STATUS_SUCCESS;
+
+	blacklist = &src_lst->roam_blacklist[0];
+	for (i = 0; i < src_lst->num_entries; i++) {
+		entry = qdf_mem_malloc(sizeof(struct sir_rssi_disallow_lst));
+		if (!entry)
+			return;
+
+		qdf_copy_macaddr(&entry->bssid, &blacklist->bssid);
+		entry->retry_delay = blacklist->timeout;
+		entry->time_during_rejection = blacklist->received_time;
+		/* set 0dbm as expected rssi for btm blaclisted entries */
+		entry->expected_rssi = LIM_MIN_RSSI;
+		lim_remove_duplicate_bssid_node(
+					entry,
+					&mac_ctx->roam.rssi_disallow_bssid);
+
+		if (qdf_list_size(&mac_ctx->roam.rssi_disallow_bssid) >=
+		    MAX_RSSI_AVOID_BSSID_LIST) {
+			status = lim_rem_blacklist_entry_with_lowest_delta(
+					&mac_ctx->roam.rssi_disallow_bssid);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				pe_err("Failed to remove entry with lowest delta");
+				qdf_mem_free(entry);
+				return;
+			}
+		}
+
+		if (QDF_IS_STATUS_SUCCESS(status)) {
+			status = qdf_list_insert_back(
+					&mac_ctx->roam.rssi_disallow_bssid,
+					&entry->node);
+			if (QDF_IS_STATUS_ERROR(status)) {
+				pe_err("Failed to enqueue bssid: %pM",
+				       entry->bssid.bytes);
+				qdf_mem_free(entry);
+				return;
+			}
+			pe_debug("Added BTM blacklisted bssid: %pM",
+				 entry->bssid.bytes);
+		}
+		blacklist++;
+	}
+}

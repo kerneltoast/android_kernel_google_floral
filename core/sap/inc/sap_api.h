@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -888,6 +888,14 @@ bool wlansap_is_channel_in_nol_list(struct sap_context *sap_ctx,
 				    ePhyChanBondState chanBondState);
 
 /**
+ * wlansap_is_gp_sap_ctx_empty() - This API checks if gp_sap_ctx
+ * is empty
+ *
+ * Return: TRUE if empty, FALSE otherwise
+ */
+bool wlansap_is_gp_sap_ctx_empty(void);
+
+/**
  * wlansap_is_channel_leaking_in_nol() - This API checks if channel is leaking
  * in nol list
  * @sap_ctx: SAP context pointer
@@ -1218,6 +1226,22 @@ QDF_STATUS wlansap_de_register_mgmt_frame(struct sap_context *sap_ctx,
  */
 QDF_STATUS wlansap_channel_change_request(struct sap_context *sapContext,
 					  uint8_t target_channel);
+
+/**
+ * wlansap_get_sec_channel() - get the secondary sap channel
+ * @sec_ch_offset: secondary channel offset.
+ * @op_channel: Operating sap channel.
+ * @sec_channel: channel to be filled.
+ *
+ * This API will get the secondary sap channel from the offset, and
+ * operating channel.
+ *
+ * Return: None
+ *
+ */
+void wlansap_get_sec_channel(uint8_t sec_ch_offset,
+			     uint8_t op_channel,
+			     uint8_t *sec_channel);
 
 /**
  * wlansap_start_beacon_req() - Send Start Beaconing Request

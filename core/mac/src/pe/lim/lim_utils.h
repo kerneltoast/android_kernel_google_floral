@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -182,17 +182,6 @@ void lim_send_sme_mgmt_frame_ind(tpAniSirGlobal mac_ctx, uint8_t frame_type,
 				 tpPESession psession_entry, int8_t rx_rssi);
 
 /*
- * lim_convert_active_channel_to_passive_channel() - Timer callback function
- * @mac_ctx : Pointer to Global MAC structure
- *
- * It check active DFS channels and convert them to passive channels
- * if there was no beacon/proberesp for MAX_TIME_TO_BE_ACTIVE_CHANNEL time
- *
- * Return: None
-*/
-void lim_convert_active_channel_to_passive_channel(tpAniSirGlobal mac_ctx);
-
-/*
  * lim_deactivate_timers() - Function to deactivate lim timers
  * @mac_ctx: Pointer to global mac structure
  *
@@ -330,6 +319,26 @@ void lim_prepare_for11h_channel_switch(tpAniSirGlobal pMac,
 		tpPESession psessionEntry);
 void lim_switch_channel_cback(tpAniSirGlobal pMac, QDF_STATUS status,
 		uint32_t *data, tpPESession psessionEntry);
+
+/**
+ * lim_assoc_rej_get_remaining_delta() - Get remaining time delta for
+ * the rssi based disallowed list entry
+ * @node: rssi based disallowed list entry
+ *
+ * Return: remaining delta, can be -ve if time has already expired.
+ */
+int
+lim_assoc_rej_get_remaining_delta(struct sir_rssi_disallow_lst *node);
+
+/**
+ * lim_rem_blacklist_entry_with_lowest_delta() - Remove the entry with lowest
+ * time delta
+ * @list: rssi based rejected BSSID list
+ *
+ * Return: QDF_STATUS
+ */
+QDF_STATUS
+lim_rem_blacklist_entry_with_lowest_delta(qdf_list_t *list);
 
 /**
  * lim_get_session_by_macaddr() - api to find session based on MAC

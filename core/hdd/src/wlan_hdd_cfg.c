@@ -5012,6 +5012,13 @@ struct reg_table_entry g_registry_table[] = {
 			    (void *)
 			    CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_DEFAULT),
 
+	REG_VARIABLE_STRING(CFG_ACTION_OUI_DISABLE_AGGRESSIVE_TX_NAME,
+			    WLAN_PARAM_String,
+			    struct hdd_config, action_oui_str[6],
+			    VAR_FLAGS_OPTIONAL,
+			    (void *)
+			    CFG_ACTION_OUI_DISABLE_AGGRESSIVE_TX_DEFAULT),
+
 	REG_VARIABLE(CFG_DTIM_1CHRX_ENABLE_NAME, WLAN_PARAM_Integer,
 		struct hdd_config, enable_dtim_1chrx,
 		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -5790,6 +5797,82 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_PEER_UNMAP_CONF_DEFAULT,
 		     CFG_ENABLE_PEER_UNMAP_CONF_MIN,
 		     CFG_ENABLE_PEER_UNMAP_CONF_MAX),
+
+	REG_VARIABLE(CFG_ROAM_SCORE_DELTA, WLAN_PARAM_Integer,
+		     struct hdd_config, roam_score_delta,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ROAM_SCORE_DELTA_DEFAULT,
+		     CFG_ROAM_SCORE_DELTA_MIN,
+		     CFG_ROAM_SCORE_DELTA_MAX),
+
+	REG_VARIABLE(CFG_ROAM_TRIGGER_DELTA_BITMAP, WLAN_PARAM_Integer,
+		     struct hdd_config, roam_score_delta_bitmap,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ROAM_TRIGGER_DELTA_BITMAP_DEFAULT,
+		     CFG_ROAM_TRIGGER_DELTA_BITMAP_MIN,
+		     CFG_ROAM_TRIGGER_DELTA_BITMAP_MAX),
+
+	REG_VARIABLE(CFG_PREFER_BTM_QUERY, WLAN_PARAM_Integer,
+		     struct hdd_config, prefer_btm_query,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_PREFER_BTM_QUERY_DEFAULT,
+		     CFG_PREFER_BTM_QUERY_MIN,
+		     CFG_PREFER_BTM_QUERY_MAX),
+
+	REG_VARIABLE(CFG_ENABLE_BTM_ABRIDGE, WLAN_PARAM_Integer,
+		     struct hdd_config, btm_abridge_config,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_BTM_ABRIDGE_DEFAULT,
+		     CFG_ENABLE_BTM_ABRIDGE_MIN,
+		     CFG_ENABLE_BTM_ABRIDGE_MAX),
+
+	REG_VARIABLE(CFG_BTM_VALIDITY_TIMER, WLAN_PARAM_Integer,
+		     struct hdd_config, btm_validity_timer,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_BTM_VALIDITY_TIMER_DEFAULT,
+		     CFG_BTM_VALIDITY_TIMER_MIN,
+		     CFG_ENABLE_BTM_ABRIDGE_MAX),
+
+	REG_VARIABLE(CFG_BTM_DISASSOC_TIMER_THRESHOLD, WLAN_PARAM_Integer,
+		     struct hdd_config, btm_disassoc_timer_threshold,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_BTM_DISASSOC_TIMER_THRESHOLD_DEFAULT,
+		     CFG_BTM_DISASSOC_TIMER_THRESHOLD_MIN,
+		     CFG_BTM_DISASSOC_TIMER_THRESHOLD_MAX),
+
+	REG_VARIABLE(CFG_ENABLE_BEACON_RECEPTION_STATS_NAME, WLAN_PARAM_Integer,
+		     struct hdd_config, enable_beacon_reception_stats,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_BEACON_RECEPTION_STATS_DEFAULT,
+		     CFG_ENABLE_BEACON_RECEPTION_STATS_MIN,
+		     CFG_ENABLE_BEACON_RECEPTION_STATS_MAX),
+
+	REG_VARIABLE(CFG_ENABLE_BSS_LOAD_TRIGGERED_ROAM, WLAN_PARAM_Integer,
+		     struct hdd_config, enable_bss_load_roam_trigger,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_BSS_LOAD_TRIGGERED_ROAM_DEFAULT,
+		     CFG_ENABLE_BSS_LOAD_TRIGGERED_ROAM_MIN,
+		     CFG_ENABLE_BSS_LOAD_TRIGGERED_ROAM_MAX),
+
+	REG_VARIABLE(CFG_BSS_LOAD_THRESHOLD, WLAN_PARAM_Integer,
+		     struct hdd_config, bss_load_threshold,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_BSS_LOAD_THRESHOLD_DEFAULT,
+		     CFG_BSS_LOAD_THRESHOLD_MIN,
+		     CFG_BSS_LOAD_THRESHOLD_MAX),
+
+	REG_VARIABLE(CFG_BSS_LOAD_SAMPLE_TIME, WLAN_PARAM_Integer,
+		struct hdd_config, bss_load_sample_time,
+		VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		CFG_BSS_LOAD_SAMPLE_TIME_DEFAULT,
+		CFG_BSS_LOAD_SAMPLE_TIME_MIN,
+		CFG_BSS_LOAD_SAMPLE_TIME_MAX),
+	REG_VARIABLE(CFG_ENABLE_RTT_SUPPORT, WLAN_PARAM_Integer,
+		     struct hdd_config, enable_rtt_support,
+		     VAR_FLAGS_OPTIONAL,
+		     CFG_ENABLE_RTT_SUPPORT_DEFAULT,
+		     CFG_ENABLE_RTT_SUPPORT_MIN,
+		     CFG_ENABLE_RTT_SUPPORT_MAX),
 };
 
 
@@ -6817,6 +6900,10 @@ static void hdd_cfg_print_action_oui(struct hdd_context *hdd_ctx)
 	hdd_debug("Name = [%s] value = [%s]",
 		  CFG_ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN_NAME,
 		  config->action_oui_str[ACTION_OUI_CONNECT_1X1_WITH_1_CHAIN]);
+
+	hdd_debug("Name = [%s] value = [%s]",
+		  CFG_ACTION_OUI_DISABLE_AGGRESSIVE_TX_NAME,
+		  config->action_oui_str[ACTION_OUI_DISABLE_AGGRESSIVE_TX]);
 }
 
 /**
@@ -9033,6 +9120,9 @@ static void hdd_update_bss_score_params(struct hdd_config *config,
 	score_params->band_weight_per_index =
 		hdd_limit_max_per_index_score(config->band_weight_per_index);
 
+	score_params->roam_score_delta = config->roam_score_delta;
+	score_params->roam_score_delta_bitmap = config->roam_score_delta_bitmap;
+
 	score_params->rssi_score.best_rssi_threshold =
 				config->best_rssi_threshold;
 	score_params->rssi_score.good_rssi_threshold =
@@ -9129,6 +9219,21 @@ static void sme_update_roam_preauth_params(tSmeConfigParams *sme_config,
 {
 }
 #endif
+
+/**
+ * sme_update_beacon_stats() -  Update enable/disable beacon stats in mac ctx
+ * @mac_handle: Opaque mac handle
+ * @enable_beacon_reception_stats: Enabled/disabled
+ *
+ * Return: None
+ */
+static void sme_update_beacon_stats(mac_handle_t mac_handle,
+				    bool enable_beacon_reception_stats)
+{
+	struct sAniSirGlobal *mac_ctx = MAC_CONTEXT(mac_handle);
+
+	mac_ctx->enable_beacon_reception_stats = enable_beacon_reception_stats;
+}
 
 /**
  * hdd_set_sme_config() -initializes the sme configuration parameters
@@ -9627,6 +9732,28 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 	hdd_update_11k_offload_params(hdd_ctx->config,
 					&smeConfig->csrConfig);
 
+	if (pConfig->prefer_btm_query) {
+		smeConfig->csrConfig.btm_offload_config |=
+				(1 << BTM_OFFLOAD_CONFIG_BIT_8);
+	}
+
+	if (pConfig->btm_abridge_config) {
+		smeConfig->csrConfig.btm_offload_config |=
+			(1 << BTM_OFFLOAD_CONFIG_BIT_7);
+	}
+
+	smeConfig->csrConfig.btm_validity_timer = pConfig->btm_validity_timer;
+	smeConfig->csrConfig.btm_disassoc_timer_threshold =
+			pConfig->btm_disassoc_timer_threshold;
+	smeConfig->csrConfig.enable_bss_load_roam_trigger =
+			pConfig->enable_bss_load_roam_trigger;
+	smeConfig->csrConfig.bss_load_threshold = pConfig->bss_load_threshold;
+	smeConfig->csrConfig.bss_load_sample_time =
+			pConfig->bss_load_sample_time;
+
+
+	sme_update_beacon_stats(mac_handle,
+				hdd_ctx->config->enable_beacon_reception_stats);
 	status = sme_update_config(mac_handle, smeConfig);
 	if (!QDF_IS_STATUS_SUCCESS(status))
 		hdd_err("sme_update_config() failure: %d", status);

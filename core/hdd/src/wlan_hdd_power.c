@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1190,6 +1190,55 @@ static void hdd_ssr_restart_sap(struct hdd_context *hdd_ctx)
 	hdd_exit();
 }
 
+/**
+ * hdd_purge_all_pdev_cmd_cb() - cb for pdev purge cmd sync
+ * @hdd_handle: hdd handle
+ *
+ * Return : void
+ */
+static void hdd_purge_all_pdev_cmd_cb(hdd_handle_t hdd_handle)
+{
+	struct hdd_context *hdd_ctx = hdd_handle_to_context(hdd_handle);
+
+	if (!hdd_ctx)
+		return;
+
+	/* Unblock threads waiting for pdev command to get flushed */
+	complete(&hdd_ctx->pdev_cmd_flushed_var);
+	hdd_debug("All pdev commands flushed");
+}
+
+/**
+ * hdd_purge_all_pdev_cmd() - purge pdev commands and wait for complete
+ * @hdd_ctx: hdd context
+ *
+ * Return : void
+ */
+static void hdd_purge_all_pdev_cmd(struct hdd_context *hdd_ctx)
+{
+	int rc;
+	QDF_STATUS status;
+
+#define WLAN_WAIT_PURGE_PDEV_CMDS 1000
+
+	INIT_COMPLETION(hdd_ctx->pdev_cmd_flushed_var);
+
+	status =
+		sme_purge_pdev_all_ser_cmd_list_sync(hdd_ctx->mac_handle,
+						     hdd_purge_all_pdev_cmd_cb);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		hdd_err("Failed to post purge pdev cmd");
+		return;
+	}
+
+	rc = wait_for_completion_timeout(&hdd_ctx->pdev_cmd_flushed_var,
+					 msecs_to_jiffies(
+					 WLAN_WAIT_PURGE_PDEV_CMDS));
+
+	if (!rc)
+		hdd_err("Failed to flush pdev cmds, timed out");
+}
+
 QDF_STATUS hdd_wlan_shutdown(void)
 {
 	struct hdd_context *hdd_ctx;
@@ -1237,11 +1286,17 @@ QDF_STATUS hdd_wlan_shutdown(void)
 	 * increment their counts from 0.
 	 */
 	hdd_reset_all_adapters_connectivity_stats(hdd_ctx);
+
+	/* Disable scan and abort all pending scan commands. */
+	ucfg_scan_set_enable(hdd_ctx->psoc, false);
+	wlan_abort_scan(hdd_ctx->pdev,
+			wlan_objmgr_pdev_get_pdev_id(hdd_ctx->pdev),
+			INVAL_VDEV_ID, INVAL_SCAN_ID, true);
 	/*
 	 * Purge all active and pending list to avoid vdev destroy timeout and
 	 * thus avoid peer/vdev refcount leak.
 	 */
-	sme_purge_pdev_all_ser_cmd_list(hdd_ctx->mac_handle);
+	hdd_purge_all_pdev_cmd(hdd_ctx);
 
 	hdd_reset_all_adapters(hdd_ctx);
 
@@ -1338,6 +1393,9 @@ static void hdd_is_interface_down_during_ssr(struct hdd_context *hdd_ctx)
 		status = hdd_get_next_adapter(hdd_ctx, adapter, &pnext);
 		adapter = pnext;
 	}
+
+	if (!wlansap_is_gp_sap_ctx_empty())
+		QDF_DEBUG_PANIC("gp_sap_ctx leak");
 
 	hdd_exit();
 }
@@ -1487,10 +1545,14 @@ int wlan_hdd_set_powersave(struct hdd_adapter *adapter,
 		 */
 		status = sme_ps_disable_auto_ps_timer(mac_handle,
 					adapter->session_id);
+
 		if (status != QDF_STATUS_SUCCESS)
 			goto end;
-		status = sme_ps_enable_disable(mac_handle, adapter->session_id,
-					       SME_PS_DISABLE);
+
+		if (hdd_ctx->config && hdd_ctx->config->is_ps_enabled)
+			status = sme_ps_enable_disable(mac_handle,
+						       adapter->session_id,
+						       SME_PS_DISABLE);
 	}
 
 end:

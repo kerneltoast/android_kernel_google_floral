@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -414,6 +414,23 @@ bool wlansap_is_channel_in_nol_list(struct sap_context *sap_ctx,
 					      chanBondState);
 }
 
+bool wlansap_is_gp_sap_ctx_empty(void)
+{
+	int8_t i;
+	bool is_empty = TRUE;
+
+	qdf_mutex_acquire(&sap_context_lock);
+	for (i = 0; i < SAP_MAX_NUM_SESSION; i++) {
+		if (NULL != gp_sap_ctx[i]) {
+			is_empty = FALSE;
+			break;
+		}
+	}
+	qdf_mutex_release(&sap_context_lock);
+
+	return is_empty;
+}
+
 static QDF_STATUS wlansap_mark_leaking_channel(struct wlan_objmgr_pdev *pdev,
 		uint8_t *leakage_adjusted_lst,
 		uint8_t chan_bw)
@@ -487,7 +504,6 @@ wlansap_set_scan_acs_channel_params(tsap_config_t *pconfig,
 				void *pusr_context)
 {
 	tHalHandle h_hal = NULL;
-	tpAniSirGlobal pmac;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (NULL == pconfig) {
@@ -534,22 +550,6 @@ wlansap_set_scan_acs_channel_params(tsap_config_t *pconfig,
 		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH,
 			"%s: Invalid MAC context from pvosGCtx", __func__);
 		return QDF_STATUS_E_FAULT;
-	}
-	pmac = PMAC_STRUCT(h_hal);
-	/*
-	 * If concurrent session is running that is already associated
-	 * then we just follow that sessions country info (whether
-	 * present or not doesn't maater as we have to follow whatever
-	 * STA session does)
-	 */
-	if ((0 == sme_get_concurrent_operation_channel(h_hal)) &&
-			pconfig->ieee80211d) {
-		/* Setting the region/country  information */
-		status = ucfg_reg_set_country(pmac->pdev,
-					pconfig->countryCode);
-		if (QDF_IS_STATUS_ERROR(status))
-			QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
-				FL("Failed to set country"));
 	}
 
 	return status;
@@ -715,18 +715,12 @@ QDF_STATUS wlansap_start_bss(struct sap_context *sap_ctx,
 		goto fail;
 	}
 	pmac = PMAC_STRUCT(hHal);
-	/* If concurrent session is running that is already associated
-	 * then we just follow that sessions country info (whether
-	 * present or not doesn't maater as we have to follow whatever
-	 * STA session does) */
-	if ((0 == sme_get_concurrent_operation_channel(hHal)) &&
-			pConfig->ieee80211d) {
-		/* Setting the region/country  information */
-		qdf_status = ucfg_reg_set_country(pmac->pdev,
-					pConfig->countryCode);
-		if (QDF_IS_STATUS_ERROR(qdf_status))
-			QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_ERROR,
-				FL("Failed to set country"));
+	if (NULL == pmac) {
+		QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_INFO_HIGH,
+			  "%s: Invalid MAC context from p_cds_gctx",
+			  __func__);
+		qdf_status = QDF_STATUS_E_FAULT;
+		goto fail;
 	}
 
 	/*
@@ -1238,7 +1232,11 @@ wlansap_update_csa_channel_params(struct sap_context *sap_context,
 			op_class = wlan_reg_dmn_get_opclass_from_channel(
 					mac_ctx->scan.countryCodeCurrent,
 					channel, bw);
-			if (!op_class)
+			/*
+			 * Do not continue if bw is 20. This mean channel is not
+			 * found and thus set BW20 for the channel.
+			 */
+			if (!op_class && bw > BW20)
 				continue;
 
 			if (bw == BW80) {
@@ -1713,6 +1711,25 @@ QDF_STATUS wlansap_de_register_mgmt_frame(struct sap_context *sap_ctx,
 	return QDF_STATUS_E_FAULT;
 }
 
+void wlansap_get_sec_channel(uint8_t sec_ch_offset,
+			     uint8_t op_channel,
+			     uint8_t *sec_channel)
+{
+	switch (sec_ch_offset) {
+	case LOW_PRIMARY_CH:
+		*sec_channel = op_channel + 4;
+		break;
+	case HIGH_PRIMARY_CH:
+		*sec_channel = op_channel - 4;
+		break;
+	default:
+		*sec_channel = 0;
+	}
+	QDF_TRACE(QDF_MODULE_ID_SAP, QDF_TRACE_LEVEL_DEBUG,
+		  "%s: sec channel offset %d, sec channel %d",
+		  __func__, sec_ch_offset, *sec_channel);
+}
+
 QDF_STATUS wlansap_channel_change_request(struct sap_context *sapContext,
 					  uint8_t target_channel)
 {
@@ -1773,11 +1790,13 @@ QDF_STATUS wlansap_channel_change_request(struct sap_context *sapContext,
 	ch_params = &mac_ctx->sap.SapDfsInfo.new_ch_params;
 	wlan_reg_set_channel_params(mac_ctx->pdev, target_channel,
 			0, ch_params);
-	sapContext->ch_params.ch_width = ch_params->ch_width;
+	sapContext->ch_params = *ch_params;
 	/* Update the channel as this will be used to
 	 * send event to supplicant
 	 */
 	sapContext->channel = target_channel;
+	wlansap_get_sec_channel(ch_params->sec_ch_offset, target_channel,
+				(uint8_t *)(&sapContext->secondary_ch));
 	sapContext->csr_roamProfile.ch_params.ch_width = ch_params->ch_width;
 	sapContext->csr_roamProfile.ch_params.sec_ch_offset =
 						ch_params->sec_ch_offset;

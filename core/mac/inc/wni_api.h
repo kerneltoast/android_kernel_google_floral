@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -87,7 +87,6 @@ enum eWniMsgTypes {
 	eWNI_SME_UPPER_LAYER_ASSOC_CNF,
 	eWNI_SME_SESSION_UPDATE_PARAM,
 	eWNI_SME_CHNG_MCC_BEACON_INTERVAL,
-	eWNI_SME_CLEAR_DFS_CHANNEL_LIST,
 	eWNI_SME_GET_SNR_REQ,
 
 	eWNI_SME_RRM_MSG_TYPE_BEGIN,
@@ -229,6 +228,7 @@ enum eWniMsgTypes {
 	eWNI_SME_SEND_SAE_MSG,
 	eWNI_SME_SET_ADDBA_ACCEPT,
 	eWNI_SME_UPDATE_EDCA_PROFILE,
+	eWNI_SME_PURGE_ALL_PDEV_CMDS_REQ,
 	eWNI_SME_MSG_TYPES_END
 };
 

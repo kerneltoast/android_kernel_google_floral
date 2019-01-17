@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -264,8 +264,6 @@ bool csr_learn_11dcountry_information(tpAniSirGlobal pMac,
 				   tSirBssDescription *pSirBssDesc,
 				   tDot11fBeaconIEs *pIes, bool fForce);
 void csr_apply_country_information(tpAniSirGlobal pMac);
-void csr_set_cfg_scan_control_list(tpAniSirGlobal pMac, uint8_t *countryCode,
-				   struct csr_channel *pChannelList);
 void csr_free_scan_result_entry(tpAniSirGlobal pMac, struct tag_csrscan_result
 				*pResult);
 
@@ -302,6 +300,15 @@ QDF_STATUS csr_roam_save_connected_information(tpAniSirGlobal pMac,
 					      struct csr_roam_profile *pProfile,
 					      tSirBssDescription *pSirBssDesc,
 					      tDot11fBeaconIEs *pIes);
+/**
+ * csr_purge_pdev_all_ser_cmd_list_sync() - purge pdev cmnds and call cb to HDD
+ * @mac_ctx: pointer to pmac
+ * @req: purge req
+ *
+ * Return: void
+ */
+void csr_purge_pdev_all_ser_cmd_list_sync(tpAniSirGlobal mac,
+					  struct sir_purge_pdev_cmd_req *req);
 void csr_roam_check_for_link_status_change(tpAniSirGlobal pMac,
 					tSirSmeRsp *pSirMsg);
 
