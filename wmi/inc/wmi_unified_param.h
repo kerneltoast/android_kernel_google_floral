@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -37,7 +37,6 @@
 
 #define IEEE80211_ADDR_LEN  6  /* size of 802.11 address */
 #define WMI_MAC_MAX_SSID_LENGTH              32
-#define WMI_SCAN_MAX_NUM_SSID                0x0A
 #define mgmt_tx_dl_frm_len 64
 #define WMI_SMPS_MASK_LOWER_16BITS 0xFF
 #define WMI_SMPS_MASK_UPPER_3BITS 0x7
@@ -1973,6 +1972,8 @@ struct roam_fils_params {
  * @assoc_ie: Assoc IE buffer
  * @add_fils_tlv: add FILS TLV boolean
  * @roam_fils_params: roam fils params
+ * @rct_validity_timer: duration value for which the entries in
+ * roam candidate table are valid
  */
 struct roam_offload_scan_params {
 	uint8_t is_roam_req_valid;
@@ -1994,6 +1995,7 @@ struct roam_offload_scan_params {
 	int auth_mode;
 	bool fw_okc;
 	bool fw_pmksa_cache;
+	uint32_t rct_validity_timer;
 #endif
 	uint32_t min_delay_btw_roam_scans;
 	uint32_t roam_trigger_reason_bitmask;
@@ -2197,6 +2199,10 @@ struct param_slot_scoring {
  *                  BITS 16-23 :- It contains scoring percentage of 3x3
  *                  BITS 24-31 :- It contains scoring percentage of 4x4
  *                  The value of each index must be 0-100
+ * @roam_score_delta: delta value expected over the roam score of the candidate
+ * ap over the roam score of the current ap
+ * @roam_trigger_bitmap: bitmap of roam triggers on which roam_score_delta
+ * will be applied
  * @rssi_scoring: RSSI scoring information.
  * @esp_qbss_scoring: ESP/QBSS scoring percentage information
  * @oce_wan_scoring: OCE WAN metrics percentage information
@@ -2217,6 +2223,8 @@ struct scoring_param {
 	uint32_t bw_index_score;
 	uint32_t band_index_score;
 	uint32_t nss_index_score;
+	uint32_t roam_score_delta;
+	uint32_t roam_trigger_bitmap;
 	struct rssi_scoring rssi_scoring;
 	struct param_slot_scoring esp_qbss_scoring;
 	struct param_slot_scoring oce_wan_scoring;
@@ -5457,6 +5465,7 @@ typedef enum {
 	wmi_p2p_disc_event_id,
 	wmi_p2p_noa_event_id,
 	wmi_p2p_lo_stop_event_id,
+	wmi_vdev_add_macaddr_rx_filter_event_id,
 	wmi_pdev_resume_event_id,
 	wmi_d0_wow_disable_ack_event_id,
 	wmi_wow_initial_wakeup_event_id,
@@ -5567,6 +5576,7 @@ typedef enum {
 	wmi_roam_scan_stats_event_id,
 	wmi_wlan_sar2_result_event_id,
 	wmi_vdev_bcn_reception_stats_event_id,
+	wmi_roam_blacklist_event_id,
 	wmi_events_max,
 } wmi_conv_event_id;
 
@@ -8099,6 +8109,8 @@ struct wmi_mawc_roam_params {
  * @btm_solicited_timeout: Timeout value for waiting BTM request
  * @btm_max_attempt_cnt: Maximum attempt for sending BTM query to ESS
  * @btm_sticky_time: Stick time after roaming to new AP by BTM
+ * @disassoc_timer_threshold: threshold value till which the firmware can
+ * wait before triggering the roam scan after receiving the disassoc iminent
  */
 struct wmi_btm_config {
 	uint8_t vdev_id;
@@ -8106,6 +8118,18 @@ struct wmi_btm_config {
 	uint32_t btm_solicited_timeout;
 	uint32_t btm_max_attempt_cnt;
 	uint32_t btm_sticky_time;
+	uint32_t disassoc_timer_threshold;
+};
+
+/**
+ * struct wmi_bss_load_config - BSS load trigger parameters
+ * @vdev_id: VDEV on which the parameters should be applied
+ * @bss_load_threshold: BSS load threshold after which roam scan should trigger
+ */
+struct wmi_bss_load_config {
+	uint32_t vdev_id;
+	uint32_t bss_load_threshold;
+	uint32_t bss_load_sample_time;
 };
 
 /**

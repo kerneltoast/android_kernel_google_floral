@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -32,9 +32,9 @@
 typedef uint16_t wlan_scan_requester;
 typedef uint32_t wlan_scan_id;
 
-#define WLAN_SCAN_MAX_NUM_SSID          10
-#define WLAN_SCAN_MAX_NUM_BSSID         10
-#define WLAN_SCAN_MAX_NUM_CHANNELS      40
+#define WLAN_SCAN_MAX_NUM_SSID          16
+#define WLAN_SCAN_MAX_NUM_BSSID         4
+#define WLAN_SCAN_MAX_NUM_CHANNELS      68
 
 #define SCM_CANCEL_SCAN_WAIT_TIME 50
 #define SCM_CANCEL_SCAN_WAIT_ITERATION 600
@@ -1310,6 +1310,7 @@ struct pno_user_cfg {
  * bucket
  * @rssi_cat_gap: set rssi category gap
  * @scan_dwell_time_mode: Adaptive dweltime mode
+ * @scan_dwell_time_mode_nc: Adaptive dweltime mode without connection
  * @pno_cfg: Pno related config params
  * @ie_whitelist: probe req IE whitelist attrs
  * @is_bssid_hint_priority: True if bssid_hint is priority
@@ -1333,6 +1334,7 @@ struct scan_user_cfg {
 	int32_t scan_bucket_threshold;
 	uint32_t rssi_cat_gap;
 	enum scan_dwelltime_adaptive_mode scan_dwell_time_mode;
+	enum scan_dwelltime_adaptive_mode scan_dwell_time_mode_nc;
 	struct pno_user_cfg pno_cfg;
 	struct probe_req_whitelist_attr ie_whitelist;
 	uint32_t usr_cfg_probe_rpt_time;

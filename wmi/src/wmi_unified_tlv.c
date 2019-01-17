@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -2939,8 +2939,8 @@ static QDF_STATUS send_scan_start_cmd_tlv(wmi_unified_t wmi_handle,
 	buf_ptr += WMI_TLV_HDR_SIZE +
 			(params->chan_list.num_chan * sizeof(uint32_t));
 
-	if (params->num_ssids > WMI_SCAN_MAX_NUM_SSID) {
-		WMI_LOGE("Invalid value for numSsid");
+	if (params->num_ssids > WLAN_SCAN_MAX_NUM_SSID) {
+		WMI_LOGE("Invalid value for num_ssids %d", params->num_ssids);
 		goto error;
 	}
 
@@ -6568,6 +6568,8 @@ static QDF_STATUS send_roam_scan_offload_mode_cmd_tlv(wmi_unified_t wmi_handle,
 			req_offload_params->roam_preauth_no_ack_timeout;
 		roam_offload_params->reassoc_failure_timeout =
 			roam_req->reassoc_failure_timeout;
+		roam_offload_params->roam_candidate_validity_time =
+			roam_req->rct_validity_timer;
 
 		/* Fill the capabilities */
 		roam_offload_params->capability =
@@ -15882,6 +15884,13 @@ static QDF_STATUS send_roam_scan_offload_ap_profile_cmd_tlv(wmi_unified_t wmi_ha
 		 score_param->oce_wan_scoring.score_pcnt11_to_8,
 		 score_param->oce_wan_scoring.score_pcnt15_to_12);
 
+	score_param->roam_score_delta_pcnt = ap_profile->param.roam_score_delta;
+	score_param->roam_score_delta_mask =
+				ap_profile->param.roam_trigger_bitmap;
+	WMI_LOGD("Roam score delta:%d Roam_trigger_bitmap:%x",
+		 score_param->roam_score_delta_pcnt,
+		 score_param->roam_score_delta_mask);
+
 	wmi_mtrace(WMI_ROAM_AP_PROFILE, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,
 				      len, WMI_ROAM_AP_PROFILE);
@@ -18962,6 +18971,81 @@ static QDF_STATUS extract_p2p_lo_stop_ev_param_tlv(
 
 	return QDF_STATUS_SUCCESS;
 }
+
+static QDF_STATUS
+send_set_mac_addr_rx_filter_cmd_tlv(wmi_unified_t wmi_handle,
+				    struct p2p_set_mac_filter *param)
+{
+	wmi_vdev_add_mac_addr_to_rx_filter_cmd_fixed_param *cmd;
+	uint32_t len;
+	wmi_buf_t buf;
+	int ret;
+
+	if (!wmi_handle) {
+		WMI_LOGE("WMA context is invald!");
+		return QDF_STATUS_E_INVAL;
+	}
+
+	len = sizeof(*cmd);
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf) {
+		WMI_LOGE("Failed allocate wmi buffer");
+		return QDF_STATUS_E_NOMEM;
+	}
+
+	cmd = (wmi_vdev_add_mac_addr_to_rx_filter_cmd_fixed_param *)
+		wmi_buf_data(buf);
+
+	WMITLV_SET_HDR(
+	   &cmd->tlv_header,
+	   WMITLV_TAG_STRUC_wmi_vdev_add_mac_addr_to_rx_filter_cmd_fixed_param,
+	WMITLV_GET_STRUCT_TLVLEN(
+			wmi_vdev_add_mac_addr_to_rx_filter_cmd_fixed_param));
+
+	cmd->vdev_id = param->vdev_id;
+	cmd->freq = param->freq;
+	WMI_CHAR_ARRAY_TO_MAC_ADDR(param->mac, &cmd->mac_addr);
+	if (param->set)
+		cmd->enable = 1;
+	else
+		cmd->enable = 0;
+	WMI_LOGD("set random mac rx vdev %d freq %d set %d %pM",
+		 param->vdev_id, param->freq, param->set, param->mac);
+	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
+				   WMI_VDEV_ADD_MAC_ADDR_TO_RX_FILTER_CMDID);
+	if (ret) {
+		WMI_LOGE("Failed to send action frame random mac cmd");
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+static QDF_STATUS extract_mac_addr_rx_filter_evt_param_tlv(
+	wmi_unified_t wmi_handle, void *evt_buf,
+	struct p2p_set_mac_filter_evt *param)
+{
+	WMI_VDEV_ADD_MAC_ADDR_TO_RX_FILTER_STATUS_EVENTID_param_tlvs *param_buf;
+	wmi_vdev_add_mac_addr_to_rx_filter_status_event_fixed_param *event;
+
+	param_buf =
+		(WMI_VDEV_ADD_MAC_ADDR_TO_RX_FILTER_STATUS_EVENTID_param_tlvs *)
+		evt_buf;
+	if (!param_buf) {
+		WMI_LOGE("Invalid action frame filter mac event");
+		return QDF_STATUS_E_INVAL;
+	}
+	event = param_buf->fixed_param;
+	if (!event) {
+		WMI_LOGE("Invalid fixed param");
+		return QDF_STATUS_E_INVAL;
+	}
+	param->vdev_id = event->vdev_id;
+	param->status = event->status;
+
+	return QDF_STATUS_SUCCESS;
+}
 #endif /* End of CONVERGED_P2P_ENABLE */
 
 /**
@@ -20875,10 +20959,13 @@ static QDF_STATUS extract_reg_chan_list_update_event_tlv(
 	reg_info->min_bw_5g = chan_list_event_hdr->min_bw_5g;
 	reg_info->max_bw_5g = chan_list_event_hdr->max_bw_5g;
 
-	WMI_LOGD("%s:cc %s dsf %d BW: min_2g %d max_2g %d min_5g %d max_5g %d",
-			__func__, reg_info->alpha2, reg_info->dfs_region,
-			reg_info->min_bw_2g, reg_info->max_bw_2g,
-			reg_info->min_bw_5g, reg_info->max_bw_5g);
+	WMI_LOGD(FL("num_phys = %u and phy_id = %u"),
+		 reg_info->num_phy, reg_info->phy_id);
+
+	WMI_LOGD("%s:cc %s dfs %d BW: min_2g %d max_2g %d min_5g %d max_5g %d",
+		 __func__, reg_info->alpha2, reg_info->dfs_region,
+		 reg_info->min_bw_2g, reg_info->max_bw_2g,
+		 reg_info->min_bw_5g, reg_info->max_bw_5g);
 
 	WMI_LOGD("%s: num_2g_reg_rules %d num_5g_reg_rules %d", __func__,
 			num_2g_reg_rules, num_5g_reg_rules);
@@ -21289,6 +21376,7 @@ static QDF_STATUS send_set_country_cmd_tlv(wmi_unified_t wmi_handle,
 	QDF_STATUS qdf_status;
 	wmi_set_current_country_cmd_fixed_param *cmd;
 	uint16_t len = sizeof(*cmd);
+	uint8_t pdev_id = params->pdev_id;
 
 	buf = wmi_buf_alloc(wmi_handle, len);
 	if (!buf) {
@@ -21303,11 +21391,11 @@ static QDF_STATUS send_set_country_cmd_tlv(wmi_unified_t wmi_handle,
 		       WMITLV_GET_STRUCT_TLVLEN
 			       (wmi_set_current_country_cmd_fixed_param));
 
-	WMI_LOGD("setting cuurnet country to  %s", params->country);
+	cmd->pdev_id = wmi_handle->ops->convert_host_pdev_id_to_target(pdev_id);
+	WMI_LOGD("setting current country to  %s and target pdev_id = %u",
+		 params->country, cmd->pdev_id);
 
 	qdf_mem_copy((uint8_t *)&cmd->new_alpha2, params->country, 3);
-
-	cmd->pdev_id = params->pdev_id;
 
 	wmi_mtrace(WMI_SET_CURRENT_COUNTRY_CMDID, NO_SESSION, 0);
 	qdf_status = wmi_unified_cmd_send(wmi_handle,
@@ -21764,11 +21852,57 @@ static QDF_STATUS send_btm_config_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->max_attempt_cnt = params->btm_max_attempt_cnt;
 	cmd->solicited_timeout_ms = params->btm_solicited_timeout;
 	cmd->stick_time_seconds = params->btm_sticky_time;
+	cmd->disassoc_timer_threshold = params->disassoc_timer_threshold;
 
 	wmi_mtrace(WMI_ROAM_BTM_CONFIG_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 	    WMI_ROAM_BTM_CONFIG_CMDID)) {
 		WMI_LOGE("%s: failed to send WMI_ROAM_BTM_CONFIG_CMDID",
+			 __func__);
+		wmi_buf_free(buf);
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	return QDF_STATUS_SUCCESS;
+}
+
+/**
+ * send_roam_bss_load_config_tlv() - send roam load bss trigger configuration
+ * @wmi_handle: wmi handle
+ * @parms: pointer to wmi_bss_load_config
+ *
+ * This function sends the roam load bss trigger configuration to fw.
+ * the bss_load_threshold parameter is used to configure the maximum
+ * bss load percentage, above which the firmware should trigger roaming
+ *
+ * Return: QDF status
+ */
+static QDF_STATUS
+send_roam_bss_load_config_tlv(wmi_unified_t wmi_handle,
+			      struct wmi_bss_load_config *params)
+{
+	wmi_roam_bss_load_config_cmd_fixed_param *cmd;
+	wmi_buf_t buf;
+	uint32_t len;
+
+	len = sizeof(*cmd);
+	buf = wmi_buf_alloc(wmi_handle, len);
+	if (!buf)
+		return QDF_STATUS_E_NOMEM;
+
+	cmd = (wmi_roam_bss_load_config_cmd_fixed_param *)wmi_buf_data(buf);
+	WMITLV_SET_HDR(
+	   &cmd->tlv_header,
+	   WMITLV_TAG_STRUC_wmi_roam_bss_load_config_cmd_fixed_param,
+	   WMITLV_GET_STRUCT_TLVLEN(wmi_roam_bss_load_config_cmd_fixed_param));
+	cmd->vdev_id = params->vdev_id;
+	cmd->bss_load_threshold = params->bss_load_threshold;
+	cmd->monitor_time_window = params->bss_load_sample_time;
+
+	wmi_mtrace(WMI_ROAM_BSS_LOAD_CONFIG_CMDID, cmd->vdev_id, 0);
+	if (wmi_unified_cmd_send(wmi_handle, buf, len,
+				 WMI_ROAM_BSS_LOAD_CONFIG_CMDID)) {
+		WMI_LOGE("%s: failed to send WMI_ROAM_BSS_LOAD_CONFIG_CMDID ",
 			 __func__);
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
@@ -22953,6 +23087,9 @@ struct wmi_ops tlv_ops =  {
 	.extract_p2p_noa_ev_param = extract_p2p_noa_ev_param_tlv,
 	.extract_p2p_lo_stop_ev_param =
 				extract_p2p_lo_stop_ev_param_tlv,
+	.set_mac_addr_rx_filter = send_set_mac_addr_rx_filter_cmd_tlv,
+	.extract_mac_addr_rx_filter_evt_param =
+				extract_mac_addr_rx_filter_evt_param_tlv,
 #endif
 	.extract_offchan_data_tx_compl_param =
 				extract_offchan_data_tx_compl_param_tlv,
@@ -23046,6 +23183,11 @@ struct wmi_ops tlv_ops =  {
 	.convert_pdev_id_target_to_host =
 		convert_target_pdev_id_to_host_pdev_id_legacy,
 
+	.convert_host_pdev_id_to_target =
+		convert_host_pdev_id_to_target_pdev_id,
+	.convert_target_pdev_id_to_host =
+		convert_target_pdev_id_to_host_pdev_id,
+
 	.send_start_11d_scan_cmd = send_start_11d_scan_cmd_tlv,
 	.send_stop_11d_scan_cmd = send_stop_11d_scan_cmd_tlv,
 	.extract_reg_11d_new_country_event =
@@ -23079,6 +23221,7 @@ struct wmi_ops tlv_ops =  {
 	.extract_ndp_sch_update = extract_ndp_sch_update_tlv,
 #endif
 	.send_btm_config = send_btm_config_cmd_tlv,
+	.send_roam_bss_load_config = send_roam_bss_load_config_tlv,
 	.send_obss_detection_cfg_cmd = send_obss_detection_cfg_cmd_tlv,
 	.extract_obss_detection_info = extract_obss_detection_info_tlv,
 #ifdef WLAN_SUPPORT_FILS
@@ -23178,6 +23321,8 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_p2p_noa_event_id] = WMI_P2P_NOA_EVENTID;
 	event_ids[wmi_p2p_lo_stop_event_id] =
 				WMI_P2P_LISTEN_OFFLOAD_STOPPED_EVENTID;
+	event_ids[wmi_vdev_add_macaddr_rx_filter_event_id] =
+			WMI_VDEV_ADD_MAC_ADDR_TO_RX_FILTER_STATUS_EVENTID;
 	event_ids[wmi_pdev_resume_event_id] = WMI_PDEV_RESUME_EVENTID;
 	event_ids[wmi_wow_wakeup_host_event_id] = WMI_WOW_WAKEUP_HOST_EVENTID;
 	event_ids[wmi_d0_wow_disable_ack_event_id] =
@@ -23402,6 +23547,7 @@ static void populate_tlv_events_id(uint32_t *event_ids)
 	event_ids[wmi_roam_scan_stats_event_id] = WMI_ROAM_SCAN_STATS_EVENTID;
 	event_ids[wmi_vdev_bcn_reception_stats_event_id] =
 		WMI_VDEV_BCN_RECEPTION_STATS_EVENTID;
+	event_ids[wmi_roam_blacklist_event_id] = WMI_ROAM_BLACKLIST_EVENTID;
 }
 
 /**
