@@ -180,6 +180,12 @@ struct avcs_cmd_deregister_topologies {
 	 */
 } __packed;
 
+#define AVCS_CMD_ADSP_CRASH        0x0001FFFF
+
+struct avcs_cmd_adsp_crash {
+	struct apr_hdr hdr;
+} __packed;
+
 #define AVCS_MODE_DEREGISTER_ALL_CUSTOM_TOPOLOGIES	2
 
 #define AVCS_CMD_LOAD_TOPO_MODULES                 0x0001296C
@@ -204,6 +210,7 @@ int q6core_map_mdf_shared_memory(uint32_t map_handle, phys_addr_t *buf_add,
 
 int32_t core_set_license(uint32_t key, uint32_t module_id);
 int32_t core_get_license_status(uint32_t module_id);
+int q6core_adsp_crash(void);
 
 int32_t q6core_load_unload_topo_modules(uint32_t topology_id,
 			bool preload_type);
