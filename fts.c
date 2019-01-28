@@ -4231,6 +4231,7 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 	struct drm_panel *panel = NULL;
 	struct display_timing timing;
 	const char *name;
+	u32 inverted;
 	struct device_node *np = dev->of_node;
 	u32 coords[2];
 
@@ -4320,6 +4321,14 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 	else
 		bdata->limits_name = name;
 	pr_info("limits name = %s\n", bdata->limits_name);
+
+	inverted = 0;
+	if (panel)
+		retval = of_property_read_u32_index(
+				np, "st,sensor_inverted", panelmap.args[0],
+				&inverted);
+	bdata->sensor_inverted = (inverted != 0);
+	pr_info("Sensor inverted = %u\n", inverted);
 
 	if (panel && panel->funcs && panel->funcs->get_timings &&
 	    panel->funcs->get_timings(panel, 1, &timing) > 0) {
