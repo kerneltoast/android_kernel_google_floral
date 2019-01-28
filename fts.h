@@ -273,6 +273,7 @@ struct fts_hw_platform_data {
 	int x_axis_max;
 	int y_axis_max;
 	bool auto_fw_update;
+	bool heatmap_mode_full_init;
 };
 
 /* Bits for the bus reference mask */
@@ -389,6 +390,8 @@ struct fts_ts_info {
 	int stylus_enabled;	/* Stylus mode */
 	int cover_enabled;	/* Cover mode */
 	int grip_enabled;	/* Grip mode */
+
+	bool heatmap_mode_full;		/* Report full heatmap */
 
 #ifdef CONFIG_TOUCHSCREEN_TBN
 	struct tbn_context	*tbn;

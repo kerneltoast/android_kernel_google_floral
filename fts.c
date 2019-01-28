@@ -2249,6 +2249,35 @@ END:
 
 	return count;
 }
+
+static ssize_t fts_heatmap_mode_full_store(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+	int result;
+	int val;
+
+	result = kstrtoint(buf, 10, &val);
+	if (result < 0 || val < 0 || val > 1) {
+		pr_err("%s: Invalid input.\n", __func__);
+		return -EINVAL;
+	}
+
+	info->heatmap_mode_full = (val == 1);
+	return count;
+}
+
+static ssize_t fts_heatmap_mode_full_show(struct device *dev,
+					  struct device_attribute *attr,
+					  char *buf)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 info->heatmap_mode_full ? 1 : 0);
+}
+
 static DEVICE_ATTR(infoblock_getdata, (0444),
 		   fts_infoblock_getdata_show, NULL);
 static DEVICE_ATTR(fwupdate, 0664, fts_fwupdate_show,
@@ -2259,6 +2288,8 @@ static DEVICE_ATTR(fw_file_test, 0444, fts_fw_test_show, NULL);
 static DEVICE_ATTR(status, 0444, fts_status_show, NULL);
 static DEVICE_ATTR(stm_fts_cmd, 0664, stm_fts_cmd_show,
 		   stm_fts_cmd_store);
+static DEVICE_ATTR(heatmap_mode_full, 0664, fts_heatmap_mode_full_show,
+		   fts_heatmap_mode_full_store);
 #ifdef USE_ONE_FILE_NODE
 static DEVICE_ATTR(feature_enable, 0664,
 		   fts_feature_enable_show, fts_feature_enable_store);
@@ -2309,6 +2340,7 @@ static struct attribute *fts_attr_group[] = {
 	&dev_attr_fw_file_test.attr,
 	&dev_attr_status.attr,
 	&dev_attr_stm_fts_cmd.attr,
+	&dev_attr_heatmap_mode_full.attr,
 #ifdef USE_ONE_FILE_NODE
 	&dev_attr_feature_enable.attr,
 #else
@@ -3019,6 +3051,8 @@ static void heatmap_enable(void)
 
 static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 {
+	struct fts_ts_info *info =
+		container_of(v4l2, struct fts_ts_info, v4l2);
 	unsigned int num_elements;
 	/* index for looping through the heatmap buffer read over the bus */
 	unsigned int local_i;
@@ -3038,64 +3072,100 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 
 	struct heatmap_report report = {0};
 
-	result = fts_writeReadU8UX(FTS_CMD_FRAMEBUFFER_R, BITS_16,
-				   ADDR_FRAMEBUFFER, (uint8_t *)&report,
-				   sizeof(report), DUMMY_FRAMEBUFFER);
-	if (result != OK) {
-		pr_err("%s: i2c read failed, fts_writeRead returned %i",
-			__func__, result);
-		return false;
-	}
-	if (report.mode != LOCAL_HEATMAP_MODE) {
-		pr_err("Touch IC not in local heatmap mode: %X %X %i",
-			report.prefix, report.mode, report.counter);
-		return false;
-	}
+	if (!info->heatmap_mode_full) {
+		result = fts_writeReadU8UX(FTS_CMD_FRAMEBUFFER_R, BITS_16,
+					   ADDR_FRAMEBUFFER, (uint8_t *)&report,
+					   sizeof(report), DUMMY_FRAMEBUFFER);
+		if (result != OK) {
+			pr_err("%s: i2c read failed, fts_writeRead returned %i",
+				__func__, result);
+			return false;
+		}
+		if (report.mode != LOCAL_HEATMAP_MODE) {
+			pr_err("Touch IC not in local heatmap mode: %X %X %i",
+				report.prefix, report.mode, report.counter);
+			return false;
+		}
 
-	le16_to_cpus(&report.counter); /* enforce little-endian order */
-	if (report.counter == counter && counter != 0) {
-		/*
-		 * We shouldn't make ordered comparisons because of
-		 * potential overflow, but at least the value
-		 * should have changed. If the value remains the same,
-		 * but we are processing a new interrupt,
-		 * this could indicate slowness in the interrupt handler.
+		le16_to_cpus(&report.counter); /* enforce little-endian order */
+		if (report.counter == counter && counter != 0) {
+			/*
+			 * We shouldn't make ordered comparisons because of
+			 * potential overflow, but at least the value
+			 * should have changed. If the value remains the same,
+			 * but we are processing a new interrupt,
+			 * this could indicate slowness in the interrupt
+			 * handler.
+			 */
+			pr_warn("Heatmap frame has stale counter value %i",
+				counter);
+		}
+		counter = report.counter;
+		num_elements = report.size_x * report.size_y;
+		if (num_elements > LOCAL_HEATMAP_WIDTH * LOCAL_HEATMAP_HEIGHT) {
+			pr_err("Unexpected heatmap size: %i x %i",
+					report.size_x, report.size_y);
+			return false;
+		}
+
+		/* set all to zero, will only write to non-zero locations in
+		 * the loop
 		 */
-		pr_warn("Heatmap frame has stale counter value %i",
-			counter);
-	}
-	counter = report.counter;
-	num_elements = report.size_x * report.size_y;
-	if (num_elements > LOCAL_HEATMAP_WIDTH * LOCAL_HEATMAP_HEIGHT) {
-		pr_err("Unexpected heatmap size: %i x %i",
-				report.size_x, report.size_y);
-		return false;
-	}
+		memset(data, 0, max_x * max_y * sizeof(data[0]));
+		/* populate the data buffer, rearranging into final locations */
+		for (local_i = 0; local_i < num_elements; local_i++) {
+			/* enforce little-endian order */
+			le16_to_cpus(&report.data[local_i]);
+			heatmap_value = report.data[local_i];
 
-	/* set all to zero, will only write to non-zero locations in the loop */
-	memset(data, 0, max_x * max_y * sizeof(data[0]));
-	/* populate the data buffer, rearranging into final locations */
-	for (local_i = 0; local_i < num_elements; local_i++) {
-		/* enforce little-endian order */
-		le16_to_cpus(&report.data[local_i]);
-		heatmap_value = report.data[local_i];
+			if (heatmap_value == 0) {
+				/* Already set to zero. Nothing to do */
+				continue;
+			}
 
-		if (heatmap_value == 0) {
-			/* Already set to zero. Nothing to do */
-			continue;
-		}
+			heatmap_x = report.offset_x + (local_i % report.size_x);
+			heatmap_y = report.offset_y + (local_i / report.size_x);
 
-		heatmap_x = report.offset_x + (local_i % report.size_x);
-		heatmap_y = report.offset_y + (local_i / report.size_x);
-
-		if (heatmap_x < 0 || heatmap_x >= max_x ||
-			heatmap_y < 0 || heatmap_y >= max_y) {
+			if (heatmap_x < 0 || heatmap_x >= max_x ||
+			    heatmap_y < 0 || heatmap_y >= max_y) {
 				pr_err("Invalid x or y: (%i, %i), value=%i, ending loop\n",
-					heatmap_x, heatmap_y, heatmap_value);
+				       heatmap_x, heatmap_y, heatmap_value);
 				return false;
+			}
+			frame_i = heatmap_y * max_x + heatmap_x;
+			data[frame_i] = heatmap_value;
 		}
-		frame_i = heatmap_y * max_x + heatmap_x;
-		data[frame_i] = heatmap_value;
+	} else {
+		MutualSenseFrame ms_frame = { 0 };
+		uint32_t frame_index = 0, x, y;
+
+		result = getMSFrame3(MS_STRENGTH, &ms_frame);
+		if (result <= 0) {
+			pr_err("getMSFrame3 failed with result=0x%08X.\n",
+			       result);
+			return false;
+		}
+
+		for (y = 0; y < max_y; y++) {
+			for (x = 0; x < max_x; x++) {
+				/* Rotate frame counter-clockwise and invert
+				 * if necessary.
+				 */
+				if (!info->board->sensor_inverted) {
+					heatmap_value =
+					    (strength_t)ms_frame.node_data[
+						((max_x-1) - x) * max_y + y];
+				} else {
+					heatmap_value =
+					    (strength_t)ms_frame.node_data[
+						((max_x-1) - x) * max_y +
+						((max_y-1) - y)];
+				}
+				data[frame_index++] = heatmap_value;
+			}
+		}
+
+		kfree(ms_frame.node_data);
 	}
 	return true;
 }
@@ -4298,6 +4368,12 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 		pr_info("Automatic firmware update disabled\n");
 	}
 
+	bdata->heatmap_mode_full_init = false;
+	if (of_property_read_bool(np, "st,heatmap_mode_full")) {
+		bdata->heatmap_mode_full_init = true;
+		pr_info("Full heatmap enabled\n");
+	}
+
 	name = NULL;
 	if (panel)
 		retval = of_property_read_string_index(np, "st,firmware_names",
@@ -4597,6 +4673,11 @@ static int fts_probe(struct spi_device *client)
 
 	info->resume_bit = 1;
 	info->notifier = fts_noti_block;
+
+	/* Set initial heatmap mode based on the device tree configuration.
+	 * Default is partial heatmap mode.
+	 */
+	info->heatmap_mode_full = info->board->heatmap_mode_full_init;
 
 	/*
 	 * This *must* be done before request_threaded_irq is called.

@@ -158,7 +158,7 @@ int getMSFrame3(MSFrameType type, MutualSenseFrame *frame)
 
 	frame->node_data = NULL;
 
-	pr_info("%s: Starting to get frame %02X\n", __func__,
+	pr_debug("%s: Starting to get frame %02X\n", __func__,
 		 type);
 	switch (type) {
 	case MS_RAW:
@@ -233,7 +233,7 @@ LOAD_FRC:
 	frame->header.sense_node = sense_len;
 	frame->header.type = type;
 
-	pr_info("%s: Force_len = %d Sense_len = %d Offset = %04X\n",
+	pr_debug("%s: Force_len = %d Sense_len = %d Offset = %04X\n",
 		__func__, force_len, sense_len, offset);
 
 	frame->node_data = (short *)kmalloc(frame->node_data_size *
@@ -255,7 +255,7 @@ LOAD_FRC:
 	/* if you want to access one node i,j,
 	  * compute the offset like: offset = i*columns + j = > frame[i, j] */
 
-	pr_info("Frame acquired!\n");
+	pr_debug("Frame acquired!\n");
 	return frame->node_data_size;
 	/* return the number of data put inside frame */
 }
