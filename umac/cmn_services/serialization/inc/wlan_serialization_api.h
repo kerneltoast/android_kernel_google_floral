@@ -89,7 +89,10 @@ union wlan_serialization_rules_info {
  *
  * Return: QDF_STATUS_SUCCESS or QDF_STATUS_E_FAILURE
  */
-typedef QDF_STATUS (*wlan_serialization_cmd_callback) (void *wlan_cmd,
+struct wlan_serialization_command;
+
+typedef QDF_STATUS (*wlan_serialization_cmd_callback) (
+				 struct wlan_serialization_command *wlan_cmd,
 				 enum wlan_serialization_cb_reason reason);
 
 /**
