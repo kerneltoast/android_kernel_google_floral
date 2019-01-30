@@ -1217,7 +1217,7 @@ static int cs35l36_handle_of_data(struct i2c_client *i2c_client,
 			return -EINVAL;
 		}
 
-		pdata->bst_ipk = (val - 1600) / 50;
+		pdata->bst_ipk = (val - 1600) / 50 + 16;
 	}
 
 	pdata->multi_amp_mode = of_property_read_bool(np,
