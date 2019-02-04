@@ -27,4 +27,10 @@ cc_binary_host {
     static_libs: ["libfdt"],
 
     stl: "none",
+    dist: {
+        targets: [
+            "dist_files",
+        ],
+        dir: "dtc",
+    },
 }
