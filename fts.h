@@ -285,6 +285,17 @@ enum {
 	FTS_BUS_REF_FORCE_ACTIVE	= 0x10
 };
 
+/* Motion filter finite state machine (FSM) states
+ * FTS_MF_FILTERED        - default coordinate filtering
+ * FTS_MF_UNFILTERED      - unfiltered single-touch coordinates
+ * FTS_MF_FILTERED_LOCKED - filtered coordinates. Locked until touch is lifted.
+ */
+typedef enum {
+	FTS_MF_FILTERED		= 0,
+	FTS_MF_UNFILTERED	= 1,
+	FTS_MF_FILTERED_LOCKED	= 2
+} motion_filter_state_t;
+
 /*
   * Forward declaration
   */
@@ -392,6 +403,13 @@ struct fts_ts_info {
 	int grip_enabled;	/* Grip mode */
 
 	bool heatmap_mode_full;		/* Report full heatmap */
+
+	/* Motion filter finite state machine (FSM) state */
+	motion_filter_state_t mf_state;
+	/* Time of initial single-finger touch down. This timestamp is used to
+	 * compute the duration a single finger is touched before it is lifted.
+	 */
+	ktime_t mf_downtime;
 
 #ifdef CONFIG_TOUCHSCREEN_TBN
 	struct tbn_context	*tbn;

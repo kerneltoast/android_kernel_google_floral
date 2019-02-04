@@ -3170,6 +3170,61 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 	return true;
 }
 
+/* Update a state machine used to toggle control of the touch IC's motion
+ * filter.
+ */
+static int update_motion_filter(struct fts_ts_info *info)
+{
+	/* Motion filter timeout, in milliseconds */
+	const u32 mf_timeout_ms = 500;
+	u8 next_state;
+	u8 touches = hweight32(info->touch_id); /* Count the active touches */
+
+	/* Determine the next filter state. The motion filter is enabled by
+	 * default and it is disabled while a single finger is touching the
+	 * screen. If another finger is touched down or if a timeout expires,
+	 * the motion filter is reenabled and remains enabled until all fingers
+	 * are lifted.
+	 */
+	next_state = info->mf_state;
+	switch (info->mf_state) {
+	case FTS_MF_FILTERED:
+		if (touches == 1) {
+			next_state = FTS_MF_UNFILTERED;
+			info->mf_downtime = ktime_get();
+		}
+		break;
+	case FTS_MF_UNFILTERED:
+		if (touches == 0) {
+			next_state = FTS_MF_FILTERED;
+		} else if (touches > 1 ||
+			   ktime_after(ktime_get(),
+				       ktime_add_ms(info->mf_downtime,
+						    mf_timeout_ms))) {
+			next_state = FTS_MF_FILTERED_LOCKED;
+		}
+		break;
+	case FTS_MF_FILTERED_LOCKED:
+		if (touches == 0) {
+			next_state = FTS_MF_FILTERED;
+		}
+		break;
+	}
+
+	/* Send command to update filter state */
+	if ((next_state == FTS_MF_UNFILTERED) !=
+	    (info->mf_state == FTS_MF_UNFILTERED)) {
+		u8 cmd[3] = {0xC0, 0x05, 0x00};
+		pr_debug("%s: setting motion filter = %s.\n", __func__,
+			 (next_state == FTS_MF_UNFILTERED) ? "false" : "true");
+		cmd[2] = (next_state == FTS_MF_UNFILTERED) ? 0x01 : 0x00;
+		fts_write(cmd, sizeof(cmd));
+	}
+	info->mf_state = next_state;
+
+	return 0;
+}
+
 /**
   * Bottom Half Interrupt Handler function
   * This handler is called each time there is at least one new event in the FIFO
@@ -3253,6 +3308,9 @@ static irqreturn_t fts_interrupt_handler(int irq, void *handle)
 	input_sync(info->input_dev);
 
 	heatmap_read(&info->v4l2, info->timestamp);
+
+	/* Disable the firmware motion filter during single touch */
+	update_motion_filter(info);
 
 	pm_qos_update_request(&info->pm_qos_req, PM_QOS_DEFAULT_VALUE);
 	fts_set_bus_ref(info, FTS_BUS_REF_IRQ, false);
