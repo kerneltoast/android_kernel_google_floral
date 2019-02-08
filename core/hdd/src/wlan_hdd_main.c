@@ -5856,10 +5856,19 @@ QDF_STATUS hdd_reset_all_adapters(struct hdd_context *hdd_ctx)
 			wlan_hdd_netif_queue_control(adapter,
 						     WLAN_STOP_ALL_NETIF_QUEUE,
 						     WLAN_CONTROL_PATH);
+			if (test_bit(ACS_PENDING, &adapter->event_flags)) {
+				cds_flush_delayed_work(
+						&adapter->acs_pending_work);
+				clear_bit(ACS_PENDING, &adapter->event_flags);
+			}
+
 			if (test_bit(SOFTAP_BSS_STARTED,
-						&adapter->event_flags))
+						&adapter->event_flags)) {
 				hdd_sap_indicate_disconnect_for_sta(adapter);
-			clear_bit(SOFTAP_BSS_STARTED, &adapter->event_flags);
+				clear_bit(SOFTAP_BSS_STARTED,
+					  &adapter->event_flags);
+			}
+
 		} else {
 			wlan_hdd_netif_queue_control(adapter,
 					   WLAN_STOP_ALL_NETIF_QUEUE_N_CARRIER,
@@ -5915,7 +5924,12 @@ QDF_STATUS hdd_reset_all_adapters(struct hdd_context *hdd_ctx)
 		hdd_nud_ignore_tracking(adapter, true);
 		hdd_nud_reset_tracking(adapter);
 		hdd_nud_flush_work(adapter);
-		hdd_set_disconnect_status(adapter, false);
+
+		if (adapter->device_mode != QDF_SAP_MODE &&
+		    adapter->device_mode != QDF_P2P_GO_MODE &&
+		    adapter->device_mode != QDF_FTM_MODE)
+			hdd_set_disconnect_status(adapter, false);
+
 		hdd_stop_tsf_sync(adapter);
 
 		hdd_softap_deinit_tx_rx(adapter);
@@ -8331,7 +8345,7 @@ hdd_display_netif_queue_history_compact(struct hdd_context *hdd_ctx)
 		}
 
 		tbytes = 0;
-		qdf_mem_set(temp_str, sizeof(temp_str), 0);
+		qdf_mem_zero(temp_str, sizeof(temp_str));
 		for (i = WLAN_CONTROL_PATH; i < WLAN_REASON_TYPE_MAX; i++) {
 			if (adapter->queue_oper_stats[i].pause_count == 0)
 				continue;
@@ -10308,10 +10322,10 @@ int hdd_pktlog_enable_disable(struct hdd_context *hdd_ctx, bool enable,
 void hdd_free_mac_address_lists(struct hdd_context *hdd_ctx)
 {
 	hdd_debug("Resetting MAC address lists");
-	qdf_mem_set(hdd_ctx->provisioned_mac_addr,
-		    sizeof(hdd_ctx->provisioned_mac_addr), 0);
-	qdf_mem_set(hdd_ctx->derived_mac_addr,
-		    sizeof(hdd_ctx->derived_mac_addr), 0);
+	qdf_mem_zero(hdd_ctx->provisioned_mac_addr,
+		    sizeof(hdd_ctx->provisioned_mac_addr));
+	qdf_mem_zero(hdd_ctx->derived_mac_addr,
+		    sizeof(hdd_ctx->derived_mac_addr));
 	hdd_ctx->num_provisioned_addr = 0;
 	hdd_ctx->num_derived_addr = 0;
 	hdd_ctx->provisioned_intf_addr_mask = 0;
@@ -12896,15 +12910,15 @@ err_out:
  */
 void hdd_deinit(void)
 {
+	hdd_qdf_print_deinit();
 	qdf_timer_free(&hdd_drv_ops_inactivity_timer);
 
-	wlan_destroy_bug_report_lock();
-	cds_deinit();
-
-	hdd_qdf_print_deinit();
 #ifdef WLAN_LOGGING_SOCK_SVC_ENABLE
 	wlan_logging_sock_deinit_svc();
 #endif
+
+	wlan_destroy_bug_report_lock();
+	cds_deinit();
 }
 
 #ifdef QCA_WIFI_NAPIER_EMULATION
@@ -14043,6 +14057,9 @@ static inline void hdd_update_pno_config(struct pno_user_cfg *pno_cfg,
 	pno_cfg->channel_prediction = cfg->pno_channel_prediction;
 	pno_cfg->top_k_num_of_channels = cfg->top_k_num_of_channels;
 	pno_cfg->stationary_thresh = cfg->stationary_thresh;
+	pno_cfg->scan_timer_repeat_value = cfg->configPNOScanTimerRepeatValue;
+	pno_cfg->slow_scan_multiplier = cfg->pno_slow_scan_multiplier;
+	pno_cfg->dfs_chnl_scan_enabled = cfg->enable_dfs_pno_chnl_scan;
 	pno_cfg->adaptive_dwell_mode = cfg->pnoscan_adaptive_dwell_mode;
 	pno_cfg->channel_prediction_full_scan =
 		cfg->channel_prediction_full_scan;
@@ -14284,6 +14301,9 @@ static int hdd_update_scan_config(struct hdd_context *hdd_ctx)
 	struct hdd_config *cfg = hdd_ctx->config;
 	QDF_STATUS status;
 
+	/* The ini is disallow DFS channel scan if ini is 1, so negate that */
+	scan_cfg.allow_dfs_chan_in_first_scan = !cfg->initial_scan_no_dfs_chnl;
+	scan_cfg.allow_dfs_chan_in_scan = cfg->enableDFSChnlScan;
 	scan_cfg.active_dwell = cfg->nActiveMaxChnTime;
 	scan_cfg.active_dwell_2g = cfg->active_dwell_2g;
 	scan_cfg.passive_dwell = cfg->nPassiveMaxChnTime;

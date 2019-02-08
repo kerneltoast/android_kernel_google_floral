@@ -833,8 +833,8 @@ static bool lim_check_wpa_rsn_ie(tpPESession session, tpAniSirGlobal mac_ctx,
 	 * Clear the buffers so that frame parser knows that there isn't a
 	 * previously decoded IE in these buffers
 	 */
-	qdf_mem_set((uint8_t *) &dot11f_ie_rsn, sizeof(dot11f_ie_rsn), 0);
-	qdf_mem_set((uint8_t *) &dot11f_ie_wpa, sizeof(dot11f_ie_wpa), 0);
+	qdf_mem_zero((uint8_t *) &dot11f_ie_rsn, sizeof(dot11f_ie_rsn));
+	qdf_mem_zero((uint8_t *) &dot11f_ie_wpa, sizeof(dot11f_ie_wpa));
 	pe_err("RSN enabled auth, Re/Assoc req from STA: "
 		MAC_ADDRESS_STR, MAC_ADDR_ARRAY(hdr->sa));
 
@@ -1695,7 +1695,7 @@ static bool lim_update_sta_ctx(tpAniSirGlobal mac_ctx, tpPESession session,
 			 */
 			sta_ds->mlmStaContext.mlmState =
 				eLIM_MLM_WT_ASSOC_DEL_STA_RSP_STATE;
-			if (lim_del_sta(mac_ctx, sta_ds, true, session, false)
+			if (lim_del_sta(mac_ctx, sta_ds, true, session)
 					!= QDF_STATUS_SUCCESS) {
 				pe_err("Couldn't DEL STA, assocId: %d staId: %d",
 					sta_ds->assocId, sta_ds->staIndex);
