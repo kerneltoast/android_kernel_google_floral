@@ -96,7 +96,6 @@ struct afe_ctl {
 	atomic_t status;
 	wait_queue_head_t wait[AFE_MAX_PORTS];
 	wait_queue_head_t wait_wakeup;
-	struct task_struct *task;
 	wait_queue_head_t lpass_core_hw_wait;
 	uint32_t lpass_hw_core_client_hdl;
 	void (*tx_cb)(uint32_t opcode,
@@ -423,6 +422,15 @@ static void afe_notify_spdif_fmt_update(void *payload)
 	schedule_work(&this_afe.afe_spdif_work);
 }
 
+static bool afe_token_is_valid(uint32_t token)
+{
+	if (token >= AFE_MAX_PORTS) {
+		pr_err("%s: token %d is invalid.\n", __func__, token);
+		return false;
+	}
+	return true;
+}
+
 static int32_t afe_callback(struct apr_client_data *data, void *priv)
 {
 	if (!data) {
@@ -449,12 +457,6 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			this_afe.apr = NULL;
 			rtac_set_afe_handle(this_afe.apr);
 		}
-		/* send info to user */
-		if (this_afe.task == NULL)
-			this_afe.task = current;
-		pr_debug("%s: task_name = %s pid = %d\n",
-			__func__,
-			this_afe.task->comm, this_afe.task->pid);
 
 		/*
 		 * Pass reset events to proxy driver, if cb is registered
@@ -506,7 +508,10 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 						 data->payload_size))
 				return -EINVAL;
 		}
-		wake_up(&this_afe.wait[data->token]);
+		if (afe_token_is_valid(data->token))
+			wake_up(&this_afe.wait[data->token]);
+		else
+			return -EINVAL;
 	} else if (data->opcode == AFE_EVENT_MBHC_DETECTION_SW_WA) {
 		msm_aud_evt_notifier_call_chain(SWR_WAKE_IRQ_EVENT, NULL);
 	} else if (data->opcode ==
@@ -552,7 +557,10 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			case AFE_SVC_CMD_SET_PARAM_V2:
 			case AFE_PORT_CMD_MOD_EVENT_CFG:
 				atomic_set(&this_afe.state, 0);
-				wake_up(&this_afe.wait[data->token]);
+				if (afe_token_is_valid(data->token))
+					wake_up(&this_afe.wait[data->token]);
+				else
+					return -EINVAL;
 				break;
 			case AFE_SERVICE_CMD_REGISTER_RT_PORT_DRIVER:
 				break;
@@ -564,7 +572,10 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 				break;
 			case AFE_CMD_ADD_TOPOLOGIES:
 				atomic_set(&this_afe.state, 0);
-				wake_up(&this_afe.wait[data->token]);
+				if (afe_token_is_valid(data->token))
+					wake_up(&this_afe.wait[data->token]);
+				else
+					return -EINVAL;
 				pr_debug("%s: AFE_CMD_ADD_TOPOLOGIES cmd 0x%x\n",
 						__func__, payload[1]);
 				break;
@@ -588,7 +599,10 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 						return 0;
 				}
 				atomic_set(&this_afe.state, payload[1]);
-				wake_up(&this_afe.wait[data->token]);
+				if (afe_token_is_valid(data->token))
+					wake_up(&this_afe.wait[data->token]);
+				else
+					return -EINVAL;
 				break;
 			case AFE_CMD_REMOTE_LPASS_CORE_HW_VOTE_REQUEST:
 			case AFE_CMD_REMOTE_LPASS_CORE_HW_DEVOTE_REQUEST:
@@ -617,7 +631,10 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			else
 				this_afe.mmap_handle = payload[0];
 			atomic_set(&this_afe.state, 0);
-			wake_up(&this_afe.wait[data->token]);
+			if (afe_token_is_valid(data->token))
+				wake_up(&this_afe.wait[data->token]);
+			else
+				return -EINVAL;
 		} else if (data->opcode == AFE_EVENT_RT_PROXY_PORT_STATUS) {
 			port_id = (uint16_t)(0x0000FFFF & payload[0]);
 		} else if (data->opcode == AFE_PORT_MOD_EVENT) {
@@ -2849,7 +2866,7 @@ EXPORT_SYMBOL(afe_send_spdif_ch_status_cfg);
 int afe_send_cmd_wakeup_register(void *handle, bool enable)
 {
 	struct afe_svc_cmd_evt_cfg_payload wakeup_irq;
-	int ret;
+	int ret = 0;
 
 	pr_debug("%s: enter\n", __func__);
 
@@ -2863,18 +2880,13 @@ int afe_send_cmd_wakeup_register(void *handle, bool enable)
 	wakeup_irq.hdr.opcode = AFE_SVC_CMD_EVENT_CFG;
 	wakeup_irq.event_id = AFE_EVENT_ID_MBHC_DETECTION_SW_WA;
 	wakeup_irq.reg_flag = enable;
-	pr_debug("%s: cmd device start opcode[0x%x] register:%d\n",
+	pr_debug("%s: cmd wakeup register opcode[0x%x] register:%d\n",
 		 __func__, wakeup_irq.hdr.opcode, wakeup_irq.reg_flag);
 
 	ret = afe_apr_send_pkt(&wakeup_irq, &this_afe.wait_wakeup);
-	if (ret) {
+	if (ret)
 		pr_err("%s: AFE wakeup command register %d failed %d\n",
 			__func__, enable, ret);
-	} else if (this_afe.task != current) {
-		this_afe.task = current;
-		pr_debug("task_name = %s pid = %d\n",
-			 this_afe.task->comm, this_afe.task->pid);
-	}
 
 	return ret;
 }
@@ -2911,14 +2923,9 @@ static int afe_send_cmd_port_start(u16 port_id)
 		 __func__, start.hdr.opcode, start.port_id);
 
 	ret = afe_apr_send_pkt(&start, &this_afe.wait[index]);
-	if (ret) {
+	if (ret)
 		pr_err("%s: AFE enable for port 0x%x failed %d\n", __func__,
 		       port_id, ret);
-	} else if (this_afe.task != current) {
-		this_afe.task = current;
-		pr_debug("task_name = %s pid = %d\n",
-			 this_afe.task->comm, this_afe.task->pid);
-	}
 
 	return ret;
 }
