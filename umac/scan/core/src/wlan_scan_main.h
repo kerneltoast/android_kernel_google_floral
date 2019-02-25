@@ -290,6 +290,7 @@ struct pno_def_config {
  * @active_dwell: default active dwell time
  * @allow_dfs_chan_in_first_scan: first scan should contain dfs channels or not.
  * @allow_dfs_chan_in_scan: Scan DFS channels or not.
+ * @use_wake_lock_in_user_scan: if wake lock will be acquired during user scan
  * @active_dwell_2g: default active dwell time for 2G channels, if it's not zero
  * @passive_dwell:default passive dwell time
  * @max_rest_time: default max rest time
@@ -370,6 +371,7 @@ struct scan_default_params {
 	uint32_t active_dwell;
 	bool allow_dfs_chan_in_first_scan;
 	bool allow_dfs_chan_in_scan;
+	bool use_wake_lock_in_user_scan;
 	uint32_t active_dwell_2g;
 	uint32_t passive_dwell;
 	uint32_t max_rest_time;
@@ -399,6 +401,10 @@ struct scan_default_params {
 	int rssi_cat[SCM_NUM_RSSI_CAT];
 	uint16_t max_bss_per_pdev;
 	uint32_t max_active_scans_allowed;
+	uint8_t sta_scan_burst_duration;
+	uint8_t p2p_scan_burst_duration;
+	uint8_t go_scan_burst_duration;
+	uint8_t ap_scan_burst_duration;
 	enum scan_priority scan_priority;
 	enum scan_dwelltime_adaptive_mode adaptive_dwell_time_mode;
 	enum scan_dwelltime_adaptive_mode adaptive_dwell_time_mode_nc;
