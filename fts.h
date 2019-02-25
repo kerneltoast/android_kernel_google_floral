@@ -35,6 +35,7 @@
 #include <linux/device.h>
 #include <linux/input/heatmap.h>
 #include <linux/pm_qos.h>
+#include <drm/drm_panel.h>
 #include "fts_lib/ftsSoftware.h"
 #include "fts_lib/ftsHardware.h"
 
@@ -254,6 +255,17 @@ struct heatmap_report {
 					  * the shell in the normal file nodes
 					  **/
 
+/* Encapsulate display extinfo
+ *
+ * For some panels, it is insufficient to simply detect the panel ID and load
+ * one corresponding firmware. The display driver exposes extended info read
+ * from the display, but it is up to the touch driver to parse the data.
+ */
+struct fts_disp_extinfo {
+	bool is_read;
+	u8 size;
+	u8 *data;
+};
 
 /**
   * Struct which contains information about the HW platform and set up
@@ -274,6 +286,8 @@ struct fts_hw_platform_data {
 	int y_axis_max;
 	bool auto_fw_update;
 	bool heatmap_mode_full_init;
+	struct drm_panel *panel;
+	u32 initial_panel_index;
 };
 
 /* Bits for the bus reference mask */
@@ -386,6 +400,8 @@ struct fts_ts_info {
 	int reflash_fw;	/* Attempt to reflash fw */
 	int autotune_stat;	/* Attempt to autotune */
 
+	struct fts_disp_extinfo extinfo;	/* Display extended info */
+
 	struct notifier_block notifier;	/* Notify on suspend/resume */
 	int display_refresh_rate;	/* Display rate in Hz */
 	bool sensor_sleep;		/* True if suspend called */
@@ -428,6 +444,10 @@ struct fts_ts_info {
 	u8 io_extra_write_buf[WRITE_CHUNK + BITS_64 + DUMMY_FIFO];
 
 };
+
+/* DSI display function used to read panel extinfo */
+int dsi_panel_read_vendor_extinfo(struct drm_panel *panel, char *buffer,
+				  size_t len);
 
 int fts_chip_powercycle(struct fts_ts_info *info);
 extern int input_register_notifier_client(struct notifier_block *nb);

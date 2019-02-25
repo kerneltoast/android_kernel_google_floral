@@ -3345,7 +3345,229 @@ static irqreturn_t fts_interrupt_handler(int irq, void *handle)
 }
 /** @}*/
 
+/*
+ * Read the display panel's extinfo from the display driver.
+ *
+ * The display driver finds out the extinfo is available for a panel based on
+ * the device tree, but cannot read the extinfo itself until the DSI bus is
+ * initialized. Since the extinfo is not guaranteed to be available at the time
+ * the touch driver is probed or even when the automatic firmware update work is
+ * run. The display driver's API for reading extinfo does allow a client to
+ * query the size of the expected data and whether it is available.
+ *
+ * This function retrieves the extinfo from the display driver with an optional
+ * retry period to poll the display driver before giving up.
+ *
+ * @return	0 if success, -EBUSY if timeout
+ */
+static int fts_read_panel_extinfo(struct fts_ts_info *info, int wait_seconds)
+{
+	const int RETRIES_PER_S = 4;
+	const int MS_PER_RETRY = 1000 / RETRIES_PER_S;
+	ssize_t len = -EBUSY;
+	int retries = (wait_seconds <= 0) ? 0 : wait_seconds * RETRIES_PER_S;
+	int ret = 0;
 
+	/* Was extinfo previously retrieved? */
+	if (info->extinfo.is_read)
+		return 0;
+
+	/* Extinfo should not be retrieved if the driver was unable to identify
+	 * the panel via its panelmap. Consider the extinfo zero-length.
+	 */
+	if (!info->board->panel) {
+		info->extinfo.is_read = true;
+		info->extinfo.size = 0;
+		return 0;
+	}
+
+	/* Obtain buffer size */
+	len = dsi_panel_read_vendor_extinfo(info->board->panel, NULL, 0);
+	if (len == 0) {
+		/* No extinfo to be consumed */
+		info->extinfo.size = 0;
+		info->extinfo.is_read = true;
+		return 0;
+	} else if (len < 0) {
+		ret = len;
+		pr_err("%s: dsi_panel_read_vendor_extinfo returned unexpected error = %d.\n",
+		       __func__, ret);
+		goto error;
+	} else {
+		info->extinfo.data = kzalloc(len, GFP_KERNEL);
+		if (!info->extinfo.data) {
+			pr_err("%s: failed to allocate extinfo. len=%d.\n",
+			       __func__, len);
+			ret = -ENOMEM;
+			goto error;
+		}
+		info->extinfo.size = len;
+	}
+
+	/* Read vendor extinfo data */
+	do {
+		len = dsi_panel_read_vendor_extinfo(info->board->panel,
+						    info->extinfo.data,
+						    info->extinfo.size);
+		if (len == -EBUSY) {
+			pr_debug("%s: sleeping %dms.\n", __func__,
+				 MS_PER_RETRY);
+			msleep(MS_PER_RETRY);
+		} else if (len == info->extinfo.size) {
+			info->extinfo.is_read = true;
+			pr_debug("%s: Ultimately waited %d seconds.\n",
+				 __func__,
+				 wait_seconds - (retries / RETRIES_PER_S));
+			return 0;
+		} else {
+			pr_err("%s: dsi_panel_read_vendor_extinfo returned error = %d\n",
+			       __func__, len);
+			ret = len;
+			goto error;
+		}
+	} while (--retries > 0);
+
+	/* Time out after retrying for wait_seconds */
+	pr_err("%s: Timed out after waiting %d seconds.\n", __func__,
+	       wait_seconds);
+	ret = -EBUSY;
+
+error:
+	kfree(info->extinfo.data);
+	info->extinfo.data = NULL;
+	info->extinfo.size = 0;
+	info->extinfo.is_read = false;
+	return ret;
+}
+
+/*
+ * Determine the display panel based on the device tree and any extinfo read
+ * from the panel.
+ *
+ * Basic panel detection (e.g., unique part numbers) is performed by polling for
+ * connected drm_panels. Next, an override table from the device tree is used to
+ * parse the panel's extended info to distinguish between panel varients that
+ * require different firmware.
+ */
+static int fts_identify_panel(struct fts_ts_info *info)
+{
+	/* Formatting of EXTINFO rows provided in the device trees */
+	const int EXTINFO_ROW_ELEMS = 5;
+	const int EXTINFO_ROW_SIZE = EXTINFO_ROW_ELEMS * sizeof(u32);
+
+	struct device_node *np = info->dev->of_node;
+	u32 panel_index = info->board->initial_panel_index;
+	int extinfo_rows;
+	u32 filter_panel_index, filter_extinfo_index, filter_extinfo_mask;
+	u32 filter_extinfo_value, filter_extinfo_fw;
+	const char *name;
+	u32 inverted;
+	int i;
+	int ret = 0;
+
+	if (!info->extinfo.is_read) {
+		/* Extinfo was not read. Attempt one read before aborting */
+		ret = fts_read_panel_extinfo(info, 0);
+		if (ret < 0) {
+			pr_err("%s: fts_read_panel_extinfo failed with ret=%d.\n",
+			       __func__, ret);
+			return ret;
+		}
+	}
+
+	/* Read the extinfo override table to determine if there are is any
+	 * reason to select a different firmware for the panel.
+	 */
+	if (of_property_read_bool(np, "st,extinfo_override_table")) {
+		extinfo_rows = of_property_count_elems_of_size(
+					np, "st,extinfo_override_table",
+					EXTINFO_ROW_SIZE);
+
+		for (i = 0; i < extinfo_rows; i++) {
+			of_property_read_u32_index(
+					np, "st,extinfo_override_table",
+					i * EXTINFO_ROW_ELEMS + 0,
+					&filter_panel_index);
+
+			of_property_read_u32_index(
+					np, "st,extinfo_override_table",
+					i * EXTINFO_ROW_ELEMS + 1,
+					&filter_extinfo_index);
+
+			of_property_read_u32_index(
+					np, "st,extinfo_override_table",
+					i * EXTINFO_ROW_ELEMS + 2,
+					&filter_extinfo_mask);
+
+			of_property_read_u32_index(
+					np, "st,extinfo_override_table",
+					i * EXTINFO_ROW_ELEMS + 3,
+					&filter_extinfo_value);
+
+			of_property_read_u32_index(
+					np, "st,extinfo_override_table",
+					i * EXTINFO_ROW_ELEMS + 4,
+					&filter_extinfo_fw);
+
+			if (panel_index != filter_panel_index)
+				continue;
+			else if (filter_extinfo_index >= info->extinfo.size) {
+				pr_err("%s: extinfo index is out of bounds (%d >= %d) in row %d of extinfo_override_table.\n",
+				       __func__, filter_extinfo_index,
+				       info->extinfo.size, i);
+				continue;
+			} else if ((info->extinfo.data[filter_extinfo_index] &
+				      filter_extinfo_mask) ==
+				   filter_extinfo_value) {
+				/* Override the panel_index as specified in the
+				 * override table.
+				 */
+				panel_index = filter_extinfo_fw;
+				pr_info("%s: Overriding with row=%d, panel_index=%d.\n",
+					 __func__, i, panel_index);
+				break;
+			}
+		}
+	} else {
+		pr_err("%s: of_property_read_bool(np, \"st,extinfo_override_table\") failed.\n",
+		       __func__);
+	}
+
+	//---------------------------------------------------------------------
+	// Read firmware name, limits file name, and sensor inversion based on
+	// the final panel index. In order to handle the case where the DRM
+	// panel was not detected from the list in the device tree, fall back to
+	// using predefined FW and limits paths hardcoded into the driver.
+	// --------------------------------------------------------------------
+	name = NULL;
+	if (info->board->panel)
+		of_property_read_string_index(np, "st,firmware_names",
+					      panel_index, &name);
+	if (!name)
+		info->board->fw_name = PATH_FILE_FW;
+	else
+		info->board->fw_name = name;
+	pr_info("firmware name = %s\n", info->board->fw_name);
+
+	name = NULL;
+	if (info->board->panel)
+		of_property_read_string_index(np, "st,limits_names",
+					      panel_index, &name);
+	if (!name)
+		info->board->limits_name = LIMITS_FILE;
+	else
+		info->board->limits_name = name;
+	pr_info("limits name = %s\n", info->board->limits_name);
+
+	inverted = 0;
+	if (info->board->panel)
+		of_property_read_u32_index(np, "st,sensor_inverted",
+					   panel_index, &inverted);
+	info->board->sensor_inverted = (inverted != 0);
+	pr_info("Sensor inverted = %u\n", inverted);
+
+	return 0;
+}
 
 /**
   *	Implement the fw update and initialization flow of the IC that should
@@ -3372,6 +3594,23 @@ static int fts_fw_update(struct fts_ts_info *info)
 	int keep_cx = 0;
 #endif
 
+	/* Read extinfo from display driver. Wait for up to ten seconds if
+	 * there is extinfo to read but is not yet available.
+	 */
+	ret = fts_read_panel_extinfo(info, 10);
+	if (ret < 0) {
+		pr_err("%s: Failed or timed out during read of extinfo. ret=%d\n",
+		       __func__, ret);
+		goto out;
+	}
+
+	/* Identify panel given extinfo that may have been received. */
+	ret = fts_identify_panel(info);
+	if (ret < 0) {
+		pr_err("%s: Encountered error while identifying display panel. ret=%d\n",
+		       __func__, ret);
+		goto out;
+	}
 
 	pr_info("Fw Auto Update is starting...\n");
 
@@ -4386,7 +4625,6 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 	struct drm_panel *panel = NULL;
 	struct display_timing timing;
 	const char *name;
-	u32 inverted;
 	struct device_node *np = dev->of_node;
 	u32 coords[2];
 
@@ -4401,8 +4639,11 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 				return -EPROBE_DEFER;
 			panel = of_drm_find_panel(panelmap.np);
 			of_node_put(panelmap.np);
-			if (panel)
+			if (panel) {
+				bdata->panel = panel;
+				bdata->initial_panel_index = panelmap.args[0];
 				break;
+			}
 		}
 	}
 
@@ -4458,38 +4699,6 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 		bdata->heatmap_mode_full_init = true;
 		pr_info("Full heatmap enabled\n");
 	}
-
-	name = NULL;
-	if (panel)
-		retval = of_property_read_string_index(np, "st,firmware_names",
-						       panelmap.args[0], &name);
-	if (!name)
-		retval = of_property_read_string(np, "st,firmware_name", &name);
-	if (!name)
-		bdata->fw_name = PATH_FILE_FW;
-	else
-		bdata->fw_name = name;
-	pr_info("firmware name = %s\n", bdata->fw_name);
-
-	name = NULL;
-	if (panel)
-		retval = of_property_read_string_index(np, "st,limits_names",
-						       panelmap.args[0], &name);
-	if (!name)
-		retval = of_property_read_string(np, "st,limits_name", &name);
-	if (!name)
-		bdata->limits_name = LIMITS_FILE;
-	else
-		bdata->limits_name = name;
-	pr_info("limits name = %s\n", bdata->limits_name);
-
-	inverted = 0;
-	if (panel)
-		retval = of_property_read_u32_index(
-				np, "st,sensor_inverted", panelmap.args[0],
-				&inverted);
-	bdata->sensor_inverted = (inverted != 0);
-	pr_info("Sensor inverted = %u\n", inverted);
 
 	if (panel && panel->funcs && panel->funcs->get_timings &&
 	    panel->funcs->get_timings(panel, 1, &timing) > 0) {
@@ -4947,6 +5156,9 @@ static int fts_remove(struct spi_device *client)
 		gpio_free(info->board->reset_gpio);
 	if (gpio_is_valid(info->board->disp_rate_gpio))
 		gpio_free(info->board->disp_rate_gpio);
+
+	/* free any extinfo */
+	kfree(info->extinfo.data);
 
 	/* free all */
 	kfree(info);
