@@ -615,6 +615,28 @@ enum hdd_dot11_mode {
 
 /*
  * <ini>
+ * wake_lock_in_user_scan - use wake lock during user scan
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This ini is used to define if wake lock is held used during user scan req
+ *
+ * Related: Scan
+ *
+ * Usage: Internal/External
+ *
+ * </ini>
+ */
+#define CFG_ENABLE_WAKE_LOCK_IN_SCAN               "wake_lock_in_user_scan"
+#define CFG_ENABLE_WAKE_LOCK_IN_SCAN_MIN           (0)
+#define CFG_ENABLE_WAKE_LOCK_IN_SCAN_MAX           (1)
+#define CFG_ENABLE_WAKE_LOCK_IN_SCAN_DEFAULT       (0)
+
+
+
+/*
+ * <ini>
  * pmkidModes - Enable PMKID modes
  * This INI is used to enable PMKID feature options
  * @Min: 0
@@ -8390,6 +8412,96 @@ enum hdd_link_speed_rpt_type {
 #define CFG_STA_MIRACAST_MCC_REST_TIME_VAL_MAX     (500)
 #define CFG_STA_MIRACAST_MCC_REST_TIME_VAL_DEFAULT (400)
 
+/*
+ * <ini>
+ * sta_scan_burst_duration - Burst duration in case of split scan.
+ * @Min: 0
+ * @Max: 180
+ * @Default: 0
+ *
+ * This ini is used to set burst duration of scan only when STA is active.
+ *
+ * Related: None.
+ *
+ * Supported Feature: Concurrency
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_STA_SCAN_BURST_DURATION_VAL                 "sta_scan_burst_duration"
+#define CFG_STA_SCAN_BURST_DURATION_VAL_MIN             (0)
+#define CFG_STA_SCAN_BURST_DURATION_VAL_MAX             (180)
+#define CFG_STA_SCAN_BURST_DURATION_VAL_DEFAULT         (0)
+
+/*
+ * <ini>
+ * p2p_scan_burst_duration - Burst duration in case of split scan for p2p scan.
+ * @Min: 0
+ * @Max: 180
+ * @Default: 0
+ *
+ * This ini is used to set burst duration of scan for p2p scan requests.
+ *
+ * Related: None.
+ *
+ * Supported Feature: Concurrency
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_P2P_SCAN_BURST_DURATION_VAL                 "p2p_scan_burst_duration"
+#define CFG_P2P_SCAN_BURST_DURATION_VAL_MIN             (0)
+#define CFG_P2P_SCAN_BURST_DURATION_VAL_MAX             (180)
+#define CFG_P2P_SCAN_BURST_DURATION_VAL_DEFAULT         (0)
+
+/*
+ * <ini>
+ * go_scan_burst_duration - Burst duration in case of split scan when GO is
+ * active.
+ * @Min: 0
+ * @Max: 180
+ * @Default: 0
+ *
+ * This ini is used to set burst duration of scan when GO is active.
+ *
+ * Related: None.
+ *
+ * Supported Feature: Concurrency
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_GO_SCAN_BURST_DURATION_VAL                 "go_scan_burst_duration"
+#define CFG_GO_SCAN_BURST_DURATION_VAL_MIN             (0)
+#define CFG_GO_SCAN_BURST_DURATION_VAL_MAX             (180)
+#define CFG_GO_SCAN_BURST_DURATION_VAL_DEFAULT         (0)
+
+/*
+ * <ini>
+ * ap_scan_burst_duration - Burst duration in case of split scan when ap
+ * is active.
+ * @Min: 0
+ * @Max: 32
+ * @Default: 0
+ *
+ * This ini is used to set burst duration of scan when SAP is active.
+ *
+ * Related: None.
+ *
+ * Supported Feature: Concurrency
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_AP_SCAN_BURST_DURATION_VAL                 "ap_scan_burst_duration"
+#define CFG_AP_SCAN_BURST_DURATION_VAL_MIN             (0)
+#define CFG_AP_SCAN_BURST_DURATION_VAL_MAX             (32)
+#define CFG_AP_SCAN_BURST_DURATION_VAL_DEFAULT         (0)
+
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
 /*
  * <ini>
@@ -10616,7 +10728,11 @@ enum dot11p_mode {
 #define CFG_RX_THREAD_CPU_MASK_NAME	"RX_THREAD_CPU_AFFINITY_MASK"
 #define CFG_RX_THREAD_CPU_MASK_MIN	(0)
 #define CFG_RX_THREAD_CPU_MASK_MAX	(0xFF)
+#ifdef RX_PERFORMANCE
+#define CFG_RX_THREAD_CPU_MASK_DEFAULT	(0x02)
+#else
 #define CFG_RX_THREAD_CPU_MASK_DEFAULT	(0)
+#endif
 
 /* List of RPS CPU maps for different rx queues registered by WLAN driver
  * Ref - Kernel/Documentation/networking/scaling.txt
@@ -16175,6 +16291,7 @@ struct hdd_config {
 	uint16_t nTeleBcnMaxListenInterval;
 	uint8_t enableBypass11d;
 	uint8_t enableDFSChnlScan;
+	bool wake_lock_in_user_scan;
 	uint8_t enable_dfs_pno_chnl_scan;
 	uint8_t enableDynamicDTIM;
 	uint8_t ShortGI40MhzEnable;
@@ -16479,6 +16596,10 @@ struct hdd_config {
 	uint8_t is_sta_connection_in_5gz_enabled;
 	uint16_t p2p_listen_defer_interval;
 	uint32_t sta_miracast_mcc_rest_time_val;
+	uint32_t sta_scan_burst_duration;
+	uint32_t p2p_scan_burst_duration;
+	uint32_t go_scan_burst_duration;
+	uint32_t ap_scan_burst_duration;
 	bool is_ramdump_enabled;
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
 	bool sap_channel_avoidance;

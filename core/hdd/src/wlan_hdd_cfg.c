@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -1778,6 +1778,13 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_DFS_CHNL_SCAN_MIN,
 		     CFG_ENABLE_DFS_CHNL_SCAN_MAX),
 
+	REG_VARIABLE(CFG_ENABLE_WAKE_LOCK_IN_SCAN, WLAN_PARAM_Integer,
+		     struct hdd_config, wake_lock_in_user_scan,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_WAKE_LOCK_IN_SCAN_DEFAULT,
+		     CFG_ENABLE_WAKE_LOCK_IN_SCAN_MIN,
+		     CFG_ENABLE_WAKE_LOCK_IN_SCAN_MAX),
+
 	REG_VARIABLE(CFG_ENABLE_DFS_PNO_CHNL_SCAN_NAME, WLAN_PARAM_Integer,
 		     struct hdd_config, enable_dfs_pno_chnl_scan,
 		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
@@ -3363,6 +3370,34 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_STA_MIRACAST_MCC_REST_TIME_VAL_DEFAULT,
 		     CFG_STA_MIRACAST_MCC_REST_TIME_VAL_MIN,
 		     CFG_STA_MIRACAST_MCC_REST_TIME_VAL_MAX),
+
+	REG_VARIABLE(CFG_STA_SCAN_BURST_DURATION_VAL, WLAN_PARAM_Integer,
+		     struct hdd_config, sta_scan_burst_duration,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_STA_SCAN_BURST_DURATION_VAL_DEFAULT,
+		     CFG_STA_SCAN_BURST_DURATION_VAL_MIN,
+		     CFG_STA_SCAN_BURST_DURATION_VAL_MAX),
+
+	REG_VARIABLE(CFG_P2P_SCAN_BURST_DURATION_VAL, WLAN_PARAM_Integer,
+		     struct hdd_config, p2p_scan_burst_duration,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_P2P_SCAN_BURST_DURATION_VAL_DEFAULT,
+		     CFG_P2P_SCAN_BURST_DURATION_VAL_MIN,
+		     CFG_P2P_SCAN_BURST_DURATION_VAL_MAX),
+
+	REG_VARIABLE(CFG_GO_SCAN_BURST_DURATION_VAL, WLAN_PARAM_Integer,
+		     struct hdd_config, go_scan_burst_duration,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_GO_SCAN_BURST_DURATION_VAL_DEFAULT,
+		     CFG_GO_SCAN_BURST_DURATION_VAL_MIN,
+		     CFG_GO_SCAN_BURST_DURATION_VAL_MAX),
+
+	REG_VARIABLE(CFG_AP_SCAN_BURST_DURATION_VAL, WLAN_PARAM_Integer,
+		     struct hdd_config, ap_scan_burst_duration,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_AP_SCAN_BURST_DURATION_VAL_DEFAULT,
+		     CFG_AP_SCAN_BURST_DURATION_VAL_MIN,
+		     CFG_AP_SCAN_BURST_DURATION_VAL_MAX),
 
 #ifdef FEATURE_AP_MCC_CH_AVOIDANCE
 	REG_VARIABLE(CFG_SAP_MCC_CHANNEL_AVOIDANCE_NAME,
@@ -7210,6 +7245,8 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 		  hdd_ctx->config->enableBypass11d);
 	hdd_debug("Name = [gEnableDFSChnlScan] Value = [%u] ",
 		  hdd_ctx->config->enableDFSChnlScan);
+	hdd_debug("Name = [wake_lock_in_user_scan] Value = [%u] ",
+		  hdd_ctx->config->wake_lock_in_user_scan);
 	hdd_debug("Name = [gEnableDFSPnoChnlScan] Value = [%u] ",
 		  hdd_ctx->config->enable_dfs_pno_chnl_scan);
 	hdd_debug("Name = [gReportMaxLinkSpeed] Value = [%u] ",

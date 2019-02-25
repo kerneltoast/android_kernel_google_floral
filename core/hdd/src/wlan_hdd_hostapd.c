@@ -425,8 +425,10 @@ static int __hdd_hostapd_open(struct net_device *dev)
 
 	hdd_enter_dev(dev);
 
-	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
-			 TRACE_CODE_HDD_HOSTAPD_OPEN_REQUEST, NO_SESSION, 0));
+	qdf_mtrace(QDF_MODULE_ID_HDD, QDF_MODULE_ID_HDD,
+		   TRACE_CODE_HDD_HOSTAPD_OPEN_REQUEST,
+		   NO_SESSION, 0);
+
 	/* Nothing to be done if device is unloading */
 	if (cds_is_driver_unloading()) {
 		hdd_err("Driver is unloading can not open the hdd");
@@ -500,6 +502,11 @@ static int __hdd_hostapd_stop(struct net_device *dev)
 	int ret;
 
 	hdd_enter_dev(dev);
+
+	qdf_mtrace(QDF_MODULE_ID_HDD, QDF_MODULE_ID_HDD,
+		   TRACE_CODE_HDD_HOSTAPD_STOP_REQUEST,
+		   NO_SESSION, 0);
+
 	ret = wlan_hdd_validate_context(hdd_ctx);
 	if (ret) {
 		set_bit(DOWN_DURING_SSR, &adapter->event_flags);
@@ -1453,6 +1460,8 @@ static void hdd_fill_station_info(struct hdd_adapter *adapter,
 		return;
 	}
 
+	qdf_mem_copy(&stainfo->capability, &event->capability_info,
+		     sizeof(uint16_t));
 	stainfo->freq = cds_chan_to_freq(event->chan_info.chan_id);
 	stainfo->sta_type = event->staType;
 	stainfo->dot11_mode =
@@ -1695,6 +1704,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 	struct hdd_station_info *stainfo, *cache_stainfo;
 	mac_handle_t mac_handle;
 	tsap_config_t *sap_config;
+	struct wlan_objmgr_vdev *vdev;
 
 	dev = context;
 	if (!dev) {
@@ -1767,7 +1777,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		hostapd_state->qdf_status =
 			pSapEvent->sapevt.sapStartBssCompleteEvent.status;
 
-		qdf_atomic_set(&adapter->dfs_radar_found, 0);
+		qdf_atomic_set(&adapter->ch_switch_in_progress, 0);
 
 		status = policy_mgr_set_chan_switch_complete_evt(
 						hdd_ctx->psoc);
@@ -1967,7 +1977,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 			hdd_debug("Sent CAC start to user space");
 		}
 
-		qdf_atomic_set(&adapter->dfs_radar_found, 0);
+		qdf_atomic_set(&adapter->ch_switch_in_progress, 0);
 		break;
 	case eSAP_DFS_CAC_INTERRUPTED:
 		/*
@@ -2251,13 +2261,19 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 			}
 			qdf_mem_free(sta_info);
 		}
+
+		vdev = hdd_objmgr_get_vdev(adapter);
 		/* Lets abort scan to ensure smooth authentication for client */
-		if (ucfg_scan_get_vdev_status(adapter->vdev) !=
-				SCAN_NOT_IN_PROGRESS) {
+		if (vdev &&
+		    ucfg_scan_get_vdev_status(vdev) != SCAN_NOT_IN_PROGRESS) {
 			wlan_abort_scan(hdd_ctx->pdev, INVAL_PDEV_ID,
 					adapter->session_id, INVALID_SCAN_ID,
 					false);
 		}
+
+		if (vdev)
+			hdd_objmgr_put_vdev(vdev);
+
 		if (adapter->device_mode == QDF_P2P_GO_MODE) {
 			/* send peer status indication to oem app */
 			hdd_send_peer_status_ind_to_app(
@@ -2553,7 +2569,7 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		return QDF_STATUS_SUCCESS;
 	case eSAP_ECSA_CHANGE_CHAN_IND:
 		hdd_debug("Channel change indication from peer for channel %d",
-				pSapEvent->sapevt.sap_chan_cng_ind.new_chan);
+			  pSapEvent->sapevt.sap_chan_cng_ind.new_chan);
 		if (hdd_softap_set_channel_change(dev,
 			 pSapEvent->sapevt.sap_chan_cng_ind.new_chan,
 			 CH_WIDTH_MAX, false))
@@ -2573,6 +2589,18 @@ QDF_STATUS hdd_hostapd_sap_event_cb(tpSap_Event pSapEvent,
 		INIT_WORK(&adapter->sap_stop_bss_work,
 			  hdd_stop_sap_due_to_invalid_channel);
 		schedule_work(&adapter->sap_stop_bss_work);
+		return QDF_STATUS_SUCCESS;
+
+	case eSAP_CHANNEL_CHANGE_RESP:
+		hdd_debug("Channel change rsp status = %d",
+			  pSapEvent->sapevt.ch_change_rsp_status);
+		/*
+		 * Set the ch_switch_in_progress flag to zero and also enable
+		 * roaming once channel change process (success/failure)
+		 * is completed
+		 */
+		qdf_atomic_set(&adapter->ch_switch_in_progress, 0);
+		wlan_hdd_enable_roaming(adapter);
 		return QDF_STATUS_SUCCESS;
 
 	default:
@@ -2759,6 +2787,39 @@ static int hdd_softap_unpack_ie(mac_handle_t mac_handle,
 }
 
 /**
+ * hdd_is_any_sta_connecting() - check if any sta is connecting
+ * @hdd_ctx: hdd context
+ *
+ * Return: true if any sta is connecting
+ */
+static bool hdd_is_any_sta_connecting(struct hdd_context *hdd_ctx)
+{
+	struct hdd_adapter *adapter = NULL;
+	struct hdd_station_ctx *sta_ctx;
+
+	if (!hdd_ctx) {
+		hdd_err("HDD context is NULL");
+		return false;
+	}
+
+	hdd_for_each_adapter(hdd_ctx, adapter) {
+		sta_ctx = WLAN_HDD_GET_STATION_CTX_PTR(adapter);
+		if ((adapter->device_mode == QDF_STA_MODE) ||
+		    (adapter->device_mode == QDF_P2P_CLIENT_MODE) ||
+		    (adapter->device_mode == QDF_P2P_DEVICE_MODE)) {
+			if (sta_ctx->conn_info.connState ==
+			    eConnectionState_Connecting) {
+				hdd_debug("vdev_id %d: connecting",
+					  adapter->session_id);
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+/**
  * hdd_softap_set_channel_change() -
  * This function to support SAP channel change with CSA IE
  * set in the beacons.
@@ -2791,7 +2852,7 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 	 * user space as it may change the HW mode requirement, for which sta is
 	 * trying to connect.
 	 */
-	if (hdd_get_sta_connection_in_progress(hdd_ctx)) {
+	if (hdd_is_any_sta_connecting(hdd_ctx)) {
 		hdd_err("STA connection is in progress");
 		return -EBUSY;
 	}
@@ -2819,7 +2880,7 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 	}
 
 	/*
-	 * Set the dfs_radar_found flag to mimic channel change
+	 * Set the ch_switch_in_progress flag to mimic channel change
 	 * when a radar is found. This will enable synchronizing
 	 * SAP and HDD states similar to that of radar indication.
 	 * Suspend the netif queues to stop queuing Tx frames
@@ -2827,7 +2888,7 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 	 * once the channel change is completed and SAP will
 	 * post eSAP_START_BSS_EVENT success event to HDD.
 	 */
-	if (qdf_atomic_inc_return(&adapter->dfs_radar_found) > 1) {
+	if (qdf_atomic_inc_return(&adapter->ch_switch_in_progress) > 1) {
 		hdd_err("Channel switch in progress!!");
 		return -EBUSY;
 	}
@@ -2851,16 +2912,31 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 				target_channel,
 				adapter->session_id)) {
 		hdd_err("Channel switch failed due to concurrency check failure");
-		qdf_atomic_set(&adapter->dfs_radar_found, 0);
+		qdf_atomic_set(&adapter->ch_switch_in_progress, 0);
 		return -EINVAL;
 	}
 
 	status = policy_mgr_reset_chan_switch_complete_evt(hdd_ctx->psoc);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
 		hdd_err("clear event failed");
-		qdf_atomic_set(&adapter->dfs_radar_found, 0);
+		qdf_atomic_set(&adapter->ch_switch_in_progress, 0);
 		return -EINVAL;
 	}
+
+	/*
+	 * Reject channel change req  if reassoc in progress on any adapter.
+	 * sme_is_any_session_in_middle_of_roaming is for LFR2 and
+	 * hdd_is_roaming_in_progress is for LFR3
+	 */
+	if (sme_is_any_session_in_middle_of_roaming(hdd_ctx->mac_handle) ||
+	    hdd_is_roaming_in_progress(hdd_ctx)) {
+		hdd_info("Channel switch not allowed as reassoc in progress");
+		qdf_atomic_set(&adapter->ch_switch_in_progress, 0);
+		return -EINVAL;
+	}
+	/* Disable Roaming on all adapters before doing channel change */
+	wlan_hdd_disable_roaming(adapter);
+
 	/*
 	 * Post the Channel Change request to SAP.
 	 */
@@ -2878,7 +2954,13 @@ int hdd_softap_set_channel_change(struct net_device *dev, int target_channel,
 		 * radar found flag and also restart the netif
 		 * queues.
 		 */
-		qdf_atomic_set(&adapter->dfs_radar_found, 0);
+		qdf_atomic_set(&adapter->ch_switch_in_progress, 0);
+
+		/*
+		 * If Posting of the Channel Change request fails
+		 * enable roaming on all adapters
+		 */
+		wlan_hdd_enable_roaming(adapter);
 
 		ret = -EINVAL;
 	}
@@ -3519,11 +3601,29 @@ static __iw_softap_setparam(struct net_device *dev,
 	{
 		QDF_STATUS status;
 
+		/*
+		 * Reject hidden ssid param update  if reassoc in progress on
+		 * any adapter. sme_is_any_session_in_middle_of_roaming is for
+		 * LFR2 and hdd_is_roaming_in_progress is for LFR3
+		 */
+		if (hdd_is_roaming_in_progress(hdd_ctx) ||
+		    sme_is_any_session_in_middle_of_roaming(mac_handle)) {
+			hdd_info("Reassociation in progress");
+			return -EINVAL;
+		}
+
+		/*
+		 * Disable Roaming on all adapters before start of
+		 * start of Hidden ssid connection
+		 */
+		wlan_hdd_disable_roaming(adapter);
+
 		status = sme_update_session_param(mac_handle,
 				adapter->session_id,
 				SIR_PARAM_SSID_HIDDEN, set_value);
 		if (QDF_STATUS_SUCCESS != status) {
 			hdd_err("QCSAP_PARAM_HIDE_SSID failed");
+			wlan_hdd_enable_roaming(adapter);
 			return -EIO;
 		}
 		break;
@@ -6180,6 +6280,22 @@ bool hdd_sap_destroy_ctx(struct hdd_adapter *adapter)
 	return true;
 }
 
+void hdd_sap_destroy_ctx_all(struct hdd_context *hdd_ctx, bool is_ssr)
+{
+	struct hdd_adapter *adapter;
+
+	/* sap_ctx is not destroyed as it will be leveraged for sap restart */
+	if (is_ssr)
+		return;
+
+	hdd_debug("destroying all the sap context");
+
+	hdd_for_each_adapter(hdd_ctx, adapter) {
+		if (adapter->device_mode == QDF_SAP_MODE)
+			hdd_sap_destroy_ctx(adapter);
+	}
+}
+
 QDF_STATUS hdd_init_ap_mode(struct hdd_adapter *adapter, bool reinit)
 {
 	struct hdd_hostapd_state *phostapdBuf;
@@ -6417,7 +6533,7 @@ struct hdd_adapter *hdd_wlan_create_ap_dev(struct hdd_context *hdd_ctx,
 	spin_lock_init(&adapter->pause_map_lock);
 	adapter->start_time = adapter->last_time = qdf_system_ticks();
 
-	qdf_atomic_init(&adapter->dfs_radar_found);
+	qdf_atomic_init(&adapter->ch_switch_in_progress);
 
 	return adapter;
 }
@@ -6513,9 +6629,9 @@ int wlan_hdd_set_channel(struct wiphy *wiphy,
 	}
 	adapter = WLAN_HDD_GET_PRIV_PTR(dev);
 
-	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
-			 TRACE_CODE_HDD_CFG80211_SET_CHANNEL,
-			 adapter->session_id, channel_type));
+	qdf_mtrace(QDF_MODULE_ID_HDD, QDF_MODULE_ID_HDD,
+		   TRACE_CODE_HDD_CFG80211_SET_CHANNEL,
+		   adapter->session_id, channel_type);
 
 	hdd_debug("Device_mode %s(%d)  freq = %d",
 	       hdd_device_mode_to_string(adapter->device_mode),
@@ -7772,7 +7888,8 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 	}
 
 	/* Mark the indoor channel (passive) to disable */
-	if (iniConfig->force_ssc_disable_indoor_channel) {
+	if (iniConfig->force_ssc_disable_indoor_channel &&
+	    adapter->device_mode == QDF_SAP_MODE) {
 		hdd_update_indoor_channel(hdd_ctx, true);
 		if (QDF_IS_STATUS_ERROR(
 		    sme_update_channel_list(mac_handle))) {
@@ -7781,6 +7898,11 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 			ret = -EINVAL;
 			goto free;
 		}
+
+		/* check if STA is on indoor channel*/
+		if (policy_mgr_is_force_scc(hdd_ctx->psoc))
+			hdd_check_and_disconnect_sta_on_invalid_channel(
+								       hdd_ctx);
 	}
 	if (adapter->device_mode == QDF_SAP_MODE) {
 		/*
@@ -8128,6 +8250,12 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 
 		if (pIe != NULL) {
 			pIe++;
+			if (pIe[0] > SIR_MAC_RATESET_EID_MAX) {
+				hdd_err("Invalid supported rates %d",
+					pIe[0]);
+				ret = -EINVAL;
+				goto error;
+			}
 			pConfig->supported_rates.numRates = pIe[0];
 			pIe++;
 			for (i = 0;
@@ -8144,6 +8272,12 @@ int wlan_hdd_cfg80211_start_bss(struct hdd_adapter *adapter,
 					       pBeacon->tail_len);
 		if (pIe != NULL) {
 			pIe++;
+			if (pIe[0] > SIR_MAC_RATESET_EID_MAX) {
+				hdd_err("Invalid supported rates %d",
+					pIe[0]);
+				ret = -EINVAL;
+				goto error;
+			}
 			pConfig->extended_rates.numRates = pIe[0];
 			pIe++;
 			for (i = 0; i < pConfig->extended_rates.numRates; i++) {
@@ -8371,7 +8505,8 @@ error:
 		wlan_hdd_restore_channels(hdd_ctx, true);
 
 	/* Revert the indoor to passive marking if START BSS fails */
-	if (iniConfig->force_ssc_disable_indoor_channel) {
+	if (iniConfig->force_ssc_disable_indoor_channel &&
+	    adapter->device_mode == QDF_SAP_MODE) {
 		hdd_update_indoor_channel(hdd_ctx, false);
 		sme_update_channel_list(mac_handle);
 	}
@@ -8448,9 +8583,9 @@ static int __wlan_hdd_cfg80211_stop_ap(struct wiphy *wiphy,
 	if (wlan_hdd_validate_session_id(adapter->session_id))
 		return -EINVAL;
 
-	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
-			 TRACE_CODE_HDD_CFG80211_STOP_AP,
-			 adapter->session_id, adapter->device_mode));
+	qdf_mtrace(QDF_MODULE_ID_HDD, QDF_MODULE_ID_HDD,
+		   TRACE_CODE_HDD_CFG80211_STOP_AP,
+		   adapter->session_id, adapter->device_mode);
 
 	if (!(adapter->device_mode == QDF_SAP_MODE ||
 	      adapter->device_mode == QDF_P2P_GO_MODE)) {
@@ -8752,9 +8887,10 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 	if (wlan_hdd_validate_session_id(adapter->session_id))
 		return -EINVAL;
 
-	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
-			 TRACE_CODE_HDD_CFG80211_START_AP, adapter->session_id,
-			 params->beacon_interval));
+	qdf_mtrace(QDF_MODULE_ID_HDD, QDF_MODULE_ID_HDD,
+		   TRACE_CODE_HDD_CFG80211_START_AP,
+		   adapter->session_id, params->beacon_interval);
+
 	if (WLAN_HDD_ADAPTER_MAGIC != adapter->magic) {
 		hdd_err("HDD adapter magic is invalid");
 		return -ENODEV;
@@ -9081,9 +9217,10 @@ static int __wlan_hdd_cfg80211_change_beacon(struct wiphy *wiphy,
 	if (wlan_hdd_validate_session_id(adapter->session_id))
 		return -EINVAL;
 
-	MTRACE(qdf_trace(QDF_MODULE_ID_HDD,
-			 TRACE_CODE_HDD_CFG80211_CHANGE_BEACON,
-			 adapter->session_id, adapter->device_mode));
+	qdf_mtrace(QDF_MODULE_ID_HDD, QDF_MODULE_ID_HDD,
+		   TRACE_CODE_HDD_CFG80211_CHANGE_BEACON,
+		   adapter->session_id, adapter->device_mode);
+
 	hdd_debug("Device_mode %s(%d)",
 	       hdd_device_mode_to_string(adapter->device_mode),
 	       adapter->device_mode);

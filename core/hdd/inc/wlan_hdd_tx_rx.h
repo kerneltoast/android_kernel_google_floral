@@ -58,6 +58,20 @@ QDF_STATUS hdd_deinit_tx_rx(struct hdd_adapter *adapter);
 QDF_STATUS hdd_rx_packet_cbk(void *context, qdf_nbuf_t rxBuf);
 
 /**
+ * hdd_rx_deliver_to_stack() - HDD helper function to deliver RX pkts to stack
+ * @adapter: pointer to HDD adapter context
+ * @skb: pointer to skb
+ *
+ * The function calls the appropriate stack function depending upon the packet
+ * type and whether GRO/LRO is enabled.
+ *
+ * Return: QDF_STATUS_E_FAILURE if any errors encountered,
+ *	   QDF_STATUS_SUCCESS otherwise
+ */
+QDF_STATUS hdd_rx_deliver_to_stack(struct hdd_adapter *adapter,
+				   struct sk_buff *skb);
+
+/**
  * hdd_rx_ol_init() - Initialize Rx mode(LRO or GRO) method
  * @hdd_ctx: pointer to HDD Station Context
  *
@@ -198,9 +212,14 @@ void wlan_hdd_classify_pkt(struct sk_buff *skb);
 
 #ifdef MSM_PLATFORM
 void hdd_reset_tcp_delack(struct hdd_context *hdd_ctx);
+bool hdd_is_current_high_throughput(struct hdd_context *hdd_ctx);
 #define HDD_MSM_CFG(msm_cfg)	msm_cfg
 #else
 static inline void hdd_reset_tcp_delack(struct hdd_context *hdd_ctx) {}
+static inline bool hdd_is_current_high_throughput(struct hdd_context *hdd_ctx)
+{
+	return false;
+}
 #define HDD_MSM_CFG(msm_cfg)	0
 #endif
 

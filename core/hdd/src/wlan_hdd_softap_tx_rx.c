@@ -826,7 +826,7 @@ static void hdd_softap_notify_tx_compl_cbk(struct sk_buff *skb,
 QDF_STATUS hdd_softap_rx_packet_cbk(void *context, qdf_nbuf_t rx_buf)
 {
 	struct hdd_adapter *adapter = NULL;
-	int rxstat;
+	QDF_STATUS qdf_status;
 	unsigned int cpu_index;
 	struct sk_buff *skb = NULL;
 	struct sk_buff *next = NULL;
@@ -928,15 +928,10 @@ QDF_STATUS hdd_softap_rx_packet_cbk(void *context, qdf_nbuf_t rx_buf)
 		 * it to stack
 		 */
 		qdf_net_buf_debug_release_skb(skb);
-		if (hdd_napi_enabled(HDD_NAPI_ANY) &&
-			!hdd_ctx->enable_rxthread)
-			rxstat = netif_receive_skb(skb);
-		else
-			rxstat = netif_rx_ni(skb);
 
-		hdd_ctx->no_rx_offload_pkt_cnt++;
+		qdf_status = hdd_rx_deliver_to_stack(adapter, skb);
 
-		if (NET_RX_SUCCESS == rxstat)
+		if (QDF_IS_STATUS_SUCCESS(qdf_status))
 			++adapter->hdd_stats.tx_rx_stats.rx_delivered[cpu_index];
 		else
 			++adapter->hdd_stats.tx_rx_stats.rx_refused[cpu_index];
@@ -1165,7 +1160,8 @@ QDF_STATUS hdd_softap_stop_bss(struct hdd_adapter *adapter)
 		wlan_hdd_restore_channels(hdd_ctx, true);
 
 	/*  Mark the indoor channel (passive) to enable  */
-	if (hdd_ctx->config->force_ssc_disable_indoor_channel) {
+	if (hdd_ctx->config->force_ssc_disable_indoor_channel &&
+	    adapter->device_mode == QDF_SAP_MODE) {
 		hdd_update_indoor_channel(hdd_ctx, false);
 		sme_update_channel_list(hdd_ctx->mac_handle);
 	}

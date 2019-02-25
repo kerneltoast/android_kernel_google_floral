@@ -684,6 +684,20 @@ QDF_STATUS sme_configure_app_type2_params(tHalHandle hHal,
 int8_t sme_get_infra_session_id(tHalHandle hHal);
 uint8_t sme_get_infra_operation_channel(tHalHandle hHal, uint8_t sessionId);
 uint8_t sme_get_concurrent_operation_channel(tHalHandle hHal);
+/**
+ * sme_get_beaconing_concurrent_operation_channel() - To get concurrent
+ * operating channel of beaconing interface
+ * @hal: Pointer to hal context
+ * @vdev_id_to_skip: channel of which vdev id to skip
+ *
+ * This routine will return operating channel of active AP/GO channel
+ * and will skip the channel of vdev_id_to_skip.
+ * If other no reqested mode is active it will return 0
+ *
+ * Return: uint8_t
+ */
+uint8_t sme_get_beaconing_concurrent_operation_channel(tHalHandle hal,
+						       uint8_t vdev_id_to_skip);
 #ifdef FEATURE_WLAN_MCC_TO_SCC_SWITCH
 uint16_t sme_check_concurrent_channel_overlap(tHalHandle hHal, uint16_t sap_ch,
 		eCsrPhyMode sapPhyMode,
@@ -2535,5 +2549,13 @@ static inline QDF_STATUS sme_deregister_twt_disable_complete_cb(tHalHandle hal)
 QDF_STATUS
 sme_get_roam_scan_stats(tHalHandle hal, roam_scan_stats_cb cb, void *context,
 			uint32_t vdev_id);
+
+/**
+ * sme_update_hidden_ssid_status_cb() - cb fun to update hidden ssid stats
+ * @mac_handle: mac handler
+ * @cb: cb of type hidden_ssid_cb
+ */
+QDF_STATUS sme_update_hidden_ssid_status_cb(mac_handle_t mac_handle,
+					    hidden_ssid_cb cb);
 
 #endif /* #if !defined( __SME_API_H ) */

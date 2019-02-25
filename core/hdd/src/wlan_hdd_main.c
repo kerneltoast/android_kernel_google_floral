@@ -572,6 +572,7 @@ static int __hdd_netdev_notifier_call(struct notifier_block *nb,
 #endif
 	struct hdd_adapter *adapter;
 	struct hdd_context *hdd_ctx;
+	struct wlan_objmgr_vdev *vdev;
 
 	hdd_enter_dev(dev);
 
@@ -635,12 +636,16 @@ static int __hdd_netdev_notifier_call(struct notifier_block *nb,
 		break;
 
 	case NETDEV_GOING_DOWN:
-		if (ucfg_scan_get_vdev_status(adapter->vdev) !=
+		vdev = hdd_objmgr_get_vdev(adapter);
+		if (!vdev)
+			break;
+		if (ucfg_scan_get_vdev_status(vdev) !=
 				SCAN_NOT_IN_PROGRESS) {
 			wlan_abort_scan(hdd_ctx->pdev, INVAL_PDEV_ID,
 					adapter->session_id, INVALID_SCAN_ID,
 					true);
 		}
+		hdd_objmgr_put_vdev(vdev);
 		cds_flush_work(&adapter->scan_block_work);
 		/* Need to clean up blocked scan request */
 		wlan_hdd_cfg80211_scan_block_cb(&adapter->scan_block_work);
@@ -3082,8 +3087,10 @@ static int __hdd_open(struct net_device *dev)
 	int ret;
 
 	hdd_enter_dev(dev);
-	MTRACE(qdf_trace(QDF_MODULE_ID_HDD, TRACE_CODE_HDD_OPEN_REQUEST,
-		adapter->session_id, adapter->device_mode));
+
+	qdf_mtrace(QDF_MODULE_ID_HDD, QDF_MODULE_ID_HDD,
+		   TRACE_CODE_HDD_OPEN_REQUEST,
+		   adapter->session_id, adapter->device_mode);
 
 	/* Nothing to be done if device is unloading */
 	if (cds_is_driver_unloading()) {
@@ -3197,8 +3204,9 @@ static int __hdd_stop(struct net_device *dev)
 
 	hdd_enter_dev(dev);
 
-	MTRACE(qdf_trace(QDF_MODULE_ID_HDD, TRACE_CODE_HDD_STOP_REQUEST,
-			 adapter->session_id, adapter->device_mode));
+	qdf_mtrace(QDF_MODULE_ID_HDD, QDF_MODULE_ID_HDD,
+		   TRACE_CODE_HDD_STOP_REQUEST,
+		   adapter->session_id, adapter->device_mode);
 
 	ret = wlan_hdd_validate_context(hdd_ctx);
 	if (ret) {
@@ -4527,7 +4535,8 @@ void hdd_deinit_adapter(struct hdd_context *hdd_ctx,
 	hdd_exit();
 }
 
-static void hdd_cleanup_adapter(struct hdd_context *hdd_ctx, struct hdd_adapter *adapter,
+static void hdd_cleanup_adapter(struct hdd_context *hdd_ctx,
+				struct hdd_adapter *adapter,
 				bool rtnl_held)
 {
 	struct net_device *dev = NULL;
@@ -4542,6 +4551,7 @@ static void hdd_cleanup_adapter(struct hdd_context *hdd_ctx, struct hdd_adapter 
 	hdd_nud_deinit_tracking(adapter);
 	qdf_mutex_destroy(&adapter->disconnection_status_lock);
 	hdd_apf_context_destroy(adapter);
+	qdf_spinlock_destroy(&adapter->vdev_lock);
 
 	wlan_hdd_debugfs_csr_deinit(adapter);
 	if (adapter->device_mode == QDF_STA_MODE)
@@ -5306,6 +5316,8 @@ struct hdd_adapter *hdd_open_adapter(struct hdd_context *hdd_ctx, uint8_t sessio
 		return NULL;
 	}
 
+	qdf_spinlock_create(&adapter->vdev_lock);
+
 	hdd_init_completion(adapter);
 	INIT_WORK(&adapter->scan_block_work, wlan_hdd_cfg80211_scan_block_cb);
 	qdf_list_create(&adapter->blocked_scan_request_q, WLAN_MAX_SCAN_COUNT);
@@ -5627,6 +5639,9 @@ QDF_STATUS hdd_stop_adapter_ext(struct hdd_context *hdd_ctx,
 			clear_bit(ACS_PENDING, &adapter->event_flags);
 		}
 		wlan_hdd_scan_abort(adapter);
+		/* Diassociate with all the peers before stop ap post */
+		if (test_bit(SOFTAP_BSS_STARTED, &adapter->event_flags))
+			wlan_hdd_del_station(adapter);
 		/* Flush IPA exception path packets */
 		sap_config = &adapter->session.ap.sap_config;
 		if (sap_config)
@@ -11554,6 +11569,8 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 	/* Free the cache channels of the command SET_DISABLE_CHANNEL_LIST */
 	wlan_hdd_free_cache_channels(hdd_ctx);
 
+	hdd_sap_destroy_ctx_all(hdd_ctx, is_recovery_stop);
+
 	hdd_check_for_leaks(hdd_ctx, is_recovery_stop);
 	hdd_debug_domain_set(QDF_DEBUG_DOMAIN_INIT);
 
@@ -12045,6 +12062,8 @@ int hdd_register_cb(struct hdd_context *hdd_ctx)
 
 	sme_set_link_layer_ext_cb(mac_handle,
 			wlan_hdd_cfg80211_link_layer_stats_ext_callback);
+	sme_update_hidden_ssid_status_cb(mac_handle,
+					 hdd_hidden_ssid_enable_roaming);
 
 	status = sme_set_lost_link_info_cb(mac_handle,
 					   hdd_lost_link_info_cb);
@@ -14304,6 +14323,7 @@ static int hdd_update_scan_config(struct hdd_context *hdd_ctx)
 	/* The ini is disallow DFS channel scan if ini is 1, so negate that */
 	scan_cfg.allow_dfs_chan_in_first_scan = !cfg->initial_scan_no_dfs_chnl;
 	scan_cfg.allow_dfs_chan_in_scan = cfg->enableDFSChnlScan;
+	scan_cfg.use_wake_lock_in_user_scan = cfg->wake_lock_in_user_scan;
 	scan_cfg.active_dwell = cfg->nActiveMaxChnTime;
 	scan_cfg.active_dwell_2g = cfg->active_dwell_2g;
 	scan_cfg.passive_dwell = cfg->nPassiveMaxChnTime;
@@ -14329,6 +14349,10 @@ static int hdd_update_scan_config(struct hdd_context *hdd_ctx)
 	scan_cfg.enable_mac_spoofing = cfg->enable_mac_spoofing;
 	scan_cfg.sta_miracast_mcc_rest_time =
 				cfg->sta_miracast_mcc_rest_time_val;
+	scan_cfg.sta_scan_burst_duration = cfg->sta_scan_burst_duration;
+	scan_cfg.p2p_scan_burst_duration = cfg->p2p_scan_burst_duration;
+	scan_cfg.go_scan_burst_duration = cfg->go_scan_burst_duration;
+	scan_cfg.ap_scan_burst_duration = cfg->ap_scan_burst_duration;
 
 	hdd_update_pno_config(&scan_cfg.pno_cfg, cfg);
 	hdd_update_ie_whitelist_attr(&scan_cfg.ie_whitelist, cfg);
@@ -15195,6 +15219,21 @@ tcp_param_change_nla_failed:
 	kfree_skb(vendor_event);
 }
 #endif /* MSM_PLATFORM */
+
+void hdd_hidden_ssid_enable_roaming(hdd_handle_t hdd_handle, uint8_t vdev_id)
+{
+	struct hdd_context *hdd_ctx = hdd_handle_to_context(hdd_handle);
+	struct hdd_adapter *adapter;
+
+	adapter = hdd_get_adapter_by_vdev(hdd_ctx, vdev_id);
+
+	if (!adapter) {
+		hdd_err("Adapter is null");
+		return;
+	}
+	/* enable roaming on all adapters once hdd get hidden ssid rsp */
+	wlan_hdd_enable_roaming(adapter);
+}
 
 /* Register the module init/exit functions */
 module_init(hdd_module_init);

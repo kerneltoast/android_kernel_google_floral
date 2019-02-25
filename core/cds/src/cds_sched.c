@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -36,7 +36,7 @@
 #include <linux/spinlock.h>
 #include <linux/kthread.h>
 #include <linux/cpu.h>
-#ifdef THREAD_PERFORMANCE
+#ifdef RX_PERFORMANCE
 #include <linux/sched/types.h>
 #endif
 /* Preprocessor Definitions and Constants */
@@ -389,6 +389,35 @@ static void cds_cpu_before_offline_cb(void *context, uint32_t cpu)
 {
 	cds_cpu_hotplug_notify(cpu, false);
 }
+
+#ifdef RX_PERFORMANCE
+/**
+ * cds_set_ol_rx_thread_scheduler - set ol_rx_thread scheduler
+ * @psched_context: Pointer to a previously allocated buffer big
+ *
+ * Return: None
+ */
+static void cds_set_ol_rx_thread_scheduler(p_cds_sched_context psched_context)
+{
+	struct sched_param param;
+
+	if (!psched_context) {
+		cds_err("Null params being passed");
+		return;
+	}
+	if (!psched_context->ol_rx_thread) {
+		cds_alert("CDS OL RX Thread is NULL");
+		return;
+	}
+	param.sched_priority = 99;
+	sched_setscheduler(psched_context->ol_rx_thread, SCHED_RR, &param);
+}
+#else
+static void cds_set_ol_rx_thread_scheduler(p_cds_sched_context psched_context)
+{
+}
+#endif /* RX_PERFORMANCE */
+
 #endif /* QCA_CONFIG_SMP */
 
 /**
@@ -411,12 +440,6 @@ QDF_STATUS cds_sched_open(void *p_cds_context,
 		p_cds_sched_context pSchedContext,
 		uint32_t SchedCtxSize)
 {
-#ifdef THREAD_PERFORMANCE
-	struct sched_param param;
-
-	param.sched_priority = 99;
-#endif
-
 	cds_debug("Opening the CDS Scheduler");
 	/* Sanity checks */
 	if ((p_cds_context == NULL) || (pSchedContext == NULL)) {
@@ -463,9 +486,7 @@ QDF_STATUS cds_sched_open(void *p_cds_context,
 		goto OL_RX_THREAD_START_FAILURE;
 
 	}
-#ifdef THREAD_PERFORMANCE
-	sched_setscheduler(pSchedContext->ol_rx_thread, SCHED_RR, &param);
-#endif
+	cds_set_ol_rx_thread_scheduler(pSchedContext);
 	wake_up_process(pSchedContext->ol_rx_thread);
 	cds_debug("CDS OL RX thread Created");
 	wait_for_completion_interruptible(&pSchedContext->ol_rx_start_event);
@@ -619,6 +640,38 @@ cds_indicate_rxpkt(p_cds_sched_context pSchedContext,
 	set_bit(RX_POST_EVENT, &pSchedContext->ol_rx_event_flag);
 	wake_up_interruptible(&pSchedContext->ol_rx_wait_queue);
 }
+
+/**
+ * cds_close_rx_thread() - close the Rx thread
+ *
+ * This api closes the Rx thread:
+ *
+ * Return: qdf status
+ */
+QDF_STATUS cds_close_rx_thread(void)
+{
+	cds_debug("invoked");
+
+	if (!gp_cds_sched_context) {
+		cds_err("gp_cds_sched_context == NULL");
+		return QDF_STATUS_E_FAILURE;
+	}
+
+	if (!gp_cds_sched_context->ol_rx_thread)
+		return QDF_STATUS_SUCCESS;
+
+	/* Shut down Tlshim Rx thread */
+	set_bit(RX_SHUTDOWN_EVENT, &gp_cds_sched_context->ol_rx_event_flag);
+	set_bit(RX_POST_EVENT, &gp_cds_sched_context->ol_rx_event_flag);
+	wake_up_interruptible(&gp_cds_sched_context->ol_rx_wait_queue);
+	wait_for_completion(&gp_cds_sched_context->ol_rx_shutdown);
+	gp_cds_sched_context->ol_rx_thread = NULL;
+	cds_drop_rxpkt_by_staid(gp_cds_sched_context, WLAN_MAX_STA_COUNT);
+	cds_free_ol_rx_pkt_freeq(gp_cds_sched_context);
+	qdf_cpuhp_unregister(&gp_cds_sched_context->cpuhp_event_handle);
+
+	return QDF_STATUS_SUCCESS;
+} /* cds_close_rx_thread */
 
 /**
  * cds_drop_rxpkt_by_staid() - api to drop pending rx packets for a sta
@@ -782,20 +835,7 @@ QDF_STATUS cds_sched_close(void)
 		return QDF_STATUS_E_FAILURE;
 	}
 
-#ifdef QCA_CONFIG_SMP
-	if (!gp_cds_sched_context->ol_rx_thread)
-		return QDF_STATUS_SUCCESS;
-
-	/* Shut down Tlshim Rx thread */
-	set_bit(RX_SHUTDOWN_EVENT, &gp_cds_sched_context->ol_rx_event_flag);
-	set_bit(RX_POST_EVENT, &gp_cds_sched_context->ol_rx_event_flag);
-	wake_up_interruptible(&gp_cds_sched_context->ol_rx_wait_queue);
-	wait_for_completion(&gp_cds_sched_context->ol_rx_shutdown);
-	gp_cds_sched_context->ol_rx_thread = NULL;
-	cds_drop_rxpkt_by_staid(gp_cds_sched_context, WLAN_MAX_STA_COUNT);
-	cds_free_ol_rx_pkt_freeq(gp_cds_sched_context);
-	qdf_cpuhp_unregister(&gp_cds_sched_context->cpuhp_event_handle);
-#endif
+	cds_close_rx_thread();
 	gp_cds_sched_context = NULL;
 	return QDF_STATUS_SUCCESS;
 } /* cds_sched_close() */
