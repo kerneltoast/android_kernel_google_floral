@@ -4985,15 +4985,12 @@ static int sm8150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 			goto end;
 		}
 
-		/* iaxxx codec driver not support set_sysclk */
-		if (cpu_dai->id != AFE_PORT_ID_QUATERNARY_TDM_TX) {
-			ret = snd_soc_codec_set_sysclk(codec, 0, 0,
-					clk_freq,
-					SND_SOC_CLOCK_IN);
-			if (ret < 0)
-				pr_err("%s: set sysclk failed, err:%d\n",
-					__func__, ret);
-		}
+		ret = snd_soc_codec_set_sysclk(codec, 0, 0,
+				clk_freq,
+				SND_SOC_CLOCK_IN);
+		if (ret < 0)
+			pr_err("%s: set sysclk failed, err:%d\n",
+				__func__, ret);
 	}
 end:
 	return ret;
@@ -6226,8 +6223,13 @@ static struct snd_soc_dai_link msm_common_be_dai_links[] = {
 		.stream_name = "Quaternary TDM0 Playback",
 		.cpu_dai_name = "msm-dai-q6-tdm.36912",
 		.platform_name = "msm-pcm-routing",
+#ifdef CONFIG_USE_IAXXX_TDM
+		.codec_name = "iaxxx-codec",
+		.codec_dai_name = "iaxxx-pcm0",
+#else
 		.codec_name = "msm-stub-codec.1",
 		.codec_dai_name = "msm-stub-rx",
+#endif
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.id = MSM_BACKEND_DAI_QUAT_TDM_RX_0,
@@ -6903,8 +6905,13 @@ static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 		.stream_name = "Quaternary MI2S Playback",
 		.cpu_dai_name = "msm-dai-q6-mi2s.3",
 		.platform_name = "msm-pcm-routing",
+#ifdef CONFIG_USE_IAXXX_I2S
+		.codec_name = "iaxxx-codec",
+		.codec_dai_name = "iaxxx-pcm0",
+#else
 		.codec_name = "msm-stub-codec.1",
 		.codec_dai_name = "msm-stub-rx",
+#endif
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.id = MSM_BACKEND_DAI_QUATERNARY_MI2S_RX,
