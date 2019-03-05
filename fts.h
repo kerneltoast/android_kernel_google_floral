@@ -195,7 +195,7 @@
 					 * reported */
 /* **** END **** */
 
-#define SKIP_PRESSURE
+/* #define SKIP_PRESSURE */
 
 /**@}*/
 /*********************************************************/

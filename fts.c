@@ -2450,7 +2450,7 @@ static bool fts_enter_pointer_event_handler(struct fts_ts_info *info, unsigned
 		 * pressure value instead
 		 */
 #ifndef SKIP_PRESSURE
-		pr_dbg("%s: Pressure is %i, but pointer is not leaving\n",
+		pr_debug("%s: Pressure is %i, but pointer is not leaving\n",
 		       __func__, z);
 #endif
 		z = 1; /* smallest non-zero pressure value */
