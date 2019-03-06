@@ -228,7 +228,7 @@
 								 * register in
 								 * FTI */
 /* value to write in SYSTEM_RESET_ADDRESS to perform a system reset in FTM5 */
-#define SYSTEM_RESET_VALUE	0x80
+#define SYSTEM_RESET_VALUE	0x81
 
 
 /* REMAP REGISTER */

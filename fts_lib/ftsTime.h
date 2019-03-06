@@ -47,7 +47,7 @@
 #define TIMEOUT_INITIALIZATION_TEST_RESULT	(5000 * TIMEOUT_RESOLUTION)
 /* /< timeout to perform initialization test in ms */
 #define TIEMOUT_ECHO \
-	TIMEOUT_INITIALIZATION_TEST_RESULT
+	(800 * TIMEOUT_RESOLUTION)
 /* /< timeout of the echo command, should be the max of
   *  all the possible commands (used in worst case) */
 /** @}*/
