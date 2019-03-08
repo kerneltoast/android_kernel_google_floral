@@ -7972,6 +7972,8 @@ static int hdd_unmap_req_id_to_pattern_id(struct hdd_context *hdd_ctx,
 #define PARAM_DST_MAC_ADDR \
 		QCA_WLAN_VENDOR_ATTR_OFFLOADED_PACKETS_DST_MAC_ADDR
 #define PARAM_PERIOD QCA_WLAN_VENDOR_ATTR_OFFLOADED_PACKETS_PERIOD
+#define PARAM_PROTO_TYPE \
+		QCA_WLAN_VENDOR_ATTR_OFFLOADED_PACKETS_ETHER_PROTO_TYPE
 
 /**
  * wlan_hdd_add_tx_ptrn() - add tx pattern
@@ -8023,6 +8025,7 @@ wlan_hdd_add_tx_ptrn(struct hdd_adapter *adapter, struct hdd_context *hdd_ctx,
 		hdd_err("attr period failed");
 		goto fail;
 	}
+
 	add_req->usPtrnIntervalMs = nla_get_u32(tb[PARAM_PERIOD]);
 	hdd_debug("Period: %u ms", add_req->usPtrnIntervalMs);
 	if (add_req->usPtrnIntervalMs == 0) {
@@ -8067,6 +8070,13 @@ wlan_hdd_add_tx_ptrn(struct hdd_adapter *adapter, struct hdd_context *hdd_ctx,
 				add_req->ucPtrnSize);
 		goto fail;
 	}
+
+	if (!tb[PARAM_PROTO_TYPE])
+		eth_type = htons(ETH_P_IP);
+	else
+		eth_type = htons(nla_get_u16(tb[PARAM_PROTO_TYPE]));
+
+	hdd_debug("packet proto type: %u", eth_type);
 
 	len = 0;
 	qdf_mem_copy(&add_req->ucPattern[0], dst_addr.bytes, QDF_MAC_ADDR_SIZE);
@@ -8207,6 +8217,7 @@ __wlan_hdd_cfg80211_offloaded_packets(struct wiphy *wiphy,
 			[PARAM_DST_MAC_ADDR] = { .type = NLA_BINARY,
 						.len = QDF_MAC_ADDR_SIZE },
 			[PARAM_PERIOD] = { .type = NLA_U32 },
+			[PARAM_PROTO_TYPE] = {.type = NLA_U16},
 	};
 
 	hdd_enter_dev(dev);
@@ -8257,6 +8268,7 @@ __wlan_hdd_cfg80211_offloaded_packets(struct wiphy *wiphy,
 #undef PARAM_SRC_MAC_ADDR
 #undef PARAM_DST_MAC_ADDR
 #undef PARAM_PERIOD
+#undef PARAM_PROTO_TYPE
 
 /**
  * wlan_hdd_cfg80211_offloaded_packets() - Wrapper to offload packets
@@ -18435,7 +18447,7 @@ static int wlan_hdd_cfg80211_set_fils_config(struct hdd_adapter *adapter,
 
 	roam_profile->fils_con_info->is_fils_connection = true;
 	roam_profile->fils_con_info->sequence_number =
-		req->fils_erp_next_seq_num;
+			(req->fils_erp_next_seq_num + 1);
 	roam_profile->fils_con_info->auth_type = auth_type;
 
 	roam_profile->fils_con_info->r_rk_length =
@@ -22512,7 +22524,7 @@ __wlan_hdd_cfg80211_update_connect_params(struct wiphy *wiphy,
 					req->fils_erp_realm_len);
 		}
 
-		fils_info->sequence_number = req->fils_erp_next_seq_num;
+		fils_info->sequence_number = req->fils_erp_next_seq_num + 1;
 		fils_info->r_rk_length = req->fils_erp_rrk_len;
 
 		if (req->fils_erp_rrk_len && req->fils_erp_rrk)
