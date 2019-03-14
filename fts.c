@@ -271,6 +271,7 @@ static ssize_t fts_fwupdate_show(struct device *dev,
 static ssize_t fts_appid_show(struct device *dev, struct device_attribute *attr,
 			      char *buf)
 {
+	struct fts_ts_info *info = dev_get_drvdata(dev);
 	int written = 0;
 	char temp[35];
 
@@ -287,7 +288,23 @@ static ssize_t fts_appid_show(struct device *dev, struct device_attribute *attr,
 			     systemInfo.u8_cfgAfeVer,
 			     systemInfo.u16_cfgProjectId);
 	written += scnprintf(buf + written, PAGE_SIZE - written,
-			     "MPFlag: %02X\n",
+			     "FW file: %s\n", info->board->fw_name);
+
+	written += scnprintf(buf + written, PAGE_SIZE - written,
+			     "Extended display info: ");
+	if (!info->extinfo.is_read)
+		written += scnprintf(buf + written, PAGE_SIZE - written,
+			     "[pending]");
+	else if (info->extinfo.size == 0)
+		written += scnprintf(buf + written, PAGE_SIZE - written,
+			     "[none]");
+	else if (info->extinfo.size * 2 < PAGE_SIZE - written) {
+		bin2hex(buf + written, info->extinfo.data, info->extinfo.size);
+		written += info->extinfo.size * 2;
+	}
+
+	written += scnprintf(buf + written, PAGE_SIZE - written,
+			     "\nMPFlag: %02X\n",
 			     systemInfo.u8_mpFlag);
 
 	return written;
