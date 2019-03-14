@@ -77,6 +77,9 @@
 #include "fts_lib/ftsTime.h"
 #include "fts_lib/ftsTool.h"
 
+/* Touch simulation MT slot */
+#define TOUCHSIM_SLOT_ID		0
+#define TOUCHSIM_TIMER_INTERVAL_NS	8333333
 
 /* Switch GPIO values */
 #define FTS_SWITCH_GPIO_VALUE_AP_MASTER		0
@@ -1438,7 +1441,234 @@ static ssize_t fts_gesture_coordinates_show(struct device *dev,
 }
 #endif
 
+/* Touch simulation hr timer expiry callback */
+static enum hrtimer_restart touchsim_timer_cb(struct hrtimer *timer)
+{
+	struct fts_touchsim *touchsim = container_of(timer,
+						struct fts_touchsim,
+						hr_timer);
+	enum hrtimer_restart retval = HRTIMER_NORESTART;
 
+	if (touchsim->is_running) {
+		hrtimer_forward_now(timer,
+				ns_to_ktime(TOUCHSIM_TIMER_INTERVAL_NS));
+		retval = HRTIMER_RESTART;
+	}
+
+	/* schedule the task to report touch coordinates to kernel
+	 *  input subsystem
+	 */
+	queue_work(touchsim->wq, &touchsim->work);
+
+	return retval;
+}
+
+/* Compute the next touch coordinate(x,y) */
+static void touchsim_refresh_coordinates(struct fts_touchsim *touchsim)
+{
+	struct fts_ts_info *info  = container_of(touchsim,
+						struct fts_ts_info,
+						touchsim);
+
+	const int x_start = info->board->x_axis_max / 10;
+	const int x_max   = (info->board->x_axis_max * 9) / 10;
+	const int y_start = info->board->y_axis_max / 4;
+	const int y_max   = info->board->y_axis_max / 2;
+
+	touchsim->x += touchsim->x_step;
+	touchsim->y += touchsim->y_step;
+
+	if (touchsim->x < x_start || touchsim->x > x_max)
+		touchsim->x_step *= -1;
+
+	if (touchsim->y < y_start || touchsim->y > y_max)
+		touchsim->y_step *= -1;
+}
+
+/* Report touch contact */
+static void touchsim_report_contact_event(struct input_dev *dev, int slot_id,
+						int x, int y, int z)
+{
+	/* report the cordinates to the input subsystem */
+	input_mt_slot(dev, slot_id);
+	input_report_key(dev, BTN_TOUCH, true);
+	input_mt_report_slot_state(dev, MT_TOOL_FINGER, true);
+	input_report_abs(dev, ABS_MT_POSITION_X, x);
+	input_report_abs(dev, ABS_MT_POSITION_Y, y);
+	input_report_abs(dev, ABS_MT_PRESSURE, z);
+}
+
+/* Work callback to report the touch co-ordinates to input subsystem */
+static void touchsim_work(struct work_struct *work)
+{
+	struct fts_touchsim *touchsim =	container_of(work,
+						struct fts_touchsim,
+						work);
+	struct fts_ts_info *info  = container_of(touchsim,
+						struct fts_ts_info,
+						touchsim);
+	u64 timestamp_ns = ktime_get_ns();
+
+	/* prevent CPU from entering deep sleep */
+	pm_qos_update_request(&info->pm_qos_req, 100);
+
+	/* Notify the PM core that the wakeup event will take 1 sec */
+	__pm_wakeup_event(&info->wakesrc, jiffies_to_msecs(HZ));
+
+	/* get the next touch coordinates */
+	touchsim_refresh_coordinates(touchsim);
+
+	/* send the touch co-ordinates */
+	touchsim_report_contact_event(info->input_dev, TOUCHSIM_SLOT_ID,
+					touchsim->x, touchsim->y, 1);
+
+	input_event(info->input_dev, EV_MSC, MSC_TIMESTAMP,
+			timestamp_ns / 1000);
+
+	input_sync(info->input_dev);
+
+	heatmap_read(&info->v4l2, timestamp_ns);
+
+	pm_qos_update_request(&info->pm_qos_req, PM_QOS_DEFAULT_VALUE);
+}
+
+/* Start the touch simulation */
+static int touchsim_start(struct fts_touchsim *touchsim)
+{
+	struct fts_ts_info *info  = container_of(touchsim,
+						struct fts_ts_info,
+						touchsim);
+	int res;
+
+	if (!touchsim->wq) {
+		pr_err("%s: touch simulation test wq is not available!\n",
+			__func__);
+		return -EFAULT;
+	}
+
+	if (touchsim->is_running) {
+		pr_err("%s: test in progress!\n", __func__);
+		return -EBUSY;
+	}
+
+	/* setup the initial touch coordinates*/
+	touchsim->x = info->board->x_axis_max / 10;
+	touchsim->y = info->board->y_axis_max / 4;
+
+	touchsim->is_running = true;
+
+	touchsim->x_step = 2;
+	touchsim->y_step = 2;
+
+	/* Disable touch interrupts from hw */
+	res = fts_enableInterrupt(false);
+	if ( res != OK)
+		pr_err("%s: fts_enableInterrupt: ERROR %08X\n", __func__, res);
+
+	/* Release all touches in the linux input subsystem */
+	release_all_touches(info);
+
+	/* setup and start a hr timer to be fired every 120Hz(~8.333333ms) */
+	hrtimer_init(&touchsim->hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
+	touchsim->hr_timer.function = touchsim_timer_cb;
+	hrtimer_start(&touchsim->hr_timer,
+			ns_to_ktime(TOUCHSIM_TIMER_INTERVAL_NS),
+			HRTIMER_MODE_ABS);
+
+	return OK;
+}
+
+/* Stop the touch simulation test */
+static int touchsim_stop(struct fts_touchsim *touchsim)
+{
+	struct fts_ts_info *info  = container_of(touchsim,
+						struct fts_ts_info,
+						touchsim);
+	int res;
+
+	if (!touchsim->is_running) {
+		pr_err("%s: test is not in progress!\n", __func__);
+		return -EINVAL;
+	}
+
+	/* Set the flag here to make sure flushed work doesn't
+	 * re-start the timer
+	 */
+	touchsim->is_running = false;
+
+	hrtimer_cancel(&touchsim->hr_timer);
+
+	/* flush any pending work */
+	flush_workqueue(touchsim->wq);
+
+	/* Release all touches in the linux input subsystem */
+	release_all_touches(info);
+
+	/* re enable the hw touch interrupt */
+	res = fts_enableInterrupt(true);
+	if ( res != OK)
+		pr_err("%s: fts_enableInterrupt: ERROR %08X\n", __func__, res);
+
+
+	return OK;
+}
+
+/** sysfs file node to handle the touch simulation test request.
+  *  "cat touchsim" shows if the test is running
+  *  Possible outputs:
+  *  1 = test running.
+  *  0 = test not running.
+  */
+static ssize_t fts_touch_simulation_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			info->touchsim.is_running ? 1 : 0);
+}
+
+/** sysfs file node to handle the touch simulation test request.
+  * "echo <cmd> > touchsim"  to execute a command
+  *  Possible commands (cmd):
+  *  1 = start the test if not already running.
+  *  0 = stop the test if its running.
+  */
+static ssize_t fts_touch_simulation_store(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf,
+					  size_t count)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+	ssize_t retval = count;
+	u8 result;
+
+	if (!mutex_trylock(&info->diag_cmd_lock)) {
+		pr_err("%s: Blocking concurrent access\n", __func__);
+		retval = -EBUSY;
+		goto out;
+	}
+
+	if (kstrtou8(buf, 16, &result)) {
+		pr_err("%s:bad input. valid inputs are either 0 or 1!\n",
+			 __func__);
+		retval = -EINVAL;
+		goto unlock;
+	}
+
+	if (result == 1)
+		touchsim_start(&info->touchsim);
+	else if (result == 0)
+		touchsim_stop(&info->touchsim);
+	else
+		pr_err("%s:Invalid cmd(%u). valid cmds are either 0 or 1!\n",
+			__func__, result);
+unlock:
+	mutex_unlock(&info->diag_cmd_lock);
+out:
+	return retval;
+}
 
 /***************************************** PRODUCTION TEST
   ***************************************************/
@@ -2439,6 +2669,10 @@ static DEVICE_ATTR(gesture_coordinates, 0664,
 #endif
 static DEVICE_ATTR(autotune, 0664, fts_autotune_show, fts_autotune_store);
 
+static DEVICE_ATTR(touchsim, 0664,
+		   fts_touch_simulation_show,
+		   fts_touch_simulation_store);
+
 /*  /sys/devices/soc.0/f9928000.i2c/i2c-6/6-0049 */
 static struct attribute *fts_attr_group[] = {
 	 &dev_attr_infoblock_getdata.attr,
@@ -2476,6 +2710,7 @@ static struct attribute *fts_attr_group[] = {
 	&dev_attr_gesture_coordinates.attr,
 #endif
 	&dev_attr_autotune.attr,
+	&dev_attr_touchsim.attr,
 	NULL,
 };
 
@@ -5136,12 +5371,24 @@ static int fts_probe(struct spi_device *client)
 		queue_delayed_work(info->fwu_workqueue, &info->fwu_work,
 				   msecs_to_jiffies(EXP_FN_WORK_DELAY_MS));
 
+	info->touchsim.wq = alloc_workqueue("fts-heatmap_test-queue",
+					WQ_UNBOUND | WQ_HIGHPRI |
+					WQ_CPU_INTENSIVE, 1);
+
+	if (info->touchsim.wq)
+		INIT_WORK(&(info->touchsim.work), touchsim_work);
+	else
+		pr_err("ERROR: Cannot create touch sim. test work queue\n");
+
 	pr_info("Probe Finished!\n");
 
 	return OK;
 
 
 ProbeErrorExit_7:
+	if(info->touchsim.wq)
+		destroy_workqueue(info->touchsim.wq);
+
 	msm_drm_unregister_client(&info->notifier);
 
 	heatmap_remove(&info->v4l2);
@@ -5222,6 +5469,10 @@ static int fts_remove(struct spi_device *client)
 	/* Remove the work thread */
 	destroy_workqueue(info->event_wq);
 	wakeup_source_trash(&info->wakesrc);
+
+	if(info->touchsim.wq)
+		destroy_workqueue(info->touchsim.wq);
+
 	if (info->fwu_workqueue)
 		destroy_workqueue(info->fwu_workqueue);
 
