@@ -246,8 +246,10 @@ static int swrm_clk_request(struct swr_mstr_ctrl *swrm, bool enable)
 
 	mutex_lock(&swrm->clklock);
 	if (enable) {
-		if (!swrm->dev_up)
+		if (!swrm->dev_up) {
+			ret = -ENODEV;
 			goto exit;
+		}
 		swrm->clk_ref_count++;
 		if (swrm->clk_ref_count == 1) {
 			ret = swrm->clk(swrm->handle, true);
@@ -470,11 +472,16 @@ static int swrm_cmd_fifo_rd_cmd(struct swr_mstr_ctrl *swrm, int *cmd_data,
 
 	mutex_lock(&swrm->iolock);
 	val = swrm_get_packed_reg_val(&swrm->rcmd_id, len, dev_addr, reg_addr);
-	/* wait for FIFO RD to complete to avoid overflow */
-	usleep_range(100, 105);
-	swr_master_write(swrm, SWRM_CMD_FIFO_RD_CMD, val);
-	/* wait for FIFO RD CMD complete to avoid overflow */
-	usleep_range(250, 255);
+	if (swrm->read) {
+		/* skip delay if read is handled in platform driver */
+		swr_master_write(swrm, SWRM_CMD_FIFO_RD_CMD, val);
+	} else {
+		/* wait for FIFO RD to complete to avoid overflow */
+		usleep_range(100, 105);
+		swr_master_write(swrm, SWRM_CMD_FIFO_RD_CMD, val);
+		/* wait for FIFO RD CMD complete to avoid overflow */
+		usleep_range(250, 255);
+	}
 retry_read:
 	*cmd_data = swr_master_read(swrm, SWRM_CMD_FIFO_RD_FIFO_ADDR);
 	dev_dbg(swrm->dev, "%s: reg: 0x%x, cmd_id: 0x%x, rcmd_id: 0x%x, \
@@ -518,8 +525,12 @@ static int swrm_cmd_fifo_wr_cmd(struct swr_mstr_ctrl *swrm, u8 cmd_data,
 			dev_num: 0x%x, cmd_data: 0x%x\n", __func__,
 			reg_addr, cmd_id, swrm->wcmd_id,dev_addr, cmd_data);
 	swr_master_write(swrm, SWRM_CMD_FIFO_WR_CMD, val);
-	/* wait for FIFO WR command to complete to avoid overflow */
-	usleep_range(250, 255);
+	/*
+	 * wait for FIFO WR command to complete to avoid overflow
+	 * skip delay if write is handled in platform driver.
+	 */
+	if(!swrm->write)
+		usleep_range(250, 255);
 	if (cmd_id == 0xF) {
 		/*
 		 * sleep for 10ms for MSM soundwire variant to allow broadcast
@@ -1287,7 +1298,10 @@ static irqreturn_t swr_mstr_interrupt(int irq, void *dev)
 	}
 
 	mutex_lock(&swrm->reslock);
-	swrm_clk_request(swrm, true);
+	if (swrm_clk_request(swrm, true)) {
+		mutex_unlock(&swrm->reslock);
+		goto exit;
+	}
 	mutex_unlock(&swrm->reslock);
 
 	intr_sts = swr_master_read(swrm, SWRM_INTERRUPT_STATUS);
@@ -1433,6 +1447,7 @@ handle_irq:
 	mutex_lock(&swrm->reslock);
 	swrm_clk_request(swrm, false);
 	mutex_unlock(&swrm->reslock);
+exit:
 	swrm_unlock_sleep(swrm);
 	return ret;
 }
