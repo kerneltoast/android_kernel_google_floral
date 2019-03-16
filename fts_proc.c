@@ -280,6 +280,8 @@
 							 * need to pass: type */
 #define CMD_READSSCOMPDATA			0x33	/* /< Read SS Init data:
 							 * need to pass: type */
+#define CMD_READGOLDENMUTUAL			0x34	/* /< Read GoldenMutual
+							   raw data */
 #define CMD_READTOTMSCOMPDATA			0x35	/* /< Read Tot MS Init
 							 * data: need to pass:
 							 * type */
@@ -863,6 +865,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 	TotSelfSenseData totComData;
 	MutualSenseCoeff msCoeff;
 	SelfSenseCoeff ssCoeff;
+	GoldenMutualRawData gmRawData;
 	int meanNorm = 0, meanEdge = 0;
 
 	u64 address;
@@ -1683,7 +1686,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 		case CMD_REQCOMPDATA:	/* request comp data */
 			if (numberParam == 2) {
 				pr_info("Requesting Compensation Data\n");
-				res = requestCompensationData(cmd[1]);
+				res = requestHDMDownload(cmd[1]);
 
 				if (res < OK)
 					pr_err("Error requesting compensation data ERROR %08X\n",
@@ -1699,15 +1702,14 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 		case CMD_READCOMPDATAHEAD:	/* read comp data header */
 			if (numberParam == 2) {
 				pr_info("Requesting Compensation Data\n");
-				res = requestCompensationData(cmd[1]);
+				res = requestHDMDownload(cmd[1]);
 				if (res < OK)
 					pr_err("Error requesting compensation data ERROR %08X\n",
 						res);
 				else {
 					pr_info("Requesting Compensation Data Finished!\n");
-					res = readCompensationDataHeader(
-						(u8)funcToTest[1], &dataHead,
-						&address);
+					res = readHDMHeader((u8)funcToTest[1],
+						&dataHead, &address);
 					if (res < OK)
 						pr_err("Read Compensation Data Header ERROR %08X\n",
 							res);
@@ -1797,6 +1799,34 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 				pr_err("Wrong number of parameters!\n");
 				res = ERROR_OP_NOT_ALLOW;
 			}
+			break;
+
+		case CMD_READGOLDENMUTUAL:
+			if (numberParam != 1) {
+				pr_err("Wrong number of parameters!\n");
+				res = ERROR_OP_NOT_ALLOW;
+				break;
+			}
+
+			pr_info("Get Golden Mutual Raw data\n");
+
+			res = readGoldenMutualRawData(&gmRawData);
+			if (res < OK) {
+				pr_err("Err reading GM data %08X\n", res);
+				break;
+			}
+
+			pr_info("GM data reading Finished!\n");
+
+			size = gmRawData.data_size * sizeof(s32) + 6;
+
+			print_frame_short("Golden Mutual Data =",
+					array1dTo2d_short(
+						gmRawData.data,
+						gmRawData.data_size,
+						gmRawData.hdr.ms_s_len),
+					gmRawData.hdr.ms_f_len,
+					gmRawData.hdr.ms_s_len);
 			break;
 
 		case CMD_READTOTMSCOMPDATA:	/* read mutual comp data */
@@ -3234,6 +3264,41 @@ END:	/* here start the reporting phase, assembling the data to send in the
 				break;
 
 
+			case CMD_READGOLDENMUTUAL:
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						(u8)gmRawData.hdm_hdr.type);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ms_f_len);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ms_s_len);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ss_f_len);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ss_s_len);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ms_k_len);
+
+				/* Copying Golden Mutual raw values */
+				for (j = 0; j < gmRawData.data_size; j++) {
+					index += scnprintf(
+						&driver_test_buff[index],
+						size - index, "%04X",
+						(u16)gmRawData.data[j]);
+				}
+
+				kfree(gmRawData.data);
+				break;
 
 			case CMD_READTOTMSCOMPDATA:
 				index += scnprintf(&driver_test_buff[index],

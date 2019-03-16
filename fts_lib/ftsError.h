@@ -148,12 +148,12 @@
   * commands/steps or which are part of a more complex procedure
   * @{
   */
-#define ERROR_REQU_COMP_DATA	(0x80010000)	/* /< compensation data
+#define ERROR_REQU_HDM_DOWNLOAD	(0x80010000)	/* /< HDM download
 						 * request failed */
 #define ERROR_REQU_DATA		(0x80020000)	/* /< data request
 						 * failed */
-#define ERROR_COMP_DATA_HEADER	(0x80030000)	/* /< unable to retrieve
-						 * the compensation data
+#define ERROR_HDM_DATA_HEADER	(0x80030000)	/* /< unable to retrieve
+						 * the HDM data
 						 * header */
 #define ERROR_COMP_DATA_GLOBAL	(0x80040000)	/* /< unable to retrieve
 						 * the global
@@ -179,6 +179,8 @@
 #define ERROR_CHECK_ECHO_FAIL	(0x800E0000)	/* /< unable to retrieve
 						 * echo event */
 #define ERROR_GET_FRAME		(0x800F0000)	/* /< unable to get frame */
+#define ERROR_GOLDEN_MUTUAL_DATA (0x80100000)	/* /< unable to read Golden
+ 						 * Mutual Data */
 /** @}*/
 
 /* FOURTH LEVEL ERROR CODE */

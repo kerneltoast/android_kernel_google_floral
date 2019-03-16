@@ -27,17 +27,19 @@
 
 
 
-#define RETRY_COMP_DATA_READ 2	/* /< max number of attempts to read
-				 * initialization data */
+#define RETRY_FW_HDM_DOWNLOAD 2	/* /< max number of attempts to
+				 * request HDM download */
 
 
-/* Bytes dimension of Compensation Data Format */
+/* Bytes dimension of HDM content */
 
-#define COMP_DATA_HEADER	DATA_HEADER	/* /< size in bytes of
+#define HDM_DATA_HEADER	DATA_HEADER	/* /< size in bytes of
 						 * initialization data header */
-#define COMP_DATA_GLOBAL	(16 - COMP_DATA_HEADER)	/* /< size in bytes
+#define COMP_DATA_GLOBAL	(16 - HDM_DATA_HEADER)	/* /< size in bytes
 							 * of initialization
 							 * data general info */
+#define GM_DATA_HEADER		(16 - HDM_DATA_HEADER)	/* /< size in bytes of
+ 						* Golden Mutual data header */
 
 
 #define HEADER_SIGNATURE	0xA5	/* /< signature used as starting byte of
@@ -141,25 +143,37 @@ typedef struct {
 				 * contains the SS Sens Sense coeff */
 } SelfSenseCoeff;
 
-int requestCompensationData(u8 type);
-int readCompensationDataHeader(u8 type, DataHeader *header, u64 *address);
-int readMutualSenseGlobalData(u64 *address, MutualSenseData *global);
-int readMutualSenseNodeData(u64 address, MutualSenseData *node);
+/**
+  * Struct which contains the Golden Mutual Header
+  */
+typedef struct {
+	u8 ms_f_len;		/* /< ms force length */
+	u8 ms_s_len;		/* /< ms sense length */
+	u8 ss_f_len;		/* /< ss force length */
+	u8 ss_s_len;		/* /< ss sense length */
+	u8 ms_k_len;		/* /< ms key length   */
+	u8 reserved_0[3];
+	u32 reserved_1;
+}GoldenMutualHdr;
+
+/**
+  * Struct which contains the Golden Mutual Raw data
+  */
+typedef struct {
+	DataHeader hdm_hdr;	/* /< HDM Header */
+	GoldenMutualHdr hdr; 	/* /< Golden Mutual Data Hdr */
+	s16 *data; 	        /* /< pointer to the raw data */
+	u32 data_size; 	        /* /< size of raw data buffer */
+} GoldenMutualRawData;
+
+int requestHDMDownload(u8 type);
+int readHDMHeader(u8 type, DataHeader *header, u64 *address);
 int readMutualSenseCompensationData(u8 type, MutualSenseData *data);
-int readSelfSenseGlobalData(u64 *address, SelfSenseData *global);
-int readSelfSenseNodeData(u64 address, SelfSenseData *node);
 int readSelfSenseCompensationData(u8 type, SelfSenseData *data);
-int readToTMutualSenseGlobalData(u64 *address, TotMutualSenseData *global);
-int readToTMutualSenseNodeData(u64 address, TotMutualSenseData *node);
 int readTotMutualSenseCompensationData(u8 type, TotMutualSenseData *data);
-int readTotSelfSenseGlobalData(u64 *address, TotSelfSenseData *global);
-int readTotSelfSenseNodeData(u64 address, TotSelfSenseData *node);
 int readTotSelfSenseCompensationData(u8 type, TotSelfSenseData *data);
-int readSensitivityCoeffHeader(u8 type, DataHeader *msHeader,
-			       DataHeader *ssHeader, u64 *address);
-int readSensitivityCoeffNodeData(u64 address, MutualSenseCoeff *msCoeff,
-				 SelfSenseCoeff *ssCoeff);
 int readSensitivityCoefficientsData(MutualSenseCoeff *msData,
 				    SelfSenseCoeff *ssData);
+int readGoldenMutualRawData(GoldenMutualRawData *pgmData);
 
 #endif
