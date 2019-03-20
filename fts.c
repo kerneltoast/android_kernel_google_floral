@@ -3440,8 +3440,9 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 			 * this could indicate slowness in the interrupt
 			 * handler.
 			 */
-			pr_warn("Heatmap frame has stale counter value %i",
-				counter);
+			if (info->mf_state != FTS_MF_UNFILTERED)
+				pr_warn("Heatmap frame has stale counter value %i",
+					counter);
 		}
 		counter = report.counter;
 		num_elements = report.size_x * report.size_y;
