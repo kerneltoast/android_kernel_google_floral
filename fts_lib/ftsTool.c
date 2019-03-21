@@ -108,8 +108,6 @@ int u8ToU16n(u8 *src, int src_length, u16 *dst)
 		return ERROR_OP_NOT_ALLOW;
 	else {
 		j = 0;
-		dst = (u16 *)kmalloc((src_length / 2) * sizeof(u16),
-				     GFP_KERNEL);
 		for (i = 0; i < src_length; i += 2) {
 			dst[j] = ((src[i + 1] & 0x00FF) << 8) +
 				 (src[i] & 0x00FF);
@@ -148,18 +146,15 @@ int u8ToU16_be(u8 *src, u16 *dst)
   * Convert an array of u16 to an array of u8, dst has MSB first (big endian).
   * @param src pointer to the source array of u16
   * @param src_length size of src
-  * @param dst pointer to the destination array of u8. This array should be free
-  * when no need anymore
+  * @param dst pointer to the destination array of u8.
   * @return size of dst (src size multiply by 2)
   */
 int u16ToU8n_be(u16 *src, int src_length, u8 *dst)
 {
-	int i, j;
+	int i, j = 0;
 
-	dst = (u8 *)kmalloc((2 * src_length) * sizeof(u8), GFP_KERNEL);
-	j = 0;
 	for (i = 0; i < src_length; i++) {
-		dst[j] = (u8)(src[i] & 0xFF00) >> 8;
+		dst[j] 	   = (u8)(src[i] & 0xFF00) >> 8;
 		dst[j + 1] = (u8)(src[i] & 0x00FF);
 		j += 2;
 	}
