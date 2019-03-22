@@ -3427,6 +3427,7 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 		if (report.mode != LOCAL_HEATMAP_MODE) {
 			pr_err("Touch IC not in local heatmap mode: %X %X %i",
 				report.prefix, report.mode, report.counter);
+			heatmap_enable();
 			return false;
 		}
 
