@@ -3388,8 +3388,10 @@ static bool fts_user_report_event_handler(struct fts_ts_info *info, unsigned
 
 static void heatmap_enable(void)
 {
-	unsigned char command[] = {0xA4, 0x06, LOCAL_HEATMAP_MODE};
-	fts_write(command, 3);
+	u8 command[] = {FTS_CMD_SYSTEM, SYS_CMD_LOAD_DATA,
+					LOCAL_HEATMAP_MODE};
+	pr_info("%s\n", __func__);
+	fts_write(command, ARRAY_SIZE(command));
 }
 
 static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
@@ -3652,7 +3654,8 @@ static irqreturn_t fts_interrupt_handler(int irq, void *handle)
 	}
 	input_sync(info->input_dev);
 
-	heatmap_read(&info->v4l2, info->timestamp);
+        if (processed_pointer_event)
+		heatmap_read(&info->v4l2, info->timestamp);
 
 	/* Disable the firmware motion filter during single touch */
 	update_motion_filter(info);
