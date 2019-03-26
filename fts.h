@@ -437,6 +437,8 @@ struct fts_ts_info {
 
 	bool heatmap_mode_full;		/* Report full heatmap */
 
+	/* Stop changing motion filter and keep fw design */
+	bool use_default_mf;
 	/* Motion filter finite state machine (FSM) state */
 	motion_filter_state_t mf_state;
 	/* Time of initial single-finger touch down. This timestamp is used to

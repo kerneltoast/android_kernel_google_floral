@@ -1670,6 +1670,52 @@ out:
 	return retval;
 }
 
+/** sysfs file node to show motion filter mode
+  *  "echo 0/1 > default_mf" to change
+  *  "cat default_mf" to show
+  *  Possible commands:
+  *  0 = Dynamic change motion filter
+  *  1 = Default motion filter by FW
+  */
+static ssize_t fts_default_mf_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", info->use_default_mf ? 1 : 0);
+}
+
+static ssize_t fts_default_mf_store(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf,
+					  size_t count)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+	bool val = false;
+	ssize_t retval = count;
+
+	if (!mutex_trylock(&info->diag_cmd_lock)) {
+		pr_err("%s: Blocking concurrent access\n", __func__);
+		retval = -EBUSY;
+		goto out;
+	}
+
+	if (kstrtobool(buf, &val) < 0) {
+		pr_err("%s: bad input. valid inputs are either 0 or 1!\n",
+			 __func__);
+		retval = -EINVAL;
+		goto unlock;
+	}
+
+	info->use_default_mf = val;
+
+unlock:
+	mutex_unlock(&info->diag_cmd_lock);
+out:
+	return retval;
+}
+
 /***************************************** PRODUCTION TEST
   ***************************************************/
 
@@ -2673,6 +2719,10 @@ static DEVICE_ATTR(touchsim, 0664,
 		   fts_touch_simulation_show,
 		   fts_touch_simulation_store);
 
+static DEVICE_ATTR(default_mf, 0664,
+		   fts_default_mf_show,
+		   fts_default_mf_store);
+
 /*  /sys/devices/soc.0/f9928000.i2c/i2c-6/6-0049 */
 static struct attribute *fts_attr_group[] = {
 	 &dev_attr_infoblock_getdata.attr,
@@ -2711,6 +2761,7 @@ static struct attribute *fts_attr_group[] = {
 #endif
 	&dev_attr_autotune.attr,
 	&dev_attr_touchsim.attr,
+	&dev_attr_default_mf.attr,
 	NULL,
 };
 
@@ -3526,6 +3577,9 @@ static int update_motion_filter(struct fts_ts_info *info)
 	const u32 mf_timeout_ms = 500;
 	u8 next_state;
 	u8 touches = hweight32(info->touch_id); /* Count the active touches */
+
+	if (info->use_default_mf)
+		return 0;
 
 	/* Determine the next filter state. The motion filter is enabled by
 	 * default and it is disabled while a single finger is touching the
@@ -5295,6 +5349,9 @@ static int fts_probe(struct spi_device *client)
 	 * Default is partial heatmap mode.
 	 */
 	info->heatmap_mode_full = info->board->heatmap_mode_full_init;
+
+	/* init motion filter mode */
+	info->use_default_mf = false;
 
 	/*
 	 * This *must* be done before request_threaded_irq is called.
