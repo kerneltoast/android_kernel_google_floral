@@ -2867,6 +2867,10 @@ END_DIAGNOSTIC:
 						FTS_BUS_REF_FORCE_ACTIVE,
 						cmd[1]);
 					res = OK;
+					if (cmd[1])
+						__pm_wakeup_event(
+							&info->wakesrc,
+							3 * MSEC_PER_SEC);
 				}
 			} else {
 				pr_err("Wrong number of parameters!\n");
