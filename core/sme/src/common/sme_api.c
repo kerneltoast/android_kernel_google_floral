@@ -14959,10 +14959,8 @@ QDF_STATUS sme_fast_reassoc(tHalHandle hal, struct csr_roam_profile *profile,
 	}
 
 	roam_profile = session->pCurRoamProfile;
-	if (roam_profile->supplicant_disabled_roaming ||
-	    roam_profile->driver_disabled_roaming) {
-		sme_debug("roaming status in Supplicant %d and in driver %d",
-			  roam_profile->supplicant_disabled_roaming,
+	if (roam_profile->driver_disabled_roaming) {
+		sme_debug("roaming status in driver %d",
 			  roam_profile->driver_disabled_roaming);
 		return QDF_STATUS_E_FAILURE;
 	}
@@ -15083,7 +15081,10 @@ send_flush_cmd:
 				   QDF_MODULE_ID_WMA,
 				   QDF_MODULE_ID_WMA, &msg)) {
 		sme_err("Not able to post message to WDA");
-		qdf_mem_free(pmk_cache);
+		if (pmk_cache) {
+			qdf_mem_zero(pmk_cache, sizeof(*pmk_cache));
+			qdf_mem_free(pmk_cache);
+		}
 		return QDF_STATUS_E_FAILURE;
 	}
 

@@ -5186,6 +5186,26 @@ static QDF_STATUS csr_roam_get_qos_info_from_bss(tpAniSirGlobal pMac,
 	return status;
 }
 
+static void csr_reset_cfg_privacy(tpAniSirGlobal mac)
+{
+	uint8_t Key0[WNI_CFG_WEP_DEFAULT_KEY_1_LEN] = {0};
+	uint8_t Key1[WNI_CFG_WEP_DEFAULT_KEY_2_LEN] = {0};
+	uint8_t Key2[WNI_CFG_WEP_DEFAULT_KEY_3_LEN] = {0};
+	uint8_t Key3[WNI_CFG_WEP_DEFAULT_KEY_4_LEN] = {0};
+
+	cfg_set_int(mac, WNI_CFG_PRIVACY_ENABLED, 0);
+	cfg_set_int(mac, WNI_CFG_RSN_ENABLED, 0);
+	cfg_set_str(mac, WNI_CFG_WEP_DEFAULT_KEY_1, Key0,
+			 WNI_CFG_WEP_DEFAULT_KEY_1_LEN);
+	cfg_set_str(mac, WNI_CFG_WEP_DEFAULT_KEY_2, Key1,
+			 WNI_CFG_WEP_DEFAULT_KEY_2_LEN);
+	cfg_set_str(mac, WNI_CFG_WEP_DEFAULT_KEY_3, Key2,
+			 WNI_CFG_WEP_DEFAULT_KEY_3_LEN);
+	cfg_set_str(mac, WNI_CFG_WEP_DEFAULT_KEY_4, Key3,
+			 WNI_CFG_WEP_DEFAULT_KEY_4_LEN);
+	cfg_set_int(mac, WNI_CFG_WEP_DEFAULT_KEYID, 0);
+}
+
 void csr_set_cfg_privacy(tpAniSirGlobal pMac, struct csr_roam_profile *pProfile,
 			 bool fPrivacy)
 {
@@ -15007,6 +15027,18 @@ csr_roam_set_pmkid_cache(tpAniSirGlobal pMac, uint32_t sessionId,
 	return QDF_STATUS_SUCCESS;
 }
 
+#ifdef WLAN_FEATURE_ROAM_OFFLOAD
+static void csr_mem_zero_psk_pmk(struct csr_roam_session *session)
+{
+	qdf_mem_zero(session->psk_pmk, sizeof(session->psk_pmk));
+	session->pmk_len = 0;
+}
+#else
+static void csr_mem_zero_psk_pmk(struct csr_roam_session *session)
+{
+}
+#endif
+
 QDF_STATUS csr_roam_del_pmkid_from_cache(tpAniSirGlobal pMac,
 					 uint32_t sessionId,
 					 tPmkidCacheInfo *pmksa,
@@ -15036,6 +15068,7 @@ QDF_STATUS csr_roam_del_pmkid_from_cache(tpAniSirGlobal pMac,
 			     sizeof(tPmkidCacheInfo) * CSR_MAX_PMKID_ALLOWED);
 		pSession->NumPmkidCache = 0;
 		pSession->curr_cache_idx = 0;
+		csr_mem_zero_psk_pmk(pSession);
 		return QDF_STATUS_SUCCESS;
 	}
 
@@ -17800,6 +17833,9 @@ void csr_cleanup_session(tpAniSirGlobal pMac, uint32_t sessionId)
 		/* Clean up FT related data structures */
 		sme_ft_close(MAC_HANDLE(pMac), sessionId);
 		csr_free_connect_bss_desc(pMac, sessionId);
+
+		sme_reset_key(MAC_HANDLE(pMac), sessionId);
+		csr_reset_cfg_privacy(pMac);
 		csr_roam_free_connect_profile(&pSession->connectedProfile);
 		csr_roam_free_connected_info(pMac, &pSession->connectedInfo);
 		qdf_mc_timer_destroy(&pSession->hTimerRoaming);

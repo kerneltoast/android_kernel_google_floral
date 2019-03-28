@@ -94,6 +94,7 @@
 #include "wlan_hdd_driver_ops.h"
 #include "epping_main.h"
 #include "wlan_hdd_data_stall_detection.h"
+#include "wlan_hdd_mpta_helper.h"
 
 #include <wlan_hdd_ipa.h>
 #include "hif.h"
@@ -4910,6 +4911,10 @@ static int hdd_send_coex_config_params(struct hdd_context *hdd_ctx,
 		hdd_err("Failed to send coex BT interference level");
 		goto err;
 	}
+
+	if (wlan_hdd_mpta_helper_enable(config))
+		goto err;
+
 	return 0;
 err:
 	return -EINVAL;
@@ -5590,6 +5595,12 @@ QDF_STATUS hdd_stop_adapter_ext(struct hdd_context *hdd_ctx,
 		wlan_hdd_cleanup_actionframe(adapter);
 		wlan_hdd_cleanup_remain_on_channel_ctx(adapter);
 		hdd_clear_fils_connection_info(adapter);
+		qdf_ret_status = sme_roam_del_pmkid_from_cache(
+							mac_handle,
+							adapter->session_id,
+							NULL, true);
+		if (QDF_IS_STATUS_ERROR(qdf_ret_status))
+			hdd_err("Cannot flush PMKIDCache");
 
 #ifdef WLAN_OPEN_SOURCE
 		cancel_work_sync(&adapter->ipv4_notifier_work);
@@ -11027,13 +11038,14 @@ static int hdd_features_init(struct hdd_context *hdd_ctx)
 
 	/**
 	 * In case of SSR/PDR, if pktlog was enabled manually before
-	 * SSR/PDR, Then enabled it again automatically after Wlan
+	 * SSR/PDR, then enable it again automatically after Wlan
 	 * device up.
+	 * During SSR/PDR, pktlog will be disabled as part of
+	 * hdd_features_deinit if pktlog is enabled in ini.
+	 * Re-enable pktlog in SSR case, if pktlog is enabled in ini.
 	 */
-	if (cds_is_driver_recovering()) {
-		if (hdd_ctx->is_pktlog_enabled)
-			hdd_pktlog_enable_disable(hdd_ctx, true, 0, 0);
-	} else if (cds_is_packet_log_enabled())
+	if (cds_is_packet_log_enabled() ||
+	    (cds_is_driver_recovering() && hdd_ctx->is_pktlog_enabled))
 		hdd_pktlog_enable_disable(hdd_ctx, true, 0, 0);
 
 	hddtxlimit.txPower2g = hdd_ctx->config->TxPower2g;
@@ -11117,7 +11129,16 @@ static inline QDF_STATUS hdd_register_bcn_cb(struct hdd_context *hdd_ctx)
 		wlan_cfg80211_inform_bss_frame,
 		SCAN_CB_TYPE_INFORM_BCN);
 	if (!QDF_IS_STATUS_SUCCESS(status)) {
-		hdd_err("failed with status code %08d [x%08x]",
+		hdd_err("failed to register SCAN_CB_TYPE_INFORM_BCN with status code %08d [x%08x]",
+			status, status);
+		return status;
+	}
+
+	status = ucfg_scan_register_bcn_cb(hdd_ctx->psoc,
+		wlan_cfg80211_unlink_bss_list,
+		SCAN_CB_TYPE_UNLINK_BSS);
+	if (!QDF_IS_STATUS_SUCCESS(status)) {
+		hdd_err("failed to refister SCAN_CB_TYPE_FLUSH_BSS with status code %08d [x%08x]",
 			status, status);
 		return status;
 	}
@@ -14491,6 +14512,11 @@ void hdd_set_roaming_in_progress(bool value)
 
 	hdd_ctx->roaming_in_progress = value;
 	hdd_debug("Roaming in Progress set to %d", value);
+	if (!hdd_ctx->roaming_in_progress) {
+		/* Reset scan reject params on successful roam complete */
+		hdd_debug("Reset scan reject params");
+		hdd_init_scan_reject_params(hdd_ctx);
+	}
 }
 
 bool hdd_is_roaming_in_progress(struct hdd_context *hdd_ctx)
