@@ -110,6 +110,7 @@ typedef struct {
 	u8 u8_scrRxLen;	/* /< Rx length */
 	u8 u8_keyLen;	/* /< Key Len */
 	u8 u8_forceLen;	/* /< Force Len */
+	u32 u32_productionTimestamp;	/* /< Production Timestamp */
 
 	u16 u16_dbgInfoAddr;	/* /< Offset of debug Info structure */
 

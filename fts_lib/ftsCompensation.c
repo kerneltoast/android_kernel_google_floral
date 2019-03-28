@@ -283,12 +283,15 @@ int readSelfSenseGlobalData(u64 *address, SelfSenseData *global)
 	global->s_cx1 = (i8)data[5];
 	global->f_max_n = data[6];
 	global->s_max_n = data[7];
+	global->f_ix0 = data[8];
+	global->s_ix0 = data[9];
 
 	pr_info("force_len = %d sense_len = %d  f_ix1 = %d   s_ix1 = %d   f_cx1 = %d   s_cx1 = %d\n",
 		global->header.force_node, global->header.sense_node,
 		global->f_ix1, global->s_ix1, global->f_cx1, global->s_cx1);
-	pr_info("max_n = %d   s_max_n = %d\n", global->f_max_n,
-		global->s_max_n);
+	pr_info("max_n = %d   s_max_n = %d f_ix0 = %d  s_ix0 = %d\n",
+		global->f_max_n, global->s_max_n, global->f_ix0,
+		global->s_ix0);
 
 
 	*address += COMP_DATA_GLOBAL;

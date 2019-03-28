@@ -1699,7 +1699,7 @@ static ssize_t stm_fts_cmd_show(struct device *dev,
 			else {
 				pr_info("SS Compensation Data Reading Finished!\n");
 				size += ((comData.header.force_node +
-					  comData.header.sense_node) * 2 + 6) *
+					  comData.header.sense_node) * 2 + 8) *
 					sizeof(u8) * 2;
 				print_frame_u8("SS Data Ix2_fm = ",
 					       array1dTo2d_u8(comData.ix2_fm,
@@ -1975,6 +1975,14 @@ END:
 			index += scnprintf(all_strbuff + index,
 					   size - index, "%02X",
 					   (comData.s_cx1) & 0xFF);
+
+			index += scnprintf(all_strbuff + index,
+					   size - index, "%02X",
+					   (comData.f_ix0) & 0xFF);
+
+			index += scnprintf(all_strbuff + index,
+					   size - index, "%02X",
+					   (comData.s_ix0) & 0xFF);
 
 			/* Copying IX2 Force */
 			for (j = 0; j < comData.header.force_node; j++) {

@@ -30,26 +30,28 @@
   * Definitions of all the Timeout used in several operations
   * @{
   */
-#define TIMEOUT_RESOLUTION			2
+#define TIMEOUT_RESOLUTION			50
 /* /< timeout resolution in ms (all timeout should be multiples of this unit) */
-#define GENERAL_TIMEOUT				(50 * TIMEOUT_RESOLUTION)
+#define GENERAL_TIMEOUT				(15 * TIMEOUT_RESOLUTION)
 /* /< general timeout in ms */
-#define RELEASE_INFO_TIMEOUT			(15 * TIMEOUT_RESOLUTION)
+#define RELEASE_INFO_TIMEOUT			(2 * TIMEOUT_RESOLUTION)
 /* /< timeout to request release info in ms */
 
 
-#define TIMEOUT_REQU_COMP_DATA			(100 * TIMEOUT_RESOLUTION)
+#define TIMEOUT_REQU_COMP_DATA			(4 * TIMEOUT_RESOLUTION)
 /* /< timeout to request compensation data in ms */
-#define TIMEOUT_REQU_DATA			(200 * TIMEOUT_RESOLUTION)
+#define TIMEOUT_REQU_DATA			(8 * TIMEOUT_RESOLUTION)
 /* /< timeout to request data in ms */
-#define TIMEOUT_ITO_TEST_RESULT			(100 * TIMEOUT_RESOLUTION)
+#define TIMEOUT_ITO_TEST_RESULT			(4 * TIMEOUT_RESOLUTION)
 /* /< timeout to perform ito test in ms */
 #define TIMEOUT_INITIALIZATION_TEST_RESULT	(5000 * TIMEOUT_RESOLUTION)
 /* /< timeout to perform initialization test in ms */
-#define TIEMOUT_ECHO \
-	(800 * TIMEOUT_RESOLUTION)
-/* /< timeout of the echo command, should be the max of
-  *  all the possible commands (used in worst case) */
+#define TIEMOUT_ECHO 				(50 * TIMEOUT_RESOLUTION)
+/* /< timeout of the echo command,*/
+#define TIMEOUT_ECHO_FPI			(200  * TIMEOUT_RESOLUTION)
+/* /< timeout of the Full panel Init echo command */
+#define TIMEOUT_ECHO_SINGLE_ENDED_SPECIAL_AUTOTUNE \
+	(100  * TIMEOUT_RESOLUTION)
 /** @}*/
 
 

@@ -79,6 +79,8 @@ typedef struct {
 	i8 s_cx1;	/* /< CX1 Sense (can be negative) */
 	u8 f_max_n;	/* /< Force MaxN */
 	u8 s_max_n;	/* /< Sense MaxN */
+	u8 f_ix0;	/* /< IX0 Force */
+	u8 s_ix0;	/* /< IX0 Sense */
 
 	u8 *ix2_fm;	/* /< pointer to an array of bytes which contains Force
 			 * Ix2 data node */

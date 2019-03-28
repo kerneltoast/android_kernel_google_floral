@@ -51,9 +51,9 @@
   */
 /* **** CODE CONFIGURATION **** */
 #define FTS_TS_DRV_NAME		"fts"	/* driver name */
-#define FTS_TS_DRV_VERSION	"5.2.16.4"	/* driver version string
+#define FTS_TS_DRV_VERSION	"5.2.16.5"	/* driver version string
 							 * */
-#define FTS_TS_DRV_VER		0x05021004	/* driver version u32 format */
+#define FTS_TS_DRV_VER		0x05021005	/* driver version u32 format */
 
 /* #define DEBUG */	/* /< define to print more logs in the kernel log
 			 * and better follow the code flow */

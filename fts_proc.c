@@ -1622,7 +1622,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 					pr_info("SS Compensation Data Reading Finished!\n");
 					size = ((comData.header.force_node +
 						 comData.header.sense_node) *
-						2 + 13) *
+						2 + 15) *
 					       sizeof(i8);
 					print_frame_i8("SS Data Ix2_fm = ",
 						array1dTo2d_i8(
@@ -3042,6 +3042,14 @@ END:	/* here start the reporting phase, assembling the data to send in the
 				index += scnprintf(&driver_test_buff[index],
 						   size - index, "%02X",
 						   comData.s_cx1 & 0xFF);
+
+				index += scnprintf(&driver_test_buff[index],
+						   size - index, "%02X",
+						   comData.f_ix0 & 0xFF);
+
+				index += scnprintf(&driver_test_buff[index],
+						   size - index, "%02X",
+						   comData.s_ix0 & 0xFF);
 
 				/* Copying IX2 Force */
 				for (j = 0; j < comData.header.force_node;
