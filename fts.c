@@ -1761,7 +1761,7 @@ static ssize_t stm_fts_cmd_store(struct device *dev,
 	u8 result, n = 0;
 	struct fts_ts_info *info = dev_get_drvdata(dev);
 	char *p, *temp_buf, *token;
-	ssize_t buf_len;
+	size_t token_len = 0;
 	ssize_t retval = count;
 
 	if (!count) {
@@ -1786,8 +1786,8 @@ static ssize_t stm_fts_cmd_store(struct device *dev,
 
 	temp_buf = kstrdup(buf, GFP_KERNEL);
 	if (!temp_buf) {
-		pr_err("%s: memory allocation failed for length(%zu)!",
-			__func__, buf_len);
+		pr_err("%s: memory allocation failed!",
+			__func__);
 		retval = -ENOMEM;
 		goto unlock;
 	}
@@ -1814,9 +1814,14 @@ static ssize_t stm_fts_cmd_store(struct device *dev,
 			break;
 		}
 
-		if (strlen(token) != 2 ) {
-			pr_debug("%s: bad len. len=%zu\n",
-				 __func__, strlen(token));
+		token_len = strlen(token);
+
+		/* handle last token case */
+		if (token_len == 3 && token[2] == '\n')
+			token[2] = '\0';
+		else if (token_len != 2) {
+			pr_err("%s: bad len. len=%zu\n",
+				 __func__, token_len);
 			n = 0;
 			break;
 		}
@@ -1825,14 +1830,14 @@ static ssize_t stm_fts_cmd_store(struct device *dev,
 			/* Conversion failed due to bad input.
 			* Discard the entire buffer.
 			*/
-			pr_debug("%s: bad input\n", __func__);
+			pr_err("%s: bad input\n", __func__);
 			n = 0;
 			break;
 		}
 
 		/* found a valid cmd/args */
 		typeOfCommand[n] = result;
-		pr_debug("%s: typeOfCommand[%d]=%02X\n",
+		pr_info("%s: typeOfCommand[%d]=%02X\n",
 			__func__, n, typeOfCommand[n]);
 
 		n++;
