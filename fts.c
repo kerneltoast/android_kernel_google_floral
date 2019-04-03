@@ -3216,6 +3216,22 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				event[5], event[6], event[7]);
 		break;
 
+	case EVT_TYPE_STATUS_STIMPAD:
+		if (event[2] == 0)
+			pr_info("%s: Stimpad disabled\n", __func__);
+		else if (event[2] == 1)
+			pr_info("%s: Stimpad enabled\n", __func__);
+		else if (event[2] == 2)
+			pr_info("%s: Stimpad disabled by signature invalid\n",
+			 __func__);
+		else if (event[2] == 3)
+			pr_info("%s: Stimpad disabled by nodescount invalid\n",
+			 __func__);
+		else
+			pr_info("%s: invalid Stimpad_info(%d)\n",
+				__func__, event[2]);
+		break;
+
 	default:
 		pr_err("%s: Received unhandled status event = %02X %02X %02X %02X %02X %02X %02X %02X\n",
 			__func__, event[0], event[1], event[2], event[3],
