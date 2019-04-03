@@ -41,18 +41,18 @@
 
 
 /**
-  * Request to the FW to load the specified Initialization Data
+  * Request to the FW to load the specified Initialization Data into HDM
   * @param type type of Initialization data to load @link load_opt Load Host
   * Data Option @endlink
   * @return OK if success or an error code which specify the type of error
   */
-int requestCompensationData(u8 type)
+int requestHDMDownload(u8 type)
 {
 	int ret = ERROR_OP_NOT_ALLOW;
 	int retry = 0;
 
-	pr_info("%s: Requesting compensation data...\n", __func__);
-	while (retry < RETRY_COMP_DATA_READ) {
+	pr_info("%s: Requesting HDM download...\n", __func__);
+	while (retry < RETRY_FW_HDM_DOWNLOAD) {
 		ret = writeSysCmd(SYS_CMD_LOAD_DATA,  &type, 1);
 		/* send request to load in memory the Compensation Data */
 		if (ret < OK) {
@@ -60,20 +60,22 @@ int requestCompensationData(u8 type)
 				 __func__, retry + 1);
 			retry += 1;
 		} else {
-			pr_info("%s: Request Compensation data FINISHED!\n",
+			pr_info("%s: Request HDM Download FINISHED!\n",
 				__func__);
 			return OK;
 		}
 	}
 
-	pr_err("%s: Requesting compensation data... ERROR %08X\n",
-		 __func__, ret | ERROR_REQU_COMP_DATA);
-	return ret | ERROR_REQU_COMP_DATA;
+	ret |= ERROR_REQU_HDM_DOWNLOAD;
+	pr_err("%s: Requesting HDM Download... ERROR %08X\n",
+		 __func__, ret);
+
+	return ret;
 }
 
 
 /**
-  * Read Initialization Data Header and check that the type loaded match
+  * Read HDM Header and check that the type loaded match
   * with the one previously requested
   * @param type type of Initialization data requested @link load_opt Load Host
   * Data Option @endlink
@@ -82,21 +84,21 @@ int requestCompensationData(u8 type)
   * to the next data
   * @return OK if success or an error code which specify the type of error
   */
-int readCompensationDataHeader(u8 type, DataHeader *header, u64 *address)
+int readHDMHeader(u8 type, DataHeader *header, u64 *address)
 {
 	u64 offset = ADDR_FRAMEBUFFER;
-	u8 data[COMP_DATA_HEADER];
+	u8 data[HDM_DATA_HEADER];
 	int ret;
 
 	ret = fts_writeReadU8UX(FTS_CMD_FRAMEBUFFER_R, BITS_16, offset, data,
-				COMP_DATA_HEADER, DUMMY_FRAMEBUFFER);
+				HDM_DATA_HEADER, DUMMY_FRAMEBUFFER);
 	if (ret < OK) {	/* i2c function have already a retry mechanism */
-		pr_err("%s: error while reading data header ERROR %08X\n",
+		pr_err("%s: error while reading HDM data header ERROR %08X\n",
 			__func__, ret);
 		return ret;
 	}
 
-	pr_info("Read Data Header done!\n");
+	pr_info("Read HDM Data Header done!\n");
 
 	if (data[0] != HEADER_SIGNATURE) {
 		pr_err("%s: The Header Signature was wrong! %02X != %02X ERROR %08X\n",
@@ -116,7 +118,7 @@ int readCompensationDataHeader(u8 type, DataHeader *header, u64 *address)
 
 	header->type = type;
 
-	*address = offset + COMP_DATA_HEADER;
+	*address = offset + HDM_DATA_HEADER;
 
 	return OK;
 }
@@ -130,7 +132,7 @@ int readCompensationDataHeader(u8 type, DataHeader *header, u64 *address)
   * initialization data
   * @return OK if success or an error code which specify the type of error
   */
-int readMutualSenseGlobalData(u64 *address, MutualSenseData *global)
+static int readMutualSenseGlobalData(u64 *address, MutualSenseData *global)
 {
 	u8 data[COMP_DATA_GLOBAL];
 	int ret;
@@ -168,7 +170,7 @@ int readMutualSenseGlobalData(u64 *address, MutualSenseData *global)
   * initialization data
   * @return OK if success or an error code which specify the type of error
   */
-int readMutualSenseNodeData(u64 address, MutualSenseData *node)
+static int readMutualSenseNodeData(u64 address, MutualSenseData *node)
 {
 	int ret;
 	int size = node->header.force_node * node->header.sense_node;
@@ -222,16 +224,16 @@ int readMutualSenseCompensationData(u8 type, MutualSenseData *data)
 		return ERROR_OP_NOT_ALLOW;
 	}
 
-	ret = requestCompensationData(type);
+	ret = requestHDMDownload(type);
 	if (ret < 0) {
-		pr_err("%s: ERROR %08X\n", __func__, ERROR_REQU_COMP_DATA);
-		return ret | ERROR_REQU_COMP_DATA;
+		pr_err("%s: ERROR %08X\n", __func__, ret);
+		return ret;
 	}
 
-	ret = readCompensationDataHeader(type, &(data->header), &address);
+	ret = readHDMHeader(type, &(data->header), &address);
 	if (ret < 0) {
-		pr_err("%s: ERROR %08X\n", __func__, ERROR_COMP_DATA_HEADER);
-		return ret | ERROR_COMP_DATA_HEADER;
+		pr_err("%s: ERROR %08X\n", __func__, ERROR_HDM_DATA_HEADER);
+		return ret | ERROR_HDM_DATA_HEADER;
 	}
 
 	ret = readMutualSenseGlobalData(&address, data);
@@ -258,7 +260,7 @@ int readMutualSenseCompensationData(u8 type, MutualSenseData *data)
   * initialization data
   * @return OK if success or an error code which specify the type of error
   */
-int readSelfSenseGlobalData(u64 *address, SelfSenseData *global)
+static int readSelfSenseGlobalData(u64 *address, SelfSenseData *global)
 {
 	int ret;
 	u8 data[COMP_DATA_GLOBAL];
@@ -305,7 +307,7 @@ int readSelfSenseGlobalData(u64 *address, SelfSenseData *global)
   * initialization data
   * @return OK if success or an error code which specify the type of error
   */
-int readSelfSenseNodeData(u64 address, SelfSenseData *node)
+static int readSelfSenseNodeData(u64 address, SelfSenseData *node)
 {
 	int size = node->header.force_node * 2 + node->header.sense_node * 2;
 	u8 data[size];
@@ -405,18 +407,18 @@ int readSelfSenseCompensationData(u8 type, SelfSenseData *data)
 		return ERROR_OP_NOT_ALLOW;
 	}
 
-	ret = requestCompensationData(type);
+	ret = requestHDMDownload(type);
 	if (ret < 0) {
 		pr_err("%s: error while requesting data... ERROR %08X\n",
-			__func__, ERROR_REQU_COMP_DATA);
-		return ret | ERROR_REQU_COMP_DATA;
+			__func__, ret);
+		return ret;
 	}
 
-	ret = readCompensationDataHeader(type, &(data->header), &address);
+	ret = readHDMHeader(type, &(data->header), &address);
 	if (ret < 0) {
 		pr_err("%s: error while reading data header... ERROR %08X\n",
-			__func__, ERROR_COMP_DATA_HEADER);
-		return ret | ERROR_COMP_DATA_HEADER;
+			__func__, ERROR_HDM_DATA_HEADER);
+		return ret | ERROR_HDM_DATA_HEADER;
 	}
 
 	ret = readSelfSenseGlobalData(&address, data);
@@ -443,7 +445,7 @@ int readSelfSenseCompensationData(u8 type, SelfSenseData *data)
   * initialization data
   * @return OK if success or an error code which specify the type of error
   */
-int readTotMutualSenseGlobalData(u64 *address, TotMutualSenseData *global)
+static int readTotMutualSenseGlobalData(u64 *address, TotMutualSenseData *global)
 {
 	int ret;
 	u8 data[COMP_DATA_GLOBAL];
@@ -479,7 +481,7 @@ int readTotMutualSenseGlobalData(u64 *address, TotMutualSenseData *global)
   * MS initialization data
   * @return OK if success or an error code which specify the type of error
   */
-int readTotMutualSenseNodeData(u64 address, TotMutualSenseData *node)
+static int readTotMutualSenseNodeData(u64 address, TotMutualSenseData *node)
 {
 	int ret, i;
 	int size = node->header.force_node * node->header.sense_node;
@@ -542,16 +544,16 @@ int readTotMutualSenseCompensationData(u8 type, TotMutualSenseData *data)
 		return ERROR_OP_NOT_ALLOW;
 	}
 
-	ret = requestCompensationData(type);
+	ret = requestHDMDownload(type);
 	if (ret < 0) {
-		pr_err("%s: ERROR %08X\n", __func__, ERROR_REQU_COMP_DATA);
-		return ret | ERROR_REQU_COMP_DATA;
+		pr_err("%s: ERROR %08X\n", __func__, ret);
+		return ret;
 	}
 
-	ret = readCompensationDataHeader(type, &(data->header), &address);
+	ret = readHDMHeader(type, &(data->header), &address);
 	if (ret < 0) {
-		pr_err("%s: ERROR %08X\n", __func__, ERROR_COMP_DATA_HEADER);
-		return ret | ERROR_COMP_DATA_HEADER;
+		pr_err("%s: ERROR %08X\n", __func__, ERROR_HDM_DATA_HEADER);
+		return ret | ERROR_HDM_DATA_HEADER;
 	}
 
 	ret = readTotMutualSenseGlobalData(&address, data);
@@ -578,7 +580,7 @@ int readTotMutualSenseCompensationData(u8 type, TotMutualSenseData *data)
   * initialization data
   * @return OK if success or an error code which specify the type of error
   */
-int readTotSelfSenseGlobalData(u64 *address, TotSelfSenseData *global)
+static int readTotSelfSenseGlobalData(u64 *address, TotSelfSenseData *global)
 {
 	int ret;
 	u8 data[COMP_DATA_GLOBAL];
@@ -617,7 +619,7 @@ int readTotSelfSenseGlobalData(u64 *address, TotSelfSenseData *global)
   * initialization data
   * @return OK if success or an error code which specify the type of error
   */
-int readTotSelfSenseNodeData(u64 address, TotSelfSenseData *node)
+static int readTotSelfSenseNodeData(u64 address, TotSelfSenseData *node)
 {
 	int size = node->header.force_node * 2 + node->header.sense_node * 2;
 	int toRead = size * 2;	/* *2 2 bytes each node */
@@ -735,18 +737,18 @@ int readTotSelfSenseCompensationData(u8 type, TotSelfSenseData *data)
 		return ERROR_OP_NOT_ALLOW;
 	}
 
-	ret = requestCompensationData(type);
+	ret = requestHDMDownload(type);
 	if (ret < 0) {
 		pr_err("%s: error while requesting data... ERROR %08X\n",
-			__func__, ERROR_REQU_COMP_DATA);
-		return ret | ERROR_REQU_COMP_DATA;
+			__func__, ret);
+		return ret;
 	}
 
-	ret = readCompensationDataHeader(type, &(data->header), &address);
+	ret = readHDMHeader(type, &(data->header), &address);
 	if (ret < 0) {
 		pr_err("%s: error while reading data header... ERROR %08X\n",
-			__func__, ERROR_COMP_DATA_HEADER);
-		return ret | ERROR_COMP_DATA_HEADER;
+			__func__, ERROR_HDM_DATA_HEADER);
+		return ret | ERROR_HDM_DATA_HEADER;
 	}
 
 	ret = readTotSelfSenseGlobalData(&address, data);
@@ -776,7 +778,7 @@ int readTotSelfSenseCompensationData(u8 type, TotSelfSenseData *data)
   * to the next data
   * @return OK if success or an error code which specify the type of error
   */
-int readSensitivityCoeffHeader(u8 type, DataHeader *msHeader,
+static int readSensitivityCoeffHeader(u8 type, DataHeader *msHeader,
 			       DataHeader *ssHeader, u64 *address)
 {
 	u64 offset = ADDR_FRAMEBUFFER;
@@ -838,7 +840,7 @@ int readSensitivityCoeffHeader(u8 type, DataHeader *msHeader,
   * Coefficient data
   * @return OK if success or an error code which specify the type of error
   */
-int readSensitivityCoeffNodeData(u64 address, MutualSenseCoeff *msCoeff,
+static int readSensitivityCoeffNodeData(u64 address, MutualSenseCoeff *msCoeff,
 				 SelfSenseCoeff *ssCoeff)
 {
 	int size = msCoeff->header.force_node * msCoeff->header.sense_node +
@@ -927,11 +929,11 @@ int readSensitivityCoefficientsData(MutualSenseCoeff *msCoeff,
 	ssCoeff->ss_sense_coeff = NULL;
 
 
-	ret = requestCompensationData(LOAD_SENS_CAL_COEFF);
+	ret = requestHDMDownload(LOAD_SENS_CAL_COEFF);
 	if (ret < OK) {
 		pr_err("%s: error while requesting data... ERROR %08X\n",
-			__func__, ERROR_REQU_COMP_DATA);
-		return ret | ERROR_REQU_COMP_DATA;
+			__func__, ret);
+		return ret;
 	}
 
 	ret = readSensitivityCoeffHeader(LOAD_SENS_CAL_COEFF,
@@ -939,8 +941,8 @@ int readSensitivityCoefficientsData(MutualSenseCoeff *msCoeff,
 					 &address);
 	if (ret < OK) {
 		pr_err("%s: error while reading data header... ERROR %08X\n",
-			__func__, ERROR_COMP_DATA_HEADER);
-		return ret | ERROR_COMP_DATA_HEADER;
+			__func__, ERROR_HDM_DATA_HEADER);
+		return ret | ERROR_HDM_DATA_HEADER;
 	}
 
 	ret = readSensitivityCoeffNodeData(address, msCoeff, ssCoeff);
@@ -950,4 +952,115 @@ int readSensitivityCoefficientsData(MutualSenseCoeff *msCoeff,
 	}
 
 	return OK;
+}
+
+/**
+  * Read Golden Mutual Raw data from FW Host Data Memory.
+  * @param address a variable which contain the address from where to read the
+  * data
+  * @param node pointer to GoldenMutualRawData variable.
+  * @return OK if success or an error code which specify the type of error
+  */
+static int readGoldenMutualData(GoldenMutualRawData *pgmData, u64 address)
+{
+	u32 size, i;
+	int ret;
+
+	pgmData->data_size = 0;
+	pgmData->data 	   = NULL;
+
+	pr_info("Address for Golden Mutual hdr = %llx\n", address);
+
+	/* read 12 byte Golden Mutual header */
+	ret = fts_writeReadU8UX(FTS_CMD_FRAMEBUFFER_R, BITS_16,
+				address, (u8 *)&(pgmData->hdr),
+				GM_DATA_HEADER, DUMMY_FRAMEBUFFER);
+	if (ret < OK) {
+		pr_err("error while reading Golden Mutual hdr... ERROR %08X\n",
+			ret);
+		goto out;
+	}
+
+	pr_info("ms_force_len = %u ms_sense_len = %u\n",
+		 pgmData->hdr.ms_f_len, pgmData->hdr.ms_s_len);
+	pr_info("ss_force_len = %u ss_sense_len = %u\n",
+		 pgmData->hdr.ss_f_len, pgmData->hdr.ss_s_len);
+ 	pr_info("ms_key_len = %u \n", pgmData->hdr.ms_k_len);
+
+	size = pgmData->hdr.ms_f_len * pgmData->hdr.ms_s_len;
+
+	pgmData->data = kzalloc(size * sizeof(s16), GFP_KERNEL);
+	if (pgmData->data == NULL) {
+		ret = ERROR_ALLOC;
+		pr_err("Unable to allocate memory for GM raw data. ERR %08X",
+			ret);
+		goto out;
+	}
+
+	/* go past both HDM and GM header to read the data */
+	address += GM_DATA_HEADER;
+	pr_info("Address for Golden Mutual data = %llx\n", address);
+
+	//read the data buffer.
+	ret = fts_writeReadU8UX(FTS_CMD_FRAMEBUFFER_R, BITS_16, address,
+				(u8 *)pgmData->data, size * sizeof(s16),
+				DUMMY_FRAMEBUFFER);
+	if (ret < OK) {
+		pr_err("error while reading Golden Mutual data... ERROR %08X\n", ret);
+		kfree(pgmData->data);
+		pgmData->data = NULL;
+		goto out;
+	}
+
+	pgmData->data_size = size;
+
+	pr_info("Read data ok!\n");
+
+	for (i = 0; i < size; i++)
+		le16_to_cpus(&pgmData->data[i]);
+
+	ret = OK;
+out:
+	return ret;
+}
+
+/**
+  * Perform all the steps to read the necessary info for Golden Mutual raw
+  * data from the buffer and store it in a GoldemMutualRawData object.
+  * @param pointer to GoldemMutualRawData variable which will contain
+  * the raw data.
+  * @return OK if success or an error code which specify the type of error
+  */
+int readGoldenMutualRawData(GoldenMutualRawData *pgmData)
+{
+	int ret;
+	u64 address;
+
+	ret = requestHDMDownload(LOAD_GOLDEN_MUTUAL_RAW);
+	if (ret < 0) {
+		pr_err("error while requesting HDM Download... ERROR %08X\n",
+			ret);
+		goto out;
+	}
+
+	ret = readHDMHeader(LOAD_GOLDEN_MUTUAL_RAW,
+			&pgmData->hdm_hdr, &address);
+	if (ret < 0) {
+		pr_err("error reading HDM header... ERROR %08X\n",
+			ERROR_HDM_DATA_HEADER);
+		ret |= ERROR_HDM_DATA_HEADER;
+		goto out;
+	}
+
+	ret = readGoldenMutualData(pgmData, address);
+	if (ret < 0) {
+		pr_err("error reading Golden Mutual data... ERROR %08X\n",
+			ERROR_GOLDEN_MUTUAL_DATA);
+		ret |= ERROR_GOLDEN_MUTUAL_DATA;
+		goto out;
+	}
+
+	ret = OK;
+out:
+	return ret;
 }

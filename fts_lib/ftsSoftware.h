@@ -340,6 +340,8 @@ typedef enum {
 						 * Force */
 #define LOAD_SENS_CAL_COEFF		0xC0	/* /< Load Sesitivity
 						 * Calibration Coefficients */
+#define LOAD_GOLDEN_MUTUAL_RAW  	0x80  	/* /< Load Goden Mutual Raw Data */
+
 /** @}*/
 
 /* Special Tuning */
