@@ -312,7 +312,18 @@ int checkEcho(u8 *cmd, int size)
 		event_to_search[1] = EVT_TYPE_STATUS_ECHO;
 		for (i = 2; i < size + 2; i++)
 			event_to_search[i] = cmd[i - 2];
-		ret = pollForEvent(event_to_search, size + 2, readData,
+		if ((cmd[0] == FTS_CMD_SYSTEM) &&
+			(cmd[1] == SYS_CMD_SPECIAL) &&
+			((cmd[2] == SPECIAL_FULL_PANEL_INIT) ||
+			(cmd[2] == SPECIAL_PANEL_INIT)))
+			ret = pollForEvent(event_to_search, size + 2, readData,
+				   TIMEOUT_ECHO_FPI);
+		else if ((cmd[0] == FTS_CMD_SYSTEM) &&
+			(cmd[1] == SYS_CMD_CX_TUNING))
+			ret = pollForEvent(event_to_search, size + 2, readData,
+				   TIMEOUT_ECHO_SINGLE_ENDED_SPECIAL_AUTOTUNE);
+		else
+			ret = pollForEvent(event_to_search, size + 2, readData,
 				   TIEMOUT_ECHO);
 		if (ret < OK) {
 			pr_err("checkEcho: Echo Event not found! ERROR %08X\n",
@@ -649,8 +660,13 @@ int readSysInfo(int request)
 	pr_info("Key Len = %d\n", systemInfo.u8_keyLen);
 	systemInfo.u8_forceLen = data[index++];
 	pr_info("Force Len = %d\n", systemInfo.u8_forceLen);
+	index += 8;
 
-	index += 40;	/* skip reserved area */
+	u8ToU32(&data[index], &systemInfo.u32_productionTimestamp);
+	pr_info("Production Timestamp = %08X\n",
+	systemInfo.u32_productionTimestamp);
+
+	index += 32;	/* skip reserved area */
 
 	u8ToU16(&data[index], &systemInfo.u16_dbgInfoAddr);
 	index += 2;
