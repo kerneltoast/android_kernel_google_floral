@@ -3358,7 +3358,7 @@ __wlan_hdd_cfg80211_get_features(struct wiphy *wiphy,
 				 const void *data, int data_len)
 {
 	struct sk_buff *skb = NULL;
-	uint32_t dbs_capability = 0;
+	uint32_t dbs_capability = 0, twt_req, twt_res;
 	bool one_by_one_dbs, two_by_two_dbs;
 	QDF_STATUS ret = QDF_STATUS_E_FAILURE;
 	int ret_val;
@@ -3400,6 +3400,13 @@ __wlan_hdd_cfg80211_get_features(struct wiphy *wiphy,
 	if (hdd_ctx->config->oce_sap_enabled)
 		wlan_hdd_cfg80211_set_feature(feature_flags,
 					  QCA_WLAN_VENDOR_FEATURE_OCE_STA_CFON);
+
+	sme_cfg_get_int(hdd_ctx->mac_handle, WNI_CFG_TWT_REQUESTOR, &twt_req);
+	sme_cfg_get_int(hdd_ctx->mac_handle, WNI_CFG_TWT_RESPONDER, &twt_res);
+
+	if (twt_req || twt_res)
+		wlan_hdd_cfg80211_set_feature(feature_flags,
+					      QCA_WLAN_VENDOR_FEATURE_TWT);
 
 	/* Check the kernel version for upstream commit aced43ce780dc5 that
 	 * has support for processing user cell_base hints when wiphy is
@@ -5327,7 +5334,8 @@ static int hdd_get_cached_station_remote(struct hdd_context *hdd_ctx,
 			(sizeof(stainfo->dot11_mode) + NLA_HDRLEN) +
 			(sizeof(stainfo->ch_width) + NLA_HDRLEN) +
 			(sizeof(stainfo->tx_rate) + NLA_HDRLEN) +
-			(sizeof(stainfo->rx_rate) + NLA_HDRLEN);
+			(sizeof(stainfo->rx_rate) + NLA_HDRLEN) +
+			(sizeof(stainfo->support_mode) + NLA_HDRLEN);
 
 	skb = cfg80211_vendor_cmd_alloc_reply_skb(hdd_ctx->wiphy, nl_buf_len);
 	if (!skb) {
@@ -5351,8 +5359,7 @@ static int hdd_get_cached_station_remote(struct hdd_context *hdd_ctx,
 	channel_width = hdd_decode_ch_width(stainfo->ch_width);
 
 	if (nla_put_u32(skb, REMOTE_SUPPORTED_MODE,
-			hdd_convert_dot11mode(
-			stainfo->mode)) ||
+			stainfo->support_mode) ||
 	    nla_put_u8(skb, REMOTE_CH_WIDTH, channel_width)) {
 		hdd_err("remote ch put fail");
 		goto fail;
@@ -5363,6 +5370,10 @@ static int hdd_get_cached_station_remote(struct hdd_context *hdd_ctx,
 	}
 	if (nla_put_u32(skb, REMOTE_LAST_RX_RATE, stainfo->rx_rate)) {
 		hdd_err("rx rate put fail");
+		goto fail;
+	}
+	if (nla_put_u32(skb, WLAN802_11_MODE, stainfo->dot11_mode)) {
+		hdd_err("dot11 mode put fail");
 		goto fail;
 	}
 
@@ -15187,6 +15198,24 @@ static void wlan_hdd_cfg80211_set_wiphy_scan_flags(struct wiphy *wiphy)
 }
 #endif
 
+#if defined(CFG80211_SCAN_OCE_CAPABILITY_SUPPORT) || \
+	   (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 15, 0))
+static void wlan_hdd_cfg80211_set_wiphy_oce_scan_flags(struct wiphy *wiphy)
+{
+	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_FILS_MAX_CHANNEL_TIME);
+	wiphy_ext_feature_set(wiphy,
+			      NL80211_EXT_FEATURE_ACCEPT_BCAST_PROBE_RESP);
+	wiphy_ext_feature_set(wiphy,
+			      NL80211_EXT_FEATURE_OCE_PROBE_REQ_HIGH_TX_RATE);
+	wiphy_ext_feature_set(
+		wiphy, NL80211_EXT_FEATURE_OCE_PROBE_REQ_DEFERRAL_SUPPRESSION);
+}
+#else
+static void wlan_hdd_cfg80211_set_wiphy_oce_scan_flags(struct wiphy *wiphy)
+{
+}
+#endif
+
 #if defined(WLAN_FEATURE_SAE) && \
 	defined(CFG80211_EXTERNAL_AUTH_SUPPORT)
 /**
@@ -15374,6 +15403,9 @@ int wlan_hdd_cfg80211_init(struct device *dev,
 		wlan_hdd_cfg80211_set_wiphy_fils_feature(wiphy);
 
 	wlan_hdd_cfg80211_set_wiphy_scan_flags(wiphy);
+
+	if (pCfg->oce_sta_enabled)
+		wlan_hdd_cfg80211_set_wiphy_oce_scan_flags(wiphy);
 
 	wlan_hdd_cfg80211_set_wiphy_sae_feature(wiphy, pCfg);
 
@@ -20834,7 +20866,6 @@ int __wlan_hdd_cfg80211_del_station(struct wiphy *wiphy,
 	struct hdd_context *hdd_ctx;
 	QDF_STATUS qdf_status = QDF_STATUS_E_FAILURE;
 	struct hdd_hostapd_state *hapd_state;
-	int status;
 	uint8_t staId;
 	uint8_t *mac;
 	mac_handle_t mac_handle;
@@ -20854,10 +20885,10 @@ int __wlan_hdd_cfg80211_del_station(struct wiphy *wiphy,
 		   adapter->session_id, adapter->device_mode);
 
 	hdd_ctx = WLAN_HDD_GET_CTX(adapter);
-	status = wlan_hdd_validate_context(hdd_ctx);
-
-	if (0 != status)
-		return status;
+	if (!hdd_ctx) {
+		hdd_err("hdd_ctx is NULL");
+		return -EINVAL;
+	}
 
 	mac = (uint8_t *) pDelStaParams->peerMacAddr.bytes;
 	mac_handle = hdd_ctx->mac_handle;
