@@ -73,7 +73,7 @@
 #define MSM_LL_QOS_VALUE 300 /* time in us to ensure LPM doesn't go in C3/C4 */
 #define MSM_HIFI_ON 1
 
-#define TDM_MAX_SLOTS		8
+#define TDM_MAX_SLOTS		4
 #define TDM_SLOT_WIDTH_BITS	32
 
 enum {
@@ -400,7 +400,7 @@ static struct tdm_dev_config tdm_cfg[TDM_INTERFACE_MAX * 2]
 		{ {0xFFFF} }, /* RX_7 */
 	},
 	{
-		{ {0,   4,   8,  12,  16,  20,  24,  28} }, /* TX_0 */
+		{ {0,   4,   8,  12} }, /* TX_0 */
 		{ {0xFFFF} }, /* TX_1 */
 		{ {0xFFFF} }, /* TX_2 */
 		{ {0xFFFF} }, /* TX_3 */
@@ -410,7 +410,7 @@ static struct tdm_dev_config tdm_cfg[TDM_INTERFACE_MAX * 2]
 		{ {0xFFFF} }, /* TX_7 */
 	},
 	{ /* QUAT TDM */
-		{ {0,   4,   8,   12, 0xFFFF} }, /* RX_0 */
+		{ {0,   4,   8,   12} }, /* RX_0 */
 		{ {0xFFFF} }, /* RX_1 */
 		{ {0xFFFF} }, /* RX_2 */
 		{ {0xFFFF} }, /* RX_3 */
@@ -420,7 +420,7 @@ static struct tdm_dev_config tdm_cfg[TDM_INTERFACE_MAX * 2]
 		{ {0xFFFF} }, /* RX_7 */
 	},
 	{
-		{ {0,   4,   8,   12, 0xFFFF} }, /* TX_0 */
+		{ {0,   4,   8,   12} }, /* TX_0 */
 		{ {0xFFFF} }, /* TX_1 */
 		{ {0xFFFF} }, /* TX_2 */
 		{ {0xFFFF} }, /* TX_3 */
