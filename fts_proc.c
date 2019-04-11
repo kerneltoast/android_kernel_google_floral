@@ -2893,14 +2893,16 @@ END_DIAGNOSTIC:
 					pr_err("Parameter should be 1 or 0\n");
 					res = ERROR_OP_NOT_ALLOW;
 				} else {
+					pr_info("FTS_BUS_REF_FORCE_ACTIVE: %s\n",
+						cmd[1] ? "ON" : "OFF");
 					fts_set_bus_ref(info,
 						FTS_BUS_REF_FORCE_ACTIVE,
 						cmd[1]);
 					res = OK;
 					if (cmd[1])
-						__pm_wakeup_event(
-							&info->wakesrc,
-							3 * MSEC_PER_SEC);
+						__pm_stay_awake(&info->wakesrc);
+					else
+						__pm_relax(&info->wakesrc);
 				}
 			} else {
 				pr_err("Wrong number of parameters!\n");
