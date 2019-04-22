@@ -95,7 +95,7 @@ CONFIG_QCACLD_FEATURE_GREEN_AP := y
 CONFIG_QCACLD_FEATURE_APF := y
 
 #Flag to enable SARv1 -> SARv2 conversion
-CONFIG_WLAN_FEATURE_SARV1_TO_SARV2 := n
+CONFIG_WLAN_FEATURE_SARV1_TO_SARV2 := y
 
 #Flag to enable set coex configuration
 ifeq ($(CONFIG_ARCH_QCS405), y)
