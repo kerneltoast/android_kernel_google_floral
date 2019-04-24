@@ -35,6 +35,7 @@
 #include <linux/device.h>
 #include <linux/input/heatmap.h>
 #include <linux/pm_qos.h>
+#include <drm/drm_panel.h>
 #include "fts_lib/ftsSoftware.h"
 #include "fts_lib/ftsHardware.h"
 
@@ -195,7 +196,7 @@
 					 * reported */
 /* **** END **** */
 
-#define SKIP_PRESSURE
+/* #define SKIP_PRESSURE */
 
 /**@}*/
 /*********************************************************/
@@ -254,6 +255,17 @@ struct heatmap_report {
 					  * the shell in the normal file nodes
 					  **/
 
+/* Encapsulate display extinfo
+ *
+ * For some panels, it is insufficient to simply detect the panel ID and load
+ * one corresponding firmware. The display driver exposes extended info read
+ * from the display, but it is up to the touch driver to parse the data.
+ */
+struct fts_disp_extinfo {
+	bool is_read;
+	u8 size;
+	u8 *data;
+};
 
 /**
   * Struct which contains information about the HW platform and set up
@@ -274,6 +286,8 @@ struct fts_hw_platform_data {
 	int y_axis_max;
 	bool auto_fw_update;
 	bool heatmap_mode_full_init;
+	struct drm_panel *panel;
+	u32 initial_panel_index;
 };
 
 /* Bits for the bus reference mask */
@@ -284,6 +298,17 @@ enum {
 	FTS_BUS_REF_SYSFS		= 0x08,
 	FTS_BUS_REF_FORCE_ACTIVE	= 0x10
 };
+
+/* Motion filter finite state machine (FSM) states
+ * FTS_MF_FILTERED        - default coordinate filtering
+ * FTS_MF_UNFILTERED      - unfiltered single-touch coordinates
+ * FTS_MF_FILTERED_LOCKED - filtered coordinates. Locked until touch is lifted.
+ */
+typedef enum {
+	FTS_MF_FILTERED		= 0,
+	FTS_MF_UNFILTERED	= 1,
+	FTS_MF_FILTERED_LOCKED	= 2
+} motion_filter_state_t;
 
 /*
   * Forward declaration
@@ -296,6 +321,23 @@ struct fts_ts_info;
   */
 typedef bool (*event_dispatch_handler_t)
 	(struct fts_ts_info *info, unsigned char *data);
+
+/**
+  * Driver touch simulation details
+  */
+struct fts_touchsim{
+	/* touch simulation coordinates */
+	int x, y, x_step, y_step;
+
+	/* timer to run the touch simulation code */
+	struct hrtimer hr_timer;
+
+	struct work_struct work;
+	struct workqueue_struct *wq;
+
+	/* True if the touch simulation is currently running */
+	bool is_running;
+};
 
 /**
   * FTS capacitive touch screen device information
@@ -375,6 +417,8 @@ struct fts_ts_info {
 	int reflash_fw;	/* Attempt to reflash fw */
 	int autotune_stat;	/* Attempt to autotune */
 
+	struct fts_disp_extinfo extinfo;	/* Display extended info */
+
 	struct notifier_block notifier;	/* Notify on suspend/resume */
 	int display_refresh_rate;	/* Display rate in Hz */
 	bool sensor_sleep;		/* True if suspend called */
@@ -393,9 +437,26 @@ struct fts_ts_info {
 
 	bool heatmap_mode_full;		/* Report full heatmap */
 
+	/* Stop changing motion filter and keep fw design */
+	bool use_default_mf;
+	/* Motion filter finite state machine (FSM) state */
+	motion_filter_state_t mf_state;
+	/* Time of initial single-finger touch down. This timestamp is used to
+	 * compute the duration a single finger is touched before it is lifted.
+	 */
+	ktime_t mf_downtime;
+
 #ifdef CONFIG_TOUCHSCREEN_TBN
 	struct tbn_context	*tbn;
 #endif
+
+	/* Allow only one thread to execute diag command code*/
+	struct mutex diag_cmd_lock;
+	/* Allow one process to open procfs node */
+	bool diag_node_open;
+
+	/* Touch simulation details */
+	struct fts_touchsim touchsim;
 
 	/* Preallocated i/o read buffer */
 	u8 io_read_buf[READ_CHUNK + DUMMY_FIFO];
@@ -405,6 +466,10 @@ struct fts_ts_info {
 	u8 io_extra_write_buf[WRITE_CHUNK + BITS_64 + DUMMY_FIFO];
 
 };
+
+/* DSI display function used to read panel extinfo */
+int dsi_panel_read_vendor_extinfo(struct drm_panel *panel, char *buffer,
+				  size_t len);
 
 int fts_chip_powercycle(struct fts_ts_info *info);
 extern int input_register_notifier_client(struct notifier_block *nb);

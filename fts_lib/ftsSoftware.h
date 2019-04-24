@@ -340,6 +340,8 @@ typedef enum {
 						 * Force */
 #define LOAD_SENS_CAL_COEFF		0xC0	/* /< Load Sesitivity
 						 * Calibration Coefficients */
+#define LOAD_GOLDEN_MUTUAL_RAW  	0x80  	/* /< Load Goden Mutual Raw Data */
+
 /** @}*/
 
 /* Special Tuning */
@@ -391,8 +393,9 @@ typedef enum {
 #define EVT_TYPE_STATUS_FORCE_CAL	0x05	/* /< Force Calibration has
 						 * triggered */
 #define EVT_TYPE_STATUS_WATER		0x06	/* /< Water Mode */
-#define EVT_TYPE_STATUS_SS_RAW_SAT	0x07	/* /< Self Sense data saturated
-						 * */
+#define EVT_TYPE_STATUS_SS_RAW_SAT	0x07	/* /< Self Sense data saturated */
+#define EVT_TYPE_STATUS_STIMPAD 	0x0A	/* /< Stimpad status event */
+
 /** @} */
 
 /* USER TYPE */

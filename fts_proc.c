@@ -280,6 +280,8 @@
 							 * need to pass: type */
 #define CMD_READSSCOMPDATA			0x33	/* /< Read SS Init data:
 							 * need to pass: type */
+#define CMD_READGOLDENMUTUAL			0x34	/* /< Read GoldenMutual
+							   raw data */
 #define CMD_READTOTMSCOMPDATA			0x35	/* /< Read Tot MS Init
 							 * data: need to pass:
 							 * type */
@@ -679,11 +681,139 @@ static const struct seq_operations fts_seq_ops = {
   * @param file file associated to the file node
   * @return error code, 0 if success
   */
-static int fts_open(struct inode *inode, struct file *file)
+static int fts_driver_test_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &fts_seq_ops);
+	struct fts_ts_info *info = dev_get_drvdata(getDev());
+	int retval;
+
+	if (!info) {
+		pr_err("%s: Unable to access driver data\n", __func__);
+		retval = -ENODEV;
+		goto exit;
+	}
+
+	if (!mutex_trylock(&info->diag_cmd_lock)) {
+		pr_err("%s: Blocking concurrent access\n", __func__);
+		retval = -EBUSY;
+		goto exit;
+	}
+
+	/* Allowing only a single process to open diag procfs node */
+	if (info->diag_node_open == true) {
+		pr_err("%s: Blocking multiple open\n", __func__);
+		retval = -EBUSY;
+		goto unlock;
+	}
+
+	retval = seq_open(file, &fts_seq_ops);
+	if(!retval) {
+		info->diag_node_open = true;
+	}
+
+unlock:
+	mutex_unlock(&info->diag_cmd_lock);
+exit:
+	return retval;
 };
 
+/**
+  * This function closes a sequential file
+  * @param inode Inode in the file system that was called and triggered this
+  * function
+  * @param file file associated to the file node
+  * @return error code, 0 if success
+  */
+static int fts_driver_test_release(struct inode *inode, struct file *file)
+{
+	struct fts_ts_info *info = dev_get_drvdata(getDev());
+	int retval;
+
+	if (!info) {
+		pr_err("%s: Unable to access driver data\n", __func__);
+		retval = -ENODEV;
+		goto exit;
+	}
+
+	if (!mutex_trylock(&info->diag_cmd_lock)) {
+		pr_err("%s: Blocking concurrent access\n", __func__);
+		retval = -EBUSY;
+		goto exit;
+	}
+
+	retval = seq_release(inode, file);
+	info->diag_node_open = false;
+
+	mutex_unlock(&info->diag_cmd_lock);
+exit:
+	return retval;
+}
+
+
+/**
+  * This function reads a sequential file
+  * @param file  file associated to the file node
+  * @param buf 	 userspace buffer where the newly read data should be placed
+  * @param count size of the requested transfer.
+  * @param pos   start position from which data should be written in the file.
+  * @return error code, 0 if success
+  */
+static ssize_t fts_driver_test_read(struct file *file, char __user *buf,
+					size_t count, loff_t *pos)
+{
+	struct fts_ts_info *info = dev_get_drvdata(getDev());
+	ssize_t bytes_read = -EINVAL;
+
+	if (!info) {
+		pr_err("%s: Unable to access driver data\n", __func__);
+		bytes_read = -ENODEV;
+		goto exit;
+	}
+
+	if (!mutex_trylock(&info->diag_cmd_lock)) {
+		pr_err("%s: Blocking concurrent access\n", __func__);
+		bytes_read = -EBUSY;
+		goto exit;
+	}
+
+	bytes_read = seq_read(file, buf, count, pos);
+
+	mutex_unlock(&info->diag_cmd_lock);
+exit:
+	return bytes_read;
+}
+
+/**
+  * This function moves the cursor position within a file.
+  * @param file   file associated to the file node
+  * @param offset offset relative to the current file position.
+  * @param whence defines where to seek from.
+  * @return error code, 0 if success
+  */
+static loff_t fts_driver_test_lseek(struct file *file, loff_t offset,
+					int whence)
+{
+	struct fts_ts_info *info = dev_get_drvdata(getDev());
+	loff_t retval;
+
+	if (!info) {
+		pr_err("%s: Unable to access driver data\n", __func__);
+		retval = -ENODEV;
+		goto exit;
+	}
+
+	if (!mutex_trylock(&info->diag_cmd_lock)) {
+		pr_err("%s: Blocking concurrent access\n", __func__);
+		retval = -EBUSY;
+		goto exit;
+	}
+
+	retval = seq_lseek(file, offset, whence);
+
+	mutex_unlock(&info->diag_cmd_lock);
+
+exit:
+	return retval;
+}
 
 /*****************************************************************************/
 
@@ -735,6 +865,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 	TotSelfSenseData totComData;
 	MutualSenseCoeff msCoeff;
 	SelfSenseCoeff ssCoeff;
+	GoldenMutualRawData gmRawData;
 	int meanNorm = 0, meanEdge = 0;
 
 	u64 address;
@@ -742,6 +873,18 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 	Firmware fw;
 	LimitFile lim;
 	const char *limits_file = info->board->limits_name;
+
+	if (!info) {
+		pr_err("%s: Unable to access driver data\n", __func__);
+		count =  -ENODEV;
+		goto exit;
+	}
+
+	if (!mutex_trylock(&info->diag_cmd_lock)) {
+		pr_err("%s: Blocking concurrent access\n", __func__);
+		count = -EBUSY;
+		goto exit;
+	}
 
 	mess.dummy = 0;
 	mess.action = 0;
@@ -1543,7 +1686,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 		case CMD_REQCOMPDATA:	/* request comp data */
 			if (numberParam == 2) {
 				pr_info("Requesting Compensation Data\n");
-				res = requestCompensationData(cmd[1]);
+				res = requestHDMDownload(cmd[1]);
 
 				if (res < OK)
 					pr_err("Error requesting compensation data ERROR %08X\n",
@@ -1559,15 +1702,14 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 		case CMD_READCOMPDATAHEAD:	/* read comp data header */
 			if (numberParam == 2) {
 				pr_info("Requesting Compensation Data\n");
-				res = requestCompensationData(cmd[1]);
+				res = requestHDMDownload(cmd[1]);
 				if (res < OK)
 					pr_err("Error requesting compensation data ERROR %08X\n",
 						res);
 				else {
 					pr_info("Requesting Compensation Data Finished!\n");
-					res = readCompensationDataHeader(
-						(u8)funcToTest[1], &dataHead,
-						&address);
+					res = readHDMHeader((u8)funcToTest[1],
+						&dataHead, &address);
 					if (res < OK)
 						pr_err("Read Compensation Data Header ERROR %08X\n",
 							res);
@@ -1657,6 +1799,34 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 				pr_err("Wrong number of parameters!\n");
 				res = ERROR_OP_NOT_ALLOW;
 			}
+			break;
+
+		case CMD_READGOLDENMUTUAL:
+			if (numberParam != 1) {
+				pr_err("Wrong number of parameters!\n");
+				res = ERROR_OP_NOT_ALLOW;
+				break;
+			}
+
+			pr_info("Get Golden Mutual Raw data\n");
+
+			res = readGoldenMutualRawData(&gmRawData);
+			if (res < OK) {
+				pr_err("Err reading GM data %08X\n", res);
+				break;
+			}
+
+			pr_info("GM data reading Finished!\n");
+
+			size = gmRawData.data_size * sizeof(s32) + 6;
+
+			print_frame_short("Golden Mutual Data =",
+					array1dTo2d_short(
+						gmRawData.data,
+						gmRawData.data_size,
+						gmRawData.hdr.ms_s_len),
+					gmRawData.hdr.ms_f_len,
+					gmRawData.hdr.ms_s_len);
 			break;
 
 		case CMD_READTOTMSCOMPDATA:	/* read mutual comp data */
@@ -2723,10 +2893,16 @@ END_DIAGNOSTIC:
 					pr_err("Parameter should be 1 or 0\n");
 					res = ERROR_OP_NOT_ALLOW;
 				} else {
+					pr_info("FTS_BUS_REF_FORCE_ACTIVE: %s\n",
+						cmd[1] ? "ON" : "OFF");
 					fts_set_bus_ref(info,
 						FTS_BUS_REF_FORCE_ACTIVE,
 						cmd[1]);
 					res = OK;
+					if (cmd[1])
+						__pm_stay_awake(&info->wakesrc);
+					else
+						__pm_relax(&info->wakesrc);
 				}
 			} else {
 				pr_err("Wrong number of parameters!\n");
@@ -3098,6 +3274,41 @@ END:	/* here start the reporting phase, assembling the data to send in the
 				break;
 
 
+			case CMD_READGOLDENMUTUAL:
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						(u8)gmRawData.hdm_hdr.type);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ms_f_len);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ms_s_len);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ss_f_len);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ss_s_len);
+
+				index += scnprintf(&driver_test_buff[index],
+						size - index, "%02X",
+						gmRawData.hdr.ms_k_len);
+
+				/* Copying Golden Mutual raw values */
+				for (j = 0; j < gmRawData.data_size; j++) {
+					index += scnprintf(
+						&driver_test_buff[index],
+						size - index, "%04X",
+						(u16)gmRawData.data[j]);
+				}
+
+				kfree(gmRawData.data);
+				break;
 
 			case CMD_READTOTMSCOMPDATA:
 				index += scnprintf(&driver_test_buff[index],
@@ -3474,6 +3685,9 @@ ERROR:
 
 	fts_set_bus_ref(info, FTS_BUS_REF_SYSFS, false);
 
+	mutex_unlock(&info->diag_cmd_lock);
+
+exit:
 	return count;
 }
 
@@ -3484,11 +3698,11 @@ ERROR:
   * operation on a device file node (open. read, write etc.)
   */
 static struct file_operations fts_driver_test_ops = {
-	.open		= fts_open,
-	.read		= seq_read,
+	.open		= fts_driver_test_open,
+	.read		= fts_driver_test_read,
 	.write		= fts_driver_test_write,
-	.llseek		= seq_lseek,
-	.release	= seq_release
+	.llseek		= fts_driver_test_lseek,
+	.release	= fts_driver_test_release
 };
 
 /*****************************************************************************/
