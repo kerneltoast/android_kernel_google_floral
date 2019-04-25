@@ -286,6 +286,7 @@ static const struct category_info cinfo[MAX_SUPPORTED_CATEGORY] = {
 	[QDF_MODULE_ID_MGMT_TXRX] = {QDF_TRACE_LEVEL_ALL},
 	[QDF_MODULE_ID_PMO] = {QDF_TRACE_LEVEL_ALL},
 	[QDF_MODULE_ID_SCAN] = {QDF_TRACE_LEVEL_ALL},
+	[QDF_MODULE_ID_MLME] = {QDF_TRACE_LEVEL_ALL},
 	[QDF_MODULE_ID_POLICY_MGR] = {QDF_TRACE_LEVEL_ALL},
 	[QDF_MODULE_ID_P2P] = {QDF_TRACE_LEVEL_ALL},
 	[QDF_MODULE_ID_TDLS] = {QDF_TRACE_LEVEL_ALL},
@@ -11791,6 +11792,14 @@ int hdd_wlan_stop_modules(struct hdd_context *hdd_ctx, bool ftm_mode)
 
 	/* Free the cache channels of the command SET_DISABLE_CHANNEL_LIST */
 	wlan_hdd_free_cache_channels(hdd_ctx);
+
+	/* Free the resources allocated while storing SAR config. These needs
+	 * to be freed only in the case when it is not SSR. As in the case of
+	 * SSR, the values needs to be intact so that it can be restored during
+	 * reinit path.
+	 */
+	if (!is_recovery_stop)
+		wlan_hdd_free_sar_config(hdd_ctx);
 
 	hdd_sap_destroy_ctx_all(hdd_ctx, is_recovery_stop);
 
