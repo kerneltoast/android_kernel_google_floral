@@ -4088,7 +4088,7 @@ static int fts_fw_update(struct fts_ts_info *info)
 			__func__, ret);
 	}
 
-	if (init_type == NO_INIT) {
+	if (init_type != SPECIAL_FULL_PANEL_INIT) {
 #if defined(PRE_SAVED_METHOD) || defined(COMPUTE_INIT_METHOD)
 		if ((systemInfo.u8_cfgAfeVer != systemInfo.u8_cxAfeVer)
 #ifdef COMPUTE_INIT_METHOD
@@ -4107,8 +4107,7 @@ static int fts_fw_update(struct fts_ts_info *info)
 			pr_err("%s: Different Panel AFE Ver: %02X != %02X... Execute Panel Init!\n",
 				__func__, systemInfo.u8_cfgAfeVer,
 				systemInfo.u8_panelCfgAfeVer);
-		} else
-			init_type = NO_INIT;
+		}
 	}
 
 out:
