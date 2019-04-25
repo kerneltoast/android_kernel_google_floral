@@ -2116,7 +2116,7 @@ wma_wow_get_pkt_proto_subtype(uint8_t *data, uint32_t len)
 	eth_type = *(uint16_t *)(data + QDF_NBUF_TRAC_ETH_TYPE_OFFSET);
 	eth_type = qdf_cpu_to_be16(eth_type);
 
-	WMA_LOGD("Ether Type: 0x%04x", eth_type);
+	WMA_LOGI("Ether Type: 0x%04x", eth_type);
 	switch (eth_type) {
 	case QDF_NBUF_TRAC_EAPOL_ETH_TYPE:
 		if (len < WMA_EAPOL_SUBTYPE_GET_MIN_LEN)

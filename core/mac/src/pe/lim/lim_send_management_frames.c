@@ -1402,12 +1402,10 @@ lim_send_assoc_rsp_mgmt_frame(tpAniSirGlobal mac_ctx,
 			status);
 	}
 
-	if (subtype == LIM_ASSOC)
-		pe_debug("*** Sending Assoc Resp status %d aid %d to",
-			status_code, aid);
-	else
-		pe_debug("*** Sending ReAssoc Resp status %d aid %d to",
-			status_code, aid);
+	pe_info("Tx %s Rsp SN=%d status %d aid %d len %d to",
+		(LIM_ASSOC == subtype) ? "Assoc" : "ReAssoc",
+		((mac_hdr->seqControl.seqNumHi << 4) | mac_hdr->seqControl.seqNumLo),
+		status_code, aid, bytes);
 
 	lim_print_mac_addr(mac_ctx, mac_hdr->da, LOGD);
 
@@ -2121,7 +2119,8 @@ lim_send_assoc_req_mgmt_frame(tpAniSirGlobal mac_ctx,
 	MTRACE(qdf_trace(QDF_MODULE_ID_PE, TRACE_CODE_TX_MGMT,
 			 pe_session->peSessionId, mac_hdr->fc.subType));
 
-	pe_debug("Sending Association Request length %d to ", bytes);
+	pe_info("Tx Assoc Req SN=%d len %d to ",
+		((mac_hdr->seqControl.seqNumHi << 4) | mac_hdr->seqControl.seqNumLo), bytes);
 	min_rid = lim_get_min_session_txrate(pe_session);
 	lim_diag_event_report(mac_ctx, WLAN_PE_DIAG_ASSOC_START_EVENT,
 			      pe_session, QDF_STATUS_SUCCESS, QDF_STATUS_SUCCESS);
@@ -2476,12 +2475,12 @@ alloc_packet:
 			lim_add_fils_data_to_auth_frame(session, body);
 		}
 
-		pe_debug("*** Sending Auth seq# %d status %d (%d) to "
-				MAC_ADDRESS_STR,
+		pe_info("Tx Auth SN=%d TSN:%d status %d (%d) to "
+			MAC_ADDRESS_STR,
+			((mac_hdr->seqControl.seqNumHi << 4) | mac_hdr->seqControl.seqNumLo),
 			auth_frame->authTransactionSeqNumber,
 			auth_frame->authStatusCode,
-			(auth_frame->authStatusCode ==
-				eSIR_MAC_SUCCESS_STATUS),
+			(auth_frame->authStatusCode == eSIR_MAC_SUCCESS_STATUS),
 			MAC_ADDR_ARRAY(mac_hdr->da));
 	}
 	QDF_TRACE_HEX_DUMP(QDF_MODULE_ID_PE,
@@ -2875,9 +2874,12 @@ lim_send_disassoc_mgmt_frame(tpAniSirGlobal pMac,
 			nStatus);
 	}
 
-	pe_debug("***Sessionid %d Sending Disassociation frame with "
-		   "reason %u and waitForAck %d to " MAC_ADDRESS_STR " ,From "
-		   MAC_ADDRESS_STR, psessionEntry->peSessionId, nReason,
+	pe_info("Tx Disassoc frame SN=%d s_id: %d with "
+		   "reason %u & waitForAck %d to " MAC_ADDRESS_STR " ,From "
+		   MAC_ADDRESS_STR,
+		((pMacHdr->seqControl.seqNumHi << 4) |
+		pMacHdr->seqControl.seqNumLo), psessionEntry->peSessionId,
+		nReason,
 		waitForAck, MAC_ADDR_ARRAY(pMacHdr->da),
 		MAC_ADDR_ARRAY(psessionEntry->selfMacAddr));
 
@@ -3052,10 +3054,12 @@ lim_send_deauth_mgmt_frame(tpAniSirGlobal pMac,
 		pe_warn("There were warnings while packing a De-Authentication (0x%08x)",
 			nStatus);
 	}
-	pe_debug("***Sessionid %d Sending Deauth frame with "
+	pe_info("Tx Deauth frame SN=%d s_id: %d  with "
 		       "reason %u and waitForAck %d to " MAC_ADDRESS_STR
 		       " ,From " MAC_ADDRESS_STR,
-		psessionEntry->peSessionId, nReason, waitForAck,
+		((pMacHdr->seqControl.seqNumHi << 4) |
+		pMacHdr->seqControl.seqNumLo), psessionEntry->peSessionId,
+		nReason, waitForAck,
 		MAC_ADDR_ARRAY(pMacHdr->da),
 		MAC_ADDR_ARRAY(psessionEntry->selfMacAddr));
 

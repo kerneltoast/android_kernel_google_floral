@@ -1422,7 +1422,8 @@ lim_process_auth_frame(tpAniSirGlobal mac_ctx, uint8_t *rx_pkt_info,
 
 	rx_auth_frm_body = rx_auth_frame;
 
-	pe_debug("Received Auth frame with type: %d seqnum: %d status: %d %d",
+	pe_info("Rx Auth frame SN=%d type: %d TSN: %d status: %d %d",
+		curr_seq_num,
 		(uint32_t) rx_auth_frm_body->authAlgoNumber,
 		(uint32_t) rx_auth_frm_body->authTransactionSeqNumber,
 		(uint32_t) rx_auth_frm_body->authStatusCode,

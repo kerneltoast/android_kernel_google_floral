@@ -146,10 +146,13 @@ lim_process_deauth_frame(tpAniSirGlobal pMac, uint8_t *pRxPacketInfo,
 	/* Get reasonCode from Deauthentication frame body */
 	reasonCode = sir_read_u16(pBody);
 
-	pe_debug("Received Deauth frame for Addr: " MAC_ADDRESS_STR
-			"(mlm state = %s, sme state = %d systemrole = %d "
-			"RSSI = %d) with reason code %d [%s] from "
-			MAC_ADDRESS_STR, MAC_ADDR_ARRAY(pHdr->da),
+	pe_info("Rx Deauth frame SN=%d for Addr: " MAC_ADDRESS_STR
+			"(mlmST = %s, smeST = %d s_role = %d "
+			"RSSI = %d) with rc %d [%s] from "
+			MAC_ADDRESS_STR,
+			((pHdr->seqControl.seqNumHi << 4) |
+			pHdr->seqControl.seqNumLo),
+			MAC_ADDR_ARRAY(pHdr->da),
 			lim_mlm_state_str(psessionEntry->limMlmState),
 			psessionEntry->limSmeState,
 			GET_LIM_SYSTEM_ROLE(psessionEntry), frame_rssi,
