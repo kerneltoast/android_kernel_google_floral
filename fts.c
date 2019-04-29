@@ -3094,68 +3094,58 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 
 	case EVT_TYPE_STATUS_FORCE_CAL:
 		switch (event[2]) {
-		case 0x00:
-			pr_info("%s: Continuous frame drop Force cal = %02X %02X %02X %02X %02X %02X\n",
-				__func__, event[2], event[3], event[4],
-				event[5], event[6], event[7]);
-			break;
-
 		case 0x01:
-			pr_info("%s: Mutual negative detect Force cal = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Sense on Force cal = %02X %02X"
+				" %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
 
 		case 0x02:
-			pr_info("%s: Mutual calib deviation Force cal = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Host command Force cal = %02X %02X"
+				" %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x10:
+			pr_info("%s: Mutual frame drop Force cal = %02X %02X"
+			" %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
 
 		case 0x11:
-			pr_info("%s: SS negative detect Force cal = %02X %02X %02X %02X %02X %02X\n",
-				__func__, event[2], event[3], event[4],
-				event[5], event[6], event[7]);
-			break;
-
-		case 0x12:
-			pr_info("%s: SS negative detect Force cal in Low Power mode = %02X %02X %02X %02X %02X %02X\n",
-				__func__, event[2], event[3], event[4],
-				event[5], event[6], event[7]);
-			break;
-
-		case 0x13:
-			pr_info("%s: SS negative detect Force cal in Idle mode = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Mutual pure raw Force cal = %02X %02X"
+			" %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
 
 		case 0x20:
-			pr_info("%s: SS invalid Mutual Strength soft Force cal = %02X %02X %02X %02X %02X %02X\n",
-				__func__, event[2], event[3], event[4],
-				event[5], event[6], event[7]);
-			break;
-
-		case 0x21:
-			pr_info("%s: SS invalid Self Strength soft Force cal = %02X %02X %02X %02X %02X %02X\n",
-				__func__, event[2], event[3], event[4],
-				event[5], event[6], event[7]);
-			break;
-
-		case 0x22:
-			pr_info("%s: SS invalid Self Island soft Force cal = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Self detect negative Force cal = %02X"
+			" %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
 
 		case 0x30:
-			pr_info("%s: MS invalid Mutual Strength soft Force cal = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Invalid mutual soft Force cal = %02X"
+			" %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
 
 		case 0x31:
-			pr_info("%s: MS invalid Self Strength soft Force cal = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Invalid self soft Force cal = %02X"
+			" %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x32:
+			pr_info("%s: Invalid SS island soft Force cal = %02X"
+			" %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
@@ -3233,7 +3223,8 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 		break;
 
 	default:
-		pr_err("%s: Received unhandled status event = %02X %02X %02X %02X %02X %02X %02X %02X\n",
+		pr_info("%s: Received status event = %02X %02X %02X %02X %02X"
+			" %02X %02X %02X\n",
 			__func__, event[0], event[1], event[2], event[3],
 			event[4], event[5], event[6], event[7]);
 		break;
@@ -4097,7 +4088,7 @@ static int fts_fw_update(struct fts_ts_info *info)
 			__func__, ret);
 	}
 
-	if (init_type == NO_INIT) {
+	if (init_type != SPECIAL_FULL_PANEL_INIT) {
 #if defined(PRE_SAVED_METHOD) || defined(COMPUTE_INIT_METHOD)
 		if ((systemInfo.u8_cfgAfeVer != systemInfo.u8_cxAfeVer)
 #ifdef COMPUTE_INIT_METHOD
@@ -4116,8 +4107,7 @@ static int fts_fw_update(struct fts_ts_info *info)
 			pr_err("%s: Different Panel AFE Ver: %02X != %02X... Execute Panel Init!\n",
 				__func__, systemInfo.u8_cfgAfeVer,
 				systemInfo.u8_panelCfgAfeVer);
-		} else
-			init_type = NO_INIT;
+		}
 	}
 
 out:
