@@ -4708,7 +4708,7 @@ int fts_set_bus_ref(struct fts_ts_info *info, u16 ref, bool enable)
 
 	if ((enable && (info->bus_refmask & ref)) ||
 	    (!enable && !(info->bus_refmask & ref))) {
-		pr_err("%s: reference is unexpectedly set: mask=0x%04X, ref=0x%04X, enable=%d.\n",
+		pr_debug("%s: reference is unexpectedly set: mask=0x%04X, ref=0x%04X, enable=%d.\n",
 			__func__, info->bus_refmask, ref, enable);
 		mutex_unlock(&info->bus_mutex);
 		return ERROR_OP_NOT_ALLOW;
@@ -4775,13 +4775,13 @@ static int fts_screen_state_chg_callback(struct notifier_block *nb,
 	case MSM_DRM_BLANK_POWERDOWN:
 	case MSM_DRM_BLANK_LP:
 		if (val == MSM_DRM_EARLY_EVENT_BLANK) {
-			pr_info("%s: BLANK\n", __func__);
+			pr_debug("%s: BLANK\n", __func__);
 			fts_set_bus_ref(info, FTS_BUS_REF_SCREEN_ON, false);
 		}
 		break;
 	case MSM_DRM_BLANK_UNBLANK:
 		if (val == MSM_DRM_EVENT_BLANK) {
-			pr_info("%s: UNBLANK\n", __func__);
+			pr_debug("%s: UNBLANK\n", __func__);
 			fts_set_bus_ref(info, FTS_BUS_REF_SCREEN_ON, true);
 		}
 		break;
@@ -4792,7 +4792,7 @@ static int fts_screen_state_chg_callback(struct notifier_block *nb,
 		if (gpio_is_valid(info->board->disp_rate_gpio))
 			gpio_set_value(info->board->disp_rate_gpio,
 				(info->display_refresh_rate == 90));
-		pr_info("Refresh rate changed to %d Hz.\n",
+		pr_debug("Refresh rate changed to %d Hz.\n",
 			info->display_refresh_rate);
 	}
 
