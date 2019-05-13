@@ -2647,7 +2647,14 @@ END:
 	return count;
 }
 
-static ssize_t fts_heatmap_mode_full_store(struct device *dev,
+/* sysfs file node to store heatmap mode
+ * "echo cmd > heatmap_mode" to change
+ * Possible commands:
+ * 0 = FTS_HEATMAP_OFF
+ * 1 = FTS_HEATMAP_PARTIAL
+ * 2 = FTS_HEATMAP_FULL
+ */
+static ssize_t fts_heatmap_mode_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
@@ -2656,23 +2663,23 @@ static ssize_t fts_heatmap_mode_full_store(struct device *dev,
 	int val;
 
 	result = kstrtoint(buf, 10, &val);
-	if (result < 0 || val < 0 || val > 1) {
+	if (result < 0 || val < FTS_HEATMAP_OFF || val > FTS_HEATMAP_FULL) {
 		pr_err("%s: Invalid input.\n", __func__);
 		return -EINVAL;
 	}
 
-	info->heatmap_mode_full = (val == 1);
+	info->heatmap_mode = val;
 	return count;
 }
 
-static ssize_t fts_heatmap_mode_full_show(struct device *dev,
+static ssize_t fts_heatmap_mode_show(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
 {
 	struct fts_ts_info *info = dev_get_drvdata(dev);
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
-			 info->heatmap_mode_full ? 1 : 0);
+			 info->heatmap_mode);
 }
 
 static DEVICE_ATTR(infoblock_getdata, (0444),
@@ -2685,8 +2692,8 @@ static DEVICE_ATTR(fw_file_test, 0444, fts_fw_test_show, NULL);
 static DEVICE_ATTR(status, 0444, fts_status_show, NULL);
 static DEVICE_ATTR(stm_fts_cmd, 0664, stm_fts_cmd_show,
 		   stm_fts_cmd_store);
-static DEVICE_ATTR(heatmap_mode_full, 0664, fts_heatmap_mode_full_show,
-		   fts_heatmap_mode_full_store);
+static DEVICE_ATTR(heatmap_mode, 0664, fts_heatmap_mode_show,
+		   fts_heatmap_mode_store);
 #ifdef USE_ONE_FILE_NODE
 static DEVICE_ATTR(feature_enable, 0664,
 		   fts_feature_enable_show, fts_feature_enable_store);
@@ -2745,7 +2752,7 @@ static struct attribute *fts_attr_group[] = {
 	&dev_attr_fw_file_test.attr,
 	&dev_attr_status.attr,
 	&dev_attr_stm_fts_cmd.attr,
-	&dev_attr_heatmap_mode_full.attr,
+	&dev_attr_heatmap_mode.attr,
 #ifdef USE_ONE_FILE_NODE
 	&dev_attr_feature_enable.attr,
 #else
@@ -3488,7 +3495,7 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 
 	struct heatmap_report report = {0};
 
-	if (!info->heatmap_mode_full) {
+	if (info->heatmap_mode == FTS_HEATMAP_PARTIAL) {
 		result = fts_writeReadU8UX(FTS_CMD_FRAMEBUFFER_R, BITS_16,
 					   ADDR_FRAMEBUFFER, (uint8_t *)&report,
 					   sizeof(report), DUMMY_FRAMEBUFFER);
@@ -3553,7 +3560,7 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 			frame_i = heatmap_y * max_x + heatmap_x;
 			data[frame_i] = heatmap_value;
 		}
-	} else {
+	} else if (info->heatmap_mode == FTS_HEATMAP_FULL) {
 		MutualSenseFrame ms_frame = { 0 };
 		uint32_t frame_index = 0, x, y;
 
@@ -3584,7 +3591,9 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 		}
 
 		kfree(ms_frame.node_data);
-	}
+	} else
+		return false;
+
 	return true;
 }
 
@@ -5367,7 +5376,10 @@ static int fts_probe(struct spi_device *client)
 	/* Set initial heatmap mode based on the device tree configuration.
 	 * Default is partial heatmap mode.
 	 */
-	info->heatmap_mode_full = info->board->heatmap_mode_full_init;
+	if (info->board->heatmap_mode_full_init)
+		info->heatmap_mode = FTS_HEATMAP_FULL;
+	else
+		info->heatmap_mode = FTS_HEATMAP_PARTIAL;
 
 	/* init motion filter mode */
 	info->use_default_mf = false;
