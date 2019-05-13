@@ -389,7 +389,9 @@ typedef  enum  {
     WMI_SERVICE_TX_PWR_PER_PEER = 204, /* target supports per-peer tx pwr spec via WMI_PEER_USE_FIXED_PWR */
     WMI_SERVICE_STA_PLUS_STA_SUPPORT = 205, /* indicates target supports STA + STA concurrency */
     WMI_SERVICE_WPA3_FT_FILS = 206,
-
+    WMI_SERVICE_ADAPTIVE_11R_ROAM = 207, /* Indicates FW supports adaptive 11r roaming */
+    WMI_SERVICE_CHAN_RF_CHARACTERIZATION_INFO = 208, /* FW provides RF scores for chans in the service ready extension msg */
+    WMI_SERVICE_FW_IFACE_COMBINATION_SUPPORT = 209, /* FW sends WMI_IFACE_COMBINATION_IND_EVENT msg immediately after WMI_SERVICE_READY_EXT_EVENT msg */
 
     /******* ADD NEW SERVICES HERE *******/
 
