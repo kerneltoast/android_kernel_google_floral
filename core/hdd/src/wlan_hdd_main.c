@@ -71,7 +71,6 @@
 #include <linux/semaphore.h>
 #include <linux/ctype.h>
 #include <linux/compat.h>
-#include <linux/reboot.h>
 #ifdef MSM_PLATFORM
 #include <soc/qcom/subsystem_restart.h>
 #endif
@@ -170,7 +169,6 @@
 #define PANIC_ON_BUG_STR ""
 #endif
 
-bool g_is_system_reboot_triggered;
 int wlan_start_ret_val;
 static DECLARE_COMPLETION(wlan_start_comp);
 static unsigned int dev_num = 1;
@@ -310,7 +308,6 @@ int limit_off_chan_tbl[HDD_MAX_AC][HDD_MAX_OFF_CHAN_ENTRIES] = {
 };
 
 struct notifier_block hdd_netdev_notifier;
-struct notifier_block system_reboot_notifier;
 
 struct sock *cesium_nl_srv_sock;
 #ifdef FEATURE_WLAN_AUTO_SHUTDOWN
@@ -540,11 +537,6 @@ static bool hdd_wait_for_recovery_completion(void)
 		if (retry == HDD_MOD_EXIT_SSR_MAX_RETRIES/2)
 			hdd_err("Recovery in progress; wait here!!!");
 
-		if (g_is_system_reboot_triggered) {
-			hdd_info("System Reboot happening ignore unload!!");
-			return false;
-		}
-
 		msleep(1000);
 		if (retry++ == HDD_MOD_EXIT_SSR_MAX_RETRIES) {
 			hdd_err("SSR never completed, error");
@@ -692,27 +684,6 @@ static int hdd_netdev_notifier_call(struct notifier_block *nb,
 
 struct notifier_block hdd_netdev_notifier = {
 	.notifier_call = hdd_netdev_notifier_call,
-};
-
-static int system_reboot_notifier_call(struct notifier_block *nb,
-				       unsigned long msg_type, void *_unused)
-{
-	switch (msg_type) {
-	case SYS_DOWN:
-	case SYS_HALT:
-	case SYS_POWER_OFF:
-		g_is_system_reboot_triggered = true;
-		hdd_info("reboot, reason: %ld", msg_type);
-		break;
-	default:
-		break;
-	}
-
-	return NOTIFY_OK;
-}
-
-struct notifier_block system_reboot_notifier = {
-	.notifier_call = system_reboot_notifier_call,
 };
 
 /* variable to hold the insmod parameters */
@@ -7662,7 +7633,6 @@ static void hdd_wlan_exit(struct hdd_context *hdd_ctx)
 		hdd_deinit_all_adapters(hdd_ctx, false);
 	}
 
-	unregister_reboot_notifier(&system_reboot_notifier);
 	unregister_netdevice_notifier(&hdd_netdev_notifier);
 
 	hdd_wlan_stop_modules(hdd_ctx, false);
@@ -9908,7 +9878,6 @@ err_close_adapters:
 }
 
 
-#ifdef QCA_LL_TX_FLOW_CONTROL_V2
 /**
  * hdd_txrx_populate_cds_config() - Populate txrx cds configuration
  * @cds_cfg: CDS Configuration
@@ -9925,13 +9894,6 @@ static inline void hdd_txrx_populate_cds_config(struct cds_config_info
 	cds_cfg->tx_flow_start_queue_offset =
 		hdd_ctx->config->TxFlowStartQueueOffset;
 }
-#else
-static inline void hdd_txrx_populate_cds_config(struct cds_config_info
-						*cds_cfg,
-						struct hdd_context *hdd_ctx)
-{
-}
-#endif
 
 #ifdef FEATURE_WLAN_RA_FILTERING
 /**
@@ -11919,12 +11881,6 @@ int hdd_wlan_startup(struct device *dev)
 		goto err_wiphy_unregister;
 	}
 
-	ret = register_reboot_notifier(&system_reboot_notifier);
-	if (ret) {
-		hdd_err("Failed to register reboot notifier: %d", ret);
-		goto err_unregister_netdev;
-	}
-
 	rtnl_held = hdd_hold_rtnl_lock();
 
 	ret = hdd_open_interfaces(hdd_ctx, rtnl_held);
@@ -11983,11 +11939,9 @@ err_close_adapters:
 	hdd_close_all_adapters(hdd_ctx, rtnl_held);
 
 err_release_rtnl_lock:
-	unregister_reboot_notifier(&system_reboot_notifier);
 	if (rtnl_held)
 		hdd_release_rtnl_lock();
 
-err_unregister_netdev:
 	unregister_netdevice_notifier(&hdd_netdev_notifier);
 
 err_wiphy_unregister:
@@ -14034,12 +13988,10 @@ static int hdd_update_dp_config(struct hdd_context *hdd_ctx)
 
 	params.tso_enable = hdd_ctx->config->tso_enable;
 	params.lro_enable = hdd_ctx->config->lro_enable;
-#ifdef QCA_LL_TX_FLOW_CONTROL_V2
 	params.tx_flow_stop_queue_threshold =
 			hdd_ctx->config->TxFlowStopQueueThreshold;
 	params.tx_flow_start_queue_offset =
 			hdd_ctx->config->TxFlowStartQueueOffset;
-#endif
 	params.flow_steering_enable = hdd_ctx->config->flow_steering_enable;
 	params.napi_enable = hdd_ctx->napi_enable;
 	params.tcp_udp_checksumoffload =
