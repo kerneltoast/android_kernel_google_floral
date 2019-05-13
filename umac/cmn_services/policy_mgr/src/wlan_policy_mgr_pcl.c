@@ -82,12 +82,10 @@ QDF_STATUS policy_mgr_get_pcl_for_existing_conn(struct wlan_objmgr_psoc *psoc,
 		/* Check, store and temp delete the mode's parameter */
 		policy_mgr_store_and_del_conn_info(psoc, mode,
 				all_matching_cxn_to_del, info, &num_cxn_del);
-		qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 		/* Get the PCL */
 		status = policy_mgr_get_pcl(psoc, mode, pcl_ch, len,
 					pcl_weight, weight_len);
 		policy_mgr_debug("Get PCL to FW for mode:%d", mode);
-		qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 		/* Restore the connection info */
 		policy_mgr_restore_deleted_conn_info(psoc, info, num_cxn_del);
 	}
@@ -462,10 +460,10 @@ static QDF_STATUS policy_mgr_modify_sap_pcl_based_on_nol(
 }
 
 static QDF_STATUS
-policy_mgr_modify_sap_pcl_based_on_srd(struct wlan_objmgr_psoc *psoc,
-				       uint8_t *pcl_list_org,
-				       uint8_t *weight_list_org,
-				       uint32_t *pcl_len_org)
+policy_mgr_modify_pcl_based_on_srd(struct wlan_objmgr_psoc *psoc,
+				   uint8_t *pcl_list_org,
+				   uint8_t *weight_list_org,
+				   uint32_t *pcl_len_org)
 {
 	uint32_t i, pcl_len = 0;
 	uint8_t pcl_list[QDF_MAX_NUM_CHAN];
@@ -549,7 +547,7 @@ static QDF_STATUS policy_mgr_pcl_modification_for_sap(
 		policy_mgr_debug("chan:%d weight:%d",
 				 pcl_channels[i], pcl_weight[i]);
 
-	status = policy_mgr_modify_sap_pcl_based_on_srd
+	status = policy_mgr_modify_pcl_based_on_srd
 			(psoc, pcl_channels, pcl_weight, len);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		policy_mgr_err("failed to get srd modified pcl for SAP");
@@ -582,6 +580,12 @@ static QDF_STATUS policy_mgr_pcl_modification_for_p2p_go(
 			pm_ctx, pcl_channels, pcl_weight, len);
 	if (QDF_IS_STATUS_ERROR(status)) {
 		policy_mgr_err("failed to get modified pcl for GO");
+		return status;
+	}
+	status = policy_mgr_modify_pcl_based_on_srd
+			(psoc, pcl_channels, pcl_weight, len);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		policy_mgr_err("failed to get modified pcl for SAP");
 		return status;
 	}
 	policy_mgr_debug("modified pcl len:%d", *len);
@@ -1849,7 +1853,6 @@ QDF_STATUS policy_mgr_get_valid_chan_weights(struct wlan_objmgr_psoc *psoc,
 		 */
 		policy_mgr_store_and_del_conn_info(psoc, PM_STA_MODE, false,
 						info, &num_cxn_del);
-		qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
 		/*
 		 * There is a small window between releasing the above lock
 		 * and acquiring the same in policy_mgr_allow_concurrency,
@@ -1863,7 +1866,6 @@ QDF_STATUS policy_mgr_get_valid_chan_weights(struct wlan_objmgr_psoc *psoc,
 					WEIGHT_OF_NON_PCL_CHANNELS;
 			}
 		}
-		qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 		/* Restore the connection info */
 		policy_mgr_restore_deleted_conn_info(psoc, info, num_cxn_del);
 	}

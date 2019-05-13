@@ -1630,14 +1630,22 @@ bool policy_mgr_is_concurrency_allowed(struct wlan_objmgr_psoc *psoc,
 		}
 	}
 
+	count = policy_mgr_mode_specific_connection_count(psoc, PM_STA_MODE,
+							  list);
+
+	/* Check for STA+STA concurrency */
+	if (mode == PM_STA_MODE && count &&
+	    !policy_mgr_allow_multiple_sta_connections(psoc)) {
+		policy_mgr_err("No 2nd STA connection, already one STA is connected");
+		goto done;
+	}
+
 	/*
 	 * Check all IBSS+STA concurrencies
 	 *
 	 * don't allow IBSS + STA MCC
 	 * don't allow IBSS + STA SCC if IBSS is on DFS channel
 	 */
-	count = policy_mgr_mode_specific_connection_count(psoc,
-				PM_STA_MODE, list);
 	if ((PM_IBSS_MODE == mode) &&
 		(policy_mgr_mode_specific_connection_count(psoc,
 		PM_IBSS_MODE, list)) && count) {
@@ -1786,6 +1794,13 @@ bool  policy_mgr_allow_concurrency_csa(struct wlan_objmgr_psoc *psoc,
 	bool allow = false;
 	struct policy_mgr_conc_connection_info info;
 	uint8_t num_cxn_del = 0;
+	struct policy_mgr_psoc_priv_obj *pm_ctx;
+
+	pm_ctx = policy_mgr_get_context(psoc);
+	if (!pm_ctx) {
+		policy_mgr_err("Invalid Context");
+		return allow;
+	}
 
 	/*
 	 * Store the connection's parameter and temporarily delete it
@@ -1793,6 +1808,7 @@ bool  policy_mgr_allow_concurrency_csa(struct wlan_objmgr_psoc *psoc,
 	 * check can be used as though a new connection is coming up,
 	 * after check, restore the connection to concurrency table.
 	 */
+	qdf_mutex_acquire(&pm_ctx->qdf_conc_list_lock);
 	policy_mgr_store_and_del_conn_info_by_vdev_id(psoc, vdev_id,
 						      &info, &num_cxn_del);
 	allow = policy_mgr_allow_concurrency(
@@ -1800,11 +1816,13 @@ bool  policy_mgr_allow_concurrency_csa(struct wlan_objmgr_psoc *psoc,
 				mode,
 				channel,
 				HW_MODE_20_MHZ);
-	if (!allow)
-		policy_mgr_err("CSA concurrency check failed");
 	/* Restore the connection entry */
 	if (num_cxn_del > 0)
 		policy_mgr_restore_deleted_conn_info(psoc, &info, num_cxn_del);
+	qdf_mutex_release(&pm_ctx->qdf_conc_list_lock);
+
+	if (!allow)
+		policy_mgr_err("CSA concurrency check failed");
 
 	return allow;
 }
@@ -3107,6 +3125,24 @@ bool policy_mgr_allow_sap_go_concurrency(struct wlan_objmgr_psoc *psoc,
 
 	/* Don't block the second interface */
 	return true;
+}
+
+bool policy_mgr_allow_multiple_sta_connections(struct wlan_objmgr_psoc *psoc)
+{
+	struct wmi_unified *wmi_handle;
+
+	wmi_handle = get_wmi_unified_hdl_from_psoc(psoc);
+	if (!wmi_handle) {
+		policy_mgr_debug("Invalid WMI handle");
+		return false;
+	}
+
+	if (wmi_service_enabled(wmi_handle,
+				wmi_service_sta_plus_sta_support))
+		return true;
+
+	policy_mgr_debug("Concurrent STA connections are not supported");
+	return false;
 }
 
 bool policy_mgr_dual_beacon_on_single_mac_scc_capable(

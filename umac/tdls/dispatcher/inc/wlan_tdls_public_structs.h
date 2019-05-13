@@ -78,6 +78,8 @@
 #define TDLS_TEARDOWN_PEER_UNSPEC_REASON 26
 
 #define INVALID_TDLS_PEER_ID 0xFF
+#define INVALID_TDLS_PEER_INDEX 0xFF
+
 #define TDLS_STA_INDEX_CHECK(sta_id) \
 	(((sta_id) >= 0) && ((sta_id) < 0xFF))
 /**
@@ -540,7 +542,7 @@ typedef void (*tdls_rx_callback)(void *user_data,
  *
  * Return: true or false
  */
-typedef bool (*tdls_wmm_check)(struct wlan_objmgr_vdev **vdev);
+typedef bool (*tdls_wmm_check)(uint8_t vdev_id);
 
 
 /* This callback is used to report state change of peer to wpa_supplicant */
