@@ -4680,6 +4680,9 @@ static void fts_suspend_work(struct work_struct *work)
 
 	fts_enableInterrupt(false);
 
+	/* Flush any outstanding touch events */
+	flushFIFO();
+
 	fts_set_switch_gpio(info, FTS_SWITCH_GPIO_VALUE_SLPI_MASTER);
 
 #ifdef CONFIG_TOUCHSCREEN_TBN
