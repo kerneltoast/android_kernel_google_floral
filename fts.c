@@ -5591,6 +5591,28 @@ static int fts_remove(struct spi_device *client)
 	return OK;
 }
 
+#ifdef CONFIG_PM
+static int fts_pm_suspend(struct device *dev)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+
+	if (info->resume_bit) {
+		pr_warn("%s: can't suspend because touch bus is in use(bus_refmask=0x%X)!\n",
+			__func__, info->bus_refmask);
+		return -EBUSY;
+	}
+
+	return 0;
+}
+
+static int fts_pm_resume(struct device *dev)
+{
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(fts_pm_ops, fts_pm_suspend, fts_pm_resume);
+#endif
+
 /**
   * Struct which contains the compatible names that need to match with
   * the definition of the device in the device tree node
@@ -5612,6 +5634,9 @@ static struct i2c_driver fts_i2c_driver = {
 	.driver			= {
 		.name		= FTS_TS_DRV_NAME,
 		.of_match_table = fts_of_match_table,
+#ifdef CONFIG_PM
+		.pm		= &fts_pm_ops,
+#endif
 	},
 	.probe			= fts_probe,
 	.remove			= fts_remove,
@@ -5623,6 +5648,9 @@ static struct spi_driver fts_spi_driver = {
 		.name		= FTS_TS_DRV_NAME,
 		.of_match_table = fts_of_match_table,
 		.owner		= THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm		= &fts_pm_ops,
+#endif
 	},
 	.probe			= fts_probe,
 	.remove			= fts_remove,
