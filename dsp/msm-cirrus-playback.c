@@ -435,8 +435,10 @@ extern int crus_afe_callback(void *payload, int size)
 
 	switch (payload32[1]) {
 	case CIRRUS_SP:
-		memcpy(crus_sp_get_buffer, payload32, size);
-		atomic_set(&crus_sp_get_param_flag, 1);
+		if (crus_sp_get_buffer != NULL) {
+			memcpy(crus_sp_get_buffer, payload32, size);
+			atomic_set(&crus_sp_get_param_flag, 1);
+		}
 		break;
 	default:
 		return -EINVAL;
