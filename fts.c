@@ -2916,7 +2916,6 @@ static bool fts_enter_pointer_event_handler(struct fts_ts_info *info, unsigned
 					  * distance */
 		break;
 
-	case TOUCH_TYPE_INVALID:
 	default:
 		pr_err("%s : Invalid touch type = %d ! No Report...\n",
 			__func__, touchType);
@@ -2990,7 +2989,6 @@ static bool fts_leave_pointer_event_handler(struct fts_ts_info *info, unsigned
 		__clear_bit(touchId, &info->touch_id);
 		break;
 
-	case TOUCH_TYPE_INVALID:
 	default:
 		pr_err("%s : Invalid touch type = %d ! No Report...\n",
 			__func__, touchType);
@@ -3092,9 +3090,18 @@ static bool fts_controller_ready_event_handler(struct fts_ts_info *info,
 static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				     char *event)
 {
+	u8 grid_touch_status;
+
 	switch (event[1]) {
 	case EVT_TYPE_STATUS_ECHO:
 		pr_debug("%s: Echo event of command = %02X %02X %02X %02X %02X %02X\n",
+			__func__, event[2], event[3], event[4], event[5],
+			event[6], event[7]);
+		break;
+
+	case EVT_TYPE_STATUS_GPIO_CHAR_DET:
+		pr_info("%s: GPIO Charger Detect ="
+			" %02X %02X %02X %02X %02X %02X\n",
 			__func__, event[2], event[3], event[4], event[5],
 			event[6], event[7]);
 		break;
@@ -3136,59 +3143,81 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 				event[5], event[6], event[7]);
 			break;
 
+		case 0x21:
+			pr_info("%s: Self touch negative Force cal = %02X"
+			" %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x22:
+			pr_info("%s: Self detect frame flatness Force cal ="
+			" %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x23:
+			pr_info("%s: Self touch frame flatness Force cal ="
+			" %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
 		case 0x30:
-			pr_info("%s: Invalid mutual soft Force cal = %02X"
+			pr_info("%s: Invalid mutual Force cal = %02X"
 			" %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
 
 		case 0x31:
-			pr_info("%s: Invalid self soft Force cal = %02X"
-			" %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Invalid differential mutual Force cal ="
+			" %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
 
 		case 0x32:
-			pr_info("%s: Invalid SS island soft Force cal = %02X"
+			pr_info("%s: Invalid Self Force cal = %02X"
 			" %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 			break;
 
+		case 0x33:
+			pr_info("%s: Invalid Self island Force cal = %02X"
+			" %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x34:
+			pr_info("%s: Invalid Self force touch Force cal ="
+			" %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x35:
+			pr_info("%s: Mutual frame flatness Force cal ="
+			" %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
 		default:
-			pr_info("%s: Force cal = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Force cal = %02X %02X %02X %02X"
+				" %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		}
 		break;
 
 	case EVT_TYPE_STATUS_FRAME_DROP:
-		switch (event[2]) {
-		case 0x01:
-			pr_info("%s: Frame drop noisy frame = %02X %02X %02X %02X %02X %02X\n",
-				__func__, event[2], event[3], event[4],
-				event[5], event[6], event[7]);
-			break;
-
-		case 0x02:
-			pr_info("%s: Frame drop bad R = %02X %02X %02X %02X %02X %02X\n",
-				__func__, event[2], event[3], event[4],
-				event[5], event[6], event[7]);
-			break;
-
-		case 0x03:
-			pr_info("%s: Frame drop invalid processing state = %02X %02X %02X %02X %02X %02X\n",
-				__func__, event[2], event[3], event[4],
-				event[5], event[6], event[7]);
-			break;
-
-		default:
 			pr_info("%s: Frame drop = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
-		}
 		break;
 
 	case EVT_TYPE_STATUS_SS_RAW_SAT:
@@ -3203,30 +3232,200 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 		break;
 
 	case EVT_TYPE_STATUS_WATER:
+		switch (event[2]) {
+		case 0x00:
+			pr_info("%s: Water Mode Entry by BLD with real"
+				" raw frame = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x01:
+			pr_info("%s: Water Mode Entry by BLD with rom"
+				" raw frame = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x02:
+			pr_info("%s: Water Mode Entry by MID with real"
+				" raw frame = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x03:
+			pr_info("%s: Water Mode leave by BLD with real"
+				" raw frame = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x04:
+			pr_info("%s: Water Mode leave by BLD with rom"
+				" raw frame = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x05:
+			pr_info("%s: Water Mode leave by MID with real"
+				" raw frame = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		default:
+			pr_info("%s: Water Mode = %02X %02X %02X %02X"
+				" %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+		}
+		break;
+
+	case EVT_TYPE_STATUS_PRE_WAT_DET:
 		if (event[2] == 1)
-			pr_info("%s: Enter Water mode = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Previous Water entry ="
+			" %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		else
-			pr_info("%s: Exit Water mode = %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Previous Water leave ="
+				" %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		break;
 
+	case EVT_TYPE_STATUS_NOISE:
+		pr_info("%s: Noise Status Event = %02X %02X"
+		" %02X %02X %02X %02X\n",
+			__func__, event[2], event[3], event[4], event[5],
+			event[6], event[7]);
+		break;
+
 	case EVT_TYPE_STATUS_STIMPAD:
-		if (event[2] == 0)
-			pr_info("%s: Stimpad disabled\n", __func__);
-		else if (event[2] == 1)
-			pr_info("%s: Stimpad enabled\n", __func__);
-		else if (event[2] == 2)
-			pr_info("%s: Stimpad disabled by signature invalid\n",
-			 __func__);
-		else if (event[2] == 3)
-			pr_info("%s: Stimpad disabled by nodescount invalid\n",
-			 __func__);
-		else
-			pr_info("%s: invalid Stimpad_info(%d)\n",
-				__func__, event[2]);
+		switch (event[2]) {
+		case 0x00:
+			pr_debug("%s: Stimpad disable event"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x01:
+			pr_debug("%s: Stimpad enable event"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x02:
+			pr_debug("%s: Stimpad disable by signature invalid"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x03:
+			pr_debug("%s: Stimpad disable by nodes count invalid"
+				" raw frame = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		default:
+			pr_debug("%s: Stimpad Status = %02X %02X %02X %02X"
+				" %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+		}
+		break;
+
+	case EVT_TYPE_STATUS_NO_TOUCH:
+		pr_info("%s: No Touch Status Event = %02X %02X"
+		" %02X %02X %02X %02X\n",
+			__func__, event[2], event[3], event[4], event[5],
+			event[6], event[7]);
+		break;
+
+	case EVT_TYPE_STATUS_IDLE:
+		pr_info("%s: Idle Status Event = %02X %02X"
+		" %02X %02X %02X %02X\n",
+			__func__, event[2], event[3], event[4], event[5],
+			event[6], event[7]);
+		break;
+
+	case EVT_TYPE_STATUS_PALM_TOUCH:
+		switch (event[2]) {
+		case 0x01:
+			pr_info("%s: Palm block entry event"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x02:
+			pr_info("%s: Palm block release event"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		default:
+			pr_info("%s: Palm touch Status = %02X %02X %02X %02X"
+				" %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+		}
+		break;
+
+	case EVT_TYPE_STATUS_GRIP_TOUCH:
+		grid_touch_status = (event[2] & 0xF0) >> 4;
+		switch (grid_touch_status) {
+		case 0x01:
+			pr_info("%s: Grip Touch entry event"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x02:
+			pr_info("%s: Grip Touch release event"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		default:
+			pr_info("%s: Grip Touch Status = %02X %02X %02X %02X"
+				" %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+		}
+		break;
+
+	case EVT_TYPE_STATUS_GOLDEN_RAW_VAL:
+		switch (event[2]) {
+		case 0x01:
+			pr_info("%s: Golden Raw Validation Pass"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		case 0x02:
+			pr_info("%s: Golden Raw Validation Fail"
+				" = %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+			break;
+
+		default:
+			pr_info("%s: Golden Raw Validation Status ="
+			" %02X %02X %02X %02X %02X %02X\n",
+				__func__, event[2], event[3], event[4],
+				event[5], event[6], event[7]);
+		}
 		break;
 
 	default:
