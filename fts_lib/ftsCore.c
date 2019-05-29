@@ -114,7 +114,7 @@ int fts_system_reset(void)
 						    data));
 		else {
 			gpio_set_value(reset_gpio, 0);
-			mdelay(10);
+			msleep(10);
 			gpio_set_value(reset_gpio, 1);
 			res = OK;
 		}
@@ -197,6 +197,8 @@ void setSystemResetedUp(int val)
 int pollForEvent(int *event_to_search, int event_bytes, u8 *readData, int
 		 time_to_wait)
 {
+	const u8 NO_RESPONSE = 0xFF;
+	const int POLL_SLEEP_TIME_MS = 5;
 	int i, find, retry, count_err;
 	int time_to_count;
 	int err_handling = OK;
@@ -208,15 +210,21 @@ int pollForEvent(int *event_to_search, int event_bytes, u8 *readData, int
 	find = 0;
 	retry = 0;
 	count_err = 0;
-	time_to_count = time_to_wait / TIMEOUT_RESOLUTION;
+	time_to_count = time_to_wait / POLL_SLEEP_TIME_MS;
 
 	startStopWatch(&clock);
 	while (find != 1 && retry < time_to_count &&
 		fts_writeReadU8UX(cmd[0], 0, 0, readData, FIFO_EVENT_SIZE,
 			DUMMY_FIFO)
 	       >= OK) {
-		/* Log of errors */
-		if (readData[0] == EVT_ID_ERROR) {
+		if (readData[0] == NO_RESPONSE ||
+		    readData[0] == EVT_ID_NOEVENT) {
+			/* No events available, so sleep briefly */
+			msleep(POLL_SLEEP_TIME_MS);
+			retry++;
+			continue;
+		} else if (readData[0] == EVT_ID_ERROR) {
+			/* Log of errors */
 			pr_err("%s\n",
 				 printHex("ERROR EVENT = ",
 					  readData,
@@ -233,14 +241,13 @@ int pollForEvent(int *event_to_search, int event_bytes, u8 *readData, int
 				return err_handling;
 			}
 		} else {
-			if (readData[0] != EVT_ID_NOEVENT) {
-				pr_info("%s\n",
-					 printHex("READ EVENT = ", readData,
-						  FIFO_EVENT_SIZE,
-						  temp,
-						  sizeof(temp)));
-				memset(temp, 0, 128);
-			}
+			pr_info("%s\n",
+				 printHex("READ EVENT = ", readData,
+					  FIFO_EVENT_SIZE,
+					  temp,
+					  sizeof(temp)));
+			memset(temp, 0, 128);
+
 			if (readData[0] == EVT_ID_CONTROLLER_READY &&
 			    event_to_search[0] != EVT_ID_CONTROLLER_READY) {
 				pr_err("pollForEvent: Unmanned Controller Ready Event! Setting reset flags...\n");
@@ -258,9 +265,6 @@ int pollForEvent(int *event_to_search, int event_bytes, u8 *readData, int
 				break;
 			}
 		}
-
-		retry++;
-		mdelay(TIMEOUT_RESOLUTION);
 	}
 	stopStopWatch(&clock);
 	if ((retry >= time_to_count) && find != 1) {

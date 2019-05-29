@@ -52,9 +52,9 @@
   */
 /* **** CODE CONFIGURATION **** */
 #define FTS_TS_DRV_NAME		"fts"	/* driver name */
-#define FTS_TS_DRV_VERSION	"5.2.16.6"	/* driver version string
+#define FTS_TS_DRV_VERSION	"5.2.16.7"	/* driver version string
 							 * */
-#define FTS_TS_DRV_VER		0x05021006	/* driver version u32 format */
+#define FTS_TS_DRV_VER		0x05021007	/* driver version u32 format */
 
 /* #define DEBUG */	/* /< define to print more logs in the kernel log
 			 * and better follow the code flow */
@@ -310,6 +310,18 @@ typedef enum {
 	FTS_MF_FILTERED_LOCKED	= 2
 } motion_filter_state_t;
 
+/* Heatmap mode selection
+ * FTS_HEATMAP_OFF	- no data read
+ * FTS_HEATMAP_PARTIAL	- read partial frame
+ *			(LOCAL_HEATMAP_WIDTH * LOCAL_HEATMAP_HEIGHT)
+ * FTS_HEATMAP_FULL	- read full mutual sense strength frame
+ */
+enum {
+	FTS_HEATMAP_OFF		= 0,
+	FTS_HEATMAP_PARTIAL	= 1,
+	FTS_HEATMAP_FULL	= 2
+};
+
 /*
   * Forward declaration
   */
@@ -435,7 +447,7 @@ struct fts_ts_info {
 	int cover_enabled;	/* Cover mode */
 	int grip_enabled;	/* Grip mode */
 
-	bool heatmap_mode_full;		/* Report full heatmap */
+	int heatmap_mode;	/* heatmap mode*/
 
 	/* Stop changing motion filter and keep fw design */
 	bool use_default_mf;

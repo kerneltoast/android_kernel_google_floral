@@ -2647,7 +2647,14 @@ END:
 	return count;
 }
 
-static ssize_t fts_heatmap_mode_full_store(struct device *dev,
+/* sysfs file node to store heatmap mode
+ * "echo cmd > heatmap_mode" to change
+ * Possible commands:
+ * 0 = FTS_HEATMAP_OFF
+ * 1 = FTS_HEATMAP_PARTIAL
+ * 2 = FTS_HEATMAP_FULL
+ */
+static ssize_t fts_heatmap_mode_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
@@ -2656,23 +2663,23 @@ static ssize_t fts_heatmap_mode_full_store(struct device *dev,
 	int val;
 
 	result = kstrtoint(buf, 10, &val);
-	if (result < 0 || val < 0 || val > 1) {
+	if (result < 0 || val < FTS_HEATMAP_OFF || val > FTS_HEATMAP_FULL) {
 		pr_err("%s: Invalid input.\n", __func__);
 		return -EINVAL;
 	}
 
-	info->heatmap_mode_full = (val == 1);
+	info->heatmap_mode = val;
 	return count;
 }
 
-static ssize_t fts_heatmap_mode_full_show(struct device *dev,
+static ssize_t fts_heatmap_mode_show(struct device *dev,
 					  struct device_attribute *attr,
 					  char *buf)
 {
 	struct fts_ts_info *info = dev_get_drvdata(dev);
 
 	return scnprintf(buf, PAGE_SIZE, "%d\n",
-			 info->heatmap_mode_full ? 1 : 0);
+			 info->heatmap_mode);
 }
 
 static DEVICE_ATTR(infoblock_getdata, (0444),
@@ -2685,8 +2692,8 @@ static DEVICE_ATTR(fw_file_test, 0444, fts_fw_test_show, NULL);
 static DEVICE_ATTR(status, 0444, fts_status_show, NULL);
 static DEVICE_ATTR(stm_fts_cmd, 0664, stm_fts_cmd_show,
 		   stm_fts_cmd_store);
-static DEVICE_ATTR(heatmap_mode_full, 0664, fts_heatmap_mode_full_show,
-		   fts_heatmap_mode_full_store);
+static DEVICE_ATTR(heatmap_mode, 0664, fts_heatmap_mode_show,
+		   fts_heatmap_mode_store);
 #ifdef USE_ONE_FILE_NODE
 static DEVICE_ATTR(feature_enable, 0664,
 		   fts_feature_enable_show, fts_feature_enable_store);
@@ -2745,7 +2752,7 @@ static struct attribute *fts_attr_group[] = {
 	&dev_attr_fw_file_test.attr,
 	&dev_attr_status.attr,
 	&dev_attr_stm_fts_cmd.attr,
-	&dev_attr_heatmap_mode_full.attr,
+	&dev_attr_heatmap_mode.attr,
 #ifdef USE_ONE_FILE_NODE
 	&dev_attr_feature_enable.attr,
 #else
@@ -3488,7 +3495,7 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 
 	struct heatmap_report report = {0};
 
-	if (!info->heatmap_mode_full) {
+	if (info->heatmap_mode == FTS_HEATMAP_PARTIAL) {
 		result = fts_writeReadU8UX(FTS_CMD_FRAMEBUFFER_R, BITS_16,
 					   ADDR_FRAMEBUFFER, (uint8_t *)&report,
 					   sizeof(report), DUMMY_FRAMEBUFFER);
@@ -3553,7 +3560,7 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 			frame_i = heatmap_y * max_x + heatmap_x;
 			data[frame_i] = heatmap_value;
 		}
-	} else {
+	} else if (info->heatmap_mode == FTS_HEATMAP_FULL) {
 		MutualSenseFrame ms_frame = { 0 };
 		uint32_t frame_index = 0, x, y;
 
@@ -3584,7 +3591,9 @@ static bool read_heatmap_raw(struct v4l2_heatmap *v4l2, strength_t *data)
 		}
 
 		kfree(ms_frame.node_data);
-	}
+	} else
+		return false;
+
 	return true;
 }
 
@@ -4088,7 +4097,7 @@ static int fts_fw_update(struct fts_ts_info *info)
 			__func__, ret);
 	}
 
-	if (init_type == NO_INIT) {
+	if (init_type != SPECIAL_FULL_PANEL_INIT) {
 #if defined(PRE_SAVED_METHOD) || defined(COMPUTE_INIT_METHOD)
 		if ((systemInfo.u8_cfgAfeVer != systemInfo.u8_cxAfeVer)
 #ifdef COMPUTE_INIT_METHOD
@@ -4107,8 +4116,7 @@ static int fts_fw_update(struct fts_ts_info *info)
 			pr_err("%s: Different Panel AFE Ver: %02X != %02X... Execute Panel Init!\n",
 				__func__, systemInfo.u8_cfgAfeVer,
 				systemInfo.u8_panelCfgAfeVer);
-		} else
-			init_type = NO_INIT;
+		}
 	}
 
 out:
@@ -4672,6 +4680,9 @@ static void fts_suspend_work(struct work_struct *work)
 
 	fts_enableInterrupt(false);
 
+	/* Flush any outstanding touch events */
+	flushFIFO();
+
 	fts_set_switch_gpio(info, FTS_SWITCH_GPIO_VALUE_SLPI_MASTER);
 
 #ifdef CONFIG_TOUCHSCREEN_TBN
@@ -4709,7 +4720,7 @@ int fts_set_bus_ref(struct fts_ts_info *info, u16 ref, bool enable)
 
 	if ((enable && (info->bus_refmask & ref)) ||
 	    (!enable && !(info->bus_refmask & ref))) {
-		pr_err("%s: reference is unexpectedly set: mask=0x%04X, ref=0x%04X, enable=%d.\n",
+		pr_debug("%s: reference is unexpectedly set: mask=0x%04X, ref=0x%04X, enable=%d.\n",
 			__func__, info->bus_refmask, ref, enable);
 		mutex_unlock(&info->bus_mutex);
 		return ERROR_OP_NOT_ALLOW;
@@ -4776,13 +4787,13 @@ static int fts_screen_state_chg_callback(struct notifier_block *nb,
 	case MSM_DRM_BLANK_POWERDOWN:
 	case MSM_DRM_BLANK_LP:
 		if (val == MSM_DRM_EARLY_EVENT_BLANK) {
-			pr_info("%s: BLANK\n", __func__);
+			pr_debug("%s: BLANK\n", __func__);
 			fts_set_bus_ref(info, FTS_BUS_REF_SCREEN_ON, false);
 		}
 		break;
 	case MSM_DRM_BLANK_UNBLANK:
 		if (val == MSM_DRM_EVENT_BLANK) {
-			pr_info("%s: UNBLANK\n", __func__);
+			pr_debug("%s: UNBLANK\n", __func__);
 			fts_set_bus_ref(info, FTS_BUS_REF_SCREEN_ON, true);
 		}
 		break;
@@ -4793,7 +4804,7 @@ static int fts_screen_state_chg_callback(struct notifier_block *nb,
 		if (gpio_is_valid(info->board->disp_rate_gpio))
 			gpio_set_value(info->board->disp_rate_gpio,
 				(info->display_refresh_rate == 90));
-		pr_info("Refresh rate changed to %d Hz.\n",
+		pr_debug("Refresh rate changed to %d Hz.\n",
 			info->display_refresh_rate);
 	}
 
@@ -5368,7 +5379,10 @@ static int fts_probe(struct spi_device *client)
 	/* Set initial heatmap mode based on the device tree configuration.
 	 * Default is partial heatmap mode.
 	 */
-	info->heatmap_mode_full = info->board->heatmap_mode_full_init;
+	if (info->board->heatmap_mode_full_init)
+		info->heatmap_mode = FTS_HEATMAP_FULL;
+	else
+		info->heatmap_mode = FTS_HEATMAP_PARTIAL;
 
 	/* init motion filter mode */
 	info->use_default_mf = false;
@@ -5580,6 +5594,28 @@ static int fts_remove(struct spi_device *client)
 	return OK;
 }
 
+#ifdef CONFIG_PM
+static int fts_pm_suspend(struct device *dev)
+{
+	struct fts_ts_info *info = dev_get_drvdata(dev);
+
+	if (info->resume_bit) {
+		pr_warn("%s: can't suspend because touch bus is in use(bus_refmask=0x%X)!\n",
+			__func__, info->bus_refmask);
+		return -EBUSY;
+	}
+
+	return 0;
+}
+
+static int fts_pm_resume(struct device *dev)
+{
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(fts_pm_ops, fts_pm_suspend, fts_pm_resume);
+#endif
+
 /**
   * Struct which contains the compatible names that need to match with
   * the definition of the device in the device tree node
@@ -5601,6 +5637,9 @@ static struct i2c_driver fts_i2c_driver = {
 	.driver			= {
 		.name		= FTS_TS_DRV_NAME,
 		.of_match_table = fts_of_match_table,
+#ifdef CONFIG_PM
+		.pm		= &fts_pm_ops,
+#endif
 	},
 	.probe			= fts_probe,
 	.remove			= fts_remove,
@@ -5612,6 +5651,9 @@ static struct spi_driver fts_spi_driver = {
 		.name		= FTS_TS_DRV_NAME,
 		.of_match_table = fts_of_match_table,
 		.owner		= THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm		= &fts_pm_ops,
+#endif
 	},
 	.probe			= fts_probe,
 	.remove			= fts_remove,
