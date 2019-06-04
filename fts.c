@@ -4668,15 +4668,13 @@ static void fts_suspend_work(struct work_struct *work)
 
 	reinit_completion(&info->bus_resumed);
 
-	__pm_wakeup_event(&info->wakesrc, jiffies_to_msecs(HZ));
+	__pm_stay_awake(&info->wakesrc);
 
 	info->resume_bit = 0;
 
 	fts_mode_handler(info, 0);
 
 	release_all_touches(info);
-
-	info->sensor_sleep = true;
 
 	fts_enableInterrupt(false);
 
@@ -4689,6 +4687,9 @@ static void fts_suspend_work(struct work_struct *work)
 	if (info->tbn)
 		tbn_release_bus(info->tbn);
 #endif
+
+	info->sensor_sleep = true;
+	__pm_relax(&info->wakesrc);
 }
 /** @}*/
 
@@ -5599,9 +5600,12 @@ static int fts_pm_suspend(struct device *dev)
 {
 	struct fts_ts_info *info = dev_get_drvdata(dev);
 
-	if (info->resume_bit) {
-		pr_warn("%s: can't suspend because touch bus is in use(bus_refmask=0x%X)!\n",
-			__func__, info->bus_refmask);
+	if (info->bus_refmask)
+		pr_warn("%s: bus_refmask 0x%X\n", __func__, info->bus_refmask);
+
+	if (info->resume_bit == 1 || info->sensor_sleep == false) {
+		pr_warn("%s: can't suspend because touch bus is in use!\n",
+			__func__);
 		return -EBUSY;
 	}
 
