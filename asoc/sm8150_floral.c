@@ -4979,18 +4979,32 @@ static int sm8150_tdm_snd_hw_params(struct snd_pcm_substream *substream,
 				SND_SOC_DAIFMT_IB_NF);
 
 		if (ret != 0) {
-			dev_err(codec_dai->dev,
-				"Failed to set %s's clock: ret = %d\n",
-				codec_dai->name, ret);
+			if (ret == -ENOTSUPP) {
+				ret = 0;
+				dev_info(codec_dai->dev,
+					"Do not support set_fmt\n");
+			} else {
+				dev_err(codec_dai->dev,
+					"Failed to set %s's clock: ret = %d\n",
+					codec_dai->name, ret);
+			}
 			goto end;
 		}
 
 		ret = snd_soc_codec_set_sysclk(codec, 0, 0,
 				clk_freq,
 				SND_SOC_CLOCK_IN);
-		if (ret < 0)
-			pr_err("%s: set sysclk failed, err:%d\n",
-				__func__, ret);
+		if (ret < 0) {
+			if (ret == -ENOTSUPP) {
+				ret = 0;
+				dev_info(codec_dai->dev,
+					"Do not support set_sysclk\n");
+			} else {
+				pr_err("%s: set sysclk failed, err:%d\n",
+					__func__, ret);
+			}
+			goto end;
+		}
 	}
 end:
 	return ret;
@@ -6203,13 +6217,8 @@ static struct snd_soc_dai_link msm_common_be_dai_links[] = {
 		.stream_name = "Tertiary TDM1 Playback",
 		.cpu_dai_name = "msm-dai-q6-tdm.36898",
 		.platform_name = "msm-pcm-routing",
-#ifdef CONFIG_SND_SOC_CS35L36_TDM
-		.codecs = spk_codec,
-		.num_codecs = ARRAY_SIZE(spk_codec),
-#else
 		.codec_name = "msm-stub-codec.1",
 		.codec_dai_name = "msm-stub-rx",
-#endif
 		.no_pcm = 1,
 		.dpcm_playback = 1,
 		.id = MSM_BACKEND_DAI_TERT_TDM_RX_1,
