@@ -326,6 +326,11 @@ int checkEcho(u8 *cmd, int size)
 			(cmd[1] == SYS_CMD_CX_TUNING))
 			ret = pollForEvent(event_to_search, size + 2, readData,
 				   TIMEOUT_ECHO_SINGLE_ENDED_SPECIAL_AUTOTUNE);
+		else if (cmd[0] == FTS_CMD_SYSTEM &&
+			 cmd[1] == SYS_CMD_SPECIAL &&
+			 cmd[2] == SPECIAL_FIFO_FLUSH)
+			ret = pollForEvent(event_to_search, size + 2, readData,
+				   TIMEOUT_ECHO_FLUSH);
 		else
 			ret = pollForEvent(event_to_search, size + 2, readData,
 				   TIEMOUT_ECHO);

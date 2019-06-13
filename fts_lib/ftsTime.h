@@ -48,6 +48,8 @@
 /* /< timeout to perform initialization test in ms */
 #define TIEMOUT_ECHO 				(50 * TIMEOUT_RESOLUTION)
 /* /< timeout of the echo command,*/
+#define TIMEOUT_ECHO_FLUSH			(TIMEOUT_RESOLUTION)
+/* /< timeout of the flush echo command,*/
 #define TIMEOUT_ECHO_FPI			(200  * TIMEOUT_RESOLUTION)
 /* /< timeout of the Full panel Init echo command */
 #define TIMEOUT_ECHO_SINGLE_ENDED_SPECIAL_AUTOTUNE \
