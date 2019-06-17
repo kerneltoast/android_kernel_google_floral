@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2011, 2014-2016 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011, 2014-2016, 2019 The Linux Foundation. All rights
+ * reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -36,7 +37,7 @@
  * default limit of 8 VAPs per device.
  */
 /* Rome PRD support 4 vdevs */
-#define CFG_TGT_NUM_VDEV                4
+#define CFG_TGT_NUM_VDEV                5
 
 /*
  * We would need 1 AST entry per peer. Scale it by a factor of 2 to minimize hash collisions.
