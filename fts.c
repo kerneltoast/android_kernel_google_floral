@@ -3207,8 +3207,7 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 			break;
 
 		default:
-			pr_info("%s: Force cal = %02X %02X %02X %02X"
-				" %02X %02X\n",
+			pr_info("%s: Unknown force cal = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		}
@@ -3276,8 +3275,7 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 			break;
 
 		default:
-			pr_info("%s: Water Mode = %02X %02X %02X %02X"
-				" %02X %02X\n",
+			pr_info("%s: Unknown water mode = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		}
@@ -3297,8 +3295,7 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 		break;
 
 	case EVT_TYPE_STATUS_NOISE:
-		pr_info("%s: Noise Status Event = %02X %02X"
-		" %02X %02X %02X %02X\n",
+		pr_debug("%s: Noise Status Event = %02X %02X %02X %02X %02X %02X\n",
 			__func__, event[2], event[3], event[4], event[5],
 			event[6], event[7]);
 		break;
@@ -3334,8 +3331,7 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 			break;
 
 		default:
-			pr_debug("%s: Stimpad Status = %02X %02X %02X %02X"
-				" %02X %02X\n",
+			pr_debug("%s: Unknown stimpad status = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		}
@@ -3372,8 +3368,7 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 			break;
 
 		default:
-			pr_info("%s: Palm touch Status = %02X %02X %02X %02X"
-				" %02X %02X\n",
+			pr_info("%s: Unknown palm touch status = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		}
@@ -3397,8 +3392,7 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 			break;
 
 		default:
-			pr_info("%s: Grip Touch Status = %02X %02X %02X %02X"
-				" %02X %02X\n",
+			pr_info("%s: Unknown grip touch status = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		}
@@ -3421,16 +3415,14 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 			break;
 
 		default:
-			pr_info("%s: Golden Raw Validation Status ="
-			" %02X %02X %02X %02X %02X %02X\n",
+			pr_info("%s: Unknown golden raw validation status = %02X %02X %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
 		}
 		break;
 
 	default:
-		pr_info("%s: Received status event = %02X %02X %02X %02X %02X"
-			" %02X %02X %02X\n",
+		pr_info("%s: Received unknown status event = %02X %02X %02X %02X %02X %02X %02X %02X\n",
 			__func__, event[0], event[1], event[2], event[3],
 			event[4], event[5], event[6], event[7]);
 		break;
