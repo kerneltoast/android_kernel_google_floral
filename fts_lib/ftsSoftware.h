@@ -388,13 +388,22 @@ typedef enum {
 #define EVT_TYPE_STATUS_ECHO		0x01	/* /< Echo event,
 						 * contain the first 5 bytes of
 						 * the FW command sent */
+#define EVT_TYPE_STATUS_GPIO_CHAR_DET	0x02	/*/< Gpio Charger detected */
 #define EVT_TYPE_STATUS_FRAME_DROP	0x03	/* /< Some frame was skipped
 						 * during the elaboration */
 #define EVT_TYPE_STATUS_FORCE_CAL	0x05	/* /< Force Calibration has
 						 * triggered */
 #define EVT_TYPE_STATUS_WATER		0x06	/* /< Water Mode */
 #define EVT_TYPE_STATUS_SS_RAW_SAT	0x07	/* /< Self Sense data saturated */
-#define EVT_TYPE_STATUS_STIMPAD 	0x0A	/* /< Stimpad status event */
+#define EVT_TYPE_STATUS_PRE_WAT_DET	0x08	/* /< Previous Water Detect* */
+#define EVT_TYPE_STATUS_NOISE		0x09	/* /< Noise Status* */
+#define EVT_TYPE_STATUS_STIMPAD		0x0A	/* /< Stimpad Status* */
+#define EVT_TYPE_STATUS_NO_TOUCH	0x0B	/* /< No Touch Status* */
+#define EVT_TYPE_STATUS_IDLE		0x0C	/* /< Idle Status* */
+#define EVT_TYPE_STATUS_PALM_TOUCH	0x0D	/* /< Palm Touch Status* */
+#define EVT_TYPE_STATUS_GRIP_TOUCH	0x0E	/* /< Grip Touch Status* */
+#define EVT_TYPE_STATUS_GOLDEN_RAW_VAL	0x0F	/* /< Golden Raw
+						 * Validation Status */
 
 /** @} */
 
@@ -522,7 +531,7 @@ typedef enum {
 #define TOUCH_TYPE_GLOVE	0x02	/* /< Glove touch */
 #define TOUCH_TYPE_STYLUS	0x03	/* /< Stylus touch */
 #define TOUCH_TYPE_PALM		0x04	/* /< Palm touch */
-#define TOUCH_TYPE_HOVER	0x05	/* /< Hovering touch */
+#define TOUCH_TYPE_HOVER	0x00	/* /< Hovering touch */
 
 /* Keys code */
 #define FTS_KEY_0		0x01	/* /< Key 0 bit */
