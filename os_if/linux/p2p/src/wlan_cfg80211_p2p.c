@@ -439,7 +439,6 @@ int wlan_cfg80211_mgmt_tx(struct wlan_objmgr_vdev *vdev,
 	if (wait > MAX_OFFCHAN_TIME_FOR_DNBS) {
 		int ret;
 		bool ok;
-		uint32_t channel = wlan_freq_to_chan(chan->center_freq);
 
 		ret = policy_mgr_is_chan_ok_for_dnbs(psoc, channel, &ok);
 		if (QDF_IS_STATUS_ERROR(ret)) {
@@ -455,7 +454,7 @@ int wlan_cfg80211_mgmt_tx(struct wlan_objmgr_vdev *vdev,
 	}
 
 	mgmt_tx.vdev_id = (uint32_t)vdev_id;
-	mgmt_tx.chan = (uint32_t)wlan_freq_to_chan(chan->center_freq);
+	mgmt_tx.chan = channel;
 	mgmt_tx.wait = wait;
 	mgmt_tx.len = len;
 	mgmt_tx.no_cck = (uint32_t)no_cck;
