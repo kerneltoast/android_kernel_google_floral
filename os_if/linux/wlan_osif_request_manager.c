@@ -83,7 +83,7 @@ struct osif_request *osif_request_alloc(const struct osif_request_params *params
 	struct osif_request *request;
 
 	if (!is_initialized) {
-		cfg80211_err("invoked when not initialized from %pS",
+		cfg80211_err("invoked when not initialized from %pK",
 			(void *)_RET_IP_);
 		return NULL;
 	}
@@ -91,7 +91,7 @@ struct osif_request *osif_request_alloc(const struct osif_request_params *params
 	length = sizeof(*request) + params->priv_size;
 	request = qdf_mem_malloc(length);
 	if (!request) {
-		cfg80211_err("allocation failed for %pS", (void *)_RET_IP_);
+		cfg80211_err("allocation failed for %pK", (void *)_RET_IP_);
 		return NULL;
 	}
 	request->reference_count = 1;
@@ -101,7 +101,7 @@ struct osif_request *osif_request_alloc(const struct osif_request_params *params
 	request->cookie = cookie++;
 	qdf_list_insert_back(&requests, &request->node);
 	qdf_spin_unlock_bh(&spinlock);
-	cfg80211_debug("request %pK, cookie %pK, caller %pS",
+	cfg80211_debug("request %pK, cookie %pK, caller %pK",
 		  request, request->cookie, (void *)_RET_IP_);
 
 	return request;
@@ -123,7 +123,7 @@ struct osif_request *osif_request_get(void *cookie)
 	struct osif_request *request;
 
 	if (!is_initialized) {
-		cfg80211_err("invoked when not initialized from %pS",
+		cfg80211_err("invoked when not initialized from %pK",
 			(void *)_RET_IP_);
 		return NULL;
 	}
@@ -132,7 +132,7 @@ struct osif_request *osif_request_get(void *cookie)
 	if (request)
 		request->reference_count++;
 	qdf_spin_unlock_bh(&spinlock);
-	cfg80211_debug("cookie %pK, request %pK, caller %pS",
+	cfg80211_debug("cookie %pK, request %pK, caller %pK",
 		  cookie, request, (void *)_RET_IP_);
 
 	return request;
@@ -142,7 +142,7 @@ void osif_request_put(struct osif_request *request)
 {
 	bool unlinked = false;
 
-	cfg80211_debug("request %pK, cookie %pK, caller %pS",
+	cfg80211_debug("request %pK, cookie %pK, caller %pK",
 		  request, request->cookie, (void *)_RET_IP_);
 	qdf_spin_lock_bh(&spinlock);
 	request->reference_count--;
@@ -172,7 +172,7 @@ void osif_request_complete(struct osif_request *request)
 
 void osif_request_manager_init(void)
 {
-	cfg80211_debug("%pS", (void *)_RET_IP_);
+	cfg80211_debug("%pK", (void *)_RET_IP_);
 	if (is_initialized)
 		return;
 
@@ -190,6 +190,6 @@ void osif_request_manager_init(void)
  */
 void osif_request_manager_deinit(void)
 {
-	cfg80211_debug("%pS", (void *)_RET_IP_);
+	cfg80211_debug("%pK", (void *)_RET_IP_);
 	is_initialized = false;
 }

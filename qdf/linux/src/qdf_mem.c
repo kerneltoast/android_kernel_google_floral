@@ -420,7 +420,7 @@ static void qdf_mem_meta_table_print(struct __qdf_mem_info *table,
 			break;
 
 		print(print_priv,
-		      "%6u x %5u = %7uB @ %s:%u   %pS %llu",
+		      "%6u x %5u = %7uB @ %s:%u   %pK %llu",
 		      table[i].count,
 		      table[i].size,
 		      table[i].count * table[i].size,
@@ -429,7 +429,7 @@ static void qdf_mem_meta_table_print(struct __qdf_mem_info *table,
 		      table[i].time);
 		len += qdf_scnprintf(debug_str + len,
 				     sizeof(debug_str) - len,
-				     " @ %s:%u %pS",
+				     " @ %s:%u %pK",
 				     table[i].file,
 				     table[i].line,
 				     table[i].caller);
