@@ -729,90 +729,18 @@ static int fts_driver_test_release(struct inode *inode, struct file *file)
 	struct fts_ts_info *info = dev_get_drvdata(getDev());
 	int retval;
 
-	if (!info) {
+	if (info)
+		mutex_lock(&info->diag_cmd_lock);
+	else
 		pr_err("%s: Unable to access driver data\n", __func__);
-		retval = -ENODEV;
-		goto exit;
-	}
-
-	if (!mutex_trylock(&info->diag_cmd_lock)) {
-		pr_err("%s: Blocking concurrent access\n", __func__);
-		retval = -EBUSY;
-		goto exit;
-	}
 
 	retval = seq_release(inode, file);
-	info->diag_node_open = false;
 
-	mutex_unlock(&info->diag_cmd_lock);
-exit:
-	return retval;
-}
-
-
-/**
-  * This function reads a sequential file
-  * @param file  file associated to the file node
-  * @param buf 	 userspace buffer where the newly read data should be placed
-  * @param count size of the requested transfer.
-  * @param pos   start position from which data should be written in the file.
-  * @return error code, 0 if success
-  */
-static ssize_t fts_driver_test_read(struct file *file, char __user *buf,
-					size_t count, loff_t *pos)
-{
-	struct fts_ts_info *info = dev_get_drvdata(getDev());
-	ssize_t bytes_read = -EINVAL;
-
-	if (!info) {
-		pr_err("%s: Unable to access driver data\n", __func__);
-		bytes_read = -ENODEV;
-		goto exit;
+	if (info) {
+		info->diag_node_open = false;
+		mutex_unlock(&info->diag_cmd_lock);
 	}
 
-	if (!mutex_trylock(&info->diag_cmd_lock)) {
-		pr_err("%s: Blocking concurrent access\n", __func__);
-		bytes_read = -EBUSY;
-		goto exit;
-	}
-
-	bytes_read = seq_read(file, buf, count, pos);
-
-	mutex_unlock(&info->diag_cmd_lock);
-exit:
-	return bytes_read;
-}
-
-/**
-  * This function moves the cursor position within a file.
-  * @param file   file associated to the file node
-  * @param offset offset relative to the current file position.
-  * @param whence defines where to seek from.
-  * @return error code, 0 if success
-  */
-static loff_t fts_driver_test_lseek(struct file *file, loff_t offset,
-					int whence)
-{
-	struct fts_ts_info *info = dev_get_drvdata(getDev());
-	loff_t retval;
-
-	if (!info) {
-		pr_err("%s: Unable to access driver data\n", __func__);
-		retval = -ENODEV;
-		goto exit;
-	}
-
-	if (!mutex_trylock(&info->diag_cmd_lock)) {
-		pr_err("%s: Blocking concurrent access\n", __func__);
-		retval = -EBUSY;
-		goto exit;
-	}
-
-	retval = seq_lseek(file, offset, whence);
-
-	mutex_unlock(&info->diag_cmd_lock);
-
-exit:
 	return retval;
 }
 
@@ -880,12 +808,6 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 	if (!info) {
 		pr_err("%s: Unable to access driver data\n", __func__);
 		count =  -ENODEV;
-		goto exit;
-	}
-
-	if (!mutex_trylock(&info->diag_cmd_lock)) {
-		pr_err("%s: Blocking concurrent access\n", __func__);
-		count = -EBUSY;
 		goto exit;
 	}
 
@@ -3726,8 +3648,6 @@ ERROR:
 
 	fts_set_bus_ref(info, FTS_BUS_REF_SYSFS, false);
 
-	mutex_unlock(&info->diag_cmd_lock);
-
 exit:
 	return count;
 }
@@ -3740,9 +3660,9 @@ exit:
   */
 static struct file_operations fts_driver_test_ops = {
 	.open		= fts_driver_test_open,
-	.read		= fts_driver_test_read,
+	.read		= seq_read,
 	.write		= fts_driver_test_write,
-	.llseek		= fts_driver_test_lseek,
+	.llseek		= seq_lseek,
 	.release	= fts_driver_test_release
 };
 
