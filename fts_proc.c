@@ -1859,7 +1859,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 
 			pr_info("GM data reading Finished!\n");
 
-			size = gmRawData.data_size * sizeof(s32) + 6;
+			size = (6 + gmRawData.data_size) * sizeof(u16);
 
 			print_frame_short("Golden Mutual Data =",
 					array1dTo2d_short(
