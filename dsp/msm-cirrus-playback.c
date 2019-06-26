@@ -1259,6 +1259,12 @@ static long crus_sp_shared_ioctl(struct file *f, unsigned int cmd,
 		goto exit;
 	}
 
+	if (size != sizeof(crus_sp_hdr)) {
+		pr_err("%s: the payload size is invalid", __func__);
+		result = -EINVAL;
+		goto exit;
+	}
+
 	/* Copy IOCTL header from usermode */
 	if (copy_from_user(&crus_sp_hdr, arg, size)) {
 		pr_err("copy_from_user (struct) failed\n");
@@ -1351,12 +1357,19 @@ static long crus_sp_shared_ioctl(struct file *f, unsigned int cmd,
 
 		break;
 	case CRUS_SP_IOCTL_SET_CALIB:
+		if (bufsize != sizeof(crus_sp_cal_rslt)) {
+			pr_err("%s: the data size is invalid", __func__);
+			result = -EINVAL;
+			goto exit_io;
+		}
+
 		if (copy_from_user(io_data,
 				   (void *)crus_sp_hdr.data, bufsize)) {
 			pr_err("copy_from_user failed\n");
 			result = -EFAULT;
 			goto exit_io;
 		}
+
 		memcpy(&crus_sp_cal_rslt, io_data, bufsize);
 
 		msm_crus_check_calibration_value();
