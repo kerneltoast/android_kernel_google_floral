@@ -16,6 +16,7 @@
 #include <linux/jiffies.h>
 #include <linux/uaccess.h>
 #include <linux/atomic.h>
+#include <soc/qcom/subsystem_restart.h>
 #include <sound/asound.h>
 #include <dsp/msm-dts-srs-tm-config.h>
 #include <dsp/apr_audio-v2.h>
@@ -984,6 +985,9 @@ int adm_set_pp_params(int port_id, int copp_idx,
 		pr_err("%s: Set params timed out port = 0x%x\n", __func__,
 		       port_id);
 		ret = -ETIMEDOUT;
+
+		pr_err("trigger ADSP SSR b/136031875");
+		subsystem_restart("adsp");
 		goto done;
 	}
 	if (atomic_read(copp_stat) > 0) {
