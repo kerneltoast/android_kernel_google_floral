@@ -2875,11 +2875,11 @@ static bool fts_enter_pointer_event_handler(struct fts_ts_info *info, unsigned
 	distance = 0;	/* if the tool is touching the display
 			  * the distance should be 0 */
 
-	if (x == info->board->x_axis_max)
-		x--;
+	if (x > info->board->x_axis_max)
+		x = info->board->x_axis_max;
 
-	if (y == info->board->y_axis_max)
-		y--;
+	if (y > info->board->y_axis_max)
+		y = info->board->y_axis_max;
 
 	input_mt_slot(info->input_dev, touchId);
 	switch (touchType) {
@@ -5305,8 +5305,8 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 		coords[1] = timing.vactive.max - 1;
 	} else if (of_property_read_u32_array(np, "st,max-coords", coords, 2)) {
 		pr_err("st,max-coords not found, using 1440x2560\n");
-		coords[0] = 1440;
-		coords[1] = 2560;
+		coords[0] = 1440 - 1;
+		coords[1] = 2560 - 1;
 	}
 	bdata->x_axis_max = coords[0];
 	bdata->y_axis_max = coords[1];
