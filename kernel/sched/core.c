@@ -2094,6 +2094,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags,
 	unsigned long flags;
 	int cpu, success = 0;
 
+	preempt_disable();
 	if (p == current) {
 		/*
 		 * We're waking current, this means 'p->on_rq' and 'task_cpu(p)
@@ -2107,7 +2108,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags,
 		 *    it disabling IRQs (this allows not taking ->pi_lock).
 		 */
 		if (!(p->state & state))
-			return false;
+			goto out;
 
 		success = 1;
 		cpu = task_cpu(p);
@@ -2223,6 +2224,7 @@ unlock:
 out:
 	if (success)
 		ttwu_stat(p, cpu, wake_flags);
+	preempt_enable();
 
 #ifdef CONFIG_SCHED_WALT
 	if (success && sched_predl) {
