@@ -6656,6 +6656,10 @@ static const struct snd_kcontrol_new slimbus_7_rx_mixer_controls[] = {
 	MSM_BACKEND_DAI_SLIMBUS_7_RX,
 	MSM_FRONTEND_DAI_MULTIMEDIA26, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia30", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_SLIMBUS_7_RX,
+	MSM_FRONTEND_DAI_MULTIMEDIA30, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
 };
 
 static const struct snd_kcontrol_new slimbus_9_rx_mixer_controls[] = {
@@ -6796,6 +6800,10 @@ static const struct snd_kcontrol_new usb_audio_rx_mixer_controls[] = {
 	SOC_DOUBLE_EXT("MultiMedia26", SND_SOC_NOPM,
 	MSM_BACKEND_DAI_USB_RX,
 	MSM_FRONTEND_DAI_MULTIMEDIA26, 1, 0, msm_routing_get_audio_mixer,
+	msm_routing_put_audio_mixer),
+	SOC_DOUBLE_EXT("MultiMedia30", SND_SOC_NOPM,
+	MSM_BACKEND_DAI_USB_RX,
+	MSM_FRONTEND_DAI_MULTIMEDIA30, 1, 0, msm_routing_get_audio_mixer,
 	msm_routing_put_audio_mixer),
 };
 
@@ -20151,6 +20159,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"SLIMBUS_7_RX Audio Mixer", "MultiMedia15", "MM_DL15"},
 	{"SLIMBUS_7_RX Audio Mixer", "MultiMedia16", "MM_DL16"},
 	{"SLIMBUS_7_RX Audio Mixer", "MultiMedia26", "MM_DL26"},
+	{"SLIMBUS_7_RX Audio Mixer", "MultiMedia30", "MM_DL30"},
 	{"SLIMBUS_7_RX", NULL, "SLIMBUS_7_RX Audio Mixer"},
 
 	{"SLIMBUS_9_RX Audio Mixer", "MultiMedia1", "MM_DL1"},
@@ -20189,6 +20198,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"USB_AUDIO_RX Audio Mixer", "MultiMedia15", "MM_DL15"},
 	{"USB_AUDIO_RX Audio Mixer", "MultiMedia16", "MM_DL16"},
 	{"USB_AUDIO_RX Audio Mixer", "MultiMedia26", "MM_DL26"},
+	{"USB_AUDIO_RX Audio Mixer", "MultiMedia30", "MM_DL30"},
 	{"USB_AUDIO_RX", NULL, "USB_AUDIO_RX Audio Mixer"},
 
 	{"MultiMedia1 Mixer", "VOC_REC_UL", "INCALL_RECORD_TX"},
