@@ -1394,12 +1394,47 @@ static long crus_sp_ioctl(struct file *f,
 	return crus_sp_shared_ioctl(f, cmd, (void __user *)arg);
 }
 
+struct compat_crus_sp_ioctl_header {
+	uint32_t size;
+	uint32_t module_id;
+	uint32_t param_id;
+	uint32_t data_length;
+	compat_caddr_t data;
+};
+
 static long crus_sp_compat_ioctl(struct file *f,
 				 unsigned int cmd, unsigned long arg)
 {
 	unsigned int cmd64;
+	struct compat_crus_sp_ioctl_header __user *ua32;
+	struct crus_sp_ioctl_header __user *ua;
+	compat_caddr_t __user ua32_data;
+	void __user *ua_data;
+	uint32_t ua32_size, ua_size;
 
 	pr_debug("%s\n", __func__);
+
+	ua32 = compat_ptr(arg);
+	if (get_user(ua32_size, (uint32_t __user*)&ua32->size))
+		return -EFAULT;
+	if (ua32_size != sizeof(*ua32))
+		return -EINVAL;
+
+	ua_size = sizeof(*ua);
+	ua = compat_alloc_user_space(ua_size);
+	if (!ua)
+		return -ENOMEM;
+
+	/* Copy everything but data, then fixup size & data. */
+	if (copy_in_user(ua, ua32, sizeof(*ua32) - sizeof(ua32->data)))
+		return -EFAULT;
+	if (put_user(ua_size, (uint32_t __user*)&ua->size))
+		return -EFAULT;
+	if (get_user(ua32_data, (compat_caddr_t __user*)&ua32->data))
+		return -EFAULT;
+	ua_data = compat_ptr(ua32_data);
+	if (put_user(ua_data, (void* __user*)&ua->data))
+		return -EFAULT;
 
 	switch (cmd) {
 	case CRUS_SP_IOCTL_GET32:
@@ -1419,7 +1454,7 @@ static long crus_sp_compat_ioctl(struct file *f,
 		return -EINVAL;
 	}
 
-	return crus_sp_shared_ioctl(f, cmd64, compat_ptr(arg));
+	return crus_sp_shared_ioctl(f, cmd64, ua);
 }
 
 static int crus_sp_open(struct inode *inode, struct file *f)
