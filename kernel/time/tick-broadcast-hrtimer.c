@@ -64,7 +64,7 @@ static int bc_set_next(ktime_t expires, struct clock_event_device *bc)
 	 * hrtimer_start() can call into tracing.
 	 */
 	RCU_NONIDLE( {
-		hrtimer_start(&bctimer, expires, HRTIMER_MODE_ABS_PINNED);
+		hrtimer_start(&bctimer, expires, HRTIMER_MODE_ABS_PINNED_HARD);
 		/*
 		 * The core tick broadcast mode expects bc->bound_on to be set
 		 * correctly to prevent a CPU which has the broadcast hrtimer
