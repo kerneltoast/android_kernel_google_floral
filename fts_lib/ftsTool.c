@@ -355,22 +355,22 @@ short **array1dTo2d_short(short *data, int size, int columns)
 	int i;
 	short **matrix = NULL;
 
-	if (size == 0) {
-		matrix = (short **)kmalloc_array(1,
-				sizeof(short *), GFP_KERNEL);
-		matrix[0] = (short *)kmalloc_array(0,
-				sizeof(short), GFP_KERNEL);
-	} else {
+	if (size != 0)
 		matrix = (short **)kmalloc_array(((int)(size / columns)),
 				sizeof(short *), GFP_KERNEL);
 
-		if (matrix != NULL) {
-			for (i = 0; i < (int)(size / columns); i++)
-				matrix[i] = (short *)kmalloc_array(columns,
-						sizeof(short), GFP_KERNEL);
+	if (matrix != NULL) {
+		for (i = 0; i < (int)(size / columns); i++) {
+			matrix[i] = (short *)kmalloc_array(columns,
+					sizeof(short), GFP_KERNEL);
+			if (!matrix[i])
+				break;
+		}
 
-			for (i = 0; i < size; i++)
-				matrix[i / columns][i % columns] = data[i];
+		for (i = 0; i < size; i++) {
+			if (!matrix[i / columns])
+				break;
+			matrix[i / columns][i % columns] = data[i];
 		}
 	}
 
@@ -391,20 +391,22 @@ u16 **array1dTo2d_u16(u16 *data, int size, int columns)
 	int i;
 	u16 **matrix = NULL;
 
-	if (size == 0) {
-		matrix = (u16 **)kmalloc_array(1, sizeof(u16 *), GFP_KERNEL);
-		matrix[0] = (u16 *)kmalloc_array(0, sizeof(u16), GFP_KERNEL);
-	} else {
+	if (size != 0)
 		matrix = (u16 **)kmalloc_array(((int)(size / columns)),
 				sizeof(u16 *), GFP_KERNEL);
 
-		if (matrix != NULL) {
-			for (i = 0; i < (int)(size / columns); i++)
-				matrix[i] = (u16 *)kmalloc_array(columns,
-						sizeof(u16), GFP_KERNEL);
+	if (matrix != NULL) {
+		for (i = 0; i < (int)(size / columns); i++) {
+			matrix[i] = (u16 *)kmalloc_array(columns,
+					sizeof(u16), GFP_KERNEL);
+			if (!matrix[i])
+				break;
+		}
 
-			for (i = 0; i < size; i++)
-				matrix[i / columns][i % columns] = data[i];
+		for (i = 0; i < size; i++) {
+			if (!matrix[i / columns])
+				break;
+			matrix[i / columns][i % columns] = data[i];
 		}
 	}
 
@@ -425,22 +427,23 @@ u8 **array1dTo2d_u8(u8 *data, int size, int columns)
 	int i;
 	u8 **matrix = NULL;
 
-	if (size == 0) {
-		matrix = (u8 **)kmalloc_array(1, sizeof(u8 *), GFP_KERNEL);
-
-		matrix[0] = (u8 *)kmalloc_array(0, sizeof(u8), GFP_KERNEL);
-	} else {
-
+	if (size != 0) {
 		matrix = (u8 **)kmalloc_array(((int)(size / columns)),
 				sizeof(u8 *), GFP_KERNEL);
+	}
 
-		if (matrix != NULL) {
-			for (i = 0; i < (int)(size / columns); i++)
-				matrix[i] = (u8 *)kmalloc_array(columns,
-						sizeof(u8), GFP_KERNEL);
+	if (matrix != NULL) {
+		for (i = 0; i < (int)(size / columns); i++) {
+			matrix[i] = (u8 *)kmalloc_array(columns,
+					sizeof(u8), GFP_KERNEL);
+			if (!matrix[i])
+				break;
+		}
 
-			for (i = 0; i < size; i++)
-				matrix[i / columns][i % columns] = data[i];
+		for (i = 0; i < size; i++) {
+			if (!matrix[i / columns])
+				break;
+			matrix[i / columns][i % columns] = data[i];
 		}
 	}
 
@@ -461,20 +464,22 @@ i8 **array1dTo2d_i8(i8 *data, int size, int columns)
 	int i;
 	i8 **matrix = NULL;
 
-	if (size == 0) {
-		matrix = (i8 **)kmalloc_array(1, sizeof(i8 *), GFP_KERNEL);
-		matrix[0] = (i8 *)kmalloc_array(0, sizeof(i8), GFP_KERNEL);
-	} else {
+	if (size != 0)
 		matrix = (i8 **)kmalloc_array(((int)(size / columns)),
 				sizeof(i8 *), GFP_KERNEL);
 
-		if (matrix != NULL) {
-			for (i = 0; i < (int)(size / columns); i++)
-				matrix[i] = (i8 *)kmalloc_array(columns,
-						sizeof(i8), GFP_KERNEL);
+	if (matrix != NULL) {
+		for (i = 0; i < (int)(size / columns); i++) {
+			matrix[i] = (i8 *)kmalloc_array(columns,
+					sizeof(i8), GFP_KERNEL);
+			if (!matrix[i])
+				break;
+		}
 
-			for (i = 0; i < size; i++)
-				matrix[i / columns][i % columns] = data[i];
+		for (i = 0; i < size; i++) {
+			if (!matrix[i / columns])
+				break;
+			matrix[i / columns][i % columns] = data[i];
 		}
 	}
 
@@ -495,6 +500,11 @@ void print_frame_short(char *label, short **matrix, int row, int column)
 	int buff_len, index;
 	char *buff;
 
+	pr_info("%s\n", label);
+
+	if (matrix == NULL)
+		return;
+
 	buff_len = (6 + 1) * column + 1; /* -32768 str len: 6 */
 	buff = kzalloc(buff_len, GFP_KERNEL);
 	if (buff == NULL) {
@@ -502,8 +512,9 @@ void print_frame_short(char *label, short **matrix, int row, int column)
 		return;
 	}
 
-	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
+		if (!matrix[i])
+			break;
 		index = 0;
 		for (j = 0; j < column; j++)
 			index += scnprintf(buff + index, buff_len - index,
@@ -529,6 +540,11 @@ void print_frame_u16(char *label, u16 **matrix, int row, int column)
 	int buff_len, index;
 	char *buff;
 
+	pr_info("%s\n", label);
+
+	if (matrix == NULL)
+		return;
+
 	buff_len = (5 + 1) * column + 1; /* 65535 str len: 5 */
 	buff = kzalloc(buff_len, GFP_KERNEL);
 	if (buff == NULL) {
@@ -536,8 +552,9 @@ void print_frame_u16(char *label, u16 **matrix, int row, int column)
 		return;
 	}
 
-	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
+		if (!matrix[i])
+			break;
 		index = 0;
 		for (j = 0; j < column; j++)
 			index += scnprintf(buff + index, buff_len - index,
@@ -563,6 +580,11 @@ void print_frame_u8(char *label, u8 **matrix, int row, int column)
 	int buff_len, index;
 	char *buff;
 
+	pr_info("%s\n", label);
+
+	if (matrix == NULL)
+		return;
+
 	buff_len = (3 + 1) * column + 1; /* 255 str len: 3 */
 	buff = kzalloc(buff_len, GFP_KERNEL);
 	if (buff == NULL) {
@@ -570,8 +592,9 @@ void print_frame_u8(char *label, u8 **matrix, int row, int column)
 		return;
 	}
 
-	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
+		if (!matrix[i])
+			break;
 		index = 0;
 		for (j = 0; j < column; j++)
 			index += scnprintf(buff + index, buff_len - index,
@@ -597,6 +620,11 @@ void print_frame_i8(char *label, i8 **matrix, int row, int column)
 	int buff_len, index;
 	char *buff;
 
+	pr_info("%s\n", label);
+
+	if (matrix == NULL)
+		return;
+
 	buff_len = (4 + 1) * column + 1; /* -128 str len: 4 */
 	buff = kzalloc(buff_len, GFP_KERNEL);
 	if (buff == NULL) {
@@ -604,8 +632,9 @@ void print_frame_i8(char *label, i8 **matrix, int row, int column)
 		return;
 	}
 
-	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
+		if (!matrix[i])
+			break;
 		index = 0;
 		for (j = 0; j < column; j++)
 			index += scnprintf(buff + index, buff_len - index,
@@ -631,6 +660,11 @@ void print_frame_u32(char *label, u32 **matrix, int row, int column)
 	int buff_len, index;
 	char *buff;
 
+	pr_info("%s\n", label);
+
+	if (matrix == NULL)
+		return;
+
 	buff_len = (10 + 1) * column + 1; /* 4294967295 str len: 10 */
 	buff = kzalloc(buff_len, GFP_KERNEL);
 	if (buff == NULL) {
@@ -638,8 +672,9 @@ void print_frame_u32(char *label, u32 **matrix, int row, int column)
 		return;
 	}
 
-	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
+		if (!matrix[i])
+			break;
 		index = 0;
 		for (j = 0; j < column; j++)
 			index += scnprintf(buff + index, buff_len - index,
@@ -665,6 +700,11 @@ void print_frame_int(char *label, int **matrix, int row, int column)
 	int buff_len, index;
 	char *buff;
 
+	pr_info("%s\n", label);
+
+	if (matrix == NULL)
+		return;
+
 	buff_len = (11 + 1) * column + 1; /* -2147483648 str len: 11 */
 	buff = kzalloc(buff_len, GFP_KERNEL);
 	if (buff == NULL) {
@@ -672,8 +712,9 @@ void print_frame_int(char *label, int **matrix, int row, int column)
 		return;
 	}
 
-	pr_info("%s\n", label);
 	for (i = 0; i < row; i++) {
+		if (!matrix[i])
+			break;
 		index = 0;
 		for (j = 0; j < column; j++)
 			index += scnprintf(buff + index, buff_len - index,
