@@ -4376,6 +4376,7 @@ static irqreturn_t fts_isr(int irq, void *handle)
 	struct fts_ts_info *info = handle;
 
 	info->timestamp = ktime_get();
+	input_set_timestamp(info->input_dev, info->timestamp);
 
 	return IRQ_WAKE_THREAD;
 }
