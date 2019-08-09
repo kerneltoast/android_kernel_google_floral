@@ -3373,7 +3373,7 @@ int hdd_set_limit_off_chan_for_tos(struct hdd_adapter *adapter, enum tos tos,
  *
  * Return: None
  */
-void hdd_drv_ops_inactivity_handler(void);
+void hdd_drv_ops_inactivity_handler(void *);
 
 /**
  * hdd_start_driver_ops_timer() - Starts driver ops inactivity timer
