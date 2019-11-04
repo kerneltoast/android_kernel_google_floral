@@ -1693,9 +1693,6 @@ static int msm_pcm_chmap_ctl_get(struct snd_kcontrol *kcontrol,
 		return -EINVAL;
 	}
 
-	memset(ucontrol->value.integer.value, 0,
-		sizeof(ucontrol->value.integer.value));
-
 	mutex_lock(&pdata->lock);
 	prtd = substream->runtime->private_data;
 
