@@ -288,7 +288,7 @@ int getSSFrame3(SSFrameType type, SelfSenseFrame *frame)
 	}
 
 
-	pr_info("%s: Starting to get frame %02X\n", __func__, type);
+	pr_debug("%s: Starting to get frame %02X\n", __func__, type);
 	switch (type) {
 	case SS_RAW:
 		offset_force = systemInfo.u16_ssTchTxRawAddr;
@@ -396,7 +396,7 @@ int getSSFrame3(SSFrameType type, SelfSenseFrame *frame)
 
 	frame->header.type = type;
 
-	pr_info("%s: Force_len = %d Sense_len = %d Offset_force = %04X Offset_sense = %04X\n",
+	pr_debug("%s: Force_len = %d Sense_len = %d Offset_force = %04X Offset_sense = %04X\n",
 		__func__, frame->header.force_node,
 		frame->header.sense_node,
 		offset_force, offset_sense);
@@ -445,7 +445,7 @@ int getSSFrame3(SSFrameType type, SelfSenseFrame *frame)
 	/* if you want to access one node i,j,
 	  * the offset like: offset = i*columns + j = > frame[i, j] */
 
-	pr_info("Frame acquired!\n");
+	pr_debug("Frame acquired!\n");
 	return frame->header.force_node + frame->header.sense_node;
 	/* return the number of data put inside frame */
 }

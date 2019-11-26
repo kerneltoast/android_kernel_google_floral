@@ -35,6 +35,7 @@
 #include <linux/device.h>
 #include <linux/input/heatmap.h>
 #include <linux/pm_qos.h>
+#include <linux/input/touch_offload.h>
 #include <drm/drm_panel.h>
 #include "fts_lib/ftsSoftware.h"
 #include "fts_lib/ftsHardware.h"
@@ -42,7 +43,6 @@
 #ifdef CONFIG_TOUCHSCREEN_TBN
 #include <linux/input/touch_bus_negotiator.h>
 #endif
-
 
 /****************** CONFIGURATION SECTION ******************/
 /** @defgroup conf_section	 Driver Configuration Section
@@ -398,6 +398,10 @@ struct fts_ts_info {
 	struct pm_qos_request pm_qos_req;
 
 	struct v4l2_heatmap v4l2;
+
+#ifdef CONFIG_TOUCHSCREEN_OFFLOAD
+	struct touch_offload_context offload;
+#endif
 
 	struct delayed_work fwu_work;	/* Work for fw update */
 	struct workqueue_struct *fwu_workqueue;	/* Fw update work queue */
