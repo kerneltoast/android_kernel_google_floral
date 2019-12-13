@@ -373,6 +373,13 @@ void hdd_enable_ns_offload(struct hdd_adapter *adapter,
 	ns_req->trigger = trigger;
 	ns_req->count = 0;
 
+	/* check if offload cache and send is required or not */
+	status = ucfg_pmo_ns_offload_check(psoc, trigger, adapter->session_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		hdd_debug("NS offload is not required");
+		goto free_req;
+	}
+
 	/* Unicast Addresses */
 	errno = hdd_fill_ipv6_uc_addr(in6_dev, ns_req->ipv6_addr,
 				      ns_req->ipv6_addr_type, ns_req->scope,
@@ -420,9 +427,19 @@ void hdd_disable_ns_offload(struct hdd_adapter *adapter,
 		enum pmo_offload_trigger trigger)
 {
 	QDF_STATUS status;
+	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 
 	hdd_enter();
+
+	status = ucfg_pmo_ns_offload_check(hdd_ctx->psoc, trigger,
+					   adapter->session_id);
+	if (status != QDF_STATUS_SUCCESS) {
+		hdd_debug("Flushing of NS offload not required");
+		goto out;
+	}
+
 	status = pmo_ucfg_flush_ns_offload_req(adapter->vdev);
+
 	if (status != QDF_STATUS_SUCCESS) {
 		hdd_err("Failed to flush NS Offload");
 		goto out;
@@ -876,6 +893,12 @@ void hdd_enable_arp_offload(struct hdd_adapter *adapter,
 	arp_req->vdev_id = adapter->session_id;
 	arp_req->trigger = trigger;
 
+	status = ucfg_pmo_check_arp_offload(psoc, trigger, adapter->session_id);
+	if (QDF_IS_STATUS_ERROR(status)) {
+		hdd_debug("ARP offload not required");
+		goto free_req;
+	}
+
 	ifa = hdd_get_ipv4_local_interface(adapter);
 	if (!ifa || !ifa->ifa_local) {
 		hdd_info("IP Address is not assigned");
@@ -910,8 +933,17 @@ void hdd_disable_arp_offload(struct hdd_adapter *adapter,
 		enum pmo_offload_trigger trigger)
 {
 	QDF_STATUS status;
+	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
 
 	hdd_enter();
+
+	status = ucfg_pmo_check_arp_offload(hdd_ctx->psoc, trigger,
+					    adapter->session_id);
+	if (status != QDF_STATUS_SUCCESS) {
+		hdd_debug("Flushing of ARP offload not required");
+		goto out;
+	}
+
 	status = pmo_ucfg_flush_arp_offload_req(adapter->vdev);
 	if (status != QDF_STATUS_SUCCESS) {
 		hdd_err("Failed to flush arp Offload");
@@ -1736,7 +1768,6 @@ static int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
 	p_cds_sched_context cds_sched_context = get_cds_sched_ctxt();
 	struct hdd_adapter *adapter;
-	struct hdd_scan_info *scan_info;
 	mac_handle_t mac_handle;
 	int rc;
 
@@ -1800,25 +1831,16 @@ static int __wlan_hdd_cfg80211_suspend_wlan(struct wiphy *wiphy,
 	ucfg_p2p_cleanup_tx_by_psoc(hdd_ctx->psoc);
 	ucfg_p2p_cleanup_roc_by_psoc(hdd_ctx->psoc);
 
-	/* Stop ongoing scan on each interface */
-	hdd_for_each_adapter(hdd_ctx, adapter) {
-		scan_info = &adapter->scan_info;
-
-		if (sme_neighbor_middle_of_roaming(mac_handle,
-		    adapter->session_id) ||
-		    hdd_is_roaming_in_progress(hdd_ctx)) {
-			hdd_err("Roaming in progress, do not allow suspend");
-			wlan_hdd_inc_suspend_stats(hdd_ctx,
-						   SUSPEND_FAIL_ROAM);
-			return -EAGAIN;
-		}
-
-		wlan_abort_scan(hdd_ctx->pdev, INVAL_PDEV_ID,
-				adapter->session_id, INVALID_SCAN_ID, false);
+	if (hdd_is_connection_in_progress(NULL, NULL)) {
+		hdd_err_rl("Connection is in progress, rejecting suspend");
+		return -EINVAL;
 	}
 
 	/* flush any pending powersave timers */
 	hdd_for_each_adapter(hdd_ctx, adapter) {
+		wlan_abort_scan(hdd_ctx->pdev, INVAL_PDEV_ID,
+				adapter->session_id, INVALID_SCAN_ID, false);
+
 		if (wlan_hdd_validate_session_id(adapter->session_id))
 			continue;
 
