@@ -5938,6 +5938,13 @@ struct reg_table_entry g_registry_table[] = {
 		     CFG_ENABLE_RTT_SUPPORT_DEFAULT,
 		     CFG_ENABLE_RTT_SUPPORT_MIN,
 		     CFG_ENABLE_RTT_SUPPORT_MAX),
+
+	REG_VARIABLE(CFG_ENABLE_PENDING_CHAN_LIST_REQ, WLAN_PARAM_Integer,
+		     struct hdd_config, enable_pending_list_req,
+		     VAR_FLAGS_OPTIONAL | VAR_FLAGS_RANGE_CHECK_ASSUME_DEFAULT,
+		     CFG_ENABLE_PENDING_CHAN_LIST_REQ_DEFAULT,
+		     CFG_ENABLE_PENDING_CHAN_LIST_REQ_MIN,
+		     CFG_ENABLE_PENDING_CHAN_LIST_REQ_MAX),
 };
 
 
@@ -7967,6 +7974,10 @@ void hdd_cfg_print(struct hdd_context *hdd_ctx)
 	hdd_cfg_print_action_oui(hdd_ctx);
 	hdd_cfg_print_btc_params(hdd_ctx);
 	hdd_cfg_print_roam_preauth(hdd_ctx);
+
+	hdd_debug("Name = [%s] Value = [%u]",
+		  CFG_ENABLE_PENDING_CHAN_LIST_REQ,
+		  hdd_ctx->config->enable_pending_list_req);
 }
 
 /**
@@ -9829,6 +9840,8 @@ QDF_STATUS hdd_set_sme_config(struct hdd_context *hdd_ctx)
 	smeConfig->csrConfig.bss_load_sample_time =
 			pConfig->bss_load_sample_time;
 
+	smeConfig->csrConfig.enable_pending_list_req =
+			pConfig->enable_pending_list_req;
 
 	sme_update_beacon_stats(mac_handle,
 				hdd_ctx->config->enable_beacon_reception_stats);

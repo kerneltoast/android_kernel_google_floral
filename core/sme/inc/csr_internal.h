@@ -624,6 +624,7 @@ struct csr_config {
 	uint32_t bss_load_threshold;
 	uint32_t bss_load_sample_time;
 	bool roaming_scan_policy;
+	bool enable_pending_list_req;
 };
 
 struct csr_channel_powerinfo {
@@ -701,6 +702,7 @@ struct csr_scanstruct {
 	bool fcc_constraint;
 	uint8_t max_scan_count;
 	bool defer_update_channel_list;
+	bool pending_channel_list_req;
 	wlan_scan_requester requester_id;
 };
 

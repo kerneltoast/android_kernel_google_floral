@@ -1313,6 +1313,7 @@ typedef struct tagCsrConfigParam {
 	bool enable_bss_load_roam_trigger;
 	uint32_t bss_load_threshold;
 	uint32_t bss_load_sample_time;
+	bool enable_pending_list_req;
 } tCsrConfigParam;
 
 /* Tush */

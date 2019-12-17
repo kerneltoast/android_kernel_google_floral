@@ -13350,6 +13350,29 @@ enum hdd_external_acs_policy {
 #define CFG_IS_SAE_ENABLED_MAX     (1)
 
 /*
+ * <ini>
+ * enable_pending_list_req - Sets Pending channel List Req.
+ * @Min: 0
+ * @Max: 1
+ * @Default: 0
+ *
+ * This option enables/disables SCAN_CHAN_LIST_CMDID channel list command to FW
+ * till the current scan is complete.
+ *
+ * Related: None
+ *
+ * Supported Feature: STA
+ *
+ * Usage: External
+ *
+ * </ini>
+ */
+#define CFG_ENABLE_PENDING_CHAN_LIST_REQ       "enable_pending_list_req"
+#define CFG_ENABLE_PENDING_CHAN_LIST_REQ_MIN           0
+#define CFG_ENABLE_PENDING_CHAN_LIST_REQ_MAX           1
+#define CFG_ENABLE_PENDING_CHAN_LIST_REQ_DEFAULT       0
+
+/*
  * Type declarations
  */
 #define CFG_CHAN_BAND_WEIGHTAGE_NAME    "chan_band_weightage"
@@ -17072,6 +17095,8 @@ struct hdd_config {
 	uint32_t bss_load_sample_time;
 
 	bool enable_beacon_reception_stats;
+
+	bool enable_pending_list_req;
 };
 
 #define VAR_OFFSET(_Struct, _Var) (offsetof(_Struct, _Var))
