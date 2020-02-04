@@ -953,8 +953,8 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 	int xfer;
 	char *bufptr;
 	void *data = NULL;
-	uint32_t idx;
-	uint32_t size;
+	uint32_t idx = 0;
+	uint32_t size = 0;
 	uint32_t offset = 0;
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct msm_audio *prtd = substream->runtime->private_data;
@@ -1399,12 +1399,12 @@ static int msm_pcm_volume_ctl_get(struct snd_kcontrol *kcontrol,
 		return 0;
 	}
 
-	pdata = (struct msm_plat_data *)
+        pdata = (struct msm_plat_data *)
 			dev_get_drvdata(soc_prtd->platform->dev);
-	if (!pdata) {
-		pr_err("%s: pdata not found\n", __func__);
-		return -ENODEV;
-	}
+        if (!pdata) {
+                pr_err("%s: pdata not found\n", __func__);
+               return -ENODEV;
+        }
 
 	mutex_lock(&pdata->lock);
 	prtd = substream->runtime->private_data;

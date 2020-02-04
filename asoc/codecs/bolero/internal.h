@@ -23,6 +23,7 @@ enum {
 	BOLERO_WCD_EVT_PA_OFF_PRE_SSR,
 	BOLERO_WCD_EVT_SSR_DOWN,
 	BOLERO_WCD_EVT_SSR_UP,
+	BOLERO_WCD_EVT_PA_ON_POST_FSCLK,
 };
 
 enum {
@@ -37,6 +38,7 @@ enum {
 	WCD_BOLERO_EVT_RX_MUTE = 1, /* for RX mute/unmute */
 	WCD_BOLERO_EVT_IMPED_TRUE,   /* for imped true */
 	WCD_BOLERO_EVT_IMPED_FALSE,  /* for imped false */
+	WCD_BOLERO_EVT_BCS_CLK_OFF,
 };
 
 struct wcd_ctrl_platform_data {

@@ -50,6 +50,7 @@ enum {
 	ALLOW_BUCK_DISABLE,
 	HPH_COMP_DELAY,
 	HPH_PA_DELAY,
+	AMIC2_BCS_ENABLE,
 };
 
 static const DECLARE_TLV_DB_SCALE(line_gain, 0, 7, 1);
@@ -1202,10 +1203,21 @@ static int wcd937x_codec_enable_adc(struct snd_soc_dapm_widget *w,
 				    0x08, 0x08);
 		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_ANA_CLK_CTL,
 				    0x10, 0x10);
+		/* Enable BCS for Headset mic */
+		if (w->shift == 1 && !(snd_soc_read(codec,
+			WCD937X_TX_NEW_TX_CH2_SEL) & 0x80)) {
+			wcd937x_tx_connect_port(codec, MBHC, true);
+			set_bit(AMIC2_BCS_ENABLE, &wcd937x->status_mask);
+		}
 		wcd937x_tx_connect_port(codec, ADC1 + (w->shift), true);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		wcd937x_tx_connect_port(codec, ADC1 + (w->shift), false);
+		if (w->shift == 1 &&
+			test_bit(AMIC2_BCS_ENABLE, &wcd937x->status_mask)) {
+			wcd937x_tx_connect_port(codec, MBHC, false);
+			clear_bit(AMIC2_BCS_ENABLE, &wcd937x->status_mask);
+		}
 		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_ANA_CLK_CTL,
 				    0x08, 0x00);
 		break;
@@ -1230,15 +1242,18 @@ static int wcd937x_enable_req(struct snd_soc_dapm_widget *w,
 		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_REQ_CTL, 0x01,
 				    0x00);
 		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH2, 0x40, 0x40);
+		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH3_HPF, 0x40, 0x40);
 		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_DIG_CLK_CTL,
-				    0x30, 0x30);
+				    0x70, 0x70);
 		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH1, 0x80, 0x80);
 		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH2, 0x40, 0x00);
 		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH2, 0x80, 0x80);
+		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH3, 0x80, 0x80);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH1, 0x80, 0x00);
 		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH2, 0x80, 0x00);
+		snd_soc_update_bits(codec, WCD937X_ANA_TX_CH3, 0x80, 0x00);
 		snd_soc_update_bits(codec, WCD937X_DIGITAL_CDC_DIG_CLK_CTL,
 				    0x10, 0x00);
 		mutex_lock(&wcd937x->ana_tx_clk_lock);
@@ -1376,6 +1391,21 @@ int wcd937x_micbias_control(struct snd_soc_codec *codec,
 	return 0;
 }
 EXPORT_SYMBOL(wcd937x_micbias_control);
+
+void wcd937x_disable_bcs_before_slow_insert(struct snd_soc_codec *codec,
+					    bool bcs_disable)
+{
+	struct wcd937x_priv *wcd937x = snd_soc_codec_get_drvdata(codec);
+
+	if (wcd937x->update_wcd_event) {
+		if (bcs_disable)
+			wcd937x->update_wcd_event(wcd937x->handle,
+						WCD_BOLERO_EVT_BCS_CLK_OFF, 0);
+		else
+			wcd937x->update_wcd_event(wcd937x->handle,
+						WCD_BOLERO_EVT_BCS_CLK_OFF, 1);
+	}
+}
 
 static int wcd937x_get_logical_addr(struct swr_device *swr_dev)
 {
