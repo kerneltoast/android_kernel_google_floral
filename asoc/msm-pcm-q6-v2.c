@@ -1939,7 +1939,7 @@ static int msm_pcm_path_latency_ctl_get(struct snd_kcontrol *kcontrol,
 		if (rc) {
 			pr_err("%s: get_path_delay failed, ret=%d\n",
 				__func__, rc);
-			mutex_lock(&pdata->lock);
+			mutex_unlock(&pdata->lock);
 			return -EINVAL;
 		}
 		ucontrol->value.integer.value[0] =
