@@ -58,6 +58,7 @@ static struct crus_single_data_t crus_enable;
 static struct crus_sp_ioctl_header crus_sp_hdr;
 static struct cirrus_cal_result_t crus_sp_cal_rslt;
 static int32_t *crus_sp_get_buffer;
+static int32_t crus_sp_get_buffer_size;
 static atomic_t crus_sp_get_param_flag;
 struct mutex crus_sp_get_param_lock;
 struct mutex crus_sp_lock;
@@ -204,8 +205,8 @@ static int crus_afe_get_param(int port, int module, int param, int length,
 	mutex_lock(&crus_sp_get_param_lock);
 	atomic_set(&crus_sp_get_param_flag, 0);
 
-	crus_sp_get_buffer = kzalloc(config->param.payload_size + 16,
-				     GFP_KERNEL);
+	crus_sp_get_buffer_size = config->param.payload_size + 16;
+	crus_sp_get_buffer = kzalloc(crus_sp_get_buffer_size, GFP_KERNEL);
 
 	if (!crus_sp_get_buffer) {
 		pr_err("kzalloc failed for crus_sp_get_buffer!\n");
@@ -238,6 +239,7 @@ static int crus_afe_get_param(int port, int module, int param, int length,
 crus_sp_get_param_err:
 	kfree(crus_sp_get_buffer);
 	crus_sp_get_buffer = NULL;
+	crus_sp_get_buffer_size = -1;
 
 crus_sp_get_buffer_err:
 	mutex_unlock(&crus_sp_get_param_lock);
@@ -428,6 +430,7 @@ static int crus_afe_send_delta(const char *data, size_t length)
 extern int crus_afe_callback(void *payload, int size)
 {
 	uint32_t *payload32 = payload;
+	int copysize;
 
 	pr_debug("Cirrus AFE CALLBACK: size = %d\n", size);
 	if (size < 8)
@@ -436,7 +439,13 @@ extern int crus_afe_callback(void *payload, int size)
 	switch (payload32[1]) {
 	case CIRRUS_SP:
 		if (crus_sp_get_buffer != NULL) {
-			memcpy(crus_sp_get_buffer, payload32, size);
+			copysize = (crus_sp_get_buffer_size > size)?
+				size : crus_sp_get_buffer_size;
+
+			if (copysize != size)
+				pr_warn("size mismatch data may lost\n");
+
+			memcpy(crus_sp_get_buffer, payload32, copysize);
 			atomic_set(&crus_sp_get_param_flag, 1);
 		}
 		break;
