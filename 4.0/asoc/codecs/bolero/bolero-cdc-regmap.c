@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018, 2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/regmap.h>
@@ -625,6 +625,10 @@ static const struct reg_default bolero_defaults[] = {
 	{ BOLERO_CDC_VA_TOP_CSR_CORE_ID_1, 0x00},
 	{ BOLERO_CDC_VA_TOP_CSR_CORE_ID_2, 0x00},
 	{ BOLERO_CDC_VA_TOP_CSR_CORE_ID_3, 0x00},
+	{ BOLERO_CDC_VA_TOP_CSR_SWR_MIC_CTL0, 0xEE},
+	{ BOLERO_CDC_VA_TOP_CSR_SWR_MIC_CTL1, 0xEE},
+	{ BOLERO_CDC_VA_TOP_CSR_SWR_MIC_CTL2, 0xEE},
+	{ BOLERO_CDC_VA_TOP_CSR_SWR_CTRL, 0x06},
 
 	/* VA core */
 	{ BOLERO_CDC_VA_INP_MUX_ADC_MUX0_CFG0, 0x00},
@@ -793,6 +797,14 @@ static bool bolero_is_volatile_register(struct device *dev,
 	case BOLERO_CDC_VA_TOP_CSR_CORE_ID_1:
 	case BOLERO_CDC_VA_TOP_CSR_CORE_ID_2:
 	case BOLERO_CDC_VA_TOP_CSR_CORE_ID_3:
+	case BOLERO_CDC_VA_TOP_CSR_DMIC0_CTL:
+	case BOLERO_CDC_VA_TOP_CSR_DMIC1_CTL:
+	case BOLERO_CDC_VA_TOP_CSR_DMIC2_CTL:
+	case BOLERO_CDC_VA_TOP_CSR_DMIC3_CTL:
+	case BOLERO_CDC_TX_TOP_CSR_SWR_DMIC0_CTL:
+	case BOLERO_CDC_TX_TOP_CSR_SWR_DMIC1_CTL:
+	case BOLERO_CDC_TX_TOP_CSR_SWR_DMIC2_CTL:
+	case BOLERO_CDC_TX_TOP_CSR_SWR_DMIC3_CTL:
 	case BOLERO_CDC_WSA_VBAT_BCL_VBAT_GAIN_MON_VAL:
 	case BOLERO_CDC_WSA_VBAT_BCL_VBAT_DECODE_ST:
 	case BOLERO_CDC_WSA_INTR_CTRL_PIN1_STATUS0:

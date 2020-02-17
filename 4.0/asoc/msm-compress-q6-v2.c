@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
 
 
@@ -395,8 +395,8 @@ static int msm_compr_set_volume(struct snd_compr_stream *cstream,
 		gain_list[0] = volume_l;
 		gain_list[1] = volume_r;
 		gain_list[2] = volume_l;
-		num_channels = 3;
-		use_default = true;
+		if (use_default)
+			num_channels = 3;
 		rc = q6asm_set_multich_gain(prtd->audio_client, num_channels,
 					gain_list, chmap, use_default);
 	}
@@ -812,15 +812,23 @@ static void compr_event_handler(uint32_t opcode,
 			 * RESUME
 			 */
 			if ((prtd->copied_total == prtd->bytes_sent) &&
-			    atomic_read(&prtd->drain)) {
-				pr_debug("RUN ack, wake up & continue pending drain\n");
+					atomic_read(&prtd->drain)) {
+				bytes_available = prtd->bytes_received - prtd->copied_total;
+				if (bytes_available < cstream->runtime->fragment_size) {
+					pr_debug("%s: RUN ack, wake up & continue pending drain\n",
+							__func__);
 
-				if (prtd->last_buffer)
-					prtd->last_buffer = 0;
+					if (prtd->last_buffer)
+						prtd->last_buffer = 0;
 
-				prtd->drain_ready = 1;
-				wake_up(&prtd->drain_wait);
-				atomic_set(&prtd->drain, 0);
+					prtd->drain_ready = 1;
+					wake_up(&prtd->drain_wait);
+					atomic_set(&prtd->drain, 0);
+				} else if (atomic_read(&prtd->xrun)) {
+					pr_debug("%s: RUN ack, continue write cycle\n", __func__);
+					atomic_set(&prtd->xrun, 0);
+					msm_compr_send_buffer(prtd);
+				}
 			}
 
 			spin_unlock_irqrestore(&prtd->lock, flags);
@@ -1483,6 +1491,7 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 	struct audio_client *ac = prtd->audio_client;
 	uint32_t stream_index;
 	uint32_t enc_cfg_id = ENC_CFG_ID_NONE;
+	bool compress_ts = false;
 
 	switch (prtd->codec_param.codec.format) {
 	case SNDRV_PCM_FORMAT_S24_LE:
@@ -1532,22 +1541,19 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 			return ret;
 		}
 	} else {
-		if (prtd->codec_param.codec.flags & COMPRESSED_TIMESTAMP_FLAG) {
+		if (prtd->codec_param.codec.flags & COMPRESSED_TIMESTAMP_FLAG)
+			compress_ts = true;
+
+		if (q6core_get_avcs_api_version_per_service(
+				APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
+				ADSP_ASM_API_VERSION_V2)
+			ret = q6asm_open_read_v5(prtd->audio_client,
+					prtd->codec, bits_per_sample,
+					compress_ts, enc_cfg_id);
+		else
 			ret = q6asm_open_read_v4(prtd->audio_client,
-					prtd->codec,
-					bits_per_sample, true, enc_cfg_id);
-		} else {
-			if (q6core_get_avcs_api_version_per_service(
-					APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
-					ADSP_ASM_API_VERSION_V2)
-				ret = q6asm_open_read_v5(prtd->audio_client,
-						prtd->codec, bits_per_sample,
-						false, enc_cfg_id);
-			else
-				ret = q6asm_open_read_v4(prtd->audio_client,
-						prtd->codec, bits_per_sample,
-						false, enc_cfg_id);
-		}
+					prtd->codec, bits_per_sample,
+					compress_ts, enc_cfg_id);
 		if (ret < 0) {
 			pr_err("%s: q6asm_open_read failed:%d\n",
 					__func__, ret);
@@ -1755,6 +1761,10 @@ static int msm_compr_capture_open(struct snd_compr_stream *cstream)
 	enum apr_subsys_state subsys_state;
 
 	pr_debug("%s\n", __func__);
+	if (!pdata) {
+		pr_err("%s: pdata is NULL\n", __func__);
+		return -EINVAL;
+	}
 
 	subsys_state = apr_get_subsys_state();
 	if (subsys_state == APR_SUBSYS_DOWN) {
@@ -1762,7 +1772,7 @@ static int msm_compr_capture_open(struct snd_compr_stream *cstream)
 		return -ENETRESET;
 	}
 	prtd = kzalloc(sizeof(struct msm_compr_audio), GFP_KERNEL);
-	if (prtd == NULL) {
+	if (!prtd) {
 		pr_err("Failed to allocate memory for msm_compr_audio\n");
 		return -ENOMEM;
 	}
@@ -2301,7 +2311,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 	struct snd_soc_pcm_runtime *rtd = cstream->private_data;
 	struct msm_compr_pdata *pdata =
 			snd_soc_platform_get_drvdata(rtd->platform);
-	uint32_t *volume = pdata->volume[rtd->dai_link->id];
+	uint32_t *volume = NULL;
 	struct audio_client *ac = prtd->audio_client;
 	unsigned long fe_id = rtd->dai_link->id;
 	int rc = 0;
@@ -2310,6 +2320,12 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 	int stream_id;
 	uint32_t stream_index;
 	uint16_t bits_per_sample = 16;
+
+	if (!pdata) {
+		pr_err("%s: pdata is NULL\n", __func__);
+		return -EINVAL;
+	}
+	volume = pdata->volume[rtd->dai_link->id];
 
 	spin_lock_irqsave(&prtd->lock, flags);
 	if (atomic_read(&prtd->error)) {

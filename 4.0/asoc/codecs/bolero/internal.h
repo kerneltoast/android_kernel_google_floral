@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _BOLERO_INTERNAL_H
@@ -82,6 +82,14 @@ struct bolero_priv {
 	struct blocking_notifier_head notifier;
 	struct device *clk_dev;
 	rsc_clk_cb_t rsc_clk_cb;
+	s32 dmic_0_1_clk_cnt;
+	s32 dmic_2_3_clk_cnt;
+	s32 dmic_4_5_clk_cnt;
+	s32 dmic_6_7_clk_cnt;
+	u8 dmic_0_1_clk_div;
+	u8 dmic_2_3_clk_div;
+	u8 dmic_4_5_clk_div;
+	u8 dmic_6_7_clk_div;
 };
 
 struct regmap *bolero_regmap_init(struct device *dev,
@@ -91,6 +99,9 @@ int bolero_get_macro_id(bool va_no_dec_flag, u16 reg);
 extern const struct regmap_config bolero_regmap_config;
 extern u8 *bolero_reg_access[MAX_MACRO];
 extern u8 bolero_va_top_reg_access[BOLERO_CDC_VA_MACRO_TOP_MAX];
+extern u8 bolero_va_reg_access_v2[BOLERO_CDC_VA_MACRO_MAX];
+extern u8 bolero_va_reg_access_v3[BOLERO_CDC_VA_MACRO_MAX];
+extern u8 bolero_tx_reg_access_v2[BOLERO_CDC_TX_MACRO_MAX];
 extern const u16 macro_id_base_offset[MAX_MACRO];
 
 #endif
