@@ -722,7 +722,7 @@ KBUILD_CFLAGS	+= $(call cc-disable-warning, zero-length-bounds)
 ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS   += -Os
 else
-KBUILD_CFLAGS   += -O2
+KBUILD_CFLAGS   += -O3
 endif
 
 ifdef CONFIG_CC_WERROR
