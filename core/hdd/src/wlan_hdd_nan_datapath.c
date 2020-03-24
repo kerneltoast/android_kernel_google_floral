@@ -320,16 +320,16 @@ void hdd_ndp_event_handler(struct hdd_adapter *adapter,
 		case eCSR_ROAM_RESULT_NDI_CREATE_RSP:
 			success = (roam_info->ndp.ndi_create_params.status ==
 					NAN_DATAPATH_RSP_STATUS_SUCCESS);
-			hdd_debug("posting ndi create status: %d to umac",
-				success);
+			hdd_debug("posting ndi create status: %d (%s) to umac",
+				  success, success ? "Success" : "Failure");
 			os_if_nan_post_ndi_create_rsp(psoc, adapter->session_id,
 							success);
 			return;
 		case eCSR_ROAM_RESULT_NDI_DELETE_RSP:
 			success = (roam_info->ndp.ndi_create_params.status ==
 					NAN_DATAPATH_RSP_STATUS_SUCCESS);
-			hdd_debug("posting ndi delete status: %d to umac",
-				success);
+			hdd_debug("posting ndi delete status: %d (%s) to umac",
+				  success, success ? "Success" : "Failure");
 			os_if_nan_post_ndi_delete_rsp(psoc, adapter->session_id,
 							success);
 			return;
@@ -359,8 +359,6 @@ static int __wlan_hdd_cfg80211_process_ndp_cmd(struct wiphy *wiphy,
 {
 	int ret_val;
 	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
-
-	hdd_enter();
 
 	ret_val = wlan_hdd_validate_context(hdd_ctx);
 	if (ret_val)
@@ -828,8 +826,6 @@ void hdd_ndp_peer_departed_handler(uint8_t vdev_id, uint16_t sta_id,
 	struct hdd_context *hdd_ctx;
 	struct hdd_adapter *adapter;
 	struct hdd_station_ctx *sta_ctx;
-
-	hdd_enter();
 
 	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
 	if (!hdd_ctx) {
