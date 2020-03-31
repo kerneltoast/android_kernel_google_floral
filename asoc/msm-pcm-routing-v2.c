@@ -15379,6 +15379,11 @@ static const struct snd_kcontrol_new tert_tdm_rx_0_port_mixer_controls[] = {
 		MSM_BACKEND_DAI_QUIN_TDM_TX_3, 1, 0,
 		msm_routing_get_port_mixer,
 		msm_routing_put_port_mixer),
+	SOC_DOUBLE_EXT("SLIM_7_TX", SND_SOC_NOPM,
+		MSM_BACKEND_DAI_TERT_TDM_RX_0,
+		MSM_BACKEND_DAI_SLIMBUS_7_TX, 1, 0,
+		msm_routing_get_port_mixer,
+		msm_routing_put_port_mixer),
 };
 
 static const struct snd_kcontrol_new tert_tdm_rx_1_port_mixer_controls[] = {
@@ -22537,6 +22542,7 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{"TERT_TDM_RX_0 Port Mixer", "QUIN_TDM_TX_1", "QUIN_TDM_TX_1"},
 	{"TERT_TDM_RX_0 Port Mixer", "QUIN_TDM_TX_2", "QUIN_TDM_TX_2"},
 	{"TERT_TDM_RX_0 Port Mixer", "QUIN_TDM_TX_3", "QUIN_TDM_TX_3"},
+	{"TERT_TDM_RX_0 Port Mixer", "SLIM_7_TX", "SLIMBUS_7_TX"},
 	{"TERT_TDM_RX_0", NULL, "TERT_TDM_RX_0 Port Mixer"},
 
 	{"TERT_TDM_RX_1 Port Mixer", "PRI_MI2S_TX", "PRI_MI2S_TX"},
