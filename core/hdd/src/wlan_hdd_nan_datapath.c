@@ -652,10 +652,6 @@ void hdd_ndi_drv_ndi_create_rsp_handler(uint8_t vdev_id,
 	struct hdd_context *hdd_ctx;
 	struct hdd_adapter *adapter;
 	struct hdd_station_ctx *sta_ctx;
-	struct csr_roam_info roam_info = {0};
-	struct bss_description tmp_bss_descp = {0};
-	struct qdf_mac_addr bc_mac_addr = QDF_MAC_ADDR_BCAST_INIT;
-	uint8_t sta_id;
 
 	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
 	if (!hdd_ctx) {
@@ -675,12 +671,6 @@ void hdd_ndi_drv_ndi_create_rsp_handler(uint8_t vdev_id,
 		return;
 	}
 
-	sta_id = ndi_rsp->sta_id;
-	if (sta_id >= HDD_MAX_ADAPTERS) {
-		hdd_err("Error: Invalid sta id %u", sta_id);
-		return;
-	}
-
 	if (ndi_rsp->status == QDF_STATUS_SUCCESS) {
 		hdd_alert("NDI interface successfully created");
 		os_if_nan_set_ndp_create_transaction_id(adapter->vdev, 0);
@@ -694,11 +684,6 @@ void hdd_ndi_drv_ndi_create_rsp_handler(uint8_t vdev_id,
 			ndi_rsp->reason /* create_reason */);
 	}
 
-	sta_ctx->broadcast_staid = sta_id;
-	hdd_save_peer(sta_ctx, sta_id, &bc_mac_addr);
-	hdd_roam_register_sta(adapter, &roam_info, sta_id,
-			      &bc_mac_addr, &tmp_bss_descp);
-	hdd_ctx->sta_to_adapter[sta_id] = adapter;
 }
 
 void hdd_ndi_close(uint8_t vdev_id)
@@ -726,7 +711,6 @@ void hdd_ndi_drv_ndi_delete_rsp_handler(uint8_t vdev_id)
 	struct hdd_context *hdd_ctx;
 	struct hdd_adapter *adapter;
 	struct hdd_station_ctx *sta_ctx;
-	uint8_t sta_id;
 
 	hdd_ctx = cds_get_context(QDF_MODULE_ID_HDD);
 	if (!hdd_ctx) {
@@ -744,14 +728,6 @@ void hdd_ndi_drv_ndi_delete_rsp_handler(uint8_t vdev_id)
 	if (!sta_ctx) {
 		hdd_err("sta_ctx is null");
 		return;
-	}
-
-	sta_id = sta_ctx->broadcast_staid;
-	if (sta_id < HDD_MAX_ADAPTERS) {
-		hdd_ctx->sta_to_adapter[sta_id] = NULL;
-		hdd_roam_deregister_sta(adapter, sta_id);
-		hdd_delete_peer(sta_ctx, sta_id);
-		sta_ctx->broadcast_staid = HDD_WLAN_INVALID_STA_ID;
 	}
 
 	wlan_hdd_netif_queue_control(adapter,
