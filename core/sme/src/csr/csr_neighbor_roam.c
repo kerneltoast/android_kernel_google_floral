@@ -999,7 +999,7 @@ static void csr_neighbor_roam_info_ctx_init(
 
 	/* Based on the auth scheme tell if we are 11r */
 	if (csr_is_auth_type11r
-		(pMac, session->connectedProfile.AuthType,
+		(pMac, session_id, session->connectedProfile.AuthType,
 		session->connectedProfile.MDID.mdiePresent)) {
 		if (pMac->roam.configParam.isFastTransitionEnabled)
 			init_ft_flag = true;
@@ -1327,6 +1327,8 @@ QDF_STATUS csr_neighbor_roam_init(tpAniSirGlobal pMac, uint8_t sessionId)
 		pNeighborRoamInfo->cfgParams.nRoamBeaconRssiWeight;
 	qdf_mem_zero(&pNeighborRoamInfo->prevConnProfile,
 		    sizeof(tCsrRoamConnectedProfile));
+	pNeighborRoamInfo->cfgParams.enable_ft_open =
+			pMac->roam.configParam.enable_ftopen;
 
 	status = csr_ll_open(&pNeighborRoamInfo->roamableAPList);
 	if (QDF_STATUS_SUCCESS != status) {

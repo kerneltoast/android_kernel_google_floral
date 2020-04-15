@@ -9990,7 +9990,7 @@ static void csr_roam_join_rsp_processor(tpAniSirGlobal pMac,
 	struct csr_roam_session *session_ptr;
 	tPmkidCacheInfo pmksa_entry;
 	uint32_t roamId = 0, reason_code = 0;
-	bool is_dis_pending;
+	bool is_dis_pending, enable_ft_open;
 	bool use_same_bss = false;
 
 	if (!pSmeJoinRsp) {
@@ -10077,6 +10077,29 @@ static void csr_roam_join_rsp_processor(tpAniSirGlobal pMac,
 				use_same_bss = true;
 			}
 		}
+	} else if (reason_code == eSIR_MAC_INVALID_AKMP_STATUS) {
+		struct tag_csrscan_result *scan_result;
+
+		if (pCommand && pCommand->u.roamCmd.pRoamBssEntry &&
+		    pCommand->u.roamCmd.pLastRoamBss &&
+		    pCommand->u.roamCmd.pLastRoamBss->mdiePresent) {
+			sme_warn("Assoc reject from BSSID:%pM Status: Invalid AKMP",
+				 session_ptr->joinFailStatusCode.bssId);
+			pMac->roam.neighborRoamInfo[pSmeJoinRsp->sessionId].
+				cfgParams.enable_ft_open = false;
+			scan_result =
+				GET_BASE_ADDR(pCommand->u.roamCmd.pRoamBssEntry,
+					      struct tag_csrscan_result, Link);
+			/*
+			 * Retry with same BSSID without including MDIE in assoc
+			 * req
+			 */
+			if (!scan_result->retry_count) {
+				sme_info("Retry once again with same BSSID without PMKID");
+				scan_result->retry_count = 1;
+				use_same_bss = true;
+			}
+		}
 	}
 	/* If Join fails while Handoff is in progress, indicate
 	 * disassociated event to supplicant to reconnect
@@ -10099,6 +10122,11 @@ static void csr_roam_join_rsp_processor(tpAniSirGlobal pMac,
 	is_dis_pending = is_disconnect_pending(pMac, session_ptr->sessionId);
 	if (pCommand && !is_dis_pending &&
 	    session_ptr->join_bssid_count < CSR_MAX_BSSID_COUNT) {
+		if (!use_same_bss) {
+			enable_ft_open = pMac->roam.configParam.enable_ftopen;
+			pMac->roam.neighborRoamInfo[pSmeJoinRsp->sessionId].
+				cfgParams.enable_ft_open = enable_ft_open;
+		}
 		csr_roam(pMac, pCommand, use_same_bss);
 		return;
 	}
@@ -16504,7 +16532,7 @@ QDF_STATUS csr_send_join_req_msg(tpAniSirGlobal pMac, uint32_t sessionId,
 		ese_config =  pMac->roam.configParam.isEseIniFeatureEnabled;
 #endif
 		pProfile->MDID.mdiePresent = pBssDescription->mdiePresent;
-		if (csr_is_profile11r(pMac, pProfile)
+		if (csr_is_profile11r(pMac, pProfile, sessionId)
 #ifdef FEATURE_WLAN_ESE
 		    &&
 		    !((pProfile->negotiatedAuthType ==

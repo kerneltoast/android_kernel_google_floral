@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -342,9 +342,10 @@ QDF_STATUS csr_reassoc(tpAniSirGlobal pMac, uint32_t sessionId,
 QDF_STATUS csr_validate_mcc_beacon_interval(tpAniSirGlobal pMac, uint8_t channelId,
 		uint16_t *beaconInterval, uint32_t cursessionId,
 		enum QDF_OPMODE currBssPersona);
-bool csr_is_profile11r(tpAniSirGlobal mac, struct csr_roam_profile *pProfile);
-bool csr_is_auth_type11r(tpAniSirGlobal mac, eCsrAuthType AuthType,
-			 uint8_t mdiePresent);
+bool csr_is_profile11r(tpAniSirGlobal mac, struct csr_roam_profile *pProfile,
+		       uint8_t vdev_id);
+bool csr_is_auth_type11r(tpAniSirGlobal mac, uint8_t vdev_id,
+			 eCsrAuthType AuthType, uint8_t mdiePresent);
 #ifdef FEATURE_WLAN_ESE
 bool csr_is_profile_ese(struct csr_roam_profile *pProfile);
 #endif

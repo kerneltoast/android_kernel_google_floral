@@ -2732,18 +2732,21 @@ QDF_STATUS csr_validate_mcc_beacon_interval(tpAniSirGlobal mac_ctx,
 /**
  * csr_is_auth_type11r() - Check if Authentication type is 11R
  * @mac: pointer to mac context
+ * @vdev_id: vdev for which 11r akm type needs to be checked
  * @auth_type: The authentication type that is used to make the connection
  * @mdie_present: Is MDIE IE present
  *
  * Return: true if is 11R auth type, false otherwise
  */
-bool csr_is_auth_type11r(tpAniSirGlobal mac, eCsrAuthType auth_type,
-			uint8_t mdie_present)
+bool csr_is_auth_type11r(tpAniSirGlobal mac, uint8_t vdev_id,
+			 eCsrAuthType auth_type, uint8_t mdie_present)
 {
+	bool enable_ft_open =
+		mac->roam.neighborRoamInfo[vdev_id].cfgParams.enable_ft_open;
+
 	switch (auth_type) {
 	case eCSR_AUTH_TYPE_OPEN_SYSTEM:
-		if (mdie_present &&
-		    mac->roam.configParam.enable_ftopen)
+		if (mdie_present && enable_ft_open)
 			return true;
 		break;
 	case eCSR_AUTH_TYPE_FT_RSN_PSK:
@@ -2757,9 +2760,10 @@ bool csr_is_auth_type11r(tpAniSirGlobal mac, eCsrAuthType auth_type,
 
 /* Function to return true if the profile is 11r */
 bool csr_is_profile11r(tpAniSirGlobal mac,
-			struct csr_roam_profile *pProfile)
+		       struct csr_roam_profile *pProfile,
+		       uint8_t vdev_id)
 {
-	return csr_is_auth_type11r(mac, pProfile->negotiatedAuthType,
+	return csr_is_auth_type11r(mac, vdev_id, pProfile->negotiatedAuthType,
 				   pProfile->MDID.mdiePresent);
 }
 
