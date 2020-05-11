@@ -100,6 +100,7 @@ struct adm_ctl {
 	struct param_outband outband_memmap;
 	struct source_tracking_data sourceTrackingData;
 
+	struct mutex adm_apr_lock;
 	int set_custom_topology;
 	int ec_ref_rx;
 	int num_ec_ref_rx_chans;
@@ -901,6 +902,47 @@ exit:
 EXPORT_SYMBOL(adm_set_custom_chmix_cfg);
 
 /*
+ * adm_apr_send_pkt : returns 0 on success, negative otherwise.
+ */
+int adm_apr_send_pkt(void *data, int port_idx, int copp_idx)
+{
+	int ret = 0;
+	atomic_t *copp_stat = NULL;
+	wait_queue_head_t *wait = NULL;
+
+	mutex_lock(&this_adm.adm_apr_lock);
+
+	wait = &this_adm.copp.wait[port_idx][copp_idx];
+	copp_stat = &this_adm.copp.stat[port_idx][copp_idx];
+	atomic_set(copp_stat, -1);
+
+	ret = apr_send_pkt(this_adm.apr, data);
+	if (ret > 0) {
+		ret = wait_event_timeout(*wait,
+				atomic_read(copp_stat) >= 0,
+				msecs_to_jiffies(TIMEOUT_MS));
+		if (atomic_read(copp_stat) > 0) {
+			pr_err("%s: DSP returned error[%s]\n", __func__,
+				adsp_err_get_err_str(atomic_read(copp_stat)));
+			ret = adsp_err_get_lnx_err_code(atomic_read(copp_stat));
+		} else  if (!ret) {
+			pr_err_ratelimited("%s: request timedout\n",
+						__func__);
+			ret = -ETIMEDOUT;
+		} else {
+			ret = 0;
+		}
+	} else if (ret == 0) {
+		pr_err("%s: packet not transmitted\n", __func__);
+		/* apr_send_pkt can return 0 when nothing is transmitted */
+		ret = -EINVAL;
+	}
+
+	mutex_unlock(&this_adm.adm_apr_lock);
+	return ret;
+}
+
+/*
  * With pre-packed data, only the opcode differes from V5 and V6.
  * Use q6common_pack_pp_params to pack the data correctly.
  */
@@ -911,7 +953,6 @@ int adm_set_pp_params(int port_id, int copp_idx,
 	struct adm_cmd_set_pp_params *adm_set_params = NULL;
 	int size = 0;
 	int port_idx = 0;
-	atomic_t *copp_stat = NULL;
 	int ret = 0;
 
 	port_id = afe_convert_virtual_to_portid(port_id);
@@ -921,6 +962,12 @@ int adm_set_pp_params(int port_id, int copp_idx,
 		return -EINVAL;
 	} else if (copp_idx < 0 || copp_idx >= MAX_COPPS_PER_PORT) {
 		pr_err("%s: Invalid copp_idx 0x%x\n", __func__, copp_idx);
+		return -EINVAL;
+	}
+
+	if (atomic_read(&this_adm.copp.cnt[port_idx][copp_idx]) == 0) {
+		pr_err("%s:: port[0x%x] coppid[0x%x] is not active, ERROR\n",
+			__func__, port_id, copp_idx);
 		return -EINVAL;
 	}
 
@@ -970,34 +1017,8 @@ int adm_set_pp_params(int port_id, int copp_idx,
 		goto done;
 	}
 
-	copp_stat = &this_adm.copp.stat[port_idx][copp_idx];
-	atomic_set(copp_stat, -1);
-	ret = apr_send_pkt(this_adm.apr, (uint32_t *) adm_set_params);
-	if (ret < 0) {
-		pr_err("%s: Set params APR send failed port = 0x%x ret %d\n",
-		       __func__, port_id, ret);
-		goto done;
-	}
-	ret = wait_event_timeout(this_adm.copp.wait[port_idx][copp_idx],
-				 atomic_read(copp_stat) >= 0,
-				 msecs_to_jiffies(TIMEOUT_MS));
-	if (!ret) {
-		pr_err("%s: Set params timed out port = 0x%x\n", __func__,
-		       port_id);
-		ret = -ETIMEDOUT;
-
-		pr_err("trigger ADSP SSR b/136031875");
-		subsystem_restart("adsp");
-		goto done;
-	}
-	if (atomic_read(copp_stat) > 0) {
-		pr_err("%s: DSP returned error[%s]\n", __func__,
-		       adsp_err_get_err_str(atomic_read(copp_stat)));
-		ret = adsp_err_get_lnx_err_code(atomic_read(copp_stat));
-		goto done;
-	}
-
-	ret = 0;
+	ret = adm_apr_send_pkt((uint32_t *) adm_set_params,
+			port_idx, copp_idx);
 done:
 	kfree(adm_set_params);
 	return ret;
@@ -1632,9 +1653,16 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 				if (client_id == ADM_CLIENT_ID_SOURCE_TRACKING)
 					this_adm.sourceTrackingData.
 						apr_cmd_status = payload[1];
-				else if (rtac_make_adm_callback(payload,
-							data->payload_size))
-					break;
+				else {
+					rtac_make_adm_callback(payload,
+						data->payload_size);
+				}
+				atomic_set(&this_adm.copp.stat[port_idx]
+						[copp_idx], payload[1]);
+				wake_up(
+				&this_adm.copp.wait[port_idx][copp_idx]);
+				break;
+
 				/*
 				 * if soft volume is called and already
 				 * interrupted break out of the sequence here
@@ -1777,8 +1805,14 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 				this_adm.sourceTrackingData.apr_cmd_status =
 					payload[0];
 			else if (rtac_make_adm_callback(payload,
-							data->payload_size))
+						data->payload_size)) {
+				atomic_set(
+					&this_adm.copp.stat[port_idx][copp_idx],
+					payload[0]);
+				wake_up(
+				&this_adm.copp.wait[port_idx][copp_idx]);
 				break;
+			}
 
 			idx = ADM_GET_PARAMETER_LENGTH * copp_idx;
 			if (payload[0] == 0 && data->payload_size > 0) {
@@ -5132,6 +5166,7 @@ int __init adm_init(void)
 	this_adm.ffecns_port_id = -1;
 	init_waitqueue_head(&this_adm.matrix_map_wait);
 	init_waitqueue_head(&this_adm.adm_wait);
+	mutex_init(&this_adm.adm_apr_lock);
 
 	for (i = 0; i < AFE_MAX_PORTS; i++) {
 		for (j = 0; j < MAX_COPPS_PER_PORT; j++) {
@@ -5156,6 +5191,7 @@ int __init adm_init(void)
 
 void adm_exit(void)
 {
+	mutex_destroy(&this_adm.adm_apr_lock);
 	if (this_adm.apr)
 		adm_reset_data();
 	adm_delete_cal_data();

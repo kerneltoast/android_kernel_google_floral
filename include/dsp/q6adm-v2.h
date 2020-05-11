@@ -215,4 +215,5 @@ int adm_programable_channel_mixer(int port_id, int copp_idx, int session_id,
 void msm_dts_srs_acquire_lock(void);
 void msm_dts_srs_release_lock(void);
 void adm_set_native_mode(int mode);
+int adm_apr_send_pkt(void *data, int port_idx, int copp_idx);
 #endif /* __Q6_ADM_V2_H__ */
