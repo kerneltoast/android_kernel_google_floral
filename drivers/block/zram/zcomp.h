@@ -9,8 +9,11 @@
 
 #ifndef _ZCOMP_H_
 #define _ZCOMP_H_
+#include <linux/locallock.h>
 
 struct zcomp_strm {
+	/* The members ->buffer and ->tfm are protected by ->lock. */
+	struct local_irq_lock lock;
 	/* compression/decompression buffer */
 	void *buffer;
 	struct crypto_comp *tfm;
