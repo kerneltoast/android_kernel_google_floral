@@ -241,6 +241,8 @@ static inline int __local_unlock_irqrestore(struct local_irq_lock *lv,
 
 #else /* PREEMPT_RT_BASE */
 
+struct local_irq_lock { };
+
 #define DEFINE_LOCAL_IRQ_LOCK(lvar)		__typeof__(const int) lvar
 #define DECLARE_LOCAL_IRQ_LOCK(lvar)		extern __typeof__(const int) lvar
 
