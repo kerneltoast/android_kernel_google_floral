@@ -1245,6 +1245,8 @@ static int a6xx_gmu_suspend(struct kgsl_device *device)
 	/* Check no outstanding RPMh voting */
 	a6xx_complete_rpmh_votes(device);
 
+	gmu_core_regwrite(device, A6XX_GMU_CM3_SYSRESET, 1);
+
 	if (adreno_has_gbif(adreno_dev)) {
 		struct adreno_gpudev *gpudev =
 			ADRENO_GPU_DEVICE(adreno_dev);
