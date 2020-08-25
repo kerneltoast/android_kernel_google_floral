@@ -57,6 +57,7 @@
 #include <wlan_utility.h>
 #include "wlan_mlme_main.h"
 #include "wlan_scan_utils_api.h"
+#include "nan_ucfg_api.h"
 
 #define MAX_PWR_FCC_CHAN_12 8
 #define MAX_PWR_FCC_CHAN_13 2
@@ -1198,11 +1199,12 @@ QDF_STATUS csr_update_channel_list(tpAniSirGlobal pMac)
 				}
 			}
 
+			if (!ucfg_is_nan_allowed_on_chan(pMac->pdev,
+				pChanList->chanParam[num_channel].chanId))
+				pChanList->chanParam[num_channel].nan_disabled =
+					true;
 
-			if (CHANNEL_STATE_ENABLE == channel_state)
-				pChanList->chanParam[num_channel].dfsSet =
-					false;
-			else
+			if (CHANNEL_STATE_ENABLE != channel_state)
 				pChanList->chanParam[num_channel].dfsSet =
 					true;
 			if (cds_is_5_mhz_enabled())
