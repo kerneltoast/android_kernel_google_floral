@@ -2384,7 +2384,7 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
 	tsap_config_t *sap_config;
 	struct sk_buff *temp_skbuff;
-	int ret, i, ch_cnt = 0;
+	int ret, i;
 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_ACS_MAX + 1];
 	bool ht_enabled, ht40_enabled, vht_enabled;
 	uint8_t ch_width;
@@ -2392,7 +2392,6 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 	QDF_STATUS qdf_status;
 	uint8_t conc_channel;
 	mac_handle_t mac_handle;
-	bool skip_etsi13_srd_chan = false;
 
 	/* ***Note*** Donot set SME config related to ACS operation here because
 	 * ACS operation is not synchronouse and ACS for Second AP may come when
@@ -2568,40 +2567,6 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 		ret = -EINVAL;
 		goto out;
 	}
-
-	skip_etsi13_srd_chan =
-		!hdd_ctx->config->etsi13_srd_chan_in_master_mode &&
-		wlan_reg_is_etsi13_regdmn(hdd_ctx->pdev);
-
-	if (skip_etsi13_srd_chan) {
-		for (i = 0; i < sap_config->acs_cfg.ch_list_count; i++) {
-			if (wlan_reg_is_etsi13_srd_chan(hdd_ctx->pdev,
-							sap_config->acs_cfg.
-							ch_list[i]))
-				sap_config->acs_cfg.ch_list[i] = 0;
-			else
-				sap_config->acs_cfg.ch_list[ch_cnt++] =
-						sap_config->acs_cfg.ch_list[i];
-		}
-		sap_config->acs_cfg.ch_list_count = ch_cnt;
-	}
-
-	ch_cnt = 0;
-	for (i = 0; i < sap_config->acs_cfg.ch_list_count; i++) {
-		if (sap_config->acs_cfg.ch_list[i] >
-				WLAN_REG_CH_NUM(CHAN_ENUM_11) &&
-			sap_config->acs_cfg.ch_list[i] <
-				WLAN_REG_CH_NUM(CHAN_ENUM_36)) {
-			hdd_info("skip channel %d",
-					sap_config->acs_cfg.ch_list[i]);
-			continue;
-		}
-		sap_config->acs_cfg.ch_list[ch_cnt++] =
-			sap_config->acs_cfg.ch_list[i];
-	}
-	sap_config->acs_cfg.ch_list_count = ch_cnt;
-
-	hdd_debug("get pcl for DO_ACS vendor command");
 
 	/* consult policy manager to get PCL */
 	qdf_status = policy_mgr_get_pcl(hdd_ctx->psoc, PM_SAP_MODE,

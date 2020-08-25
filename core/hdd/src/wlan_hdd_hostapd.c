@@ -8967,7 +8967,9 @@ static int __wlan_hdd_cfg80211_start_ap(struct wiphy *wiphy,
 		hdd_err("SAP not allowed on DFS channel!!");
 		return -EINVAL;
 	}
-	if (!reg_is_etsi13_srd_chan_allowed_master_mode(hdd_ctx->pdev) &&
+
+	if (!reg_is_etsi13_srd_chan_allowed_master_mode(hdd_ctx->pdev,
+							adapter->device_mode) &&
 	     reg_is_etsi13_srd_chan(hdd_ctx->pdev, channel)) {
 		hdd_err("SAP not allowed on SRD channel.");
 		return -EINVAL;
