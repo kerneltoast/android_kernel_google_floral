@@ -1,5 +1,4 @@
-/*
- */
+// SPDX-License-Identifier: GPL-2.0-only
 #include <linux/sched/debug.h>
 #include <linux/export.h>
 
@@ -212,7 +211,7 @@ void __sched __write_rt_lock(struct rt_rw_lock *lock)
 		raw_spin_unlock_irqrestore(&m->wait_lock, flags);
 
 		if (atomic_read(&lock->readers) != 0)
-			schedule();
+			preempt_schedule_lock();
 
 		raw_spin_lock_irqsave(&m->wait_lock, flags);
 
@@ -305,15 +304,11 @@ int __lockfunc rt_read_trylock(rwlock_t *rwlock)
 {
 	int ret;
 
-	sleeping_lock_inc();
-	migrate_disable();
 	ret = do_read_rt_trylock(rwlock);
 	if (ret) {
 		rwlock_acquire_read(&rwlock->dep_map, 0, 1, _RET_IP_);
 		rcu_read_lock();
-	} else {
-		migrate_enable();
-		sleeping_lock_dec();
+		migrate_disable();
 	}
 	return ret;
 }
@@ -323,15 +318,11 @@ int __lockfunc rt_write_trylock(rwlock_t *rwlock)
 {
 	int ret;
 
-	sleeping_lock_inc();
-	migrate_disable();
 	ret = do_write_rt_trylock(rwlock);
 	if (ret) {
 		rwlock_acquire(&rwlock->dep_map, 0, 1, _RET_IP_);
 		rcu_read_lock();
-	} else {
-		migrate_enable();
-		sleeping_lock_dec();
+		migrate_disable();
 	}
 	return ret;
 }
@@ -339,41 +330,37 @@ EXPORT_SYMBOL(rt_write_trylock);
 
 void __lockfunc rt_read_lock(rwlock_t *rwlock)
 {
-	sleeping_lock_inc();
-	rcu_read_lock();
-	migrate_disable();
 	rwlock_acquire_read(&rwlock->dep_map, 0, 0, _RET_IP_);
 	do_read_rt_lock(rwlock);
+	rcu_read_lock();
+	migrate_disable();
 }
 EXPORT_SYMBOL(rt_read_lock);
 
 void __lockfunc rt_write_lock(rwlock_t *rwlock)
 {
-	sleeping_lock_inc();
-	rcu_read_lock();
-	migrate_disable();
 	rwlock_acquire(&rwlock->dep_map, 0, 0, _RET_IP_);
 	do_write_rt_lock(rwlock);
+	rcu_read_lock();
+	migrate_disable();
 }
 EXPORT_SYMBOL(rt_write_lock);
 
 void __lockfunc rt_read_unlock(rwlock_t *rwlock)
 {
 	rwlock_release(&rwlock->dep_map, 1, _RET_IP_);
-	do_read_rt_unlock(rwlock);
 	migrate_enable();
 	rcu_read_unlock();
-	sleeping_lock_dec();
+	do_read_rt_unlock(rwlock);
 }
 EXPORT_SYMBOL(rt_read_unlock);
 
 void __lockfunc rt_write_unlock(rwlock_t *rwlock)
 {
 	rwlock_release(&rwlock->dep_map, 1, _RET_IP_);
-	do_write_rt_unlock(rwlock);
 	migrate_enable();
 	rcu_read_unlock();
-	sleeping_lock_dec();
+	do_write_rt_unlock(rwlock);
 }
 EXPORT_SYMBOL(rt_write_unlock);
 
