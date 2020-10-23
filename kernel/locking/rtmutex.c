@@ -2050,22 +2050,6 @@ int __sched __rt_mutex_futex_trylock(struct rt_mutex *lock)
 	return __rt_mutex_slowtrylock(lock);
 }
 
-/**
- * rt_mutex_lock_killable - lock a rt_mutex killable
- *
- * @lock:              the rt_mutex to be locked
- * @detect_deadlock:   deadlock detection on/off
- *
- * Returns:
- *  0          on success
- * -EINTR      when interrupted by a signal
- */
-int __sched rt_mutex_lock_killable(struct rt_mutex *lock)
-{
-	return rt_mutex_lock_state(lock, TASK_KILLABLE, 0);
-}
-EXPORT_SYMBOL_GPL(rt_mutex_lock_killable);
-
 int __sched __rt_mutex_trylock(struct rt_mutex *lock)
 {
 #ifdef CONFIG_PREEMPT_RT_FULL
