@@ -23,6 +23,7 @@
 #include <linux/sched/clock.h>
 #include <linux/sched/stat.h>
 #include <linux/sched/nohz.h>
+#include <linux/sched/loadavg.h>
 #include <linux/module.h>
 #include <linux/irq_work.h>
 #include <linux/posix-timers.h>
@@ -113,7 +114,8 @@ static void tick_do_update_jiffies64(ktime_t now)
 						tick_period);
 	}
 
-	do_timer(ticks);
+	/* Advance jiffies to complete the jiffies_seq protected job */
+	jiffies_64 += ticks;
 
 	/*
 	 * Keep the tick_next_period variable up to date.  WRITE_ONCE()
@@ -122,7 +124,15 @@ static void tick_do_update_jiffies64(ktime_t now)
 	WRITE_ONCE(tick_next_period,
 		   ktime_add(last_jiffies_update, tick_period));
 
+	/*
+	 * Release the sequence count. calc_global_load() below is not
+	 * protected by it, but jiffies_lock needs to be held to prevent
+	 * concurrent invocations.
+	 */
 	write_seqcount_end(&jiffies_seq);
+
+	calc_global_load(ticks);
+
 	raw_spin_unlock(&jiffies_lock);
 	update_wall_time();
 }
