@@ -127,7 +127,6 @@ struct batt_ssoc_state {
 	/* output of rate limiter */
 	qnum_t ssoc_rl;
 	struct batt_ssoc_rl_state ssoc_rl_state;
-	int ssoc_delta;
 
 	/* output of rate limiter */
 	int rl_rate;
@@ -2471,7 +2470,7 @@ static int ssoc_get_delta(struct batt_drv *batt_drv)
 	const bool overheat = batt_drv->batt_health ==
 			      POWER_SUPPLY_HEALTH_OVERHEAT;
 
-	return overheat ? 0 : qnum_rconst(batt_drv->ssoc_state.ssoc_delta);
+	return overheat ? 0 : SSOC_DELTA;
 }
 
 /* TODO: handle the whole state buck_enable state */
@@ -4821,11 +4820,6 @@ static void google_battery_init_work(struct work_struct *work)
 	if (ret < 0)
 		batt_drv->ssoc_state.bd_trickle_reset_sec =
 				DEFAULT_BD_TRICKLE_RESET_SEC;
-
-	ret = of_property_read_u32(node, "google,ssoc-delta",
-				   &batt_drv->ssoc_state.ssoc_delta);
-	if (ret < 0)
-		batt_drv->ssoc_state.ssoc_delta = SSOC_DELTA;
 
 	/* cycle count is cached, here since SSOC, chg_profile might use it */
 	batt_update_cycle_count(batt_drv);
