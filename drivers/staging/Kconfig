@@ -122,4 +122,9 @@ source "drivers/staging/s2mpg01/Kconfig"
 
 source "drivers/staging/wlan_mac/Kconfig"
 
+config QCA_CLD_WLAN
+	bool "Qualcomm Atheros CLD WLAN module"
+	help
+	  Add support for the Qualcomm Atheros CLD WLAN module.
+
 endif # STAGING
