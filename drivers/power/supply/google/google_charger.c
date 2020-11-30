@@ -2134,8 +2134,8 @@ static int pps_policy(struct chg_drv *chg_drv, int fv_uv, int cc_max)
 	}
 
 	/* TODO: should we compensate for the round down here? */
-	exp_mw = (unsigned long)vbatt * (unsigned long)cc_max * 1.1 /
-		 1000000000;
+	exp_mw = (unsigned long)vbatt * (unsigned long)cc_max * 11 /
+		 10000000000;
 
 	logbuffer_log(pps->log,
 		"ibatt %d, vbatt %d, vbatt*cc_max*1.1 %lu mw, adapter %ld, keep_alive_cnt %d",
