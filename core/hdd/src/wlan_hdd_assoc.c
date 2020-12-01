@@ -2966,8 +2966,6 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 			u8 *pFTAssocReq = NULL;
 			unsigned int assocReqlen = 0;
 			struct ieee80211_channel *chan;
-			uint8_t rspRsnIe[DOT11F_IE_RSN_MAX_LEN];
-			uint32_t rspRsnLength = DOT11F_IE_RSN_MAX_LEN;
 
 			/* add bss_id to cfg80211 data base */
 			bss =
@@ -3182,10 +3180,6 @@ hdd_association_completion_handler(struct hdd_adapter *adapter,
 							    &reqRsnLength,
 							    reqRsnIe);
 
-				sme_roam_get_wpa_rsn_rsp_ie(mac_handle,
-							    adapter->session_id,
-							    &rspRsnLength,
-							    rspRsnIe);
 				if (!hddDisconInProgress) {
 					if (ft_carrier_on)
 						hdd_send_re_assoc_event(dev,
