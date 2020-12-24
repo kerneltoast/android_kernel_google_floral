@@ -2655,8 +2655,7 @@ static int __wlan_hdd_cfg80211_do_acs(struct wiphy *wiphy,
 	    HDD_EXTERNAL_ACS_PCL_MANDATORY) && conc_channel) {
 		if ((conc_channel <= WLAN_REG_CH_NUM(CHAN_ENUM_14)) &&
 		      (sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211B ||
-		       sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211G ||
-		       sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211ANY)) {
+		       sap_config->acs_cfg.band == QCA_ACS_MODE_IEEE80211G)) {
 			sap_config->acs_cfg.pri_ch = conc_channel;
 			wlan_sap_set_sap_ctx_acs_cfg(
 				WLAN_HDD_GET_SAP_CTX_PTR(adapter), sap_config);
