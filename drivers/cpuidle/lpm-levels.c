@@ -1540,7 +1540,7 @@ static void lpm_cpuidle_s2idle(struct cpuidle_device *dev,
 {
 	static DEFINE_SPINLOCK(s2idle_lock);
 	static struct cpumask idling_cpus;
-	static s2idle_sleep_attempts;
+	static int s2idle_sleep_attempts;
 	static bool s2idle_aborted;
 	struct lpm_cpu *cpu = per_cpu(cpu_lpm, dev->cpu);
 	const struct cpumask *cpumask = get_cpu_mask(dev->cpu);
