@@ -2963,7 +2963,7 @@ int ab_sm_init(struct platform_device *pdev)
 		goto fail_ab_ready;
 	}
 
-	if (of_property_read_u32(np, "chip-id", &ab_sm_ctx->chip_id))
+	if (of_property_read_u32(np, "chip-id", (u32 *)&ab_sm_ctx->chip_id))
 		ab_sm_ctx->chip_id = CHIP_ID_B0; /* Assume B0 if unspecified */
 
 	if (of_property_read_u32(np, "ddrcke-iso-clamp-wr",
