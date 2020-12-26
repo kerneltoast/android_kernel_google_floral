@@ -2077,7 +2077,7 @@ static int num_pd_instances;
  */
 struct usbpd *usbpd_create(struct device *parent)
 {
-	int ret = 0;
+	int ret;
 	struct usbpd *pd;
 	union power_supply_propval val = {0};
 
@@ -2086,10 +2086,8 @@ struct usbpd *usbpd_create(struct device *parent)
 		return ERR_PTR(-ENOMEM);
 
 	pd->log = debugfs_logbuffer_register("usbpd");
-	if (IS_ERR_OR_NULL(pd->log)) {
-		ret = PTR_ERR(pd->log);
-		goto free_pd;
-	}
+	if (IS_ERR(pd->log))
+		pd->log = NULL;
 
 	mutex_init(&pd->lock);
 
@@ -2275,7 +2273,6 @@ del_pd:
 	device_del(&pd->dev);
 free_buffer:
 	debugfs_logbuffer_unregister(pd->log);
-free_pd:
 	num_pd_instances--;
 	put_device(&pd->dev);
 	return ERR_PTR(ret);
