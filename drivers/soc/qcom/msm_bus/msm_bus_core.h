@@ -369,6 +369,8 @@ msm_bus_dbg_add_client(const struct msm_bus_client_handle *pdata)
 	return 0;
 }
 static inline void msm_bus_dbg_suspend_print_clients(void)
+{
+}
 
 static inline int
 msm_bus_dbg_add_bcm(struct msm_bus_node_device_type *cur_bcm)
