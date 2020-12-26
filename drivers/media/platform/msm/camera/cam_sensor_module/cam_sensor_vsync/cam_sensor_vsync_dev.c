@@ -646,17 +646,8 @@ static int cam_vsync_probe(struct platform_device *pdev)
 	snprintf(path, sizeof(path), "%d:%d", sq->sq_node, sq->sq_port);
 
 	ctx->de_dir = debugfs_create_dir(path, cam_vsync_debug_dir);
-	if (IS_ERR(ctx->de_dir)) {
-		ret = PTR_ERR(ctx->de_dir);
-		goto err_release_qmi_handle;
-	}
-
 	ctx->de_data = debugfs_create_file("data", 0600, ctx->de_dir,
 						NULL, &cam_vsync_qmi_fops);
-	if (IS_ERR(ctx->de_data)) {
-		ret = PTR_ERR(ctx->de_data);
-		goto err_remove_de_dir;
-	}
 
 	ctx->timeout_cnt = 0;
 	INIT_LIST_HEAD(&ctx->pending_reqs);
@@ -665,8 +656,6 @@ static int cam_vsync_probe(struct platform_device *pdev)
 
 	return 0;
 
-err_remove_de_dir:
-	debugfs_remove(ctx->de_dir);
 err_release_qmi_handle:
 	qmi_handle_release(&ctx->qmi);
 
@@ -754,10 +743,8 @@ static int cam_vsync_init(void)
 	int ret;
 
 	cam_vsync_debug_dir = debugfs_create_dir("cam_vsync_qmi", NULL);
-	if (IS_ERR(cam_vsync_debug_dir)) {
+	if (IS_ERR(cam_vsync_debug_dir))
 		CAM_ERR(CAM_SENSOR, "failed to create qmi_vsync dir\n");
-		return PTR_ERR(cam_vsync_debug_dir);
-	}
 
 	ret = platform_driver_register(&cam_vsync_driver);
 	if (ret)
