@@ -1827,7 +1827,7 @@ static irqreturn_t abc_pcie_irq_handler(int irq, void *ptr)
 	u32 msi_cap_val;
 
 	irq = irq - pdev->irq;
-	pr_info_ratelimited("MSI Irq number is : %d\n", irq);
+	pr_debug("MSI Irq number is : %d\n", irq);
 	spin_lock(&abc_dev->lock);
 
 	if (irq >= ABC_MSI_0_TMU_AON && irq <= ABC_MSI_14_FLUSH_DONE) {
@@ -1893,7 +1893,7 @@ static int abc_pcie_enter_el2_handler(void *ctx)
 {
 	struct device *dev = (struct device *)ctx;
 
-	dev_info(dev, "%s: enter\n", __func__);
+	dev_dbg(dev, "%s: enter\n", __func__);
 
 	/*
 	 * If PCIe link is not enabled, this handler should not have been
@@ -1903,27 +1903,27 @@ static int abc_pcie_enter_el2_handler(void *ctx)
 					ABC_PCIE_LINK_STATE_MASK)))
 		return -EINVAL;
 
-	dev_info(dev, "Broadcast Enter EL2 notification\n");
+	dev_dbg(dev, "Broadcast Enter EL2 notification\n");
 
 	/* Broadcast this event to subscribers */
 	abc_pcie_link_notify_blocking(ABC_PCIE_LINK_PRE_DISABLE |
 					ABC_PCIE_LINK_ENTER_EL2);
 
-	dev_info(dev, "%s: disabling dma\n", __func__);
+	dev_dbg(dev, "%s: disabling dma\n", __func__);
 	/* Call PCIe DMA ops after notifying other clients */
 	if (abc_dev->dma_device_ops)
 		abc_dev->dma_device_ops->pre_disable();
 
-	dev_info(dev, "%s: disabling irq\n", __func__);
+	dev_dbg(dev, "%s: disabling irq\n", __func__);
 	/* Disable PCIe interrupts during EL2 */
 	abc_pcie_disable_irqs(abc_dev->pdev);
 
-	dev_info(dev, "%s: detaching SMMU\n", __func__);
+	dev_dbg(dev, "%s: detaching SMMU\n", __func__);
 
 	/* Detach the PCIe EP device to the ARM sMMU */
 	abc_pcie_smmu_detach((struct device *)ctx);
 
-	dev_info(dev, "%s: done\n", __func__);
+	dev_dbg(dev, "%s: done\n", __func__);
 
 	return 0;
 }
@@ -1934,7 +1934,7 @@ static int abc_pcie_exit_el2_handler(void *ctx)
 	uint32_t test_read_data = 0;
 	int ret;
 
-	dev_info(dev, "%s: enter\n", __func__);
+	dev_dbg(dev, "%s: enter\n", __func__);
 
 	/*
 	 * If PCIe link is not enabled, this handler should not have been
@@ -1945,7 +1945,7 @@ static int abc_pcie_exit_el2_handler(void *ctx)
 		return -ENOTCONN;
 
 
-	dev_info(dev, "%s: attaching SMMU\n", __func__);
+	dev_dbg(dev, "%s: attaching SMMU\n", __func__);
 
 	/* Re-attach the PCIe EP device to the ARM sMMU */
 	ret = abc_pcie_smmu_attach((struct device *)ctx);
@@ -1955,17 +1955,17 @@ static int abc_pcie_exit_el2_handler(void *ctx)
 		return ret;
 	}
 
-	dev_info(dev, "%s: enabling irq\n", __func__);
+	dev_dbg(dev, "%s: enabling irq\n", __func__);
 
 	/* Enable PCIe interrupts on EL2 exit */
 	abc_pcie_enable_irqs(abc_dev->pdev);
 
-	dev_info(dev, "%s: re-enabling dma\n", __func__);
+	dev_dbg(dev, "%s: re-enabling dma\n", __func__);
 	/* Call PCIe DMA ops before notifying other clients */
 	if (abc_dev->dma_device_ops)
 		abc_dev->dma_device_ops->post_enable();
 
-	dev_info(dev, "%s: testing pcie read\n", __func__);
+	dev_dbg(dev, "%s: testing pcie read\n", __func__);
 	ret = abc_pcie_config_read(ABC_BASE_OTP_WRAPPER & 0xffffff,
 					   0x0, &test_read_data);
 
@@ -1980,16 +1980,16 @@ static int abc_pcie_exit_el2_handler(void *ctx)
 		return (test_read_data == ABC_INVALID_DATA) ? -ENOTCONN : ret;
 	}
 
-	dev_info(dev, "%s: test read [0x%08x] = 0x%08x\n",
+	dev_dbg(dev, "%s: test read [0x%08x] = 0x%08x\n",
 			__func__, ABC_BASE_OTP_WRAPPER, test_read_data);
 
-	dev_info(dev, "Broadcast Exit EL2 notification\n");
+	dev_dbg(dev, "Broadcast Exit EL2 notification\n");
 
 	/* Broadcast this event to subscribers */
 	abc_pcie_link_notify_blocking(ABC_PCIE_LINK_POST_ENABLE |
 					ABC_PCIE_LINK_EXIT_EL2);
 
-	dev_info(dev, "%s: done\n", __func__);
+	dev_dbg(dev, "%s: done\n", __func__);
 
 	return 0;
 }
@@ -2091,19 +2091,19 @@ static int abc_pcie_linkdown_handler(void *ctx)
 	 */
 	if (!(atomic_read(&abc_dev->link_state) &
 			  ABC_PCIE_SMMU_ATTACH_STATE_MASK)) {
-		dev_info(dev, "linkdown during EL2 mode; re-attach smmu\n");
+		dev_dbg(dev, "linkdown during EL2 mode; re-attach smmu\n");
 		ret = abc_pcie_smmu_attach(dev);
 		if (ret)
 			dev_err(dev, "failed to attach SMMU: %d\n", ret);
 
-		dev_info(dev, "handle linkdown event in dma driver\n");
+		dev_dbg(dev, "handle linkdown event in dma driver\n");
 		if (abc_dev->dma_device_ops)
 			abc_dev->dma_device_ops->link_error();
 	} else {
 		if (abc_dev->dma_device_ops)
 			abc_dev->dma_device_ops->link_error();
 
-		dev_info(dev, "linkdown while EL1 has access; disable irq\n");
+		dev_dbg(dev, "linkdown while EL1 has access; disable irq\n");
 		abc_pcie_disable_irqs(abc_dev->pdev);
 	}
 

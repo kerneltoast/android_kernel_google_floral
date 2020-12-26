@@ -85,7 +85,7 @@ int flushFIFO(void)
 		return ret;
 	}
 
-	pr_info("FIFO flushed!\n");
+	pr_debug("FIFO flushed!\n");
 	return OK;
 }
 

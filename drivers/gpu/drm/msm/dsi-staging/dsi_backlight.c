@@ -439,7 +439,7 @@ static int dsi_backlight_update_status(struct backlight_device *bd)
 	dsi_backlight_hbm_dimming_restart(bl);
 
 	if (dsi_panel_initialized(panel) && bl->update_bl) {
-		pr_info("req:%d bl:%d state:0x%x\n",
+		pr_debug("req:%d bl:%d state:0x%x\n",
 			bd->props.brightness, bl_lvl, bd->props.state);
 
 		rc = bl->update_bl(bl, bl_lvl);
@@ -775,7 +775,7 @@ int dsi_backlight_early_dpms(struct dsi_backlight_config *bl, int power_mode)
 	if (!bd)
 		return 0;
 
-	pr_info("power_mode:%d state:0x%0x\n", power_mode, bd->props.state);
+	pr_debug("power_mode:%d state:0x%0x\n", power_mode, bd->props.state);
 
 	mutex_lock(&bl->state_lock);
 	state = get_state_after_dpms(bl, power_mode);

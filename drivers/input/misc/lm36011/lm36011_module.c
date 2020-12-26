@@ -1543,7 +1543,7 @@ static ssize_t led_laser_enable_store(struct device *dev,
 					sx9320_crack_detection(ctrl);
 			}
 			lm36011_enable_gpio_irq(dev);
-			dev_info(ctrl->soc_info.dev,
+			dev_dbg(ctrl->soc_info.dev,
 				"enable safety ic funciton, safety_ic_owner %d",
 				safety_ic_owner);
 		}
@@ -1561,7 +1561,7 @@ static ssize_t led_laser_enable_store(struct device *dev,
 					"ITO-R detected crack");
 				cam_req_mgr_update_safety_ic_status(LENS_CRACK);
 			}
-			dev_info(ctrl->soc_info.dev, "Silego state: 0x%x",
+			dev_dbg(ctrl->soc_info.dev, "Silego state: 0x%x",
 				ctrl->silego.fault_flag);
 		}
 		/* Clean up IRQ for PROTO and DEV device */
@@ -1571,7 +1571,7 @@ static ssize_t led_laser_enable_store(struct device *dev,
 		rc = lm36011_write_data(ctrl,
 			ENABLE_REG, IR_ENABLE_MODE);
 		if (rc == 0)
-			dev_info(dev, "Laser enabled");
+			dev_dbg(dev, "Laser enabled");
 	} else {
 		mutex_lock(&lm36011_mutex);
 		if (ctrl->type == safety_ic_owner) {
@@ -1925,7 +1925,7 @@ static void silego_self_test(
 	mutex_lock(&lm36011_mutex);
 	if (ctrl->type == safety_ic_owner) {
 		lm36011_enable_gpio_irq(ctrl->soc_info.dev);
-		dev_info(ctrl->soc_info.dev,
+		dev_dbg(ctrl->soc_info.dev,
 			"enable safety ic funciton, safety_ic_owner %d",
 			safety_ic_owner);
 	}
@@ -2293,7 +2293,7 @@ static int32_t lm36011_driver_platform_probe(
 					ctrl->silego.fault_flag);
 				ctrl->silego.is_validated = false;
 			} else
-				dev_info(ctrl->soc_info.dev,
+				dev_dbg(ctrl->soc_info.dev,
 					"Silego state: 0x%x",
 					ctrl->silego.fault_flag);
 		}

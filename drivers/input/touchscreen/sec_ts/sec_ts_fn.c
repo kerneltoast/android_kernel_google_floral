@@ -790,7 +790,7 @@ int sec_ts_fix_tmode(struct sec_ts_data *ts, u8 mode, u8 state)
 	u8 onoff[1] = {STATE_MANAGE_OFF};
 	u8 tBuff[2] = { mode, state };
 
-	input_info(true, &ts->client->dev, "%s\n", __func__);
+	input_dbg(true, &ts->client->dev, "%s\n", __func__);
 
 	ret = ts->sec_ts_i2c_write(ts, SEC_TS_CMD_STATEMANAGE_ON, onoff, 1);
 	sec_ts_delay(20);
@@ -1130,7 +1130,7 @@ static void sec_ts_print_frame(struct sec_ts_data *ts, short *min, short *max)
 	unsigned char *pStr = NULL;
 	unsigned char pTmp[16] = { 0 };
 
-	input_info(true, &ts->client->dev, "%s\n", __func__);
+	input_dbg(true, &ts->client->dev, "%s\n", __func__);
 
 	pStr = kzalloc(6 * (ts->tx_count + 1), GFP_KERNEL);
 	if (pStr == NULL)
@@ -1145,7 +1145,7 @@ static void sec_ts_print_frame(struct sec_ts_data *ts, short *min, short *max)
 		strncat(pStr, pTmp, 6 * ts->tx_count);
 	}
 
-	input_info(true, &ts->client->dev, "%s\n", pStr);
+	input_dbg(true, &ts->client->dev, "%s\n", pStr);
 	memset(pStr, 0x0, 6 * (ts->tx_count + 1));
 	snprintf(pTmp, sizeof(pTmp), " +");
 	strncat(pStr, pTmp, 6 * ts->tx_count);
@@ -1155,7 +1155,7 @@ static void sec_ts_print_frame(struct sec_ts_data *ts, short *min, short *max)
 		strncat(pStr, pTmp, 6 * ts->rx_count);
 	}
 
-	input_info(true, &ts->client->dev, "%s\n", pStr);
+	input_dbg(true, &ts->client->dev, "%s\n", pStr);
 
 	for (i = 0; i < ts->rx_count; i++) {
 		memset(pStr, 0x0, 6 * (ts->tx_count + 1));
@@ -1174,7 +1174,7 @@ static void sec_ts_print_frame(struct sec_ts_data *ts, short *min, short *max)
 			}
 			strncat(pStr, pTmp, 6 * ts->rx_count);
 		}
-		input_info(true, &ts->client->dev, "%s\n", pStr);
+		input_dbg(true, &ts->client->dev, "%s\n", pStr);
 	}
 	kfree(pStr);
 }

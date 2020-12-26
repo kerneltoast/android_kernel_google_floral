@@ -101,7 +101,7 @@ int fts_system_reset(void)
 
 	event_to_search = (int)EVT_ID_CONTROLLER_READY;
 
-	pr_info("System resetting...\n");
+	pr_debug("System resetting...\n");
 	for (i = 0; i < RETRY_SYSTEM_RESET && res < 0; i++) {
 		resetErrorList();
 		fts_enableInterrupt(false);
@@ -241,7 +241,7 @@ int pollForEvent(int *event_to_search, int event_bytes, u8 *readData, int
 				return err_handling;
 			}
 		} else {
-			pr_info("%s\n",
+			pr_debug("%s\n",
 				 printHex("READ EVENT = ", readData,
 					  FIFO_EVENT_SIZE,
 					  temp,
@@ -271,7 +271,7 @@ int pollForEvent(int *event_to_search, int event_bytes, u8 *readData, int
 		pr_err("pollForEvent: ERROR %08X\n", ERROR_TIMEOUT);
 		return ERROR_TIMEOUT;
 	} else if (find == 1) {
-		pr_info("%s\n",
+		pr_debug("%s\n",
 			 printHex("FOUND EVENT = ",
 				  readData,
 				  FIFO_EVENT_SIZE,
@@ -344,7 +344,7 @@ int checkEcho(u8 *cmd, int size)
 			return ERROR_CHECK_ECHO_FAIL;
 		}
 
-		pr_info("ECHO OK!\n");
+		pr_debug("ECHO OK!\n");
 		return ret;
 	}
 }
@@ -456,9 +456,9 @@ int writeSysCmd(u8 sys_cmd, u8 *sett, int size)
 		index += scnprintf(buff + index, buff_len - index,
 					"%02X ", sett[ret]);
 	}
-	pr_info("%s: Command = %02X %02X %s\n", __func__, cmd[0],
+	pr_debug("%s: Command = %02X %02X %s\n", __func__, cmd[0],
 		 cmd[1], buff);
-	pr_info("%s: Writing Sys command...\n", __func__);
+	pr_debug("%s: Writing Sys command...\n", __func__);
 	if (sys_cmd != SYS_CMD_LOAD_DATA)
 		ret = fts_writeFwCmd(cmd, 2 + size);
 	else {
@@ -473,7 +473,7 @@ int writeSysCmd(u8 sys_cmd, u8 *sett, int size)
 	if (ret < OK)
 		pr_err("%s: ERROR %08X\n", __func__, ret);
 	else
-		pr_info("%s: FINISHED!\n", __func__);
+		pr_debug("%s: FINISHED!\n", __func__);
 
 	return ret;
 }
