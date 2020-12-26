@@ -418,7 +418,7 @@ static inline void sde_dbg_destroy(void)
 {
 }
 
-static inline void sde_dbg_dump(enum sde_dbg_dump_context,
+static inline void sde_dbg_dump(enum sde_dbg_dump_context mode,
 	const char *name, ...)
 {
 }
@@ -433,13 +433,24 @@ static inline int sde_dbg_reg_register_base(const char *name,
 	return 0;
 }
 
+static inline int sde_dbg_reg_register_cb(const char *name, void (*cb)(void *),
+					  void *ptr)
+{
+	return 0;
+}
+
+static inline void sde_dbg_reg_unregister_cb(const char *name,
+					     void (*cb)(void *), void *ptr)
+{
+}
+
 static inline void sde_dbg_reg_register_dump_range(const char *base_name,
 		const char *range_name, u32 offset_start, u32 offset_end,
 		uint32_t xin_id)
 {
 }
 
-void sde_dbg_set_sde_top_offset(u32 blk_off)
+static inline void sde_dbg_set_sde_top_offset(u32 blk_off)
 {
 }
 
