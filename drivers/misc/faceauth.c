@@ -141,7 +141,7 @@ static long faceauth_dev_ioctl(struct file *file, unsigned int cmd,
 
 	switch (cmd) {
 	case FACEAUTH_DEV_IOC_INIT:
-		pr_info("el2: faceauth init IOCTL\n");
+		pr_debug("el2: faceauth init IOCTL\n");
 
 		if (copy_from_user(&init_step_data, (const void __user *)arg,
 				   sizeof(init_step_data))) {
@@ -162,7 +162,7 @@ static long faceauth_dev_ioctl(struct file *file, unsigned int cmd,
 			goto exit;
 		break;
 	case FACEAUTH_DEV_IOC_START:
-		pr_info("el2: faceauth start IOCTL\n");
+		pr_debug("el2: faceauth start IOCTL\n");
 
 		if (copy_from_user(&start_step_data, (const void __user *)arg,
 				   sizeof(start_step_data))) {
@@ -207,7 +207,7 @@ static long faceauth_dev_ioctl(struct file *file, unsigned int cmd,
 			goto exit;
 
 		/* Check completion flag */
-		pr_info("Waiting for completion.\n");
+		pr_debug("Waiting for completion.\n");
 		if (start_step_data.operation == COMMAND_ENROLL) {
 			polling_pause = M0_ENROLL_POLLING_PAUSE_US;
 			polling_interval = M0_ENROLL_POLLING_INTERVAL_US;
@@ -268,7 +268,7 @@ static long faceauth_dev_ioctl(struct file *file, unsigned int cmd,
 	case FACEAUTH_DEV_IOC_CLEANUP:
 		/* In case of EL2 cleanup happens in PIL callback */
 		/* TODO cleanup Airbrush DRAM */
-		pr_info("el2: faceauth cleanup IOCTL\n");
+		pr_debug("el2: faceauth cleanup IOCTL\n");
 		el2_faceauth_cleanup(data->device);
 		data->is_secure_camera = false;
 		break;
@@ -528,7 +528,7 @@ static int faceauth_pcie_blocking_listener(struct notifier_block *nb,
 		/* Use the writer lock to prevent any incoming reader */
 		down_write(&dev_data->rwsem);
 		dev_data->can_transfer = false;
-		pr_info("All ongoing ioctls are finished, confirm disable");
+		pr_debug("All ongoing ioctls are finished, confirm disable");
 		up_write(&dev_data->rwsem);
 		return NOTIFY_OK;
 	}
@@ -695,7 +695,7 @@ static int faceauth_probe(struct platform_device *pdev)
 		       0, sizeof(struct faceauth_debug_entry));
 	}
 
-	data->debug_enabled = true;
+	data->debug_enabled = false;
 	return 0;
 
 exit3:
