@@ -3708,10 +3708,10 @@ static int smb5_probe(struct platform_device *pdev)
 		return -EPROBE_DEFER;
 
 	chg->log = debugfs_logbuffer_register("smblib");
-	if (IS_ERR_OR_NULL(chg->log)) {
+	if (IS_ERR(chg->log)) {
 		pr_err("failed to obtain logbuffer instance rc:%ld",
 		       PTR_ERR(chg->log));
-		return PTR_ERR(chg->log);
+		chg->log = NULL;
 	}
 
 	rc = smblib_init(chg);
