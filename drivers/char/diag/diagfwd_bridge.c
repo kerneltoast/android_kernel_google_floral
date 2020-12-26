@@ -303,7 +303,7 @@ void diag_register_with_bridge(void)
 
 void diag_unregister_bridge(void)
 {
-	if (hsic_interface_active)
+	if (IS_ENABLED(CONFIG_USB_QTI_DIAG_BRIDGE) && hsic_interface_active)
 		diag_unregister_hsic();
 	else if (IS_ENABLED(CONFIG_MHI_BUS))
 		diag_unregister_mhi();
