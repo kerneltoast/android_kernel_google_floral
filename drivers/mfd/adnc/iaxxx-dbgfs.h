@@ -27,7 +27,13 @@ int iaxxx_dfs_switch_regmap(struct device *dev,
 int iaxxx_dfs_del_regmap(struct device *dev, struct regmap *map);
 struct dentry *iaxxx_dfs_get_root(void);
 #else
-static inline int iaxxx_dfs_add_regmap(struct device *dev, struct regmap *map)
+static inline int iaxxx_dfs_add_regmap(struct device *dev, struct regmap *map,
+				       void **dfs_node)
+{
+	return 0;
+}
+static inline int iaxxx_dfs_switch_regmap(struct device *dev,
+					  struct regmap *map, void *dfs_node)
 {
 	return 0;
 }
