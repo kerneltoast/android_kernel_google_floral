@@ -3114,7 +3114,6 @@ static int debug_chg_health_set_stage(void *data, u64 val)
 /* Adaptive Charging */
 DEFINE_SIMPLE_ATTRIBUTE(debug_chg_health_stage_fops, NULL,
 			debug_chg_health_set_stage, "%u\n");
-#endif
 
 static ssize_t debug_get_fake_temp(struct file *filp,
 					   char __user *buf,
@@ -3156,6 +3155,7 @@ static ssize_t debug_set_fake_temp(struct file *filp,
 
 BATTERY_DEBUG_ATTRIBUTE(debug_fake_temp_fops,
 				debug_get_fake_temp, debug_set_fake_temp);
+#endif
 
 /* ------------------------------------------------------------------------- */
 
