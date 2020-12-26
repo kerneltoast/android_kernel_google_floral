@@ -123,7 +123,7 @@ obj-$(CONFIG_NILFS2_FS)		+= nilfs2/
 obj-$(CONFIG_BEFS_FS)		+= befs/
 obj-$(CONFIG_HOSTFS)		+= hostfs/
 obj-$(CONFIG_CACHEFILES)	+= cachefiles/
-ifneq ($(filter y, $(CONFIG_DEBUG_FS) $(CONFIG_ANDROID)),)
+ifneq ($(filter y, $(CONFIG_DEBUG_FS) $(CONFIG_ANDROID) $(CONFIG_KMEMLEAK)),)
 obj-y				+= debugfs/
 endif
 obj-$(CONFIG_TRACING)		+= tracefs/
