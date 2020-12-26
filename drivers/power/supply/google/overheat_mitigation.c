@@ -323,7 +323,7 @@ static inline int get_usb_port_temp(struct overheat_info *ovh_info)
 	if (temp == -EINVAL || temp == -ENODATA)
 		return temp;
 
-	dev_info(ovh_info->dev, "Update USB port temp:%d\n", temp);
+	dev_dbg(ovh_info->dev, "Update USB port temp:%d\n", temp);
 	if (temp > ovh_info->max_temp)
 		ovh_info->max_temp = temp;
 

@@ -1531,7 +1531,7 @@ static int batt_chg_stats_cstr(char *buff, int size,
 
 static void batt_res_dump_logs(struct batt_res *rstate)
 {
-	pr_info("RES: req:%d, sample:%d[%d], filt_cnt:%d, res_avg:%d\n",
+	pr_debug("RES: req:%d, sample:%d[%d], filt_cnt:%d, res_avg:%d\n",
 		rstate->estimate_requested, rstate->sample_accumulator,
 		rstate->sample_count, rstate->filter_count,
 		rstate->resistance_avg);
@@ -1804,7 +1804,7 @@ static int msc_logic_irdrop(struct batt_drv *batt_drv,
 		if (batt_drv->checked_cv_cnt == 0)
 			batt_drv->checked_cv_cnt = 1;
 
-		pr_info("MSC_FAST vt=%d vb=%d fv_uv=%d->%d vchrg=%d cv_cnt=%d\n",
+		pr_debug("MSC_FAST vt=%d vb=%d fv_uv=%d->%d vchrg=%d cv_cnt=%d\n",
 			vtier, vbatt, batt_drv->fv_uv, *fv_uv,
 			batt_drv->chg_state.f.vchrg,
 			batt_drv->checked_cv_cnt);
@@ -1834,14 +1834,14 @@ static int msc_logic_irdrop(struct batt_drv *batt_drv,
 		*update_interval = profile->cv_update_interval;
 		batt_drv->checked_cv_cnt = 0;
 
-		pr_info("MSC_TYPE vt=%d vb=%d fv_uv=%d chg_type=%d\n",
+		pr_debug("MSC_TYPE vt=%d vb=%d fv_uv=%d chg_type=%d\n",
 			vtier, vbatt, *fv_uv, chg_type);
 
 	} else if (batt_drv->checked_ov_cnt) {
 		/* TAPER_DLY: countdown to raise fv_uv and/or check
 		 * for tier switch, will keep steady...
 		 */
-		pr_info("MSC_DLY vt=%d vb=%d fv_uv=%d margin=%d cv_cnt=%d, ov_cnt=%d\n",
+		pr_debug("MSC_DLY vt=%d vb=%d fv_uv=%d margin=%d cv_cnt=%d, ov_cnt=%d\n",
 			vtier, vbatt, *fv_uv, profile->cv_range_accuracy,
 			batt_drv->checked_cv_cnt,
 			batt_drv->checked_ov_cnt);
@@ -1856,7 +1856,7 @@ static int msc_logic_irdrop(struct batt_drv *batt_drv,
 		msc_state = MSC_STEADY;
 		*update_interval = profile->cv_update_interval;
 
-		pr_info("MSC_STEADY vt=%d vb=%d fv_uv=%d margin=%d\n",
+		pr_debug("MSC_STEADY vt=%d vb=%d fv_uv=%d margin=%d\n",
 			vtier, vbatt, *fv_uv,
 			profile->cv_range_accuracy);
 	} else if (batt_drv->checked_tier_switch_cnt >= (switch_cnt - 1)) {
@@ -1882,7 +1882,7 @@ static int msc_logic_irdrop(struct batt_drv *batt_drv,
 		/* debounce next taper voltage adjustment */
 		batt_drv->checked_cv_cnt = profile->cv_debounce_cnt;
 
-		pr_info("MSC_RAISE vt=%d vb=%d fv_uv=%d->%d\n",
+		pr_debug("MSC_RAISE vt=%d vb=%d fv_uv=%d->%d\n",
 			vtier, vbatt, batt_drv->fv_uv, *fv_uv);
 	}
 
@@ -2123,7 +2123,7 @@ static int msc_logic(struct batt_drv *batt_drv)
 
 		return 0;
 	} else if (batt_drv->jeita_stop_charging) {
-		pr_info("MSC_JEITA temp=%d ok, enabling charging\n", temp);
+		pr_debug("MSC_JEITA temp=%d ok, enabling charging\n", temp);
 		batt_drv->jeita_stop_charging = 0;
 	}
 
@@ -2149,7 +2149,7 @@ static int msc_logic(struct batt_drv *batt_drv)
 		if (batt_drv->vbatt_idx == -1)
 			vbatt_idx = gbms_msc_voltage_idx(profile, vbatt);
 
-		pr_info("MSC_SEED temp=%d vbatt=%d temp_idx:%d->%d, vbatt_idx:%d->%d\n",
+		pr_debug("MSC_SEED temp=%d vbatt=%d temp_idx:%d->%d, vbatt_idx:%d->%d\n",
 			temp, vbatt, batt_drv->temp_idx, temp_idx,
 			batt_drv->vbatt_idx, vbatt_idx);
 
@@ -2167,7 +2167,7 @@ static int msc_logic(struct batt_drv *batt_drv)
 		msc_state = MSC_DSG;
 		vbatt_idx = gbms_msc_voltage_idx(profile, vbatt);
 
-		pr_info("MSC_DSG vbatt_idx:%d->%d vbatt=%d ibatt=%d fv_uv=%d cv_cnt=%d ov_cnt=%d\n",
+		pr_debug("MSC_DSG vbatt_idx:%d->%d vbatt=%d ibatt=%d fv_uv=%d cv_cnt=%d ov_cnt=%d\n",
 			batt_drv->vbatt_idx, vbatt_idx,
 			vbatt, ibatt, fv_uv,
 			batt_drv->checked_cv_cnt,
@@ -2190,7 +2190,7 @@ static int msc_logic(struct batt_drv *batt_drv)
 			msc_state = MSC_LAST;
 		}
 
-		pr_info("MSC_LAST vbatt=%d ibatt=%d fv_uv=%d\n",
+		pr_debug("MSC_LAST vbatt=%d ibatt=%d fv_uv=%d\n",
 			vbatt, ibatt, fv_uv);
 
 	} else {
@@ -2225,7 +2225,7 @@ static int msc_logic(struct batt_drv *batt_drv)
 			msc_state = MSC_WAIT;
 			batt_drv->checked_cv_cnt -= 1;
 
-			pr_info("MSC_WAIT vt=%d vb=%d fv_uv=%d ibatt=%d cv_cnt=%d ov_cnt=%d t_cnt=%d\n",
+			pr_debug("MSC_WAIT vt=%d vb=%d fv_uv=%d ibatt=%d cv_cnt=%d ov_cnt=%d t_cnt=%d\n",
 				vtier, vbatt, fv_uv, ibatt,
 				batt_drv->checked_cv_cnt,
 				batt_drv->checked_ov_cnt,
@@ -2239,7 +2239,7 @@ static int msc_logic(struct batt_drv *batt_drv)
 			msc_state = MSC_RSTC;
 			batt_drv->checked_tier_switch_cnt = 0;
 
-			pr_info("MSC_RSTC vt=%d vb=%d fv_uv=%d ibatt=%d cc_next_max=%d t_cnt=%d\n",
+			pr_debug("MSC_RSTC vt=%d vb=%d fv_uv=%d ibatt=%d cc_next_max=%d t_cnt=%d\n",
 				vtier, vbatt, fv_uv, ibatt, cc_next_max,
 				batt_drv->checked_tier_switch_cnt);
 		} else if (batt_drv->checked_tier_switch_cnt >= switch_cnt) {
@@ -2247,14 +2247,14 @@ static int msc_logic(struct batt_drv *batt_drv)
 			msc_state = MSC_NEXT;
 			vbatt_idx = batt_drv->vbatt_idx + 1;
 
-			pr_info("MSC_NEXT tier vb=%d ibatt=%d vbatt_idx=%d->%d\n",
+			pr_debug("MSC_NEXT tier vb=%d ibatt=%d vbatt_idx=%d->%d\n",
 				vbatt, ibatt, batt_drv->vbatt_idx, vbatt_idx);
 		} else {
 			/* current under next tier, +1 on tier switch count */
 			msc_state = MSC_NYET;
 			batt_drv->checked_tier_switch_cnt++;
 
-			pr_info("MSC_NYET ibatt=%d cc_next_max=%d t_cnt=%d\n",
+			pr_debug("MSC_NYET ibatt=%d cc_next_max=%d t_cnt=%d\n",
 				ibatt, cc_next_max,
 				batt_drv->checked_tier_switch_cnt);
 		}
@@ -2297,7 +2297,7 @@ static int msc_logic(struct batt_drv *batt_drv)
 	batt_drv->ce_data.last_update = now;
 	mutex_unlock(&batt_drv->stats_lock);
 
-	pr_info("MSC_LOGIC cv_cnt=%d ov_cnt=%d temp_idx:%d->%d, vbatt_idx:%d->%d, fv=%d->%d, cc_max=%d\n",
+	pr_debug("MSC_LOGIC cv_cnt=%d ov_cnt=%d temp_idx:%d->%d, vbatt_idx:%d->%d, fv=%d->%d, cc_max=%d\n",
 		batt_drv->checked_cv_cnt, batt_drv->checked_ov_cnt,
 		batt_drv->temp_idx, temp_idx, batt_drv->vbatt_idx,
 		vbatt_idx, batt_drv->fv_uv, fv_uv,
@@ -2326,7 +2326,7 @@ static int batt_chg_logic(struct batt_drv *batt_drv)
 
 	__pm_stay_awake(&batt_drv->msc_ws);
 
-	pr_info("MSC_DIN chg_state=%lx f=0x%x chg_s=%s chg_t=%s vchg=%d icl=%d\n",
+	pr_debug("MSC_DIN chg_state=%lx f=0x%x chg_s=%s chg_t=%s vchg=%d icl=%d\n",
 		(unsigned long)chg_state->v,
 		chg_state->f.flags,
 		gbms_chg_status_s(chg_state->f.chg_status),
@@ -2436,7 +2436,7 @@ msc_logic_done:
 	if (batt_drv->jeita_stop_charging)
 		batt_drv->cc_max = 0;
 
-	pr_info("%s fv_uv=%d cc_max=%d update_interval=%d\n",
+	pr_debug("%s fv_uv=%d cc_max=%d update_interval=%d\n",
 		(disable_votes) ? "MSC_DOUT" : "MSC_VOTE",
 		batt_drv->fv_uv,
 		batt_drv->cc_max,

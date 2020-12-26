@@ -1644,7 +1644,7 @@ static void ddr_copy_train_results_from_sram(struct ab_ddr_context *ddr_ctx)
 	int freq = ddr_ctx->cur_freq;
 
 	sram_train_base = ddr_ctx->ddr_train_sram_location;
-	pr_info("freq: %d, sram_train_base: 0x%x\n", freq, sram_train_base);
+	pr_debug("freq: %d, sram_train_base: 0x%x\n", freq, sram_train_base);
 
 	for (i = 0; i < s_train_max_index; i++)
 		ddr_ctx->ddr_train_save_value[freq][i] =
