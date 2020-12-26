@@ -163,6 +163,7 @@ static int in_cont_index;
 static int out_cold_index;
 static char *out_buffer;
 static char *in_buffer;
+#endif
 
 static uint32_t adsp_reg_event_opcode[] = {
 	ASM_STREAM_CMD_REGISTER_PP_EVENTS,
@@ -278,6 +279,7 @@ uint8_t q6asm_get_stream_id_from_token(uint32_t token)
 }
 EXPORT_SYMBOL(q6asm_get_stream_id_from_token);
 
+#ifdef CONFIG_DEBUG_FS
 static int audio_output_latency_dbgfs_open(struct inode *inode,
 							struct file *file)
 {
