@@ -6,6 +6,10 @@ dtbo-$(CONFIG_BOARD_FLORAL) += \
 
 sm8150-coral-overlay.dtbo-base		:= qcom-base/sm8150-v2.dtb
 sm8150-flame-overlay.dtbo-base		:= qcom-base/sm8150-v2.dtb
+else
+dtb-$(CONFIG_BOARD_FLORAL) += \
+	sm8150-coral.dtb \
+	sm8150-flame.dtb
 endif
 
 always		:= $(dtb-y)
