@@ -1,4 +1,3 @@
 debugfs-objs	:= inode.o file.o
-
-obj-$(CONFIG_DEBUG_FS)	+= debugfs.o
-
+ccflags-y	:= -DCONFIG_DEBUG_FS
+obj-y		+= debugfs.o
