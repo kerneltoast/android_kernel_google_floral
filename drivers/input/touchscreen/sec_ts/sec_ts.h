@@ -33,6 +33,7 @@
 #include <linux/notifier.h>
 #include <linux/of_gpio.h>
 #include <linux/platform_device.h>
+#include <linux/pm_qos.h>
 #include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/time.h>
@@ -51,6 +52,8 @@
 #ifdef CONFIG_TOUCHSCREEN_TBN
 #include <linux/input/touch_bus_negotiator.h>
 #endif
+
+#include <linux/i2c-qcom-geni.h>
 
 #define SEC_TS_I2C_NAME		"sec_ts"
 #define SEC_TS_DEVICE_NAME	"SEC_TS"
@@ -720,6 +723,9 @@ struct sec_ts_data {
 	struct mutex eventlock;
 
 	struct notifier_block notifier;
+
+	struct pm_qos_request pm_i2c_req;
+	struct pm_qos_request pm_touch_req;
 
 	struct delayed_work work_read_info;
 #ifdef USE_POWER_RESET_WORK

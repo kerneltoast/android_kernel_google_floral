@@ -1032,11 +1032,21 @@ static irqreturn_t sec_ts_irq_thread(int irq, void *ptr)
 			   __func__);
 		return IRQ_HANDLED;
 	}
+
+	/* prevent CPU from entering deep sleep */
+	pm_qos_update_request(&ts->pm_touch_req, 100);
+	pm_qos_update_request(&ts->pm_i2c_req, 100);
+	pm_wakeup_event(&ts->client->dev, MSEC_PER_SEC);
+
 	mutex_lock(&ts->eventlock);
 
 	sec_ts_read_event(ts);
 
 	mutex_unlock(&ts->eventlock);
+
+	pm_qos_update_request(&ts->pm_i2c_req, PM_QOS_DEFAULT_VALUE);
+	pm_qos_update_request(&ts->pm_touch_req, PM_QOS_DEFAULT_VALUE);
+
 	sec_ts_set_bus_ref(ts, SEC_TS_BUS_REF_IRQ, false);
 
 	return IRQ_HANDLED;
@@ -2027,6 +2037,17 @@ static int sec_ts_probe(struct i2c_client *client,
 		}
 	}
 
+	ts->pm_i2c_req.type = PM_QOS_REQ_AFFINE_IRQ;
+	ts->pm_i2c_req.irq = geni_i2c_get_adap_irq(client);
+	irq_set_perf_affinity(ts->pm_i2c_req.irq, IRQF_PERF_AFFINE);
+	pm_qos_add_request(&ts->pm_i2c_req, PM_QOS_CPU_DMA_LATENCY,
+		PM_QOS_DEFAULT_VALUE);
+
+	ts->pm_touch_req.type = PM_QOS_REQ_AFFINE_IRQ;
+	ts->pm_touch_req.irq = client->irq;
+	pm_qos_add_request(&ts->pm_touch_req, PM_QOS_CPU_DMA_LATENCY,
+		PM_QOS_DEFAULT_VALUE);
+
 	input_info(true, &ts->client->dev, "%s: request_irq = %d\n", __func__, client->irq);
 
 	ret = request_threaded_irq(client->irq, NULL, sec_ts_irq_thread,
@@ -2084,6 +2105,8 @@ static int sec_ts_probe(struct i2c_client *client,
 err_register_drm_client:
 	free_irq(client->irq, ts);
 err_irq:
+	pm_qos_remove_request(&ts->pm_touch_req);
+	pm_qos_remove_request(&ts->pm_i2c_req);
 	if (ts->plat_data->support_dex) {
 		input_unregister_device(ts->input_dev_pad);
 		ts->input_dev_pad = NULL;
@@ -2538,6 +2561,9 @@ static int sec_ts_remove(struct i2c_client *client)
 	disable_irq_nosync(ts->client->irq);
 	free_irq(ts->client->irq, ts);
 	input_info(true, &ts->client->dev, "%s: irq disabled\n", __func__);
+
+	pm_qos_remove_request(&ts->pm_touch_req);
+	pm_qos_remove_request(&ts->pm_i2c_req);
 
 #ifdef USE_POWER_RESET_WORK
 	cancel_delayed_work_sync(&ts->reset_work);
