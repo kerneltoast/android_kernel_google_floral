@@ -473,7 +473,7 @@ int sec_ts_wait_for_ready(struct sec_ts_data *ts, unsigned int ack)
 		sec_ts_delay(20);
 	}
 
-	input_info(true, &ts->client->dev,
+	input_dbg(true, &ts->client->dev,
 		"%s: %02X, %02X, %02X, %02X, %02X, %02X, %02X, %02X [%d]\n",
 		__func__, tBuff[0], tBuff[1], tBuff[2], tBuff[3],
 		tBuff[4], tBuff[5], tBuff[6], tBuff[7], retry);
@@ -1172,7 +1172,7 @@ void sec_ts_set_grip_type(struct sec_ts_data *ts, u8 set_type)
 {
 	u8 mode = G_NONE;
 
-	input_info(true, &ts->client->dev, "%s: re-init grip(%d), edh:%d, edg:%d, lan:%d\n", __func__,
+	input_dbg(true, &ts->client->dev, "%s: re-init grip(%d), edh:%d, edg:%d, lan:%d\n", __func__,
 		set_type, ts->grip_edgehandler_direction, ts->grip_edge_range, ts->grip_landscape_mode);
 
 	/* edge handler */
@@ -2749,7 +2749,7 @@ static void sec_set_switch_gpio(struct sec_ts_data *ts, int gpio_value)
 	if (!gpio_is_valid(gpio))
 		return;
 
-	input_info(true, &ts->client->dev, "%s: toggling i2c switch to %s\n",
+	input_dbg(true, &ts->client->dev, "%s: toggling i2c switch to %s\n",
 		   __func__, gpio_value == SEC_SWITCH_GPIO_VALUE_AP_MASTER ?
 		   "AP" : "SLPI");
 
@@ -2766,7 +2766,7 @@ static void sec_ts_suspend_work(struct work_struct *work)
 					      suspend_work);
 	int ret = 0;
 
-	input_info(true, &ts->client->dev, "%s\n", __func__);
+	input_dbg(true, &ts->client->dev, "%s\n", __func__);
 
 	mutex_lock(&ts->device_mutex);
 
@@ -2809,7 +2809,7 @@ static void sec_ts_resume_work(struct work_struct *work)
 					      resume_work);
 	int ret = 0;
 
-	input_info(true, &ts->client->dev, "%s\n", __func__);
+	input_dbg(true, &ts->client->dev, "%s\n", __func__);
 
 	mutex_lock(&ts->device_mutex);
 

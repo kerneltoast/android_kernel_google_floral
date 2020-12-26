@@ -1499,7 +1499,7 @@ static int ab_sm_update_chip_state(struct ab_state_context *sc)
 	}
 	mutex_unlock(&sc->async_fifo_lock);
 
-	dev_info_ratelimited(sc->dev,
+	dev_dbg(sc->dev,
 		"AB state changed to %d\n", to_chip_substate_id);
 	ab_sm_print_ts(sc);
 
