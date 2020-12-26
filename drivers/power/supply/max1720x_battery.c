@@ -1474,7 +1474,7 @@ static int max1720x_get_battery_status(struct max1720x_chip *chip)
 	}
 
 	if (status != chip->prev_charge_status)
-		dev_info(chip->dev, "s=%d->%d c=%d avg_c=%d ichgt=%d vfsoc=%d soc=%d fullsocthr=%d\n",
+		dev_dbg(chip->dev, "s=%d->%d c=%d avg_c=%d ichgt=%d vfsoc=%d soc=%d fullsocthr=%d\n",
 				    chip->prev_charge_status,
 				    status, current_now, current_avg,
 				    ichgterm, vfsoc, soc, fullsocthr);

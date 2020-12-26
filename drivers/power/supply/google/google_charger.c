@@ -414,7 +414,7 @@ static int info_usb_state(union gbms_ce_adapter_details *ad,
 	voltage_max = GPSY_GET_PROP(usb_psy, POWER_SUPPLY_PROP_VOLTAGE_MAX);
 	amperage_max = GPSY_GET_PROP(usb_psy, POWER_SUPPLY_PROP_CURRENT_MAX);
 
-	pr_info("usbchg=%s typec=%s usbv=%d usbc=%d usbMv=%d usbMc=%d\n",
+	pr_debug("usbchg=%s typec=%s usbv=%d usbc=%d usbMv=%d usbMc=%d\n",
 		psy_usb_type_str[usb_type],
 		tcpm_psy ? psy_usbc_type_str[usbc_type] : "null",
 		GPSY_GET_PROP(usb_psy, POWER_SUPPLY_PROP_VOLTAGE_NOW) / 1000,
@@ -512,7 +512,7 @@ static int chg_update_charger(struct chg_drv *chg_drv, int fv_uv, int cc_max)
 		 */
 		rc = chg_set_charger(chg_psy, fv_uv, fcc);
 		if (rc == 0) {
-			pr_info("MSC_CHG fv_uv=%d->%d cc_max=%d->%d rc=%d\n",
+			pr_debug("MSC_CHG fv_uv=%d->%d cc_max=%d->%d rc=%d\n",
 				chg_drv->fv_uv, fv_uv,
 				chg_drv->cc_max, cc_max,
 				rc);
@@ -1287,7 +1287,7 @@ static void chg_work(struct work_struct *work)
 
 	/* disable charging is set in retail mode */
 	if (disable_charging != chg_drv->disable_charging) {
-		pr_info("MSC_CHG disable_charging %d -> %d",
+		pr_debug("MSC_CHG disable_charging %d -> %d",
 			chg_drv->disable_charging, disable_charging);
 
 		/* voted but not applied since msc_interval_votable <= 0 */
@@ -1299,7 +1299,7 @@ static void chg_work(struct work_struct *work)
 
 	/* when disable_pwrsrc is set, disable_charging is set also */
 	if (disable_pwrsrc != chg_drv->disable_pwrsrc) {
-		pr_info("MSC_CHG disable_pwrsrc %d -> %d",
+		pr_debug("MSC_CHG disable_pwrsrc %d -> %d",
 			chg_drv->disable_pwrsrc, disable_pwrsrc);
 
 		/* applied right away */
@@ -2248,7 +2248,7 @@ msc_reschedule:
 	alarm_start_relative(&chg_drv->chg_wakeup_alarm,
 			     ms_to_ktime(update_interval));
 
-	pr_info("MSC_CHG fv_uv=%d, cc_max=%d, rerun in %d ms (%d)\n",
+	pr_debug("MSC_CHG fv_uv=%d, cc_max=%d, rerun in %d ms (%d)\n",
 		fv_uv, cc_max, update_interval, rc);
 
 msc_done:
