@@ -735,7 +735,7 @@ static int sm8150_get_chg_chgr_state(const struct bms_dev *bms,
 	}
 	chg_state->f.icl = (icl * 50);
 
-	pr_info("MSC_PCS chg_state=%lx [0x%x:%d:%d:%d:%d] chg=%c\n",
+	pr_debug("MSC_PCS chg_state=%lx [0x%x:%d:%d:%d:%d] chg=%c\n",
 		(unsigned long)chg_state->v,
 		chg_state->f.flags,
 		chg_state->f.chg_type,

@@ -3112,7 +3112,7 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 	case EVT_TYPE_STATUS_FORCE_CAL:
 		switch (event[2]) {
 		case 0x01:
-			pr_info("%s: Sense on Force cal = %02X %02X"
+			pr_debug("%s: Sense on Force cal = %02X %02X"
 				" %02X %02X %02X %02X\n",
 				__func__, event[2], event[3], event[4],
 				event[5], event[6], event[7]);
@@ -3425,7 +3425,7 @@ static bool fts_status_event_handler(struct fts_ts_info *info, unsigned
 		break;
 
 	default:
-		pr_info("%s: Received unknown status event = %02X %02X %02X %02X %02X %02X %02X %02X\n",
+		pr_debug("%s: Received unknown status event = %02X %02X %02X %02X %02X %02X %02X %02X\n",
 			__func__, event[0], event[1], event[2], event[3],
 			event[4], event[5], event[6], event[7]);
 		break;
@@ -4850,7 +4850,7 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 		/* do sense off in order to avoid the flooding of the fifo with
 		  * touch events if someone is touching the panel during suspend
 		  **/
-		pr_info("%s: Sense OFF!\n", __func__);
+		pr_debug("%s: Sense OFF!\n", __func__);
 		/* for speed reason (no need to check echo in this case and
 		  * interrupt can be enabled) */
 		ret = setScanMode(SCAN_MODE_ACTIVE, 0x00);
@@ -4859,7 +4859,7 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 
 #ifdef GESTURE_MODE
 		if (info->gesture_enabled == 1) {
-			pr_info("%s: enter in gesture mode !\n",
+			pr_debug("%s: enter in gesture mode !\n",
 				 __func__);
 			res = enterGestureMode(isSystemResettedDown());
 			if (res >= OK) {
@@ -4883,7 +4883,7 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 #ifdef GLOVE_MODE
 		if ((info->glove_enabled == FEAT_ENABLE &&
 		     isSystemResettedUp()) || force == 1) {
-			pr_info("%s: Glove Mode setting...\n", __func__);
+			pr_debug("%s: Glove Mode setting...\n", __func__);
 			settings[0] = info->glove_enabled;
 			/* required to satisfy also the disable case */
 			ret = setFeatures(FEAT_SEL_GLOVE, settings, 1);
@@ -4895,9 +4895,9 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 			if (ret >= OK && info->glove_enabled == FEAT_ENABLE) {
 				fromIDtoMask(FEAT_SEL_GLOVE, (u8 *)&info->mode,
 					     sizeof(info->mode));
-				pr_info("%s: GLOVE_MODE Enabled!\n", __func__);
+				pr_debug("%s: GLOVE_MODE Enabled!\n", __func__);
 			} else
-				pr_info("%s: GLOVE_MODE Disabled!\n", __func__);
+				pr_debug("%s: GLOVE_MODE Disabled!\n", __func__);
 		}
 
 #endif
@@ -4905,7 +4905,7 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 #ifdef COVER_MODE
 		if ((info->cover_enabled == FEAT_ENABLE &&
 		     isSystemResettedUp()) || force == 1) {
-			pr_info("%s: Cover Mode setting...\n", __func__);
+			pr_debug("%s: Cover Mode setting...\n", __func__);
 			settings[0] = info->cover_enabled;
 			ret = setFeatures(FEAT_SEL_COVER, settings, 1);
 			if (ret < OK)
@@ -4916,15 +4916,15 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 			if (ret >= OK && info->cover_enabled == FEAT_ENABLE) {
 				fromIDtoMask(FEAT_SEL_COVER, (u8 *)&info->mode,
 					     sizeof(info->mode));
-				pr_info("%s: COVER_MODE Enabled!\n", __func__);
+				pr_debug("%s: COVER_MODE Enabled!\n", __func__);
 			} else
-				pr_info("%s: COVER_MODE Disabled!\n", __func__);
+				pr_debug("%s: COVER_MODE Disabled!\n", __func__);
 		}
 #endif
 #ifdef CHARGER_MODE
 		if ((info->charger_enabled > 0 && isSystemResettedUp()) ||
 		    force == 1) {
-			pr_info("%s: Charger Mode setting...\n", __func__);
+			pr_debug("%s: Charger Mode setting...\n", __func__);
 
 			settings[0] = info->charger_enabled;
 			ret = setFeatures(FEAT_SEL_CHARGER, settings, 1);
@@ -4937,10 +4937,10 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 				fromIDtoMask(FEAT_SEL_CHARGER,
 					     (u8 *)&info->mode,
 					     sizeof(info->mode));
-				pr_info("%s: CHARGER_MODE Enabled!\n",
+				pr_debug("%s: CHARGER_MODE Enabled!\n",
 					__func__);
 			} else
-				pr_info("%s: CHARGER_MODE Disabled!\n",
+				pr_debug("%s: CHARGER_MODE Disabled!\n",
 					__func__);
 		}
 #endif
@@ -4949,7 +4949,7 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 #ifdef GRIP_MODE
 		if ((info->grip_enabled == FEAT_ENABLE &&
 		     isSystemResettedUp()) || force == 1) {
-			pr_info("%s: Grip Mode setting...\n", __func__);
+			pr_debug("%s: Grip Mode setting...\n", __func__);
 			settings[0] = info->grip_enabled;
 			ret = setFeatures(FEAT_SEL_GRIP, settings, 1);
 			if (ret < OK)
@@ -4960,9 +4960,9 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 			if (ret >= OK && info->grip_enabled == FEAT_ENABLE) {
 				fromIDtoMask(FEAT_SEL_GRIP, (u8 *)&info->mode,
 					     sizeof(info->mode));
-				pr_info("%s: GRIP_MODE Enabled!\n", __func__);
+				pr_debug("%s: GRIP_MODE Enabled!\n", __func__);
 			} else
-				pr_info("%s: GRIP_MODE Disabled!\n", __func__);
+				pr_debug("%s: GRIP_MODE Disabled!\n", __func__);
 		}
 #endif
 		/* If some selective scan want to be enabled can be done
@@ -4973,7 +4973,7 @@ static int fts_mode_handler(struct fts_ts_info *info, int force)
 		/*		ACTIVE_FORCE; */
 		settings[0] = 0xFF;	/* enable all the possible scans mode
 					  * supported by the config */
-		pr_info("%s: Sense ON!\n", __func__);
+		pr_debug("%s: Sense ON!\n", __func__);
 		res |= setScanMode(SCAN_MODE_ACTIVE, settings[0]);
 		info->mode |= (SCAN_MODE_ACTIVE << 24);
 		MODE_ACTIVE(info->mode, settings[0]);
