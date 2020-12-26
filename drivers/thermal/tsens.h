@@ -104,15 +104,23 @@ struct tsens_device;
 		}	\
 	} while (0)
 #else
-#define	TSENS_DBG1(x...)		pr_debug(x)
-#define	TSENS_DBG(x...)		pr_debug(x)
-#define	TSENS_INFO(x...)		pr_info(x)
-#define	TSENS_ERR(x...)		pr_err(x)
-#define	TSENS_DUMP(x...)		pr_info(x)
+#define TSENS_DBG1(dev, msg, args...)		pr_debug(msg, ##args)
+#define TSENS_DBG(dev, msg, args...)		pr_debug(msg, ##args)
+#define TSENS_INFO(dev, msg, args...)		pr_info(msg, ##args)
+#define TSENS_ERR(dev, msg, args...)		pr_err(msg, ##args)
+#define TSENS_DUMP(dev, msg, args...)		pr_info(msg, ##args)
 #endif
 
 #if defined(CONFIG_THERMAL_TSENS)
+#ifdef CONFIG_DEBUG_FS
 int tsens2xxx_dbg(struct tsens_device *data, u32 id, u32 dbg_type, int *temp);
+#else
+static inline int tsens2xxx_dbg(struct tsens_device *data, u32 id, u32 dbg_type,
+				int *temp)
+{
+	return 0;
+}
+#endif
 #else
 static inline int tsens2xxx_dbg(struct tsens_device *data, u32 id,
 						u32 dbg_type, int *temp)
