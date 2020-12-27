@@ -109,10 +109,12 @@ void epping_rx(void *ctx, HTC_PACKET *pPacket)
 #endif
 	struct sk_buff *pktSkb = (struct sk_buff *)pPacket->pPktContext;
 
+#ifdef WLAN_DEBUG
 	EPPING_LOG(QDF_TRACE_LEVEL_INFO,
 		   "%s: adapter = 0x%pK eid=%d, skb=0x%pK, data=0x%pK, len=0x%x status:%d",
 		   __func__, adapter, eid, pktSkb, pPacket->pBuffer,
 		   pPacket->ActualLength, status);
+#endif
 
 	if (status != QDF_STATUS_SUCCESS) {
 		if (status != QDF_STATUS_E_CANCELED) {

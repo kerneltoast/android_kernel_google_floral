@@ -951,9 +951,11 @@ int dfs_bin_pri_check(
 	 * are left as it is for readability hoping the complier
 	 * will use left/right shifts wherever possible.
 	 */
+#ifdef WLAN_DEBUG
 	dfs_debug(dfs, WLAN_DEBUG_DFS2,
 		"refpri = %d high score = %d index = %d numpulses = %d",
 		refpri, highscore, highscoreindex, numpulses);
+#endif
 	/*
 	 * Count the other delay elements that have pri and dur with
 	 * in the acceptable range from the reference one.

@@ -42,7 +42,6 @@
  *
  * Return: command string
  */
-#ifdef WLAN_DEBUG
 static char *p2p_get_cmd_type_str(enum p2p_cmd_type cmd_type)
 {
 	switch (cmd_type) {
@@ -92,7 +91,6 @@ static char *p2p_get_event_type_str(enum p2p_event_type event_type)
 		return "Invalid P2P event";
 	}
 }
-#endif
 
 /**
  * p2p_psoc_obj_create_notification() - Function to allocate per P2P

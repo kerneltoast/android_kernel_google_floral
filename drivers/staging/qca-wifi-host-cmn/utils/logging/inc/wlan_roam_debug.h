@@ -99,6 +99,7 @@ enum peer_debug_op {
 #define DEBUG_INVALID_PEER_ID 0xffff
 #define DEBUG_INVALID_VDEV_ID 0xff
 
+#ifdef WLAN_DEBUG
 /**
  * wlan_roam_debug_log() - Add a debug log entry to wlan roam debug records
  * @vdev_id: vdev identifier
@@ -114,7 +115,6 @@ enum peer_debug_op {
 void wlan_roam_debug_log(uint8_t vdev_id, uint8_t op,
 			uint16_t peer_id, void *mac_addr,
 			void *peer_obj, uint32_t arg1, uint32_t arg2);
-
 /**
  * wlan_roam_debug_dump_table() - Print the roam debug log records
  * print all the valid debug records in the order of timestamp
@@ -122,4 +122,10 @@ void wlan_roam_debug_log(uint8_t vdev_id, uint8_t op,
  * Return: none
  */
 void wlan_roam_debug_dump_table(void);
+#else
+static inline void wlan_roam_debug_log(uint8_t vdev_id, uint8_t op,
+			uint16_t peer_id, void *mac_addr,
+			void *peer_obj, uint32_t arg1, uint32_t arg2) { }
+static inline void wlan_roam_debug_dump_table(void) { }
+#endif
 #endif /* _WLAN_ROAM_DEBUG_H_ */
