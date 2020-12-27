@@ -83,7 +83,6 @@ static QDF_STATUS tdls_validate_current_mode(struct tdls_soc_priv_obj *soc_obj)
 	return QDF_STATUS_SUCCESS;
 }
 
-#ifdef WLAN_DEBUG
 static char *tdls_get_ser_cmd_str(enum  wlan_serialization_cmd_type type)
 {
 	switch (type) {
@@ -97,7 +96,6 @@ static char *tdls_get_ser_cmd_str(enum  wlan_serialization_cmd_type type)
 		return "UNKNOWN";
 	}
 }
-#endif
 
 void
 tdls_release_serialization_command(struct wlan_objmgr_vdev *vdev,
@@ -1995,7 +1993,6 @@ error:
 	return status;
 }
 
-#ifdef WLAN_DEBUG
 static const char *tdls_evt_to_str(enum tdls_event_msg_type type)
 {
 	switch (type) {
@@ -2011,7 +2008,6 @@ static const char *tdls_evt_to_str(enum tdls_event_msg_type type)
 		return "INVALID_TYPE";
 	}
 }
-#endif
 
 QDF_STATUS tdls_process_should_discover(struct wlan_objmgr_vdev *vdev,
 					struct tdls_event_info *evt)
