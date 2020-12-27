@@ -105,7 +105,6 @@ modpost_link()
 	if [ -n "${CONFIG_THIN_ARCHIVES}" ]; then
 		objects="--whole-archive				\
 			built-in.o					\
-			--no-whole-archive				\
 			--start-group					\
 			${KBUILD_VMLINUX_LIBS}				\
 			--end-group"
@@ -161,7 +160,6 @@ vmlinux_link()
 		if [[ -n "${CONFIG_THIN_ARCHIVES}" && -z "${CONFIG_LTO_CLANG}" ]]; then
 			objects="--whole-archive 			\
 				built-in.o				\
-				--no-whole-archive			\
 				--start-group				\
 				${KBUILD_VMLINUX_LIBS}			\
 				--end-group				\
@@ -180,7 +178,6 @@ vmlinux_link()
 		if [ -n "${CONFIG_THIN_ARCHIVES}" ]; then
 			objects="-Wl,--whole-archive			\
 				built-in.o				\
-				-Wl,--no-whole-archive			\
 				-Wl,--start-group			\
 				${KBUILD_VMLINUX_LIBS}			\
 				-Wl,--end-group				\
