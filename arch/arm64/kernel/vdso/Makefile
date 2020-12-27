@@ -18,6 +18,7 @@ obj-vdso   := $(obj-vdso-c) $(obj-vdso-s)
 ccflags-y := -fno-stack-protector -ffixed-x18
 ccflags-y += -DDISABLE_BRANCH_PROFILING
 ccflags-y += $(DISABLE_LTO) $(DISABLE_SCS)
+ccflags-y += $(call cc-option, -fno-whole-program)
 ldflags-y := -shared -nostdlib -soname=linux-vdso.so.1  --hash-style=sysv \
 		--build-id $(call ld-option,-n) -T
 
