@@ -3211,6 +3211,7 @@ void htt_deregister_rx_pkt_dump_callback(struct htt_pdev_t *pdev)
 	}
 	pdev->rx_pkt_dump_cb = NULL;
 }
+#endif
 
 static QDF_STATUS htt_rx_hash_smmu_map(bool map, struct htt_pdev_t *pdev)
 {
@@ -3271,4 +3272,3 @@ QDF_STATUS htt_rx_update_smmu_map(struct htt_pdev_t *pdev, bool map)
 
 	return status;
 }
-#endif
