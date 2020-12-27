@@ -580,7 +580,6 @@ static QDF_STATUS p2p_populate_mac_header(
  *
  * Return: command string
  */
-#ifdef WLAN_DEBUG
 static char *p2p_get_frame_type_str(struct p2p_frame_info *frame_info)
 {
 	if (frame_info->type == P2P_FRAME_NOT_SUPPORT)
@@ -636,7 +635,6 @@ static char *p2p_get_frame_type_str(struct p2p_frame_info *frame_info)
 		return "Not support action frame";
 	}
 }
-#endif
 
 /**
  * p2p_init_frame_info() - init frame information structure
