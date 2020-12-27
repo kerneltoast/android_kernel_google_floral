@@ -39,7 +39,6 @@
 
 #ifdef WLAN_DEBUG
 static char *bw_str_arr[] = {"20MHz", "40MHz", "80MHz", "160MHz"};
-#endif
 
 /*
  * Defined the macro tx_rate_stats_print_cmn()
@@ -283,10 +282,8 @@ static void
 htt_t2h_stats_pdev_stats_print(struct wlan_dbg_stats *wlan_pdev_stats,
 			       int concise)
 {
-#ifdef WLAN_DEBUG
 	struct wlan_dbg_tx_stats *tx = &wlan_pdev_stats->tx;
 	struct wlan_dbg_rx_stats *rx = &wlan_pdev_stats->rx;
-#endif
 
 	qdf_nofl_info("WAL Pdev stats:");
 	qdf_nofl_info("\n### Tx ###");
@@ -1332,3 +1329,4 @@ void htt_t2h_stats_print(uint8_t *stats_data, int concise)
 		break;
 	}
 }
+#endif

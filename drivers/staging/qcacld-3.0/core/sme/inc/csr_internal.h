@@ -200,7 +200,6 @@ enum csr_roam_stats_classtypes {
 	eCsrMaxStats
 };
 
-#ifdef FEATURE_WLAN_DIAG_SUPPORT
 enum csr_diagwlan_status_eventsubtype {
 	eCSR_WLAN_STATUS_CONNECT = 0,
 	eCSR_WLAN_STATUS_DISCONNECT
@@ -219,7 +218,6 @@ enum csr_diagwlan_status_eventreason {
 
 };
 
-#endif /* FEATURE_WLAN_DIAG_SUPPORT */
 
 struct csr_channel {
 	uint8_t numChannels;
