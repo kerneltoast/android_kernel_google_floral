@@ -3283,6 +3283,7 @@ static int drm_panel_get_timings(struct drm_panel *panel,
 			if (rc)
 				break;
 
+			dsi_panel_put_mode(&m);
 			t->pixelclock.typ = m.pixel_clk_khz;
 			t->hactive.typ = m.timing.h_active;
 			t->hfront_porch.typ = m.timing.h_front_porch;
