@@ -270,7 +270,7 @@ static int iaxxx_misc_notify(struct notifier_block *nb,
 	struct iaxxx_misc_priv_type *misc_priv =
 		container_of(nb, struct iaxxx_misc_priv_type, nb_core);
 
-	dev_info(misc_priv->dev, "action %d\n", action);
+	dev_info(misc_priv->dev, "action %lu\n", action);
 	switch (action) {
 	/* defined in iaxxx-core.h */
 	case IAXXX_EV_CRASH:
