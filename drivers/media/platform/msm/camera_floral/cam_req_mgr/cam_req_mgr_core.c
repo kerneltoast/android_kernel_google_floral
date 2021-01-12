@@ -944,7 +944,6 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 	int64_t req_id = 0;
 	int sync_slot_idx = 0, sync_rd_idx = 0, rc = 0, i;
 	struct cam_req_mgr_core_link *sync_link;
-	int32_t sync_num_slots = 0;
 
 	if (link->sync_links_num == 0) {
 		CAM_ERR(CAM_CRM, "No synced links");
@@ -952,7 +951,6 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 	}
 
 	req_id = slot->req_id;
-	sync_num_slots = sync_link->req.in_q->num_slots;
 
 	for (i = 0; i < link->sync_links_num; i++) {
 		sync_link = link->sync_links[i];
@@ -990,7 +988,10 @@ static int __cam_req_mgr_check_sync_req_is_ready(
 	}
 
 	for (i = 0; i < link->sync_links_num; i++) {
+		int32_t sync_num_slots;
+
 		sync_link = link->sync_links[i];
+		sync_num_slots = sync_link->req.in_q->num_slots;
 		sync_slot_idx = __cam_req_mgr_find_slot_for_req(
 			sync_link->req.in_q, req_id);
 		if (sync_slot_idx == -1) {
