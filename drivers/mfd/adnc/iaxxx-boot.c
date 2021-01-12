@@ -181,7 +181,7 @@ int iaxxx_download_section(struct iaxxx_priv *priv, const uint8_t *data,
 	else
 		dev_dbg(dev,
 			"download section at 0x%pK, %d words(s) successful\n",
-			section->start_address, section->length);
+			(void *)(long)section->start_address, section->length);
 
 	return rc;
 }
@@ -364,7 +364,7 @@ static int iaxxx_download_per_core_fw(struct iaxxx_priv *priv,
 		data += sizeof(file_section);
 
 		dev_dbg(dev, "file_section.start_address: 0x%pK\n",
-				file_section.start_address);
+			(void *)(long)file_section.start_address);
 		if (iaxxx_sect_valid_proc_mask(file_section.start_address,
 			proc_id_mask) && file_section.length) {
 			file_section_bytes = file_section.length * sizeof(u32);
@@ -474,7 +474,7 @@ static int iaxxx_wait_apps_ready(struct iaxxx_priv *priv)
 
 		mode = status & IAXXX_SRB_SYS_STATUS_MODE_MASK;
 		dev_dbg(dev, "System status 0x%pK, mode = %d\n",
-						status, mode);
+			(void *)(long)status, mode);
 
 		if (mode == SYSTEM_STATUS_MODE_APPS)
 			return 0;
