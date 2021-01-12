@@ -2467,7 +2467,7 @@ static int chg_set_fcc_charge_cntl_limit(struct thermal_cooling_device *tcd,
 	tdev->current_level = lvl;
 
 	if (tdev->current_level == tdev->thermal_levels) {
-		pr_info("MSC_THERM_FCC lvl=%d charge disable\n", lvl);
+		pr_info("MSC_THERM_FCC lvl=%lu charge disable\n", lvl);
 		return vote(chg_drv->msc_chg_disable_votable,
 					THERMAL_DAEMON_VOTER, true, 0);
 	}
@@ -2515,7 +2515,7 @@ static int chg_set_dc_in_charge_cntl_limit(struct thermal_cooling_device *tcd,
 				POWER_SUPPLY_PROP_ONLINE, &pval);
 		}
 
-		pr_info("MSC_THERM_DC lvl=%d dc disable\n", lvl);
+		pr_info("MSC_THERM_DC lvl=%lu dc disable\n", lvl);
 
 		return 0;
 	}
@@ -2537,7 +2537,7 @@ static int chg_set_dc_in_charge_cntl_limit(struct thermal_cooling_device *tcd,
 			dc_icl);
 
 	if (ret < 0 || changed)
-		pr_info("MSC_THERM_DC lvl=%d dc_icl=%d (%d)\n",
+		pr_info("MSC_THERM_DC lvl=%lu dc_icl=%d (%d)\n",
 			lvl, dc_icl, ret);
 
 	/* make sure that fcc is reset to max when charging from WLC*/
