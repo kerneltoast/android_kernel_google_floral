@@ -3498,7 +3498,9 @@ static const DEVICE_ATTR_RO(ssoc_details);
 
 static int batt_init_fs(struct batt_drv *batt_drv)
 {
+#ifdef CONFIG_DEBUG_FS
 	struct dentry *de = NULL;
+#endif
 	int ret;
 
 	/* stats */
