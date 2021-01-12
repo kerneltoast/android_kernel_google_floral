@@ -2162,7 +2162,7 @@ int create_pkt_cmd_sys_ubwc_config(struct hfi_cmd_sys_set_property_packet *pkt,
 		memcpy(&pkt->rg_property_data[1], &(config->v1), config->nSize);
 
 	dprintk(VIDC_DBG,
-		"UBWC config nSize: %u, MaxChannels: %u, MalLength: %u, %u, HBB: %u\n",
+		"UBWC config nSize: %u, MaxChannels: %u, MalLength: %u, HBB: %u\n",
 		config->nSize,
 		config->v1.nMaxChannels,
 		config->v1.nMalLength,
