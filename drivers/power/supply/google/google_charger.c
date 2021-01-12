@@ -3016,7 +3016,9 @@ DEFINE_SIMPLE_ATTRIBUTE(bd_enabled_fops, bd_enabled_get,
 static int chg_init_fs(struct chg_drv *chg_drv)
 {
 	int ret;
+#ifdef CONFIG_DEBUG_FS
 	struct dentry *de = NULL;
+#endif
 
 	ret = device_create_file(chg_drv->device, &dev_attr_charge_stop_level);
 	if (ret != 0) {
