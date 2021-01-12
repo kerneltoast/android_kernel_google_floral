@@ -1145,7 +1145,7 @@ static int dsi_message_tx(struct dsi_ctrl *dsi_ctrl,
 		goto error;
 	}
 
-	pr_debug("cmd tx type=%02x cmd=%02x len=%d last=%d\n", msg->type,
+	pr_debug("cmd tx type=%02x cmd=%02x len=%lu last=%d\n", msg->type,
 		 msg->tx_len ? *((u8 *)msg->tx_buf) : 0, msg->tx_len,
 		 (msg->flags & MIPI_DSI_MSG_LASTCOMMAND) != 0);
 
