@@ -114,7 +114,7 @@ static uint32_t get_ipu_pms_val(struct ab_clk_context *clk_ctx,
 	case PLL_IPU_680MHZ_RATE:
 		return (last_val & ~PLL_IPU_PMS_MASK) | PLL_IPU_680MHZ_PMS;
 	default:
-		dev_err(clk_ctx->dev, "Bad clock rate, using %lu\n",
+		dev_err(clk_ctx->dev, "Bad clock rate, using %u\n",
 				PLL_IPU_680MHZ_RATE);
 		return (last_val & ~PLL_IPU_PMS_MASK) | PLL_IPU_680MHZ_PMS;
 	}
@@ -328,7 +328,7 @@ static uint32_t get_tpu_pms_val(struct ab_clk_context *clk_ctx,
 	case PLL_TPU_790MHZ_RATE:
 		return (last_val & ~PLL_TPU_PMS_MASK) | PLL_TPU_790MHZ_PMS;
 	default:
-		dev_err(clk_ctx->dev, "Bad clock rate, using %lu\n",
+		dev_err(clk_ctx->dev, "Bad clock rate, using %u\n",
 				PLL_TPU_790MHZ_RATE);
 		return (last_val & ~PLL_TPU_PMS_MASK) | PLL_TPU_790MHZ_PMS;
 	}
@@ -615,7 +615,7 @@ static int64_t __ab_clk_aon_set_rate_handler(struct ab_clk_context *clk_ctx,
 		ret |= ABC_WRITE(AON_CLK_RATE_REG, AON_CLK_RATE_19_2_MHZ);
 		if (ret) {
 			dev_err(clk_ctx->dev,
-				"aon_pll_mux: set_parent failed(err %d)\n",
+				"aon_pll_mux: set_parent failed(err %lld)\n",
 				ret);
 			goto error_abort;
 		}
@@ -626,7 +626,7 @@ static int64_t __ab_clk_aon_set_rate_handler(struct ab_clk_context *clk_ctx,
 	ret |= ABC_WRITE(AON_CLK_RATE_REG, AON_CLK_RATE_933_12_MHZ);
 	if (ret) {
 		dev_err(clk_ctx->dev,
-			"aon_pll_mux: set_parent failed(err %d)\n", ret);
+			"aon_pll_mux: set_parent failed(err %lld)\n", ret);
 		goto error_abort;
 	}
 
@@ -754,7 +754,7 @@ static int64_t ab_clk_aon_set_pll_div(void *ctx, uint32_t div)
 	}
 
 	dev_dbg(clk_ctx->dev,
-			"%s: set AON pll div to %llu\n", __func__, div);
+			"%s: set AON pll div to %u\n", __func__, div);
 	ABC_WRITE(CLK_CON_DIV_PLL_AON_CLK, div);
 
 	mutex_unlock(&clk_ctx->pcie_link_lock);
