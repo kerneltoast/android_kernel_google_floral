@@ -884,7 +884,7 @@ void abc_pcie_clean_dma_xfer_locked(struct abc_dma_xfer *xfer)
 			&wait_info->done, timeout);
 		if (WARN_ON(remaining == 0)) {
 			dev_err(&abc_dma.pdev->dev,
-				"%s: DMA Transfer timed out! id:%0llu, size:%lld, type:%s\n",
+				"%s: DMA Transfer timed out! id:%0llu, size:%lu, type:%s\n",
 				__func__, xfer->id, xfer->size,
 				abc_pcie_dma_xfer_method_to_str(
 					xfer->transfer_method));
@@ -976,7 +976,7 @@ int abc_pcie_dma_get_user_wait(uint64_t id,
 	xfer = abc_pcie_dma_find_xfer(session, id);
 	if (!xfer) {
 		err = -EINVAL;
-		dev_err(&abc_dma.pdev->dev, "%s: Could not find xfer:%0d\n",
+		dev_err(&abc_dma.pdev->dev, "%s: Could not find xfer:%0lld\n",
 			__func__, id);
 		goto release_lock;
 	}
@@ -1015,7 +1015,7 @@ int abc_pcie_dma_do_wait(struct abc_pcie_dma_session *session,
 	xfer = wait_info->xfer;
 	*start_id = wait_info->start_id;
 	dev_dbg(&abc_dma.pdev->dev,
-		"%s: completed xfer: id:%0llu start_id:%0u timeout:%0d [%0d]\n",
+		"%s: completed xfer: id:%0llu start_id:%0u timeout:%0d [%0ld]\n",
 		__func__, wait_info->xfer_id, wait_info->start_id, timeout,
 		remaining);
 	/* Note that DMA_BUF does its own sync, only needs to be done for
@@ -1083,7 +1083,7 @@ static void add_entry(void *base_vaddr, size_t index, uint32_t header,
 	struct abc_pcie_dma_ll_element entry;
 
 	dev_dbg(&abc_dma.pdev->dev,
-		"[%zu]: hdr=%08x src=%016lx dst=%016lx len=%zu\n",
+		"[%zu]: hdr=%08x src=%016llx dst=%016llx len=%zu\n",
 		index, header, src_addr, dst_addr, size);
 
 	entry.header = header;
@@ -1122,7 +1122,7 @@ static ssize_t max_entry_size_show(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
-	return scnprintf(buf, PAGE_SIZE, "%u\n", max_entry_size);
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", max_entry_size);
 }
 
 static ssize_t max_entry_size_store(struct device *dev,
@@ -1327,7 +1327,7 @@ static int abc_pcie_build_transfer_list(struct abc_buf_desc *src_buf,
 
 	if (size_rem) {
 		dev_err(&abc_dma.pdev->dev,
-			"%s: transfer oob: src off %zu, dst off %zu, size %zu\n",
+			"%s: transfer oob: src off %llu, dst off %llu, size %zu\n",
 			__func__, src_buf->offset, dst_buf->offset, xfer_size);
 		return -EINVAL;
 	}
@@ -1446,7 +1446,7 @@ static int abc_pcie_setup_mblk_xfer(struct abc_dma_xfer *xfer, int num_entries)
 	err = abc_pcie_dma_alloc_ab_dram(ll_size, mblk_desc);
 	if (err) {
 		dev_err(&abc_dma.pdev->dev,
-			"%s: failed to alloc ch%d BAR size: %d error: %d\n",
+			"%s: failed to alloc ch%d BAR size: %ld error: %d\n",
 			__func__, dma_chan, ll_size, err);
 		err = -ENOMEM;
 		goto release_mblk;
@@ -1618,7 +1618,7 @@ int abc_pcie_create_dma_xfer(struct abc_pcie_dma_session *session,
 	}
 
 	dev_dbg(&abc_dma.pdev->dev,
-		"%s: local_buf_type=%d, local_buf=%pK, size=%u\n",
+		"%s: local_buf_type=%d, local_buf=%pK, size=%lu\n",
 		__func__, lbuf->buf_type, lbuf->local_addr, xfer->size);
 
 	/* Create scatterlist of local buffer */
@@ -1818,7 +1818,7 @@ int abc_pcie_start_dma_xfer_locked(struct abc_dma_xfer *xfer,
 	spin_lock_irqsave(&dma_spinlock, flags);
 	if (xfer->pending) {
 		dev_err(&abc_dma.pdev->dev,
-			"%s: Error: Cannot re-start pending DMA [ID:%0d]\n",
+			"%s: Error: Cannot re-start pending DMA [ID:%0lld]\n",
 			__func__, xfer->id);
 		err = -EBUSY; /* Ask user to try again */
 	}
