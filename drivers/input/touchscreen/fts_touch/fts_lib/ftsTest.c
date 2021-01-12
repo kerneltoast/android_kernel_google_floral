@@ -598,7 +598,7 @@ int checkLimitsMinMax(short *data, int row, int column, int min, int max)
 			if (data[i * column + j] < min || data[i * column + j] >
 			    max) {
 				pr_debug("%s: Node[%d,%d] = %d exceed limit [%d, %d]\n",
-					i, j, data[i * column + j], min, max);
+					__func__,i, j, data[i * column + j], min, max);
 				count++;
 			}
 		}
@@ -724,7 +724,7 @@ int checkLimitsMap(i8 *data, int row, int column, int *min, int *max)
 			if (data[i * column + j] < min[i * column + j] ||
 			    data[i * column + j] > max[i * column + j]) {
 				pr_debug("%s: Node[%d,%d] = %d exceed limit [%d, %d]\n",
-					i, j, data[i * column + j],
+					__func__, i, j, data[i * column + j],
 					min[i * column + j],
 					max[i * column + j]);
 				count++;
@@ -759,7 +759,7 @@ int checkLimitsMapTotal(short *data, int row, int column, int *min, int *max)
 			if (data[i * column + j] < min[i * column + j] ||
 			    data[i * column + j] > max[i * column + j]) {
 				pr_debug("%s: Node[%d,%d] = %d exceed limit [%d, %d]\n",
-					i, j, data[i * column + j],
+					__func__, i, j, data[i * column + j],
 					min[i * column + j],
 					max[i * column + j]);
 				count++;
@@ -794,7 +794,7 @@ int checkLimitsMapFromU(u8 *data, int row, int column, int *min, int *max)
 			if (data[i * column + j] < min[i * column + j] ||
 			    data[i * column + j] > max[i * column + j]) {
 				pr_debug("%s: Node[%d,%d] = %d exceed limit [%d, %d]\n",
-					i, j, data[i * column + j],
+					__func__, i, j, data[i * column + j],
 					min[i * column + j],
 					max[i * column + j]);
 				count++;
@@ -829,7 +829,7 @@ int checkLimitsMapTotalFromU(u16 *data, int row, int column, int *min, int *max)
 			if (data[i * column + j] < min[i * column + j] ||
 			    data[i * column + j] > max[i * column + j]) {
 				pr_debug("%s: Node[%d,%d] = %d exceed limit [%d, %d]\n",
-					i, j, data[i * column + j],
+					__func__, i, j, data[i * column + j],
 					min[i * column + j],
 					max[i * column + j]);
 				count++;
@@ -861,7 +861,7 @@ int checkLimitsMapAdj(u8 *data, int row, int column, int *max)
 		for (j = 0; j < column; j++) {
 			if (data[i * column + j] > max[i * column + j]) {
 				pr_debug("%s: Node[%d,%d] = %d exceed limit > %d\n",
-					i, j,
+					__func__, i, j,
 					data[i * column + j],
 					max[i * column + j]);
 				count++;
@@ -893,7 +893,7 @@ int checkLimitsMapAdjTotal(u16 *data, int row, int column, int *max)
 		for (j = 0; j < column; j++) {
 			if (data[i * column + j] > max[i * column + j]) {
 				pr_debug("%s: Node[%d,%d] = %d exceed limit > %d\n",
-					i, j,
+					__func__, i, j,
 					data[i * column + j],
 					max[i * column + j]);
 				count++;
@@ -1443,7 +1443,7 @@ int production_test_ms_raw(const char *path_limits, int stop_on_fail,
 				if (ret != OK) {
 					pr_err("production_test_data: checkLimitsAdj MS RAW ADJH failed... ERROR COUNT = %d\n",
 						ret);
-					pr_err("%s MS RAW ADJ HORIZONTAL MIN/MAX:.................FAIL\n\n");
+					pr_err("MS RAW ADJ HORIZONTAL MIN/MAX:.................FAIL\n\n");
 					count_fail += 1;
 					if (stop_on_fail == 1)
 						goto ERROR;
@@ -2532,7 +2532,7 @@ int production_test_ms_cx(const char *path_limits, int stop_on_fail,
 			return ret;
 		}
 	} else
-		pr_info("%s MS CX LP TEST:.................SKIPPED\n");
+		pr_info("MS CX LP TEST:.................SKIPPED\n");
 
 	if ((todo->MutualKeyCx1 | todo->MutualKeyCx2 |
 	     todo->MutualKeyCxTotal) == 1) {
@@ -2938,7 +2938,7 @@ int production_test_ms_cx_lp(const char *path_limits, int stop_on_fail,
 	kfree(thresholds);
 	thresholds = NULL;
 
-	pr_info("%s MS LP CX2 MIN MAX TEST:\n");
+	pr_info("MS LP CX2 MIN MAX TEST:\n");
 	if (todo->MutualCx2LP == 1) {
 		ret = parseProductionTestLimits(path_limits, &limit_file,
 						MS_CX2_LP_MAP_MIN,
