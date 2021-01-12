@@ -32,8 +32,8 @@
 #include <uapi/linux/abc-pcie-dma.h>
 #include "abc-pcie-private.h"
 
-#define UPPER(address) ((unsigned int)((address & 0xFFFFFFFF00000000) >> 32))
-#define LOWER(address) ((unsigned int)(address & 0x00000000FFFFFFFF))
+#define UPPER(address) ((unsigned int)(((address) & 0xFFFFFFFF00000000) >> 32))
+#define LOWER(address) ((unsigned int)((address) & 0x00000000FFFFFFFF))
 /* TODO(isca): b/120289070 */
 #define DMA_CHAN	1
 #define DMA_CHANS_PER_READ_XFER 3
