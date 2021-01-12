@@ -418,7 +418,7 @@ static void hypx_create_blob_userbuf(struct device *dev,
 	}
 
 	if (buffer_iter_remaining) {
-		pr_err("Memory allocator is fragmented so we were not able to fit %d into segments header\n",
+		pr_err("Memory allocator is fragmented so we were not able to fit %lu into segments header\n",
 		       size);
 		goto exit2;
 	}
@@ -457,14 +457,14 @@ static void hypx_create_blob_dmabuf(struct device *dev,
 
 	data->dma_buf = dma_buf_get(dmabuf_fd);
 	if (IS_ERR(data->dma_buf)) {
-		pr_err("dma_buf_get: %d\n", PTR_ERR(data->dma_buf));
+		pr_err("dma_buf_get: %ld\n", PTR_ERR(data->dma_buf));
 		goto err1;
 	}
 
 	/* prepare dma_buf for DMA */
 	data->attach = dma_buf_attach(data->dma_buf, dev);
 	if (IS_ERR(data->attach)) {
-		pr_err("dma_buf_attach: %d\n", PTR_ERR(data->attach));
+		pr_err("dma_buf_attach: %ld\n", PTR_ERR(data->attach));
 		goto err2;
 	}
 
@@ -474,7 +474,7 @@ static void hypx_create_blob_dmabuf(struct device *dev,
 	/* map to get the sg_table */
 	data->sg_table = dma_buf_map_attachment(data->attach, dir);
 	if (IS_ERR(data->sg_table)) {
-		pr_err("dma_buf_map_attachment: %d\n", PTR_ERR(data->sg_table));
+		pr_err("dma_buf_map_attachment: %ld\n", PTR_ERR(data->sg_table));
 		goto err3;
 	}
 
