@@ -1668,7 +1668,8 @@ int abc_reg_notifier_callback(struct notifier_block *nb)
 
 	ret = atomic_notifier_chain_register(&abc_dev->intnc_notifier, nb);
 	if (ret < 0)
-		pr_err("%s: Could not register notifier, ret\n", __func__, ret);
+		pr_err("%s: Could not register notifier, ret:%d\n", __func__,
+		       ret);
 
 	return ret;
 }
