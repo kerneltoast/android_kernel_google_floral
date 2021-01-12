@@ -750,7 +750,7 @@ static u64 __iomem *get_subtable(struct gasket_page_table *pg_tbl,
 /* Unmap/sync extended Level-1 page table. */
 static void put_subtable(struct gasket_page_table *pg_tbl,
 			 struct gasket_page_table_entry *pte,
-			 uint lvl1_start_idx, uint len)
+			 ulong lvl1_start_idx, ulong len)
 {
 	gasket_subtable_manage_cb_t subtbl_manage_cb;
 
@@ -777,7 +777,7 @@ static void put_subtable(struct gasket_page_table *pg_tbl,
 static void finish_subtable(struct gasket_page_table *pg_tbl,
 			    struct gasket_page_table_entry *pte,
 			    u64 __iomem *host_addr, uint lvl0_idx,
-			    uint lvl1_start_idx, uint len)
+			    ulong lvl1_start_idx, ulong len)
 {
 	u64 __iomem *slot;
 	ulong lvl1_next_idx = lvl1_start_idx + len;
@@ -1188,9 +1188,9 @@ static int gasket_map_extended_pages(struct gasket_page_table *pg_tbl,
 {
 	int ret;
 	ulong dev_addr_end;
-	uint remain, len;
-	uint lvl0_idx = gasket_extended_lvl0_page_idx(pg_tbl, dev_addr);
-	uint lvl1_idx = gasket_extended_lvl1_page_idx(pg_tbl, dev_addr);
+	ulong remain, len;
+	ulong lvl0_idx = gasket_extended_lvl0_page_idx(pg_tbl, dev_addr);
+	ulong lvl1_idx = gasket_extended_lvl1_page_idx(pg_tbl, dev_addr);
 	struct gasket_page_table_entry *pte;
 	u64 __iomem *slot_base;
 
