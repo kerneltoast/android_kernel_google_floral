@@ -392,7 +392,8 @@ static void st21nfc_power_stats_filter(
 		return;
 
 	if (count != HEADER_LENGTH) {
-		pr_err("%s Warning: expect previous one was idle data\n");
+		pr_err("%s Warning: expect previous one was idle data\n",
+		       __func__);
 		st21nfc_dev->pw_states_err.header_payload++;
 		return;
 	}
