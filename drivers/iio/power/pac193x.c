@@ -690,7 +690,7 @@ static ssize_t inst_value_show(struct device *dev,
 		pr_err("unable to retrieve inst data\n");
 		return ret;
 	}
-	len += scnprintf(buf + len, PAGE_SIZE - len, "%lu\n",
+	len += scnprintf(buf + len, PAGE_SIZE - len, "%llu\n",
 			 chip_info->chip_reg_data.tstamp_ms);
 
 	for (cnt = 0; cnt < chip_info->phys_channels; cnt++) {
@@ -758,7 +758,7 @@ static ssize_t energy_value_show(struct device *dev,
 	}
 
 	/* get time since boot in ms */
-	len += scnprintf(buf + len, PAGE_SIZE - len, "%lu\n",
+	len += scnprintf(buf + len, PAGE_SIZE - len, "%llu\n",
 			 chip_info->chip_reg_data.tstamp_ms);
 
 	for (cnt = 0; cnt < chip_info->phys_channels; cnt++) {
