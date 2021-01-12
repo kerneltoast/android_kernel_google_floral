@@ -1187,7 +1187,7 @@ static void dump_statusregs_ranges(struct seq_file *s,
 		     reg += sizeof(val)) {
 			val = gasket_dev_read_64(oscar_dev->gasket_dev,
 						 OSCAR_BAR_INDEX, reg);
-			seq_printf(s, "0x%08lx: 0x%016llx\n", reg, val);
+			seq_printf(s, "0x%08x: 0x%016llx\n", reg, val);
 		}
 	}
 }
