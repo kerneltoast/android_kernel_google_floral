@@ -89,7 +89,7 @@ ssize_t ipu_iommu_pgtable_report_status(size_t max_size, char *buf)
 	pos = scnprintf(buf, max_size, "iommu status:\n");
 
 	for (i = 0; i < IPU_IOMMU_PT_CNT_COUNT; i++) {
-		pos += scnprintf(buf + pos, max_size - pos, "%s: %#lx (%d)\n",
+		pos += scnprintf(buf + pos, max_size - pos, "%s: %#llx (%d)\n",
 			ipu_iommu_pt_stat_names[i], ipu_iommu_pt_stat[i].total,
 			ipu_iommu_pt_stat[i].count);
 	}
@@ -609,7 +609,7 @@ static struct ipu_iommu_page_table_shadow_entry
 
 	res.ab_dram_dma_buf = ab_dram_alloc_dma_buf_kernel(size);
 	if (IS_ERR(res.ab_dram_dma_buf)) {
-		dev_err(dev, "%s Error (%d) allocating ab dram page table\n",
+		dev_err(dev, "%s Error (%ld) allocating ab dram page table\n",
 			__func__, PTR_ERR(res.ab_dram_dma_buf));
 		res.ab_dram_dma_buf = NULL;
 		goto free_shadow;
@@ -831,7 +831,7 @@ static int __ipu_iommu_pgtable_map(struct ipu_iommu_page_table *pg_table,
 		if (pte) {
 			dev_err(cfg->iommu_dev,
 				"%s Error: old page table entry is not empty (0x%llx)",
-				pte);
+				__func__, pte);
 			__ipu_iommu_pgtable_free_pages(&nshadow,
 				tblsz, cfg, cookie);
 		}	else {
@@ -1020,7 +1020,7 @@ static int ipu_iommu_pgtable_bw_map(
 
 
 	dev_dbg(cfg->iommu_dev,
-		"%s called for sz 0x%llx, phy addr 0x%llx, iova 0x%llx",
+		"%s called for sz 0x%lx, phy addr 0x%llx, iova 0x%lx",
 		__func__, size, paddr, iova);
 	*ret_size = 0;
 	size = min_t(unsigned long, size + iova,
