@@ -1647,7 +1647,7 @@ struct mmu_dump_stats {
 /* Dump the current accumulated range of mappings. */
 static void dump_range(struct seq_file *s, struct mmu_dump_range *range)
 {
-	seq_printf(s, "0x%016llx: 0x%016llx", range->dev_addr_start,
+	seq_printf(s, "0x%016lx: 0x%016llx", range->dev_addr_start,
 		   range->dma_addr_start);
 	if (range->phys_addr_start)
 		seq_printf(s, " 0x%016llx", range->phys_addr_start);
