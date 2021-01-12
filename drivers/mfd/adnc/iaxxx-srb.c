@@ -211,8 +211,8 @@ static int iaxxx_update_block_status_check_after_wait(struct device *dev,
 		goto update_block_check_err;
 	}
 
-	if (((status & IAXXX_SRB_SYS_BLK_UPDATE_RES_MASK) != 0xFF) &&
-		((status & IAXXX_SRB_SYS_BLK_UPDATE_ERR_CODE_MASK) != 0x00)) {
+	if ((status & IAXXX_SRB_SYS_BLK_UPDATE_RES_MASK) &&
+	    (status & IAXXX_SRB_SYS_BLK_UPDATE_ERR_CODE_MASK)) {
 		dev_err(dev, "%s update block failed with error= 0x%x\n",
 			__func__, status);
 		/* clear stale errors */
