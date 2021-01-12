@@ -3375,9 +3375,12 @@ static ssize_t batt_set_chg_deadline(struct device *dev,
 					power_supply_get_drvdata(psy);
 	long long deadline_s;
 	bool changed;
+	int ret;
 
 	/* API works in seconds */
-	kstrtoll(buf, 10, &deadline_s);
+	ret = kstrtoll(buf, 10, &deadline_s);
+	if (ret)
+		return ret;
 
 	mutex_lock(&batt_drv->chg_lock);
 	/* Let deadline < 0 pass to set stats */
