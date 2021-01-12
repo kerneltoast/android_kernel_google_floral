@@ -2824,7 +2824,7 @@ static void ab_sm_thermal_throttle_state_updated(
 		mutex_unlock(&sc->throttle_ready_lock);
 	}
 
-	dev_info(sc->dev, "Throttle state updated to %lu", throttle_state_id);
+	dev_info(sc->dev, "Throttle state updated to %u", throttle_state_id);
 
 	if (!sc->cold_boot)
 		complete_all(&sc->request_state_change_comp);

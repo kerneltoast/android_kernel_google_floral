@@ -101,7 +101,7 @@ static void ab_thermal_cooling_op_state_updated(
 	cooling_state = max(cooling_state, thermal->cooling_bcl.state);
 	cooling_state = max(cooling_state, thermal->cooling_internal.state);
 
-	dev_info(thermal->dev, "Cooling state updated: ext=%d, bcl=%d, int=%d, ready=%d",
+	dev_info(thermal->dev, "Cooling state updated: ext=%ld, bcl=%ld, int=%ld, ready=%d",
 		thermal->cooling_external.state, thermal->cooling_bcl.state,
 		thermal->cooling_internal.state, thermal->throttle_ready);
 
