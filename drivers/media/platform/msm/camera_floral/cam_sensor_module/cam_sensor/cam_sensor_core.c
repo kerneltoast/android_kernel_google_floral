@@ -50,21 +50,27 @@ static irqreturn_t cam_dot_flood_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static void cam_register_laser_irq(struct cam_sensor_ctrl_t *s_ctrl,
+static int cam_register_laser_irq(struct cam_sensor_ctrl_t *s_ctrl,
 	enum cam_sensor_gpio_irq type)
 {
+	int rc;
+
 	if (s_ctrl->cam_sensor_irq[type] == 0)
-		return;
+		return 0;
 	switch (type) {
 	case LASER_STATUS:
-		request_irq(s_ctrl->cam_sensor_irq[type],
+		rc = request_irq(s_ctrl->cam_sensor_irq[type],
 			cam_dot_flood_irq_handler,
 			IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 			"laser_tag", s_ctrl);
+		if (rc < 0)
+			return rc;
 		break;
 	default:
 		CAM_WARN(CAM_SENSOR, "unsupported irq type: %d", type);
 	}
+
+	return 0;
 }
 
 static void cam_release_laser_irq(struct cam_sensor_ctrl_t *s_ctrl,
@@ -1173,8 +1179,13 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 		       sizeof(struct cam_sensor_hw_sync_ctrl));
 
 		if (s_ctrl->soc_info.index == IR_MASTER &&
-			s_ctrl->hw_version >= 2)
-			cam_register_laser_irq(s_ctrl, LASER_STATUS);
+			s_ctrl->hw_version >= 2) {
+			rc = cam_register_laser_irq(s_ctrl, LASER_STATUS);
+			if (rc < 0) {
+				CAM_ERR(CAM_SENSOR, "request_irq failed");
+				goto release_mutex;
+			}
+		}
 
 		s_ctrl->sensor_state = CAM_SENSOR_ACQUIRE;
 		s_ctrl->last_flush_req = 0;
