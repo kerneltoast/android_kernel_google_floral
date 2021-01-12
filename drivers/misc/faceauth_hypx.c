@@ -392,7 +392,7 @@ static void hypx_create_blob_userbuf(struct device *dev,
 		}
 
 		if (buffer)
-			copy_from_user(out_buffer, buffer_iter, tocopy);
+			tocopy -= copy_from_user(out_buffer, buffer_iter, tocopy);
 
 		dma_sync_single_for_device(dev, virt_to_phys(out_buffer), size,
 					   DMA_TO_DEVICE);
