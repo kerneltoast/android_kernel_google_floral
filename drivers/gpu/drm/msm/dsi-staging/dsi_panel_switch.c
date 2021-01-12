@@ -608,6 +608,7 @@ static int panel_switch_data_init(struct dsi_panel *panel,
 		.sched_priority = 16,
 	};
 	const struct dsi_display *display;
+	int ret;
 
 	display = dsi_panel_to_display(panel);
 	if (unlikely(!display))
@@ -639,8 +640,10 @@ static int panel_switch_data_init(struct dsi_panel *panel,
 	debugfs_create_atomic_t("te_counter", 0600, pdata->debug_root,
 				&pdata->te_counter);
 
-	sysfs_create_group(&panel->parent->kobj,
-			   &panel_switch_sysfs_attrs_group);
+	ret = sysfs_create_group(&panel->parent->kobj,
+				 &panel_switch_sysfs_attrs_group);
+	if (ret)
+		pr_err("Failed to create panel switch sysfs, ret: %d\n", ret);
 
 	return 0;
 }
