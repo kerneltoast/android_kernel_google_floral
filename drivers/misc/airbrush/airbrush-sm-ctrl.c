@@ -341,6 +341,7 @@ static struct chip_to_block_map chip_state_map[] = {
 	CHIP_TO_BLOCK_MAP_INIT(900, 305, 305, 305, 305, 300, 303),
 };
 
+#ifdef CONFIG_AIRBRUSH_SM_DEBUG_IOCTLS
 static int ab_update_block_prop_table(struct new_block_props *props,
 		enum block_name block, struct ab_state_context *sc)
 {
@@ -409,6 +410,7 @@ static int ab_update_block_prop_table(struct new_block_props *props,
 
 	return 0;
 }
+#endif
 
 struct block_property *get_desired_state(struct block *blk,
 					 u32 to_block_state_id)
