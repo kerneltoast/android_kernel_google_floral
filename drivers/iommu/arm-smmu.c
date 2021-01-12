@@ -1596,7 +1596,7 @@ static void print_ctx_regs(struct arm_smmu_device *smmu, struct arm_smmu_cfg
 	dev_err(smmu->dev, "FAR    = 0x%016llx\n",
 		readq_relaxed(cb_base + ARM_SMMU_CB_FAR));
 	dev_err(smmu->dev, "PAR    = 0x%pK\n",
-		readq_relaxed(cb_base + ARM_SMMU_CB_PAR));
+		(void *)readq_relaxed(cb_base + ARM_SMMU_CB_PAR));
 
 	dev_err(smmu->dev,
 		"FSR    = 0x%08x [%s%s%s%s%s%s%s%s%s%s]\n",
@@ -1616,15 +1616,15 @@ static void print_ctx_regs(struct arm_smmu_device *smmu, struct arm_smmu_cfg
 
 	if (cfg->fmt == ARM_SMMU_CTX_FMT_AARCH32_S) {
 		dev_err(smmu->dev, "TTBR0  = 0x%pK\n",
-			readl_relaxed(cb_base + ARM_SMMU_CB_TTBR0));
+			(void *)(long)readl_relaxed(cb_base + ARM_SMMU_CB_TTBR0));
 		dev_err(smmu->dev, "TTBR1  = 0x%pK\n",
-			readl_relaxed(cb_base + ARM_SMMU_CB_TTBR1));
+			(void *)(long)readl_relaxed(cb_base + ARM_SMMU_CB_TTBR1));
 	} else {
 		dev_err(smmu->dev, "TTBR0  = 0x%pK\n",
-			readq_relaxed(cb_base + ARM_SMMU_CB_TTBR0));
+			(void *)readq_relaxed(cb_base + ARM_SMMU_CB_TTBR0));
 		if (stage1)
 			dev_err(smmu->dev, "TTBR1  = 0x%pK\n",
-				readq_relaxed(cb_base + ARM_SMMU_CB_TTBR1));
+				(void *)readq_relaxed(cb_base + ARM_SMMU_CB_TTBR1));
 	}
 
 
@@ -5228,7 +5228,7 @@ static int __maybe_unused arm_smmu_pm_restore_early(struct device *dev)
 					  smmu_domain);
 		if (!pgtbl_ops) {
 			dev_err(smmu->dev, "failed to allocate page tables during pm restore for cxt %d\n",
-				idx, dev_name(dev));
+				idx);
 			return -ENOMEM;
 		}
 		smmu_domain->pgtbl_ops = pgtbl_ops;
@@ -5913,7 +5913,7 @@ static ssize_t arm_smmu_debug_testbus_read(struct file *file,
 							testbus_version);
 		arm_smmu_power_off(pwr);
 
-		snprintf(buf, buf_len, "0x%0x\n", val);
+		snprintf(buf, buf_len, "0x%0lx\n", val);
 	} else {
 
 		struct arm_smmu_device *smmu = file->private_data;
@@ -6327,7 +6327,7 @@ static ssize_t arm_smmu_debug_capturebus_config_read(struct file *file,
 		snprintf(buf + strlen(buf), buf_len - strlen(buf),
 				"Match_%d : 0x%0llx\n", i+1, match[i]);
 	}
-	snprintf(buf + strlen(buf), buf_len - strlen(buf), "0x%0x\n", val);
+	snprintf(buf + strlen(buf), buf_len - strlen(buf), "0x%0lx\n", val);
 
 	buflen = min(count, strlen(buf));
 	if (copy_to_user(ubuf, buf, buflen)) {
@@ -6394,7 +6394,8 @@ static irqreturn_t arm_smmu_debug_capture_bus_match(int irq, void *dev)
 	void __iomem *tbu_base = tbu->base;
 	u64 mask[NO_OF_MASK_AND_MATCH], match[NO_OF_MASK_AND_MATCH];
 	u64 snapshot[NO_OF_CAPTURE_POINTS][REGS_PER_CAPTURE_POINT];
-	int i, j, val;
+	unsigned long val;
+	int i, j;
 
 	if (arm_smmu_power_on(smmu->pwr) || arm_smmu_power_on(tbu->pwr))
 		return IRQ_NONE;
@@ -6407,7 +6408,7 @@ static irqreturn_t arm_smmu_debug_capture_bus_match(int irq, void *dev)
 	arm_smmu_power_off(tbu->pwr);
 	arm_smmu_power_off(smmu->pwr);
 
-	dev_info(tbu->dev, "TNX_TCR_CNTL : 0x%0llx\n", val);
+	dev_info(tbu->dev, "TNX_TCR_CNTL : 0x%0lx\n", val);
 
 	for (i = 0; i < NO_OF_MASK_AND_MATCH; ++i) {
 		dev_info(tbu->dev,
