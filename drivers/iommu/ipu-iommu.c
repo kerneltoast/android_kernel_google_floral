@@ -309,8 +309,8 @@ static void ipu_iommu_tlb_sync(void *priv)
 	rsp = ipu_iommu_send_jqs_reg_msg(iommu,
 		MMU_SYNC, MMU_SYNC_SYNC_MASK, false /*is_read*/);
 	if (IS_ERR(rsp)) {
-		dev_err(iommu->dev, "%s Error (%d) writing to mmu sync register\n",
-				__func__, (int)rsp);
+		dev_err(iommu->dev, "%s Error (%ld) writing to mmu sync register\n",
+				__func__, PTR_ERR(rsp));
 		return;
 	}
 
@@ -319,8 +319,8 @@ static void ipu_iommu_tlb_sync(void *priv)
 			MMU_SYNC, 0, true /*is_read*/);
 		if (IS_ERR(rsp)) {
 			dev_err(iommu->dev,
-				"%s Error (%d) reading status register\n",
-				__func__, (int)rsp);
+				"%s Error (%ld) reading status register\n",
+				__func__, PTR_ERR(rsp));
 			return;
 		}
 		if (!(rsp->regs[0].value & MMU_SYNC_SYNC_MASK))
