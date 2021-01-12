@@ -85,7 +85,7 @@ int ipu_jqs_send_sync_reg_message(struct paintbox_data *pb,
 
 	if (req->type != JQS_MESSAGE_TYPE_IPU_REG_ACCESS) {
 		dev_err(pb->dev,
-			"%s error: unexpected message type 0x%lx\n",
+			"%s error: unexpected message type 0x%x\n",
 			__func__, req->type);
 		return -EIO;
 	}

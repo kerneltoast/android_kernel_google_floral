@@ -408,7 +408,7 @@ static ssize_t pio_threshold_show(struct device *dev,
 {
 	struct ipu_adapter_ab_mfd_data *dev_data = dev_get_drvdata(dev);
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n", dev_data->pio_threshold);
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", dev_data->pio_threshold);
 }
 
 static ssize_t pio_threshold_store(struct device *dev,
