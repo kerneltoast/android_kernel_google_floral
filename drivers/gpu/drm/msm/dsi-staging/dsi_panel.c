@@ -1242,7 +1242,7 @@ static int dsi_panel_parse_vendor_extinfo_location(struct dsi_panel *panel,
 	loc_length = size_bytes / 4;
 
 	if (size_bytes > sizeof(extinfo_location)) {
-		pr_err("Length (%d) is larger than allocated (%d).\n",
+		pr_err("Length (%d) is larger than allocated (%lu).\n",
 		       size_bytes, sizeof(extinfo_location));
 		rc = -EINVAL;
 		goto error;
@@ -2017,7 +2017,7 @@ static int dsi_panel_parse_cmd_sets_sub(struct dsi_panel_cmd_set *cmd,
 		pr_err("commands failed, rc=%d\n", rc);
 		goto error;
 	}
-	pr_debug("packet-count=%d, %d\n", packet_count, length);
+	pr_debug("packet-count=%d, %lu\n", packet_count, length);
 
 	rc = dsi_panel_alloc_cmd_packets(cmd, packet_count);
 	if (rc) {
