@@ -603,8 +603,7 @@ int power_supply_uevent(struct device *dev, struct kobj_uevent_env *env)
 		attr = &power_supply_attrs[psy->desc->properties[j]];
 
 		if (!attr->attr.name) {
-			dev_info(dev, "%s:%d FAKE attr.name=NULL skip\n",
-				__FILE__, __LINE__, __func__);
+			dev_info(dev, "FAKE attr.name=NULL skip\n");
 			continue;
 		}
 
