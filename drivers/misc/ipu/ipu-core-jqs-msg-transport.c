@@ -987,7 +987,7 @@ static ssize_t ipu_core_jqs_msg_transport_kernel_write_locked(
 			msg, msg->size, ipu_core_jqs_cbus_memcpy);
 	if (bytes_written != msg->size) {
 		dev_err(bus->parent_dev,
-				"%s: message size mismatch, expected %u, got %u\n",
+				"%s: message size mismatch, expected %u, got %ld\n",
 				__func__, msg->size, bytes_written);
 		return -EFAULT;
 	}
