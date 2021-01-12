@@ -3860,7 +3860,9 @@ static DEVICE_ATTR(bd_trickle_reset_sec, 0660,
 
 static int batt_init_fs(struct batt_drv *batt_drv)
 {
+#ifdef CONFIG_DEBUG_FS
 	struct dentry *de = NULL;
+#endif
 	int ret;
 
 	/* stats */
