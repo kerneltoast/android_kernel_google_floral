@@ -312,7 +312,7 @@ struct sg_table *ll_pool_alloc(struct ll_pool *pool, size_t len,
 
 	mutex_lock(&pool->lock);
 	if (len > pool->remaining_size || len == 0) {
-		pr_err("%s: Unable to allocate %llu bytes\n", __func__,
+		pr_err("%s: Unable to allocate %lu bytes\n", __func__,
 				len);
 		mutex_unlock(&pool->lock);
 		return ERR_PTR(-ENOMEM);
@@ -363,7 +363,7 @@ struct ll_pool *ll_pool_create(phys_addr_t base, size_t size)
 
 	/* check if base is aligned with minimal order */
 	if (!IS_ALIGNED(base, PAGE_SIZE)) {
-		pr_err("%s: base address:0x%016lx is not page aligned\n",
+		pr_err("%s: base address:0x%016llx is not page aligned\n",
 				__func__, base);
 		return ERR_PTR(-EINVAL);
 	}
