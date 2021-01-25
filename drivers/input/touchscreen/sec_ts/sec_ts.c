@@ -2030,7 +2030,8 @@ static int sec_ts_probe(struct i2c_client *client,
 	input_info(true, &ts->client->dev, "%s: request_irq = %d\n", __func__, client->irq);
 
 	ret = request_threaded_irq(client->irq, NULL, sec_ts_irq_thread,
-			ts->plat_data->irq_type, SEC_TS_I2C_NAME, ts);
+			ts->plat_data->irq_type | IRQF_PERF_AFFINE,
+			SEC_TS_I2C_NAME, ts);
 	if (ret < 0) {
 		input_err(true, &ts->client->dev, "%s: Unable to request threaded irq\n", __func__);
 		goto err_irq;
