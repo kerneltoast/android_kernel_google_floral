@@ -303,6 +303,8 @@ static int msm_drm_uninit(struct device *dev)
 		}
 	}
 
+	kthread_stop(priv->clean_thread.thread);
+
 	msm_gem_shrinker_cleanup(ddev);
 
 	drm_kms_helper_poll_fini(ddev);
@@ -769,6 +771,11 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 			goto fail;
 		}
 	}
+
+	kthread_init_worker(&priv->clean_thread.worker);
+	priv->clean_thread.thread = kthread_run_perf_critical(cpu_lp_mask,
+		kthread_worker_fn, &priv->clean_thread.worker, "drm_cleanup");
+	BUG_ON(IS_ERR(priv->clean_thread.thread));
 
 	/**
 	 * this priority was found during empiric testing to have appropriate
