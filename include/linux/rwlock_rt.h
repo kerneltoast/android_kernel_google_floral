@@ -107,6 +107,8 @@ do {							\
 	__rt_rwlock_init(rwl, #rwl, &__key);		\
 } while (0)
 
+#define rwlock_is_contended(lock)               (((void)(lock), 0))
+
 /*
  * Internal functions made global for CPU pinning
  */
