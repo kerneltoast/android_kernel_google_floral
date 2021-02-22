@@ -965,24 +965,6 @@ static void ufshcd_cmd_log_init(struct ufs_hba *hba)
 {
 }
 
-static void __ufshcd_cmd_log(struct ufs_hba *hba, char *str, char *cmd_type,
-			     unsigned int tag, u8 cmd_id, u8 idn, u8 lun,
-			     sector_t lba, u32 transfer_len)
-{
-	struct ufshcd_cmd_log_entry entry;
-
-	entry.str = str;
-	entry.lba = lba;
-	entry.cmd_id = cmd_id;
-	entry.transfer_len = transfer_len;
-	if (strcmp(cmd_type, "clk-gating"))
-		entry.doorbell = ufshcd_readl(hba,
-				REG_UTP_TRANSFER_REQ_DOOR_BELL);
-	entry.tag = tag;
-
-	ufshcd_add_command_trace(hba, &entry, strcmp(cmd_type, "clk-gating"));
-}
-
 static void ufshcd_dme_cmd_log(struct ufs_hba *hba, char *str, u8 cmd_id)
 {
 }
