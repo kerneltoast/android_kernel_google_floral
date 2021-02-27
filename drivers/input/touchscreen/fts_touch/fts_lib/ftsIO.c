@@ -182,7 +182,6 @@ static int fts_read_internal(u8 *outBuf, int byteToRead, bool dma_safe)
 	spi_message_init(&msg);
 
 	transfer[0].len = byteToRead;
-	transfer[0].delay_usecs = SPI_DELAY_CS;
 	transfer[0].tx_buf = NULL;
 	if (dma_safe == false)
 		transfer[0].rx_buf = info->io_read_buf;
@@ -279,7 +278,6 @@ static int fts_writeRead_internal(u8 *cmd, int cmdLength, u8 *outBuf,
 	spi_message_add_tail(&transfer[0], &msg);
 
 	transfer[1].len = byteToRead;
-	transfer[1].delay_usecs = SPI_DELAY_CS;
 	transfer[1].tx_buf = NULL;
 	if (dma_safe == false)
 		transfer[1].rx_buf = info->io_read_buf;
@@ -357,7 +355,6 @@ static int fts_write_internal(u8 *cmd, int cmdLength, bool dma_safe)
 	spi_message_init(&msg);
 
 	transfer[0].len = cmdLength;
-	transfer[0].delay_usecs = SPI_DELAY_CS;
 	transfer[0].tx_buf = cmd;
 	transfer[0].rx_buf = NULL;
 	spi_message_add_tail(&transfer[0], &msg);
@@ -428,7 +425,6 @@ static int fts_writeFwCmd_internal(u8 *cmd, int cmdLength, bool dma_safe)
 	spi_message_init(&msg);
 
 	transfer[0].len = cmdLength;
-	transfer[0].delay_usecs = SPI_DELAY_CS;
 	transfer[0].tx_buf = cmd;
 	transfer[0].rx_buf = NULL;
 	spi_message_add_tail(&transfer[0], &msg);
@@ -546,7 +542,6 @@ static int fts_writeThenWriteRead_internal(u8 *writeCmd1, int writeCmdLength,
 	spi_message_add_tail(&transfer[1], &msg);
 
 	transfer[2].len = byteToRead;
-	transfer[2].delay_usecs = SPI_DELAY_CS;
 	transfer[2].tx_buf = NULL;
 	if (dma_safe == false)
 		transfer[2].rx_buf = info->io_read_buf;
