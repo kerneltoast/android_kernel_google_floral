@@ -78,7 +78,7 @@ static int ttf_pwr_ibatt(const struct gbms_ce_tier_stats *ts)
 	if (avg_ibatt < 0)
 		sign = -1;
 
-	pr_debug("%s: elap=%d (%d+%d+%d) sum=%ld avg_ibatt=%d\n", __func__,
+	pr_debug("%s: elap=%d (%d+%d+%d) sum=%lld avg_ibatt=%d\n", __func__,
 		 elap, ts->time_fast, ts->time_taper, ts->time_other,
 		 ts->ibatt_sum, avg_ibatt * sign);
 
@@ -224,7 +224,7 @@ static int ttf_pwr_ratio(const struct batt_ttf_stats *stats,
 
 		/* average temperature in tier for charge tier index */
 		temp_idx = gbms_msc_temp_idx(profile, t_avg);
-		pr_debug("%s %d: temp_idx=%d t_avg=%ld sum=%ld elap=%d\n",
+		pr_debug("%s %d: temp_idx=%d t_avg=%lld sum=%lld elap=%d\n",
 			__func__, soc, temp_idx, t_avg,
 			ce_data->tier_stats[vbatt_idx].temp_sum,
 			elap);
@@ -593,7 +593,7 @@ void ttf_soc_init(struct ttf_soc_stats *dst)
 
 /* Tier estimates ---------------------------------------------------------  */
 
-#define TTF_STATS_FMT "[%d,%d %d %ld]"
+#define TTF_STATS_FMT "[%hd,%d %d %ld]"
 
 #define BATT_TTF_TS_VALID(ts) \
 	(ts->cc_total != 0 && ts->avg_time != 0)
