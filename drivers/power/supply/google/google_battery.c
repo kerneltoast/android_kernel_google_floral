@@ -2205,7 +2205,7 @@ done_no_op:
 	if (!changed)
 		return false;
 
-	pr_info("MSC_HEALTH: now=%d deadline=%d aon_soc=%d ttf=%ld state=%d->%d fv_uv=%d, cc_max=%d\n",
+	pr_info("MSC_HEALTH: now=%ld deadline=%ld aon_soc=%d ttf=%ld state=%d->%d fv_uv=%d, cc_max=%d\n",
 		now, rest->rest_deadline, rest->always_on_soc,
 		ttf, rest->rest_state, rest_state, fv_uv, cc_max);
 	logbuffer_log(batt_drv->ttf_stats.ttf_log,
@@ -3594,7 +3594,7 @@ static ssize_t batt_set_chg_deadline(struct device *dev,
 	if (changed)
 		power_supply_changed(batt_drv->psy);
 
-	pr_info("MSC_HEALTH deadline_s=%ld deadline at %ld\n",
+	pr_info("MSC_HEALTH deadline_s=%lld deadline at %ld\n",
 		deadline_s, batt_drv->chg_health.rest_deadline);
 	logbuffer_log(batt_drv->ttf_stats.ttf_log,
 		     "MSC_HEALTH: deadline_s=%ld deadline at %ld",
