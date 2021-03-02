@@ -2105,7 +2105,7 @@ static void pe_set_rmf_caps(tpAniSirGlobal mac_ctx,
 	if (DOT11F_FAILED(ret))
 		return;
 
-	ft_session->limRmfEnabled = parse_rsn.RSN_Cap[0] & 0x80;
+	ft_session->limRmfEnabled = !!(parse_rsn.RSN_Cap[0] & 0x80);
 }
 #else
 static inline void pe_set_rmf_caps(tpAniSirGlobal mac_ctx,
