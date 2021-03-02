@@ -1432,11 +1432,11 @@ static int bd_update_stats(struct bd_data *bd_state,
 	/* exit and entry criteria on temperature while connected */
 	temp_avg = bd_state->temp_sum / bd_state->time_sum;
 	if (triggered && temp <= bd_state->bd_resume_abs_temp) {
-		pr_info("MSC_BD: resume time_sum=%lld, temp_sum=%lld, temp_avg=%d\n",
+		pr_info("MSC_BD: resume time_sum=%ld, temp_sum=%lld, temp_avg=%lld\n",
 			bd_state->time_sum, bd_state->temp_sum, temp_avg);
 		bd_reset(bd_state);
 	} else if (!triggered && temp_avg >= bd_state->bd_trigger_temp) {
-		pr_info("MSC_BD: trigger time_sum=%lld, temp_sum=%lld, temp_avg=%d\n",
+		pr_info("MSC_BD: trigger time_sum=%ld, temp_sum=%lld, temp_avg=%lld\n",
 			bd_state->time_sum, bd_state->temp_sum, temp_avg);
 		bd_state->triggered = 1;
 	}
@@ -3605,7 +3605,7 @@ static int chg_set_fcc_charge_cntl_limit(struct thermal_cooling_device *tcd,
 	tdev->current_level = lvl;
 
 	if (tdev->current_level == tdev->thermal_levels) {
-		pr_info("MSC_THERM_FCC lvl=%d charge disable\n", lvl);
+		pr_info("MSC_THERM_FCC lvl=%lu charge disable\n", lvl);
 		return vote(chg_drv->msc_chg_disable_votable,
 					THERMAL_DAEMON_VOTER, true, 0);
 	}
@@ -3653,7 +3653,7 @@ static int chg_set_dc_in_charge_cntl_limit(struct thermal_cooling_device *tcd,
 				POWER_SUPPLY_PROP_ONLINE, &pval);
 		}
 
-		pr_info("MSC_THERM_DC lvl=%d dc disable\n", lvl);
+		pr_info("MSC_THERM_DC lvl=%lu dc disable\n", lvl);
 
 		return 0;
 	}
@@ -3675,7 +3675,7 @@ static int chg_set_dc_in_charge_cntl_limit(struct thermal_cooling_device *tcd,
 			dc_icl);
 
 	if (ret < 0 || changed)
-		pr_info("MSC_THERM_DC lvl=%d dc_icl=%d (%d)\n",
+		pr_info("MSC_THERM_DC lvl=%lu dc_icl=%d (%d)\n",
 			lvl, dc_icl, ret);
 
 	/* make sure that fcc is reset to max when charging from WLC*/
