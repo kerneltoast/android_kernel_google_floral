@@ -318,8 +318,6 @@ static void add_dmabuf_list(struct kgsl_dma_buf_meta *meta)
 		list_add(&dle->node, &kgsl_dmabuf_list);
 		meta->dle = dle;
 		list_add(&meta->node, &dle->dmabuf_list);
-		kgsl_trace_gpu_mem_total(meta->device,
-				 meta->entry->memdesc.size);
 	}
 	spin_unlock(&kgsl_dmabuf_lock);
 }
@@ -336,8 +334,6 @@ static void remove_dmabuf_list(struct kgsl_dma_buf_meta *meta)
 	if (list_empty(&dle->dmabuf_list)) {
 		list_del(&dle->node);
 		kfree(dle);
-		kgsl_trace_gpu_mem_total(meta->device,
-				-(meta->entry->memdesc.size));
 	}
 	spin_unlock(&kgsl_dmabuf_lock);
 }
@@ -357,6 +353,7 @@ static void kgsl_destroy_ion(struct kgsl_dma_buf_meta *meta)
 #else
 static void kgsl_destroy_ion(struct kgsl_dma_buf_meta *meta)
 {
+
 }
 #endif
 
@@ -410,6 +407,8 @@ kgsl_mem_entry_destroy(struct kref *kref)
 		}
 	}
 
+	kgsl_sharedmem_free(&entry->memdesc);
+
 	switch (memtype) {
 	case KGSL_MEM_ENTRY_ION:
 		kgsl_destroy_ion(entry->priv_data);
@@ -417,8 +416,6 @@ kgsl_mem_entry_destroy(struct kref *kref)
 	default:
 		break;
 	}
-
-	kgsl_sharedmem_free(&entry->memdesc);
 
 	kfree(entry);
 }
