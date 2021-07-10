@@ -546,7 +546,7 @@ QDF_STATUS wmi_unified_sta_ps_cmd_send(void *wmi_hdl,
 				struct sta_ps_params *param);
 
 QDF_STATUS wmi_unified_ap_ps_cmd_send(void *wmi_hdl,
-				uint8_t macaddr[IEEE80211_ADDR_LEN],
+				uint8_t *macaddr,
 				struct ap_ps_params *param);
 
 QDF_STATUS wmi_unified_scan_start_cmd_send(void *wmi_hdl,
