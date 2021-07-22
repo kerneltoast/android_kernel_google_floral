@@ -393,7 +393,7 @@ bool is_ab_dram_dma_buf(struct dma_buf *dmabuf)
 	if (!dmabuf)
 		return false;
 
-	return (strcmp(KBUILD_MODNAME, dmabuf->exp_name) == 0);
+	return dmabuf->ops == &dma_buf_ops;
 }
 EXPORT_SYMBOL(is_ab_dram_dma_buf);
 
