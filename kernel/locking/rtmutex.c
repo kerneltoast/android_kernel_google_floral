@@ -7,6 +7,11 @@
  *  Copyright (C) 2005-2006 Timesys Corp., Thomas Gleixner <tglx@timesys.com>
  *  Copyright (C) 2005 Kihon Technologies Inc., Steven Rostedt
  *  Copyright (C) 2006 Esben Nielsen
+ * Adaptive Spinlocks:
+ *  Copyright (C) 2008 Novell, Inc., Gregory Haskins, Sven Dietrich,
+ *				     and Peter Morreale,
+ * Adaptive Spinlocks simplification:
+ *  Copyright (C) 2008 Red Hat, Inc., Steven Rostedt <srostedt@redhat.com>
  *
  *  See Documentation/locking/rt-mutex-design.txt for details.
  */
@@ -957,6 +962,52 @@ takeit:
 	return 1;
 }
 
+#ifdef CONFIG_SMP
+static bool rtmutex_spin_on_owner(struct rt_mutex *lock,
+				  struct rt_mutex_waiter *waiter,
+				  struct task_struct *owner)
+{
+	bool res = true;
+
+	rcu_read_lock();
+	for (;;) {
+		/* If owner changed, trylock again. */
+		if (owner != rt_mutex_owner(lock))
+			break;
+		/*
+		 * Ensure that @owner is dereferenced after checking that
+		 * the lock owner still matches @owner. If that fails,
+		 * @owner might point to freed memory. If it still matches,
+		 * the rcu_read_lock() ensures the memory stays valid.
+		 */
+		barrier();
+		/*
+		 * Stop spinning when:
+		 *  - the lock owner has been scheduled out
+		 *  - current is not longer the top waiter
+		 *  - current is requested to reschedule (redundant
+		 *    for CONFIG_PREEMPT_RCU=y)
+		 *  - the VCPU on which owner runs is preempted
+		 */
+		if (!owner->on_cpu || waiter != rt_mutex_top_waiter(lock) ||
+		    need_resched() || vcpu_is_preempted(task_cpu(owner))) {
+			res = false;
+			break;
+		}
+		cpu_relax();
+	}
+	rcu_read_unlock();
+	return res;
+}
+#else
+static bool rtmutex_spin_on_owner(struct rt_mutex *lock,
+				  struct rt_mutex_waiter *waiter,
+				  struct task_struct *owner)
+{
+	return false;
+}
+#endif
+
 #ifdef CONFIG_PREEMPT_RT_FULL
 /*
  * preemptible spin_lock functions:
@@ -996,7 +1047,7 @@ void __sched rt_spin_lock_slowlock_locked(struct rt_mutex *lock,
 					  struct rt_mutex_waiter *waiter,
 					  unsigned long flags)
 {
-	struct task_struct *self = current;
+	struct task_struct *owner, *self = current;
 	int ret;
 
 	if (__try_to_take_rt_mutex(lock, self, NULL, STEAL_LATERAL))
@@ -1023,9 +1074,14 @@ void __sched rt_spin_lock_slowlock_locked(struct rt_mutex *lock,
 		if (__try_to_take_rt_mutex(lock, self, waiter, STEAL_LATERAL))
 			break;
 
+		if (waiter == rt_mutex_top_waiter(lock))
+			owner = rt_mutex_owner(lock);
+		else
+			owner = NULL;
 		raw_spin_unlock_irqrestore(&lock->wait_lock, flags);
 
-		preempt_schedule_lock();
+		if (!owner || !rtmutex_spin_on_owner(lock, waiter, owner))
+			preempt_schedule_lock();
 
 		raw_spin_lock_irqsave(&lock->wait_lock, flags);
 
@@ -1532,6 +1588,7 @@ __rt_mutex_slowlock(struct rt_mutex *lock, int state,
 		    struct rt_mutex_waiter *waiter,
 		    struct ww_acquire_ctx *ww_ctx)
 {
+	struct task_struct *owner;
 	int ret = 0;
 
 	for (;;) {
@@ -1554,9 +1611,14 @@ __rt_mutex_slowlock(struct rt_mutex *lock, int state,
 				break;
 		}
 
+		if (waiter == rt_mutex_top_waiter(lock))
+			owner = rt_mutex_owner(lock);
+		else
+			owner = NULL;
 		raw_spin_unlock_irq(&lock->wait_lock);
 
-		schedule();
+		if (!owner || !rtmutex_spin_on_owner(lock, waiter, owner))
+			schedule();
 
 		raw_spin_lock_irq(&lock->wait_lock);
 		set_current_state(state);
