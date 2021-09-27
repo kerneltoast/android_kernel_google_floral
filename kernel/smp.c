@@ -273,8 +273,17 @@ void flush_smp_call_function_from_idle(void)
 
 	local_irq_save(flags);
 	flush_smp_call_function_queue(true);
-	if (local_softirq_pending())
+
+	if (local_softirq_pending()) {
+#ifndef CONFIG_PREEMPT_RT_FULL
 		do_softirq();
+#else
+		struct task_struct *ksoftirqd = this_cpu_ksoftirqd();
+
+		if (ksoftirqd && ksoftirqd->state != TASK_RUNNING)
+			wake_up_process(ksoftirqd);
+#endif
+	}
 
 	local_irq_restore(flags);
 }
