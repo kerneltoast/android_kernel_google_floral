@@ -538,11 +538,13 @@ static void __cam_isp_ctx_send_sof_boot_timestamp(
 	req_msg.u.frame_msg.link_hdl = ctx_isp->base->link_hdl;
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
+#if 0
 	if (cam_notify_vsync_qmi(&req_msg)) {
 		CAM_ERR(CAM_ISP,
 			"Error in notifying vsync QMI for req id:%lld",
 			request_id);
 	}
+#endif
 
 	if (cam_req_mgr_notify_message(&req_msg,
 		V4L_EVENT_CAM_REQ_MGR_SOF_BOOT_TS,
