@@ -5069,7 +5069,7 @@ static int msm_fe_qos_prepare(struct snd_pcm_substream *substream)
 	if (pm_qos_request_active(&substream->latency_pm_qos_req))
 		pm_qos_remove_request(&substream->latency_pm_qos_req);
 
-	atomic_set(&substream->latency_pm_qos_req.cpus_affine, BIT(1) | BIT(2));
+	substream->latency_pm_qos_req.cpus_affine = BIT(1) | BIT(2);
 
 	substream->latency_pm_qos_req.type = PM_QOS_REQ_AFFINE_CORES;
 
