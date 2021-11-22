@@ -346,6 +346,17 @@ void __lockfunc rt_write_lock(rwlock_t *rwlock)
 }
 EXPORT_SYMBOL(rt_write_lock);
 
+#ifdef CONFIG_DEBUG_LOCK_ALLOC
+void __lockfunc rt_write_lock_nested(rwlock_t *rwlock, int subclass)
+{
+	rwlock_acquire(&rwlock->dep_map, subclass, 0, _RET_IP_);
+	do_write_rt_lock(rwlock);
+	rcu_read_lock();
+	migrate_disable();
+}
+EXPORT_SYMBOL(rt_write_lock_nested);
+#endif
+
 void __lockfunc rt_read_unlock(rwlock_t *rwlock)
 {
 	rwlock_release(&rwlock->dep_map, 1, _RET_IP_);
