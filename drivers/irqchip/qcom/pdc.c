@@ -50,7 +50,7 @@ struct pdc_type_info {
 static struct pdc_type_info pdc_type_config[MAX_IRQS];
 static u32 pdc_enabled[MAX_ENABLE_REGS];
 static u32 max_enable_regs;
-static DEFINE_SPINLOCK(pdc_lock);
+static DEFINE_RAW_SPINLOCK(pdc_lock);
 static void __iomem *pdc_base;
 
 static int get_pdc_pin(irq_hw_number_t hwirq, void *data)
@@ -78,7 +78,7 @@ static inline int pdc_enable_intr(struct irq_data *d, bool on)
 
 	index = pin_out / 32;
 	mask = pin_out % 32;
-	spin_lock_irqsave(&pdc_lock, flags);
+	raw_spin_lock_irqsave(&pdc_lock, flags);
 
 	enable = readl_relaxed(pdc_base + IRQ_ENABLE_BANK + (index *
 					sizeof(uint32_t)));
@@ -98,7 +98,7 @@ static inline int pdc_enable_intr(struct irq_data *d, bool on)
 		udelay(5);
 	} while (1);
 
-	spin_unlock_irqrestore(&pdc_lock, flags);
+	raw_spin_unlock_irqrestore(&pdc_lock, flags);
 
 	trace_irq_pin_config("enable", (u32)pin_out, (u32)d->hwirq,
 			0, on);
