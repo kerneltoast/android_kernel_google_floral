@@ -30,7 +30,7 @@ static DEFINE_PER_CPU(u64, nr);
 static DEFINE_PER_CPU(u64, nr_max);
 
 static DEFINE_PER_CPU(unsigned long, iowait_prod_sum);
-static DEFINE_PER_CPU(spinlock_t, nr_lock) = __SPIN_LOCK_UNLOCKED(nr_lock);
+static DEFINE_PER_CPU(raw_spinlock_t, nr_lock) = __RAW_SPIN_LOCK_UNLOCKED(nr_lock);
 static s64 last_get_time;
 
 static DEFINE_PER_CPU(atomic64_t, last_busy_time) = ATOMIC64_INIT(0);
@@ -61,7 +61,7 @@ void sched_get_nr_running_avg(struct sched_avg_stats *stats)
 		unsigned long flags;
 		u64 diff;
 
-		spin_lock_irqsave(&per_cpu(nr_lock, cpu), flags);
+		raw_spin_lock_irqsave(&per_cpu(nr_lock, cpu), flags);
 		curr_time = sched_clock();
 		diff = curr_time - per_cpu(last_time, cpu);
 		BUG_ON((s64)diff < 0);
@@ -94,7 +94,7 @@ void sched_get_nr_running_avg(struct sched_avg_stats *stats)
 		per_cpu(iowait_prod_sum, cpu) = 0;
 		per_cpu(nr_max, cpu) = per_cpu(nr, cpu);
 
-		spin_unlock_irqrestore(&per_cpu(nr_lock, cpu), flags);
+		raw_spin_unlock_irqrestore(&per_cpu(nr_lock, cpu), flags);
 	}
 
 	last_get_time = curr_time;
@@ -138,7 +138,7 @@ void sched_update_nr_prod(int cpu, long delta, bool inc)
 	u64 curr_time;
 	unsigned long flags, nr_running;
 
-	spin_lock_irqsave(&per_cpu(nr_lock, cpu), flags);
+	raw_spin_lock_irqsave(&per_cpu(nr_lock, cpu), flags);
 	nr_running = per_cpu(nr, cpu);
 	curr_time = sched_clock();
 	diff = curr_time - per_cpu(last_time, cpu);
@@ -156,7 +156,7 @@ void sched_update_nr_prod(int cpu, long delta, bool inc)
 	per_cpu(nr_prod_sum, cpu) += nr_running * diff;
 	per_cpu(nr_big_prod_sum, cpu) += walt_big_tasks(cpu) * diff;
 	per_cpu(iowait_prod_sum, cpu) += nr_iowait_cpu(cpu) * diff;
-	spin_unlock_irqrestore(&per_cpu(nr_lock, cpu), flags);
+	raw_spin_unlock_irqrestore(&per_cpu(nr_lock, cpu), flags);
 }
 EXPORT_SYMBOL(sched_update_nr_prod);
 
