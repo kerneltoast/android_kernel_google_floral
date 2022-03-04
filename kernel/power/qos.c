@@ -64,7 +64,7 @@ struct pm_qos_object {
 	char *name;
 };
 
-static DEFINE_SPINLOCK(pm_qos_lock);
+static DEFINE_RAW_SPINLOCK(pm_qos_lock);
 
 static struct pm_qos_object null_pm_qos;
 
@@ -215,7 +215,7 @@ static int pm_qos_dbg_show_requests(struct seq_file *s, void *unused)
 	}
 
 	/* Lock to ensure we have a snapshot */
-	spin_lock(&pm_qos_lock);
+	raw_spin_lock(&pm_qos_lock);
 	if (plist_head_empty(&c->list)) {
 		seq_puts(s, "Empty!\n");
 		goto out;
@@ -251,7 +251,7 @@ static int pm_qos_dbg_show_requests(struct seq_file *s, void *unused)
 		   type, pm_qos_get_value(c), active_reqs, tot_reqs);
 
 out:
-	spin_unlock(&pm_qos_lock);
+	raw_spin_unlock(&pm_qos_lock);
 	return 0;
 }
 
@@ -346,7 +346,7 @@ static int pm_qos_update_target_cpus(struct pm_qos_constraints *c,
 	unsigned long cpus = 0;
 	int ret;
 
-	spin_lock(&pm_qos_lock);
+	raw_spin_lock(&pm_qos_lock);
 	prev_value = pm_qos_get_value(c);
 	if (value == PM_QOS_DEFAULT_VALUE)
 		new_value = c->default_value;
@@ -377,7 +377,7 @@ static int pm_qos_update_target_cpus(struct pm_qos_constraints *c,
 	pm_qos_set_value(c, curr_value);
 	ret = pm_qos_set_value_for_cpus(req, c, &cpus, new_cpus, action);
 
-	spin_unlock(&pm_qos_lock);
+	raw_spin_unlock(&pm_qos_lock);
 
 	trace_pm_qos_update_target(action, prev_value, curr_value);
 
@@ -449,7 +449,7 @@ bool pm_qos_update_flags(struct pm_qos_flags *pqf,
 {
 	s32 prev_value, curr_value;
 
-	spin_lock(&pm_qos_lock);
+	raw_spin_lock(&pm_qos_lock);
 
 	prev_value = list_empty(&pqf->list) ? 0 : pqf->effective_flags;
 
@@ -472,7 +472,7 @@ bool pm_qos_update_flags(struct pm_qos_flags *pqf,
 
 	curr_value = list_empty(&pqf->list) ? 0 : pqf->effective_flags;
 
-	spin_unlock(&pm_qos_lock);
+	raw_spin_unlock(&pm_qos_lock);
 
 	trace_pm_qos_update_flags(action, prev_value, curr_value);
 	return prev_value != curr_value;
@@ -511,7 +511,7 @@ int pm_qos_request_for_cpumask(int pm_qos_class, struct cpumask *mask)
 	struct pm_qos_constraints *c = NULL;
 	int val;
 
-	spin_lock(&pm_qos_lock);
+	raw_spin_lock(&pm_qos_lock);
 	c = pm_qos_array[pm_qos_class]->constraints;
 	val = c->default_value;
 
@@ -530,7 +530,7 @@ int pm_qos_request_for_cpumask(int pm_qos_class, struct cpumask *mask)
 			break;
 		}
 	}
-	spin_unlock(&pm_qos_lock);
+	raw_spin_unlock(&pm_qos_lock);
 
 	return val;
 }
@@ -835,9 +835,9 @@ static ssize_t pm_qos_power_read(struct file *filp, char __user *buf,
 	if (!pm_qos_request_active(req))
 		return -EINVAL;
 
-	spin_lock(&pm_qos_lock);
+	raw_spin_lock(&pm_qos_lock);
 	value = pm_qos_get_value(pm_qos_array[req->pm_qos_class]->constraints);
-	spin_unlock(&pm_qos_lock);
+	raw_spin_unlock(&pm_qos_lock);
 
 	return simple_read_from_buffer(buf, count, f_pos, &value, sizeof(s32));
 }
