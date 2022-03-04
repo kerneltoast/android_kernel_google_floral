@@ -26,6 +26,11 @@ static void def_work_fn(struct work_struct *work)
 	sysfs_notify(rq_info.kobj, NULL, "def_timer_ms");
 }
 
+static void def_irq_work_fn(struct irq_work *work)
+{
+	queue_work(rq_wq, &rq_info.def_timer_work);
+}
+
 static ssize_t show_def_timer_ms(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
@@ -99,6 +104,7 @@ static int __init msm_rq_stats_init(void)
 
 	rq_wq = create_singlethread_workqueue("rq_stats");
 	WARN_ON(!rq_wq);
+	init_irq_work(&rq_info.def_timer_irq_work, def_irq_work_fn);
 	INIT_WORK(&rq_info.def_timer_work, def_work_fn);
 	spin_lock_init(&rq_lock);
 	rq_info.def_timer_jiffies = DEFAULT_DEF_TIMER_JIFFIES;

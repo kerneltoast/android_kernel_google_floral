@@ -1369,7 +1369,7 @@ static void wakeup_user(void)
 	jiffy_gap = jiffies - rq_info.def_timer_last_jiffy;
 	if (jiffy_gap >= rq_info.def_timer_jiffies) {
 		rq_info.def_timer_last_jiffy = jiffies;
-		queue_work(rq_wq, &rq_info.def_timer_work);
+		irq_work_queue(&rq_info.def_timer_irq_work);
 	}
 }
 
