@@ -3983,16 +3983,32 @@ static void ufshcd_pm_qos_put_worker(struct work_struct *work)
 	mutex_unlock(&hba->pm_qos.lock);
 }
 
+static void ufshcd_pm_qos_get_irq_worker(struct irq_work *work)
+{
+	struct ufs_hba *hba = container_of(work, typeof(*hba),
+					   pm_qos.get_irq_work);
+
+	queue_work(system_unbound_wq, &hba->pm_qos.get_work);
+}
+
+static void ufshcd_pm_qos_put_irq_worker(struct irq_work *work)
+{
+	struct ufs_hba *hba = container_of(work, typeof(*hba),
+					   pm_qos.put_irq_work);
+
+	queue_work(system_unbound_wq, &hba->pm_qos.put_work);
+}
+
 static void ufshcd_pm_qos_get(struct ufs_hba *hba)
 {
 	if (atomic_inc_return(&hba->pm_qos.count) == 1)
-		queue_work(system_unbound_wq, &hba->pm_qos.get_work);
+		irq_work_queue(&hba->pm_qos.get_irq_work);
 }
 
 static void ufshcd_pm_qos_put(struct ufs_hba *hba)
 {
 	if (atomic_dec_return(&hba->pm_qos.count) == 0)
-		queue_work(system_unbound_wq, &hba->pm_qos.put_work);
+		irq_work_queue(&hba->pm_qos.put_irq_work);
 }
 
 /**
@@ -12217,6 +12233,8 @@ void ufshcd_remove(struct ufs_hba *hba)
 	/* disable interrupts */
 	ufshcd_disable_intr(hba, hba->intr_mask);
 	ufshcd_hba_stop(hba, true);
+	irq_work_sync(&hba->pm_qos.put_irq_work);
+	irq_work_sync(&hba->pm_qos.get_irq_work);
 	cancel_work_sync(&hba->pm_qos.put_work);
 	cancel_work_sync(&hba->pm_qos.get_work);
 	pm_qos_remove_request(&hba->pm_qos.req);
@@ -12436,6 +12454,8 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 	mb();
 
 	mutex_init(&hba->pm_qos.lock);
+	init_irq_work(&hba->pm_qos.get_irq_work, ufshcd_pm_qos_get_irq_worker);
+	init_irq_work(&hba->pm_qos.put_irq_work, ufshcd_pm_qos_put_irq_worker);
 	INIT_WORK(&hba->pm_qos.get_work, ufshcd_pm_qos_get_worker);
 	INIT_WORK(&hba->pm_qos.put_work, ufshcd_pm_qos_put_worker);
 	hba->pm_qos.req.type = PM_QOS_REQ_AFFINE_IRQ;
