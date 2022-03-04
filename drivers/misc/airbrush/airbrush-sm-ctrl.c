@@ -3085,6 +3085,7 @@ int ab_sm_init(struct platform_device *pdev)
 		   AB_SM_CLEANUP_NOT_IN_PROGRESS);
 	INIT_WORK(&ab_sm_ctx->shutdown_work, ab_sm_shutdown_work);
 	BLOCKING_INIT_NOTIFIER_HEAD(&ab_sm_ctx->clk_subscribers);
+	BLOCKING_INIT_NOTIFIER_HEAD(&ab_sm_ctx->clk_subscribers_dma);
 
 	ab_sm_ctx->regulator_nb.notifier_call = ab_sm_regulator_listener;
 
