@@ -344,3 +344,4 @@ config CPU_PM
 config DEDUCE_WAKEUP_REASONS
 	bool
 	default n
+	depends on SUSPEND && !PREEMPT_RT_FULL

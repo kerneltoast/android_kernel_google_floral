@@ -76,6 +76,10 @@ static inline bool logging_wakeup_reasons(void)
 bool log_possible_wakeup_reason(int irq,
 			struct irq_desc *desc,
 			bool (*handler)(struct irq_desc *));
+void log_base_wakeup_reason(int irq);
+void clear_wakeup_reasons(void);
+void log_suspend_abort_reason(const char *fmt, ...);
+void log_bad_wake_reason(const char *fmt, ...);
 
 #else
 
@@ -85,15 +89,11 @@ static inline bool logging_wakeup_reasons(void) { return false; }
 static inline bool log_possible_wakeup_reason(int irq,
 			struct irq_desc *desc,
 			bool (*handler)(struct irq_desc *)) { return true; }
+static inline void log_base_wakeup_reason(int irq) { }
+static inline void clear_wakeup_reasons(void) { }
+static inline void log_suspend_abort_reason(const char *fmt, ...) { }
+static inline void log_bad_wake_reason(const char *fmt, ...) { }
 
 #endif
-
-const struct list_head*
-get_wakeup_reasons(unsigned long timeout, struct list_head *unfinished);
-void log_base_wakeup_reason(int irq);
-void clear_wakeup_reasons(void);
-void log_suspend_abort_reason(const char *fmt, ...);
-void log_bad_wake_reason(const char *fmt, ...);
-int check_wakeup_reason(int irq);
 
 #endif /* _LINUX_WAKEUP_REASON_H */

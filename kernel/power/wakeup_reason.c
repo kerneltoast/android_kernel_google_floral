@@ -495,16 +495,6 @@ static bool match_node(struct wakeup_irq_node *n, void *_p)
 	return n->irq != irq;
 }
 
-int check_wakeup_reason(int irq)
-{
-	bool found;
-	unsigned long flags;
-	spin_lock_irqsave(&resume_reason_lock, flags);
-	found = !walk_irq_node_tree(base_irq_nodes, match_node, &irq);
-	spin_unlock_irqrestore(&resume_reason_lock, flags);
-	return found;
-}
-
 static bool build_leaf_nodes(struct wakeup_irq_node *n, void *_p)
 {
 	struct list_head *wakeups = _p;
@@ -530,31 +520,6 @@ static bool build_unfinished_nodes(struct wakeup_irq_node *n, void *_p)
 		list_add(&n->next, unfinished);
 	}
 	return true;
-}
-
-const struct list_head *get_wakeup_reasons(unsigned long timeout,
-					   struct list_head *unfinished)
-{
-	INIT_LIST_HEAD(unfinished);
-
-	if (logging_wakeup_reasons()) {
-		unsigned long signalled = 0;
-		if (timeout)
-			signalled = wait_for_completion_timeout(
-				&wakeups_completion, timeout);
-		if (WARN_ON(!signalled)) {
-			stop_logging_wakeup_reasons();
-			walk_irq_node_tree(
-				base_irq_nodes, build_unfinished_nodes,
-				unfinished);
-			return NULL;
-		}
-		pr_info("%s: waited for %u ms\n",
-				__func__,
-				jiffies_to_msecs(timeout - signalled));
-	}
-
-	return get_wakeup_reasons_nosync();
 }
 
 static bool delete_node(struct wakeup_irq_node *n, void *unused)
