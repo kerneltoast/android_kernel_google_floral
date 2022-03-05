@@ -42,7 +42,9 @@ static const struct regmap_config syscon_regmap_config = {
 	.reg_stride = 4,
 };
 
-static struct syscon *of_syscon_register(struct device_node *np)
+static struct syscon *of_syscon_register(struct device_node *np,
+					 regmap_lock lock, regmap_unlock unlock,
+					 void *lock_arg)
 {
 	struct syscon *syscon;
 	struct regmap *regmap;
@@ -87,6 +89,9 @@ static struct syscon *of_syscon_register(struct device_node *np)
 	if (ret)
 		reg_io_width = 4;
 
+	syscon_config.lock = lock;
+	syscon_config.unlock = unlock;
+	syscon_config.lock_arg = lock_arg;
 	syscon_config.reg_stride = reg_io_width;
 	syscon_config.val_bits = reg_io_width * 8;
 	syscon_config.max_register = resource_size(&res) - reg_io_width;
@@ -114,7 +119,8 @@ err_map:
 	return ERR_PTR(ret);
 }
 
-struct regmap *syscon_node_to_regmap(struct device_node *np)
+struct regmap *__syscon_node_to_regmap(struct device_node *np, regmap_lock lock,
+				       regmap_unlock unlock, void *lock_arg)
 {
 	struct syscon *entry, *syscon = NULL;
 
@@ -129,12 +135,17 @@ struct regmap *syscon_node_to_regmap(struct device_node *np)
 	spin_unlock(&syscon_list_slock);
 
 	if (!syscon)
-		syscon = of_syscon_register(np);
+		syscon = of_syscon_register(np, lock, unlock, lock_arg);
 
 	if (IS_ERR(syscon))
 		return ERR_CAST(syscon);
 
 	return syscon->regmap;
+}
+
+struct regmap *syscon_node_to_regmap(struct device_node *np)
+{
+	return __syscon_node_to_regmap(np, NULL, NULL, NULL);
 }
 EXPORT_SYMBOL_GPL(syscon_node_to_regmap);
 
