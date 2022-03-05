@@ -213,8 +213,8 @@ gasket_interrupt_msix_init(struct gasket_interrupt_data *interrupt_data)
 	interrupt_data->msix_configured = 1;
 
 	for (i = 0; i < interrupt_data->num_interrupts; i++) {
-		ret = request_irq(interrupt_data->msix_entries[i].vector,
-				  gasket_msix_interrupt_handler, 0,
+		ret = request_threaded_irq(interrupt_data->msix_entries[i].vector,
+				  NULL, gasket_msix_interrupt_handler, 0,
 				  interrupt_data->name, interrupt_data);
 
 		if (ret) {
