@@ -142,7 +142,7 @@ static inline int timed_poll_check(struct kgsl_device *device,
 }
 
 /* Preemption functions */
-void a6xx_preemption_trigger(struct adreno_device *adreno_dev);
+void a6xx_preemption_trigger(struct adreno_device *adreno_dev, bool in_irq);
 void a6xx_preemption_schedule(struct adreno_device *adreno_dev);
 void a6xx_preemption_start(struct adreno_device *adreno_dev);
 int a6xx_preemption_init(struct adreno_device *adreno_dev);
