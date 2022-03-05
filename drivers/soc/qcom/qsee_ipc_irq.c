@@ -50,6 +50,8 @@ struct qsee_irq {
 
 	struct irq_domain *domain;
 	struct regmap *regmap;
+	raw_spinlock_t regmap_lock;
+	unsigned long lock_flags;
 
 	int num_banks;
 	struct qsee_irq_bank *banks;
@@ -232,6 +234,24 @@ static const struct irq_domain_ops qsee_irq_ops = {
 	.xlate = qsee_irq_xlate_threecell,
 };
 
+static void qsee_regmap_lock(void *data)
+__acquires(&qirq->regmap_lock)
+{
+	struct qsee_irq *qirq = data;
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&qirq->regmap_lock, flags);
+	qirq->lock_flags = flags;
+}
+
+static void qsee_regmap_unlock(void *data)
+__releases(&qirq->regmap_lock)
+{
+	struct qsee_irq *qirq = data;
+
+	raw_spin_unlock_irqrestore(&qirq->regmap_lock, qirq->lock_flags);
+}
+
 static int qsee_irq_probe(struct platform_device *pdev)
 {
 	const struct qsee_irq_data *data;
@@ -258,7 +278,9 @@ static int qsee_irq_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	qirq->regmap = syscon_node_to_regmap(syscon);
+	raw_spin_lock_init(&qirq->regmap_lock);
+	qirq->regmap = __syscon_node_to_regmap(syscon, qsee_regmap_lock,
+					       qsee_regmap_unlock, qirq);
 	if (IS_ERR(qirq->regmap))
 		return PTR_ERR(qirq->regmap);
 
