@@ -3211,8 +3211,10 @@ static void adreno_read(struct kgsl_device *device, void __iomem *base,
 
 	reg = (base + (offsetwords << 2));
 
+#ifndef CONFIG_PREEMPT_RT_BASE
 	if (!in_interrupt())
 		kgsl_pre_hwaccess(device);
+#endif
 
 	*value = __raw_readl(reg);
 	/*
@@ -3259,8 +3261,10 @@ static void adreno_regwrite(struct kgsl_device *device,
 			offsetwords, device->reg_len >> 2))
 		return;
 
+#ifndef CONFIG_PREEMPT_RT_BASE
 	if (!in_interrupt())
 		kgsl_pre_hwaccess(device);
+#endif
 
 	trace_kgsl_regwrite(device, offsetwords, value);
 
