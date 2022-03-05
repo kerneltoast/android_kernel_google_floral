@@ -1325,8 +1325,8 @@ static int oscar_setup_device(struct platform_device *pdev,
 		return -ENODEV;
 	}
 	oscar_dev->irqs[OSCAR_SCALAR_CORE_0_INT] = irq;
-	ret = devm_request_irq(dev, irq, oscar_interrupt_handler, IRQF_ONESHOT,
-			       SC_0_IRQ_NAME, oscar_dev);
+	ret = devm_request_threaded_irq(dev, irq, NULL, oscar_interrupt_handler,
+					IRQF_ONESHOT, SC_0_IRQ_NAME, oscar_dev);
 	if (ret) {
 		dev_err(dev, "failed to request irq %d\n", irq);
 		return ret;
@@ -1338,8 +1338,9 @@ static int oscar_setup_device(struct platform_device *pdev,
 		return -ENODEV;
 	}
 	oscar_dev->irqs[OSCAR_INSTR_QUEUE_INT] = irq;
-	ret = devm_request_irq(dev, irq, oscar_interrupt_handler, IRQF_ONESHOT,
-			       INST_QUEUE_IRQ_NAME, oscar_dev);
+	ret = devm_request_threaded_irq(dev, irq, NULL, oscar_interrupt_handler,
+					IRQF_ONESHOT, INST_QUEUE_IRQ_NAME,
+					oscar_dev);
 	if (ret) {
 		dev_err(dev, "failed to request irq %d\n", irq);
 		return -ENODEV;
