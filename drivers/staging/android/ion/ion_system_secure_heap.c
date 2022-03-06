@@ -403,7 +403,7 @@ struct ion_heap *ion_system_secure_heap_create(struct ion_platform_heap *unused)
 	heap->sys_heap = get_ion_heap(ION_SYSTEM_HEAP_ID);
 
 	heap->destroy_heap = false;
-	heap->work_lock = __SPIN_LOCK_UNLOCKED(heap->work_lock);
+	heap->work_lock = (spinlock_t)__SPIN_LOCK_UNLOCKED(heap->work_lock);
 	INIT_LIST_HEAD(&heap->prefetch_list);
 	INIT_DELAYED_WORK(&heap->prefetch_work,
 			  ion_system_secure_heap_prefetch_work);

@@ -69,7 +69,7 @@ static struct ion_buffer *ion_buffer_create(struct ion_heap *heap, size_t len,
 		.kmap_lock = __MUTEX_INITIALIZER(buffer->kmap_lock),
 		.free = __WORK_INITIALIZER(buffer->free, ion_buffer_free_work),
 		.map_freelist = LIST_HEAD_INIT(buffer->map_freelist),
-		.freelist_lock = __SPIN_LOCK_INITIALIZER(buffer->freelist_lock),
+		.freelist_lock = __SPIN_LOCK_UNLOCKED(buffer->freelist_lock),
 		.iommu_data = {
 			.map_list = LIST_HEAD_INIT(buffer->iommu_data.map_list),
 			.lock = __MUTEX_INITIALIZER(buffer->iommu_data.lock)
