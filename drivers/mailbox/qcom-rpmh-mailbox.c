@@ -135,7 +135,6 @@ struct rsc_drv {
 	struct tcs_mbox tcs[TCS_TYPE_NR];
 	int num_assigned;
 	int num_tcs;
-	struct tasklet_struct tasklet;
 	struct list_head response_pending;
 	raw_spinlock_t drv_lock;
 	struct tcs_response_pool *resp_pool;
@@ -344,14 +343,10 @@ static inline struct tcs_mbox *get_tcs_for_msg(struct rsc_drv *drv,
 static inline void send_tcs_response(struct tcs_response *resp)
 {
 	struct rsc_drv *drv = resp->drv;
-	unsigned long flags;
 
-	raw_spin_lock_irqsave(&drv->drv_lock, flags);
-	INIT_LIST_HEAD(&resp->list);
+	raw_spin_lock(&drv->drv_lock);
 	list_add_tail(&resp->list, &drv->response_pending);
-	raw_spin_unlock_irqrestore(&drv->drv_lock, flags);
-
-	tasklet_hi_schedule(&drv->tasklet);
+	raw_spin_unlock(&drv->drv_lock);
 }
 
 static inline void enable_tcs_irq(struct rsc_drv *drv, int m, bool enable)
@@ -390,6 +385,7 @@ static irqreturn_t tcs_irq_handler(int irq, void *p)
 {
 	struct rsc_drv *drv = p;
 	void __iomem *base = drv->reg_base;
+	bool wake_thread = false;
 	int m, i;
 	u32 irq_status, sts;
 	struct tcs_mbox *tcs;
@@ -458,12 +454,14 @@ no_resp:
 		/* Notify the client that this request is completed. */
 		atomic_set(&drv->tcs_in_use[m], 0);
 
-		/* Clean up response object and notify mbox in tasklet */
-		if (resp)
+		/* Clean up response object and notify mbox in thread */
+		if (resp) {
 			send_tcs_response(resp);
+			wake_thread = true;
+		}
 	}
 
-	return IRQ_HANDLED;
+	return wake_thread ? IRQ_WAKE_THREAD : IRQ_HANDLED;
 }
 
 static inline void mbox_notify_tx_done(struct mbox_chan *chan,
@@ -486,9 +484,8 @@ static void respond_tx_done(struct tcs_response *resp)
 /**
  * tcs_notify_tx_done: TX Done for requests that do not trigger TCS
  */
-static void tcs_notify_tx_done(unsigned long data)
+static void tcs_notify_tx_done(struct rsc_drv *drv)
 {
-	struct rsc_drv *drv = (struct rsc_drv *)data;
 	struct tcs_response *resp;
 	unsigned long flags;
 
@@ -504,6 +501,12 @@ static void tcs_notify_tx_done(unsigned long data)
 		raw_spin_unlock_irqrestore(&drv->drv_lock, flags);
 		respond_tx_done(resp);
 	} while (1);
+}
+
+static irqreturn_t tcs_irq_thread(int irq, void *p)
+{
+	tcs_notify_tx_done(p);
+	return IRQ_HANDLED;
 }
 
 static void __tcs_buffer_write(struct rsc_drv *drv, int d, int m, int n,
@@ -1129,7 +1132,6 @@ static int rsc_drv_probe(struct platform_device *pdev)
 	drv->pdev = pdev;
 	INIT_LIST_HEAD(&drv->response_pending);
 	raw_spin_lock_init(&drv->drv_lock);
-	tasklet_init(&drv->tasklet, tcs_notify_tx_done, (unsigned long)drv);
 
 	drv->name = of_get_property(pdev->dev.of_node, "label", NULL);
 	if (!drv->name)
@@ -1143,7 +1145,8 @@ static int rsc_drv_probe(struct platform_device *pdev)
 	if (irq < 0)
 		return irq;
 
-	ret = devm_request_irq(&pdev->dev, irq, tcs_irq_handler,
+	ret = devm_request_threaded_irq(&pdev->dev, irq, tcs_irq_handler,
+			tcs_irq_thread,
 			IRQF_TRIGGER_HIGH | IRQF_NO_SUSPEND | IRQF_NO_THREAD,
 			drv->name, drv);
 	if (ret)
