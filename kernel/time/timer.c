@@ -217,8 +217,6 @@ static atomic_t deferrable_pending;
 static DEFINE_STATIC_KEY_FALSE(timers_nohz_active);
 static DEFINE_MUTEX(timer_keys_mutex);
 
-static struct swork_event timer_update_swork;
-
 #ifdef CONFIG_SMP
 unsigned int sysctl_timer_migration = 1;
 
@@ -245,18 +243,12 @@ static void timer_update_keys(struct swork_event *event)
 	mutex_unlock(&timer_keys_mutex);
 }
 
+static DEFINE_SWORK(timer_update_swork, timer_update_keys);
+
 void timers_update_nohz(void)
 {
 	swork_queue(&timer_update_swork);
 }
-
-static __init int hrtimer_init_thread(void)
-{
-	WARN_ON(swork_get());
-	INIT_SWORK(&timer_update_swork, timer_update_keys);
-	return 0;
-}
-early_initcall(hrtimer_init_thread);
 
 int timer_migration_handler(struct ctl_table *table, int write,
 			    void __user *buffer, size_t *lenp,

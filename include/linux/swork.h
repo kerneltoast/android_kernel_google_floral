@@ -16,6 +16,9 @@ static inline void INIT_SWORK(struct swork_event *event,
 	event->func = func;
 }
 
+#define DEFINE_SWORK(name, fn) \
+	struct swork_event name = { .func = fn };
+
 bool swork_queue(struct swork_event *sev);
 
 static inline int swork_get(void) { return 0; }
