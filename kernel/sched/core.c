@@ -7850,9 +7850,6 @@ static void migrate_disabled_sched(struct task_struct *p)
 	p->migrate_disable_scheduled = 1;
 }
 
-static DEFINE_PER_CPU(struct cpu_stop_work, migrate_work);
-static DEFINE_PER_CPU(struct migration_arg, migrate_arg);
-
 void migrate_enable(void)
 {
 	struct task_struct *p = current;
@@ -7890,27 +7887,6 @@ void migrate_enable(void)
 	migrate_enable_update_cpus_allowed(p);
 
 	WARN_ON(smp_processor_id() != cpu);
-	if (!is_cpu_allowed(p, cpu)) {
-		struct migration_arg __percpu *arg;
-		struct cpu_stop_work __percpu *work;
-		struct rq_flags rf;
-
-		work = this_cpu_ptr(&migrate_work);
-		arg = this_cpu_ptr(&migrate_arg);
-		WARN_ON_ONCE(!arg->done && !work->disabled && work->arg);
-
-		arg->task = p;
-		arg->done = false;
-
-		rq = task_rq_lock(p, &rf);
-		update_rq_clock(rq);
-		arg->dest_cpu = select_fallback_rq(cpu, p, false);
-		task_rq_unlock(rq, p, &rf);
-
-		stop_one_cpu_nowait(task_cpu(p), migration_cpu_stop,
-				    arg, work);
-		tlb_migrate_finish(p->mm);
-	}
 
 out:
 	preempt_lazy_enable();
