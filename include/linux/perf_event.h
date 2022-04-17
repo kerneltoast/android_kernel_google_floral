@@ -1445,7 +1445,11 @@ static struct device_attribute format_attr_##_name = __ATTR_RO(_name)
 #ifdef CONFIG_PERF_EVENTS
 int perf_event_init_cpu(unsigned int cpu);
 int perf_event_exit_cpu(unsigned int cpu);
+#if defined(CONFIG_HOTPLUG_CPU) || defined(CONFIG_KEXEC_CORE)
 int perf_event_restart_events(unsigned int cpu);
+#else
+static inline int perf_event_restart_events(unsigned int cpu)		{ return 0; }
+#endif
 #else
 #define perf_event_init_cpu	NULL
 #define perf_event_exit_cpu	NULL
