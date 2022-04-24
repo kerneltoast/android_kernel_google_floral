@@ -290,7 +290,7 @@ config QCOM_WATCHDOG_V2
 
 config QCOM_FORCE_WDOG_BITE_ON_PANIC
 	bool "QCOM force watchdog bite"
-	depends on QCOM_WATCHDOG_V2
+	depends on QCOM_WATCHDOG_V2 && !PREEMPT_RT_FULL
 	help
 	  This forces a watchdog bite when the device restarts due to a
 	  kernel panic. On certain MSM SoCs, this provides us
