@@ -7,11 +7,6 @@
  *  Copyright (C) 2005-2006 Timesys Corp., Thomas Gleixner <tglx@timesys.com>
  *  Copyright (C) 2005 Kihon Technologies Inc., Steven Rostedt
  *  Copyright (C) 2006 Esben Nielsen
- *  Adaptive Spinlocks:
- *  Copyright (C) 2008 Novell, Inc., Gregory Haskins, Sven Dietrich,
- *				     and Peter Morreale,
- * Adaptive Spinlocks simplification:
- *  Copyright (C) 2008 Red Hat, Inc., Steven Rostedt <srostedt@redhat.com>
  *
  *  See Documentation/locking/rt-mutex-design.txt for details.
  */
@@ -985,41 +980,6 @@ static inline void rt_spin_lock_fastunlock(struct rt_mutex *lock,
 	else
 		slowfn(lock);
 }
-#ifdef CONFIG_SMP
-/*
- * Note that owner is a speculative pointer and dereferencing relies
- * on rcu_read_lock() and the check against the lock owner.
- */
-static int adaptive_wait(struct rt_mutex *lock,
-			 struct task_struct *owner)
-{
-	int res = 0;
-
-	rcu_read_lock();
-	for (;;) {
-		if (owner != rt_mutex_owner(lock))
-			break;
-		/*
-		 * Ensure that owner->on_cpu is dereferenced _after_
-		 * checking the above to be valid.
-		 */
-		barrier();
-		if (!owner->on_cpu) {
-			res = 1;
-			break;
-		}
-		cpu_relax();
-	}
-	rcu_read_unlock();
-	return res;
-}
-#else
-static int adaptive_wait(struct rt_mutex *lock,
-			 struct task_struct *orig_owner)
-{
-	return 1;
-}
-#endif
 
 static int task_blocks_on_rt_mutex(struct rt_mutex *lock,
 				   struct rt_mutex_waiter *waiter,
@@ -1036,8 +996,7 @@ void __sched rt_spin_lock_slowlock_locked(struct rt_mutex *lock,
 					  struct rt_mutex_waiter *waiter,
 					  unsigned long flags)
 {
-	struct task_struct *lock_owner, *self = current;
-	struct rt_mutex_waiter *top_waiter;
+	struct task_struct *self = current;
 	int ret;
 
 	if (__try_to_take_rt_mutex(lock, self, NULL, STEAL_LATERAL))
@@ -1064,13 +1023,9 @@ void __sched rt_spin_lock_slowlock_locked(struct rt_mutex *lock,
 		if (__try_to_take_rt_mutex(lock, self, waiter, STEAL_LATERAL))
 			break;
 
-		top_waiter = rt_mutex_top_waiter(lock);
-		lock_owner = rt_mutex_owner(lock);
-
 		raw_spin_unlock_irqrestore(&lock->wait_lock, flags);
 
-		if (top_waiter != waiter || adaptive_wait(lock, lock_owner))
-			preempt_schedule_lock();
+		preempt_schedule_lock();
 
 		raw_spin_lock_irqsave(&lock->wait_lock, flags);
 
