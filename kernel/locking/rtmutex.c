@@ -969,11 +969,11 @@ static bool rtmutex_spin_on_owner(struct rt_mutex *lock,
 {
 	bool res = true;
 
-	rcu_read_lock();
 	for (;;) {
-		/* If owner changed, trylock again. */
-		if (owner != rt_mutex_owner(lock))
-			break;
+		bool on_cpu, same_owner;
+
+		rcu_read_lock();
+		same_owner = owner == rt_mutex_owner(lock);
 		/*
 		 * Ensure that @owner is dereferenced after checking that
 		 * the lock owner still matches @owner. If that fails,
@@ -981,6 +981,18 @@ static bool rtmutex_spin_on_owner(struct rt_mutex *lock,
 		 * the rcu_read_lock() ensures the memory stays valid.
 		 */
 		barrier();
+		if (same_owner) {
+			if (vcpu_is_preempted(task_cpu(owner)))
+				on_cpu = false;
+			else
+				on_cpu = owner->on_cpu;
+		}
+		rcu_read_unlock();
+
+		/* If owner changed, trylock again. */
+		if (!same_owner)
+			break;
+
 		/*
 		 * Stop spinning when:
 		 *  - the lock owner has been scheduled out
@@ -989,15 +1001,13 @@ static bool rtmutex_spin_on_owner(struct rt_mutex *lock,
 		 *    for CONFIG_PREEMPT_RCU=y)
 		 *  - the VCPU on which owner runs is preempted
 		 */
-		if (!owner->on_cpu || need_resched() ||
-		    !rt_mutex_waiter_is_top_waiter(lock, waiter) ||
-		    vcpu_is_preempted(task_cpu(owner))) {
+		if (!on_cpu || need_resched() ||
+		    !rt_mutex_waiter_is_top_waiter(lock, waiter)) {
 			res = false;
 			break;
 		}
 		cpu_relax();
 	}
-	rcu_read_unlock();
 	return res;
 }
 #else
