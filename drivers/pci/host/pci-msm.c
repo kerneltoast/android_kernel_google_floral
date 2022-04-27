@@ -4322,7 +4322,7 @@ static int msm_pcie_enable(struct msm_pcie_dev_t *dev, u32 options)
 			PCIE_ERR(dev,
 				"PCIe: RC%d: unsupported gen speed: %d\n",
 				dev->rc_idx, current_link_speed);
-			return 0;
+			goto out;
 		}
 
 		bw_scale = &dev->bw_scale[index];
