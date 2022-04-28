@@ -647,25 +647,17 @@ EXPORT_SYMBOL(is_scm_armv8);
  * the additional arguments in it. The extra argument buffer will be
  * pointed to by X5.
  */
-static int allocate_extra_arg_buffer(struct scm_desc *desc, gfp_t flags)
+static void fill_extra_arg(struct scm_desc *desc, struct scm_extra_arg *argbuf)
 {
 	int i, j;
-	struct scm_extra_arg *argbuf;
 	int arglen = desc->arginfo & 0xf;
-	size_t argbuflen = PAGE_ALIGN(sizeof(struct scm_extra_arg));
-
-	desc->x5 = desc->args[FIRST_EXT_ARG_IDX];
 
 	if (likely(arglen <= N_REGISTER_ARGS)) {
-		desc->extra_arg_buf = NULL;
-		return 0;
+		desc->x5 = desc->args[FIRST_EXT_ARG_IDX];
+		return;
 	}
 
-	argbuf = kzalloc(argbuflen, flags);
-	if (!argbuf)
-		return -ENOMEM;
-
-	desc->extra_arg_buf = argbuf;
+	memset(argbuf, 0, sizeof(*argbuf));
 
 	j = FIRST_EXT_ARG_IDX;
 	if (scm_version == SCM_ARMV8_64)
@@ -675,25 +667,21 @@ static int allocate_extra_arg_buffer(struct scm_desc *desc, gfp_t flags)
 		for (i = 0; i < N_EXT_SCM_ARGS; i++)
 			argbuf->args32[i] = desc->args[j++];
 	desc->x5 = virt_to_phys(argbuf);
-	__cpuc_flush_dcache_area(argbuf, argbuflen);
+	__cpuc_flush_dcache_area(argbuf, sizeof(*argbuf));
 	outer_flush_range(virt_to_phys(argbuf),
-			  virt_to_phys(argbuf) + argbuflen);
-
-	return 0;
+			  virt_to_phys(argbuf) + sizeof(*argbuf));
 }
 
 static int __scm_call2(u32 fn_id, struct scm_desc *desc, bool retry)
 {
-	int arglen = desc->arginfo & 0xf;
+	struct scm_extra_arg extra_arg_buf __aligned(PAGE_SIZE);
 	int ret, retry_count = 0;
 	u64 x0;
 
 	if (unlikely(!is_scm_armv8()))
 		return -ENODEV;
 
-	ret = allocate_extra_arg_buffer(desc, GFP_NOIO);
-	if (ret)
-		return ret;
+	fill_extra_arg(desc, &extra_arg_buf);
 
 	x0 = fn_id | scm_version_mask;
 
@@ -737,8 +725,6 @@ out:
 		pr_err("scm_call failed: func id %#llx, ret: %d, syscall returns: %#llx, %#llx, %#llx\n",
 			x0, ret, desc->ret[0], desc->ret[1], desc->ret[2]);
 
-	if (arglen > N_REGISTER_ARGS)
-		kfree(desc->extra_arg_buf);
 	if (ret < 0)
 		return scm_remap_error(ret);
 	return 0;
@@ -793,16 +779,14 @@ EXPORT_SYMBOL(scm_call2_noretry);
  */
 int scm_call2_atomic(u32 fn_id, struct scm_desc *desc)
 {
-	int arglen = desc->arginfo & 0xf;
+	struct scm_extra_arg extra_arg_buf __aligned(PAGE_SIZE);
 	int ret;
 	u64 x0;
 
 	if (unlikely(!is_scm_armv8()))
 		return -ENODEV;
 
-	ret = allocate_extra_arg_buffer(desc, GFP_ATOMIC);
-	if (ret)
-		return ret;
+	fill_extra_arg(desc, &extra_arg_buf);
 
 	x0 = fn_id | BIT(SMC_ATOMIC_SYSCALL) | scm_version_mask;
 
@@ -823,8 +807,6 @@ int scm_call2_atomic(u32 fn_id, struct scm_desc *desc)
 			x0, ret, desc->ret[0],
 			desc->ret[1], desc->ret[2]);
 
-	if (arglen > N_REGISTER_ARGS)
-		kfree(desc->extra_arg_buf);
 	if (ret < 0)
 		return scm_remap_error(ret);
 	return ret;
