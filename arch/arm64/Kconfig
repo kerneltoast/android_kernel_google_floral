@@ -797,6 +797,7 @@ config PRIME_CPU_MASK
 
 config HOTPLUG_CPU
 	bool "Support for hot-pluggable CPUs"
+	depends on !PREEMPT_RT_BASE
 	select GENERIC_IRQ_MIGRATION
 	help
 	  Say Y here to experiment with turning CPUs off and on.  CPUs
