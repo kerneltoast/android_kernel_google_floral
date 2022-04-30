@@ -21,6 +21,7 @@
 #include <linux/kthread.h>
 #include <linux/mfd/abc-pcie.h>
 #include <linux/pm_wakeup.h>
+#include <linux/suspend.h>
 #include <soc/qcom/subsystem_notif.h>
 #include <uapi/linux/ab-sm.h>
 #include <uapi/linux/sched/types.h>
@@ -457,6 +458,61 @@ static inline bool is_sleep(u32 state_id)
 	return ((state_id >= CHIP_STATE_SLEEP &&
 				state_id <= CHIP_STATE_SLEEP_BOTH_UP) ||
 			state_id == CHIP_STATE_DEEP_SLEEP);
+}
+
+/* State machine for the state change kthread */
+#define AB_THREAD_FROZEN	BIT(0)
+#define AB_THREAD_WAKE_UP	BIT(1)
+#define AB_THREAD_RUNNING	BIT(2)
+
+/* Check if the state change thread should run and mark it as running if so */
+static bool ab_should_run(struct ab_state_context *sc)
+{
+	return atomic_cmpxchg(&sc->state_change, AB_THREAD_WAKE_UP,
+			      AB_THREAD_RUNNING) == AB_THREAD_WAKE_UP;
+}
+
+/* Finish the current state change thread run without clearing a wake request */
+static void ab_done_running(struct ab_state_context *sc)
+{
+	atomic_andnot(AB_THREAD_RUNNING, &sc->state_change);
+}
+
+/* Request the state change thread to wake up, aborting suspend if needed */
+static void ab_wake_up_thread(struct ab_state_context *sc)
+{
+	int old;
+
+	old = atomic_fetch_or(AB_THREAD_WAKE_UP, &sc->state_change);
+	if (old == AB_THREAD_FROZEN) {
+		dev_warn(sc->dev, "Aborting suspend due to wake request\n");
+		pm_system_wakeup();
+	} else if (!old) {
+		wake_up(&sc->request_state_change_waitq);
+	}
+}
+
+/* Thaw the state change thread and wake it up if there was a wake up request */
+static void ab_thaw_thread(struct ab_state_context *sc)
+{
+	int old;
+
+	old = atomic_fetch_andnot(AB_THREAD_FROZEN, &sc->state_change);
+	if (old & AB_THREAD_WAKE_UP)
+		wake_up(&sc->request_state_change_waitq);
+}
+
+/* Try to freeze the state change thread if the hardware is powered down */
+static bool ab_freeze_thread(struct ab_state_context *sc)
+{
+	if (atomic_cmpxchg(&sc->state_change, 0, AB_THREAD_FROZEN))
+		return false;
+
+	if (!is_powered_down(sc->curr_chip_substate_id)) {
+		ab_thaw_thread(sc);
+		return false;
+	}
+	return true;
 }
 
 int clk_set_ipu_tpu_freq(struct ab_state_context *sc,
@@ -1565,16 +1621,13 @@ static int state_change_task(void *ctx)
 			"Unable to set FIFO scheduling of state change task (%d)\n",
 			ret);
 
+	set_freezable();
 	while (!kthread_should_stop()) {
-		ret = wait_for_completion_interruptible(
-				&sc->request_state_change_comp);
-		reinit_completion(&sc->request_state_change_comp);
+		wait_event_freezable(sc->request_state_change_waitq,
+				     ab_should_run(sc));
 
 		if (kthread_should_stop())
 			return 0;
-
-		if (ret)
-			continue;
 
 		mutex_lock(&sc->state_transitioning_lock);
 		sc->change_ret = ab_sm_update_chip_state(sc);
@@ -1582,6 +1635,7 @@ static int state_change_task(void *ctx)
 
 		complete_all(&sc->transition_comp);
 		complete_all(&sc->notify_comp);
+		ab_done_running(sc);
 	}
 
 	return 0;
@@ -1610,7 +1664,7 @@ static int _ab_sm_set_state(struct ab_state_context *sc,
 	mutex_unlock(&sc->state_transitioning_lock);
 
 	reinit_completion(&sc->transition_comp);
-	complete_all(&sc->request_state_change_comp);
+	ab_wake_up_thread(sc);
 
 	ret = wait_for_completion_timeout(
 			&sc->transition_comp,
@@ -2262,7 +2316,7 @@ int ab_sm_enter_el2(struct ab_state_context *sc)
 
 	/* Wait for state change */
 	reinit_completion(&sc->transition_comp);
-	complete_all(&sc->request_state_change_comp);
+	ab_wake_up_thread(sc);
 	ret = wait_for_completion_timeout(&sc->transition_comp,
 			msecs_to_jiffies(AB_MAX_TRANSITION_TIME_MS));
 	if (ret == 0) {
@@ -2275,7 +2329,7 @@ int ab_sm_enter_el2(struct ab_state_context *sc)
 
 		/* Wait for state change */
 		reinit_completion(&sc->transition_comp);
-		complete_all(&sc->request_state_change_comp);
+		ab_wake_up_thread(sc);
 		ret = wait_for_completion_timeout(&sc->transition_comp,
 				msecs_to_jiffies(AB_MAX_TRANSITION_TIME_MS));
 		if (ret == 0) {
@@ -2368,7 +2422,7 @@ int ab_sm_exit_el2(struct ab_state_context *sc, u32 exit_flag)
 	sc->el2_mode = 0;
 
 	reinit_completion(&sc->transition_comp);
-	complete_all(&sc->request_state_change_comp);
+	ab_wake_up_thread(sc);
 
 	mutex_unlock(&sc->state_transitioning_lock);
 
@@ -2839,7 +2893,7 @@ static void ab_sm_thermal_throttle_state_updated(
 	dev_info(sc->dev, "Throttle state updated to %u", throttle_state_id);
 
 	if (!sc->cold_boot)
-		complete_all(&sc->request_state_change_comp);
+		ab_wake_up_thread(sc);
 }
 
 static const struct ab_thermal_ops ab_sm_thermal_ops = {
@@ -2913,6 +2967,25 @@ static void ab_sm_el2_notif_init(struct work_struct *work)
 	mutex_unlock(&sc->el2_notif_init_lock);
 }
 
+static int ab_pm_notify(struct notifier_block *b, unsigned long event, void *p)
+{
+	struct ab_state_context *sc = container_of(b, typeof(*sc), pm_notif);
+
+	switch (event) {
+	case PM_SUSPEND_PREPARE:
+		if (!ab_freeze_thread(sc)) {
+			dev_warn(sc->dev, "Can't suspend with PCIe active\n");
+			return notifier_from_errno(-EBUSY);
+		}
+		break;
+	case PM_POST_SUSPEND:
+		ab_thaw_thread(sc);
+		break;
+	}
+
+	return NOTIFY_DONE;
+}
+
 int ab_sm_init(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -2924,6 +2997,14 @@ int ab_sm_init(struct platform_device *pdev)
 							GFP_KERNEL);
 	if (ab_sm_ctx == NULL)
 		goto fail_mem_alloc;
+
+	ab_sm_ctx->pm_notif.notifier_call = ab_pm_notify;
+	ab_sm_ctx->pm_notif.priority = INT_MAX;
+	ret = register_pm_notifier(&ab_sm_ctx->pm_notif);
+	if (ret) {
+		dev_err(dev, "Failed to register PM notifier (ret = %d)", ret);
+		goto fail_pm_notif;
+	}
 
 	ret = kfifo_alloc(&ab_sm_ctx->state_change_reqs,
 		AB_KFIFO_ENTRY_SIZE * sizeof(struct ab_change_req), GFP_KERNEL);
@@ -3046,7 +3127,7 @@ int ab_sm_init(struct platform_device *pdev)
 	mutex_init(&ab_sm_ctx->mfd_lock);
 	atomic_set(&ab_sm_ctx->clocks_registered, 0);
 	atomic_set(&ab_sm_ctx->async_in_use, 0);
-	init_completion(&ab_sm_ctx->request_state_change_comp);
+	init_waitqueue_head(&ab_sm_ctx->request_state_change_waitq);
 	init_completion(&ab_sm_ctx->transition_comp);
 	init_completion(&ab_sm_ctx->notify_comp);
 	init_completion(&ab_sm_ctx->shutdown_comp);
@@ -3119,6 +3200,8 @@ fail_pmic_resources:
 fail_misc_reg:
 	kfifo_free(&ab_sm_ctx->state_change_reqs);
 fail_kfifo_alloc:
+	unregister_pm_notifier(&ab_sm_ctx->pm_notif);
+fail_pm_notif:
 	devm_kfree(dev, (void *)ab_sm_ctx);
 	ab_sm_ctx = NULL;
 fail_mem_alloc:
@@ -3132,9 +3215,10 @@ void ab_sm_exit(struct platform_device *pdev)
 	ab_sm_ctx->sm_exiting = true;
 	mutex_unlock(&ab_sm_ctx->el2_notif_init_lock);
 
+	unregister_pm_notifier(&ab_sm_ctx->pm_notif);
 	cancel_delayed_work_sync(&ab_sm_ctx->el2_notif_init);
 	kthread_stop(ab_sm_ctx->state_change_task);
-	complete_all(&ab_sm_ctx->request_state_change_comp);
+	ab_wake_up_thread(ab_sm_ctx);
 	complete_all(&ab_sm_ctx->transition_comp);
 	complete_all(&ab_sm_ctx->notify_comp);
 	ab_sm_remove_sysfs(ab_sm_ctx);

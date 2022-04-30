@@ -460,10 +460,12 @@ struct ab_state_context {
 	/* Synchronization structs */
 	struct mutex set_state_lock;
 	struct mutex state_transitioning_lock;
-	struct completion request_state_change_comp;
 	struct completion transition_comp;
 	struct completion notify_comp;
 	struct completion shutdown_comp;
+	struct notifier_block pm_notif;
+	wait_queue_head_t request_state_change_waitq;
+	atomic_t state_change;
 
 	int change_ret;
 
