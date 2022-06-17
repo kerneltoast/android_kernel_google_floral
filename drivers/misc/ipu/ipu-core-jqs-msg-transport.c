@@ -431,7 +431,7 @@ void ipu_core_jqs_msg_transport_shutdown(struct paintbox_bus *bus)
 }
 
 /* Called in a threaded interrupt context */
-irqreturn_t ipu_core_jqs_msg_transport_interrupt_handler(
+static irqreturn_t ipu_core_jqs_msg_transport_interrupt_handler(
 		struct paintbox_bus *bus)
 {
 	struct paintbox_jqs_msg_transport *trans;
@@ -498,6 +498,11 @@ irqreturn_t ipu_core_jqs_msg_transport_interrupt_thread(
 		struct paintbox_bus *bus)
 {
 	struct paintbox_jqs_msg_transport *trans;
+	irqreturn_t ret;
+
+	ret = ipu_core_jqs_msg_transport_interrupt_handler(bus);
+	if (ret != IRQ_WAKE_THREAD)
+		return ret;
 
 	mutex_lock(&bus->transport_lock);
 

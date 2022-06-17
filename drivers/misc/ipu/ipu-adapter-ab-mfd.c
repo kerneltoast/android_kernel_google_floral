@@ -514,14 +514,6 @@ static struct device *ipu_adapter_ab_mfd_get_dma_device(struct device *dev)
 	return dev_data->dma_dev;
 }
 
-static irqreturn_t ipu_adapter_ab_mfd_interrupt_handler(int irq, void *arg)
-{
-	struct ipu_adapter_ab_mfd_data *dev_data =
-		(struct ipu_adapter_ab_mfd_data *)arg;
-
-	return ipu_core_jqs_msg_transport_interrupt_handler(dev_data->bus);
-}
-
 static irqreturn_t ipu_adapter_ab_mfd_interrupt_thread(int irq, void *arg)
 {
 	struct ipu_adapter_ab_mfd_data *dev_data =
@@ -1038,7 +1030,7 @@ static int ipu_adapter_ab_mfd_probe(struct platform_device *pdev)
 		}
 
 		ret = devm_request_threaded_irq(&pdev->dev, irq,
-				ipu_adapter_ab_mfd_interrupt_handler,
+				NULL,
 				ipu_adapter_ab_mfd_interrupt_thread,
 				IRQF_ONESHOT, dev_name(&pdev->dev), dev_data);
 		if (ret < 0) {
