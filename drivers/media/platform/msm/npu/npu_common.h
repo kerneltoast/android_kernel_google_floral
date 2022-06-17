@@ -279,6 +279,7 @@ int npu_enable_post_pil_clocks(struct npu_device *npu_dev);
 void npu_disable_post_pil_clocks(struct npu_device *npu_dev);
 
 irqreturn_t npu_intr_hdler(int irq, void *ptr);
+irqreturn_t npu_intr_thrd_hdler(int irq, void *ptr);
 
 int npu_set_uc_power_level(struct npu_device *npu_dev,
 	uint32_t pwr_level);
