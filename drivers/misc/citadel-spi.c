@@ -425,12 +425,12 @@ static int citadel_probe(struct spi_device *spi)
 		goto free_citadel;
 	}
 
-	ret = devm_request_irq(&citadel->spi->dev,
-			       gpio_to_irq(citadel->ctdl_ap_irq),
-			       citadel_irq_handler,
-			       IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-			       dev_name(&spi->dev),
-			       citadel);
+	ret = devm_request_threaded_irq(&citadel->spi->dev,
+					gpio_to_irq(citadel->ctdl_ap_irq),
+					NULL, citadel_irq_handler,
+					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					dev_name(&spi->dev),
+					citadel);
 	if (ret) {
 		dev_err(&spi->dev,
 			"devm_request_irq  citadel,ctdl_ap_irq failed.\n");
